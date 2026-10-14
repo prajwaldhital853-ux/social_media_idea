@@ -92,15 +92,11 @@ export default function Feed() {
               {`Pull up a seat, ${me.name.split(' ')[0] || me.username}. What's the story today?`}
             </button>
             <button type="button" className="composer-photo" aria-label="Photo" onClick={() => setCreateOpen(true)}>
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zm0 13.5V19h14v-3l-4-4.5-4.5 5-2.5-2.5L5 16.5zM8.5 10a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z" />
-              </svg>
+              <svg viewBox="0 0 24 24" aria-hidden="true" className="ci"><rect x="3" y="6" width="18" height="14" rx="4" /><path d="M8.5 6l1.4-2.2h4.2L15.5 6" /><circle cx="12" cy="13" r="3.4" /><circle cx="17.6" cy="9.4" r=".6" className="dot" /></svg>
               <span>Photo</span>
             </button>
             <button type="button" className="composer-photo composer-video" aria-label="Video" onClick={() => setCreateOpen(true)}>
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M4.5 5h9A2.5 2.5 0 0 1 16 7.5v1.8L21 6.5v11l-5-2.8v1.8a2.5 2.5 0 0 1-2.5 2.5h-9A2.5 2.5 0 0 1 2 16.5v-9A2.5 2.5 0 0 1 4.5 5z" />
-              </svg>
+              <svg viewBox="0 0 24 24" aria-hidden="true" className="ci"><rect x="3" y="4" width="18" height="16" rx="4" /><path d="M3 8.5h18M8 4l-2 4.5M13.5 4l-2 4.5M19 4l-2 4.5" /><path d="M10.5 12.2v4.6l3.8-2.3z" className="fillme" /></svg>
               <span>Video</span>
             </button>
           </div>

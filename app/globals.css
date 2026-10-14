@@ -1902,3 +1902,11 @@ a:focus:not(:focus-visible) {
   .cp-overlay { padding: 12px; align-items: center; }
   .cp-card { height: auto; max-height: 92vh; border-radius: 16px; }
 }
+/* Original composer icons */
+.composer-photo svg.ci, .composer-video svg.ci {
+  width: 22px; height: 22px; fill: none; stroke: var(--blue); stroke-width: 1.8;
+  stroke-linecap: round; stroke-linejoin: round;
+}
+.composer-video svg.ci { stroke: #7C5CFF; }
+.composer-photo svg.ci .dot { fill: var(--blue); }
+.composer-video svg.ci .fillme { fill: #7C5CFF; stroke: none; }
