@@ -1971,3 +1971,6 @@ a:focus:not(:focus-visible) {
 @media (max-width: 768px) {
   .home-header { display: none; }
 }
+
+.composer-avatar { display: flex !important; width: 36px; height: 36px; margin-right: 8px; }
+@media (max-width: 768px) { .composer { gap: 8px; } }

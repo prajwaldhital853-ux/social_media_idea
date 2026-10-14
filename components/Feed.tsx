@@ -83,7 +83,7 @@ export default function Feed() {
       {me && (
         <div className="composer">
           <div className="composer-avatar">
-            <Avatar user={me} size={40} />
+            <Avatar user={me} size={36} />
           </div>
           <div className="composer-content composer-row">
             <button type="button" className="composer-trigger" onClick={() => setCreateOpen(true)}>
