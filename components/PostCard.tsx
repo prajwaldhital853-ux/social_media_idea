@@ -154,67 +154,67 @@ export default function PostCard({ post, author, onLike }: PostCardProps) {
             </div>
           )
         )}
-      </div>
 
-      <div className="post-actions">
-        <button
-          type="button"
-          className={`action-btn ${showComments ? 'on' : ''}`}
-          onClick={e => {
-            e.stopPropagation();
-            setShowComments(v => !v);
-          }}
-        >
-          {IC.comment}
-          <span>{formatNumber(comments.length)}</span>
-        </button>
+        <div className="post-actions">
+          <button
+            type="button"
+            className={`action-btn ${showComments ? 'on' : ''}`}
+            onClick={e => {
+              e.stopPropagation();
+              setShowComments(v => !v);
+            }}
+          >
+            {IC.comment}
+            <span>{formatNumber(comments.length)}</span>
+          </button>
 
-        <button type="button" className={`action-btn ${liked ? 'liked' : ''}`} onClick={handleLike}>
-          {IC.heart}
-          <span>{formatNumber(likeCount)}</span>
-        </button>
+          <button type="button" className={`action-btn ${liked ? 'liked' : ''}`} onClick={handleLike}>
+            {IC.heart}
+            <span>{formatNumber(likeCount)}</span>
+          </button>
 
-        <button type="button" className="action-btn" onClick={handleShare}>
-          {IC.share}
-          <span>{shareHint || 'Share'}</span>
-        </button>
-      </div>
-
-      {showComments && (
-        <div className="comment-panel" onClick={e => e.stopPropagation()}>
-          {comments.length === 0 && <p className="comment-empty">No comments yet. Start the thread.</p>}
-          {comments.map(c => {
-            const commentAuthor = db.users.find(u => u.id === c.uid);
-            if (!commentAuthor) return null;
-            return (
-              <div key={c.id} className="comment-row">
-                <Avatar user={commentAuthor} size={28} />
-                <div>
-                  <div className="comment-meta">
-                    <b>{esc(commentAuthor.name || commentAuthor.username)}</b>
-                    <span>@{esc(commentAuthor.username)}</span>
-                    <span>{ago(c.ts, db.lang)}</span>
-                  </div>
-                  <p>{esc(c.text)}</p>
-                </div>
-              </div>
-            );
-          })}
-          <form className="comment-form" onSubmit={handleCommentSubmit}>
-            {me && <Avatar user={me} size={28} />}
-            <input
-              value={commentText}
-              onChange={e => setCommentText(e.target.value)}
-              placeholder={me ? 'Write a comment' : 'Log in to comment'}
-              maxLength={1000}
-              disabled={!me}
-            />
-            <button type="submit" disabled={!me || !commentText.trim()}>
-              Reply
-            </button>
-          </form>
+          <button type="button" className="action-btn" onClick={handleShare}>
+            {IC.share}
+            <span>{shareHint || 'Share'}</span>
+          </button>
         </div>
-      )}
+
+        {showComments && (
+          <div className="comment-panel" onClick={e => e.stopPropagation()}>
+            {comments.length === 0 && <p className="comment-empty">No comments yet. Start the thread.</p>}
+            {comments.map(c => {
+              const commentAuthor = db.users.find(u => u.id === c.uid);
+              if (!commentAuthor) return null;
+              return (
+                <div key={c.id} className="comment-row">
+                  <Avatar user={commentAuthor} size={28} />
+                  <div>
+                    <div className="comment-meta">
+                      <b>{esc(commentAuthor.name || commentAuthor.username)}</b>
+                      <span>@{esc(commentAuthor.username)}</span>
+                      <span>{ago(c.ts, db.lang)}</span>
+                    </div>
+                    <p>{esc(c.text)}</p>
+                  </div>
+                </div>
+              );
+            })}
+            <form className="comment-form" onSubmit={handleCommentSubmit}>
+              {me && <Avatar user={me} size={28} />}
+              <input
+                value={commentText}
+                onChange={e => setCommentText(e.target.value)}
+                placeholder={me ? 'Write a comment' : 'Log in to comment'}
+                maxLength={1000}
+                disabled={!me}
+              />
+              <button type="submit" disabled={!me || !commentText.trim()}>
+                Reply
+              </button>
+            </form>
+          </div>
+        )}
+      </div>
     </article>
   );
 }
