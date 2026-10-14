@@ -76,6 +76,8 @@ export interface Database {
   lang: 'en' | 'ne';
 }
 
+export type ThemeMode = 'light' | 'dark';
+
 export interface ComposerState {
   postId: string | null;
   media: Media[];

@@ -18,6 +18,20 @@ export function seed(): Database {
 
   const posts = [
     {
+      id: 'p_mix',
+      uid: 'u5',
+      text: 'Weekend in Pokhara: a little clip from Phewa, then the rest of the roll. Same trip, same light. 🚤🏔️',
+      media: [
+        { type: 'video' as const, src: 'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4', dur: 5 },
+        { type: 'image' as const, src: 'https://images.unsplash.com/photo-1544735716-392fe2489ffa?w=800&q=80' },
+        { type: 'image' as const, src: 'https://images.unsplash.com/photo-1605640840605-14ac1855827b?w=800&q=80' },
+        { type: 'image' as const, src: 'https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?w=800&q=80' },
+        { type: 'image' as const, src: 'https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=800&q=80' }
+      ],
+      ts: now - 12 * M,
+      status: 'live' as const
+    },
+    {
       id: 'p1',
       uid: 'u6',
       text: 'Starlink will bring high-speed internet to remote areas around the world. The constellation now has over 4,000 satellites in orbit! 🛰️🌍',
@@ -91,7 +105,9 @@ export function seed(): Database {
     { id: 'c2', pid: 'p1', uid: 'u3', text: 'Until about nine, then the clouds rolled back in.', ts: now - 24 * M, status: 'live' as const },
     { id: 'c3', pid: 'p2', uid: 'u2', text: 'Try the small place behind the temple. It closes at 8 though.', ts: now - 100 * M, status: 'live' as const },
     { id: 'c4', pid: 'p2', uid: 'u1', text: 'Seconded. Go before noon.', ts: now - 80 * M, status: 'live' as const },
-    { id: 'c5', pid: 'p3', uid: 'u5', text: 'कति राम्रो! कहाँबाट खिच्नुभएको?', ts: now - 250 * M, status: 'live' as const }
+    { id: 'c5', pid: 'p3', uid: 'u5', text: 'कति राम्रो! कहाँबाट खिच्नुभएको?', ts: now - 250 * M, status: 'live' as const },
+    { id: 'c6', pid: 'p_mix', uid: 'u1', text: 'This album is stunning. The video with those stills together is perfect.', ts: now - 8 * M, status: 'live' as const },
+    { id: 'c7', pid: 'p_mix', uid: 'u2', text: 'Need that lakeside café in frame 3. Drop the name?', ts: now - 5 * M, status: 'live' as const }
   ];
 
   const reports = [

@@ -1,9 +1,9 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { Database, User, Post, Comment } from './types';
+import { Database, User, Post, Comment, ThemeMode } from './types';
 import { getDb, save } from './storage';
-import { uid } from './utils';
+import { THEME_KEY } from './utils';
 
 interface AppContextType {
   db: Database;
@@ -19,6 +19,18 @@ interface AppContextType {
   login: (userId: string) => void;
   logout: () => void;
   isAuthenticated: boolean;
+  theme: ThemeMode;
+  toggleTheme: () => void;
+  drawerOpen: boolean;
+  openDrawer: () => void;
+  closeDrawer: () => void;
+}
+
+function readTheme(): ThemeMode {
+  if (typeof window === 'undefined') return 'light';
+  const saved = localStorage.getItem(THEME_KEY);
+  if (saved === 'light' || saved === 'dark') return saved;
+  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -26,9 +38,14 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 export function AppProvider({ children }: { children: ReactNode }) {
   const [db, setDb] = useState<Database>(getDb());
   const [mounted, setMounted] = useState(false);
+  const [theme, setTheme] = useState<ThemeMode>('light');
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
   useEffect(() => {
     setMounted(true);
+    const next = readTheme();
+    setTheme(next);
+    document.documentElement.setAttribute('data-theme', next);
   }, []);
 
   useEffect(() => {
@@ -92,6 +109,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const logout = () => {
     setDb(prev => ({ ...prev, meId: null }));
+    setDrawerOpen(false);
+  };
+
+  const toggleTheme = () => {
+    const next: ThemeMode = theme === 'dark' ? 'light' : 'dark';
+    setTheme(next);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(THEME_KEY, next);
+      document.documentElement.setAttribute('data-theme', next);
+    }
   };
 
   return (
@@ -109,7 +136,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
         updateLang,
         login,
         logout,
-        isAuthenticated
+        isAuthenticated,
+        theme,
+        toggleTheme,
+        drawerOpen,
+        openDrawer: () => setDrawerOpen(true),
+        closeDrawer: () => setDrawerOpen(false)
       }}
     >
       {children}
