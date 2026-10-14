@@ -12,7 +12,7 @@ export const uid = (): string => {
   return Math.random().toString(36).slice(2, 10);
 };
 
-export const KEY = 'chautari-demo-v2';
+export const KEY = 'chautari-demo-v3';
 export const THEME_KEY = 'chautari-theme';
 export const DAY = 86400000;
 

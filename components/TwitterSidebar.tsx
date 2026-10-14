@@ -25,8 +25,12 @@ export default function TwitterSidebar() {
 
   return (
     <aside className="rail">
-      <Link href="/" className="logo" aria-label="Chautari home">
+      <Link href="/" className="rail-brand" aria-label="Chautari home">
         {IC.logo}
+        <span className="rail-brand-copy">
+          <b>Chautari</b>
+          <span>Stories from the square</span>
+        </span>
       </Link>
 
       {navItems.map(item => (
@@ -49,6 +53,16 @@ export default function TwitterSidebar() {
         {IC.plus}
         <span>Post</span>
       </button>
+
+      <div className="rail-card">
+        <h3>Around the square</h3>
+        <p>Pokhara light, Kathmandu rain, and kitchen steam — today&apos;s Chautari is full.</p>
+        <div className="rail-chips">
+          <span className="rail-chip">#Pokhara</span>
+          <span className="rail-chip">#Himal</span>
+          <span className="rail-chip">#Momo</span>
+        </div>
+      </div>
 
       <div className="rail-bottom">
         <ThemeToggle compact />

@@ -50,20 +50,30 @@ export default function TwitterLayout({ children }: TwitterLayoutProps) {
           <div className="widget-header">Who to follow</div>
           <div className="trend-item">
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'var(--line)' }} />
+              <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'linear-gradient(135deg,#2457A6,#F2A900)' }} />
               <div>
-                <div style={{ fontWeight: 700 }}>Tech News</div>
-                <div style={{ color: 'var(--muted)', fontSize: '13px' }}>@technews</div>
+                <div style={{ fontWeight: 700 }}>Himal Lens</div>
+                <div style={{ color: 'var(--muted)', fontSize: '13px' }}>@himal_lens</div>
               </div>
             </div>
             <button type="button" className="follow-chip">Follow</button>
           </div>
           <div className="trend-item">
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'var(--line)' }} />
+              <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'linear-gradient(135deg,#1F6F78,#58936F)' }} />
               <div>
-                <div style={{ fontWeight: 700 }}>Space Updates</div>
-                <div style={{ color: 'var(--muted)', fontSize: '13px' }}>@spaceupdates</div>
+                <div style={{ fontWeight: 700 }}>Nima Kitchen</div>
+                <div style={{ color: 'var(--muted)', fontSize: '13px' }}>@nima_kitchen</div>
+              </div>
+            </div>
+            <button type="button" className="follow-chip">Follow</button>
+          </div>
+          <div className="trend-item">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'linear-gradient(135deg,#7A3E65,#2457A6)' }} />
+              <div>
+                <div style={{ fontWeight: 700 }}>Kathmandu Daily</div>
+                <div style={{ color: 'var(--muted)', fontSize: '13px' }}>@ktm_daily</div>
               </div>
             </div>
             <button type="button" className="follow-chip">Follow</button>

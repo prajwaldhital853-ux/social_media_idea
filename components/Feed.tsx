@@ -12,7 +12,7 @@ export default function Feed() {
   const [composerText, setComposerText] = useState('');
   const [tab, setTab] = useState<'foryou' | 'following'>('foryou');
 
-  const followingIds = new Set(['u1', 'u2', 'u3', 'u5', 'u6']);
+  const followingIds = new Set(['u1', 'u2', 'u3', 'u5', 'u6', 'u8', 'u9', 'u10']);
 
   const visiblePosts = db.posts
     .slice()

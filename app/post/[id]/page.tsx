@@ -93,6 +93,7 @@ export default function PostPage() {
 
   return (
     <TwitterLayout>
+      <div className="thread-view">
       <header className="header">
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px', padding: '16px' }}>
           <button onClick={() => router.push('/')} style={{ padding: '8px', borderRadius: '50%' }}>
@@ -102,7 +103,7 @@ export default function PostPage() {
         </div>
       </header>
 
-      <PostCard post={post} author={author} />
+      <PostCard post={post} author={author} featured />
 
       <div style={{ padding: '16px', borderBottom: '1px solid var(--line)' }}>
         <div style={{ marginBottom: '16px', color: 'var(--muted)', fontSize: '15px' }}>
@@ -177,6 +178,7 @@ export default function PostPage() {
         };
         return (
           <article key={c.id} className="post">
+            <div className="post-top">
             <div className="post-avatar">
               <Avatar user={commentAuthor} size={40} />
             </div>
@@ -200,9 +202,11 @@ export default function PostPage() {
                 </button>
               )}
             </div>
+            </div>
           </article>
         );
       })}
+      </div>
     </TwitterLayout>
   );
 }
