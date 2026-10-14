@@ -1625,3 +1625,13 @@ a:focus:not(:focus-visible) {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Remove mobile blue tap highlight on clickable posts and buttons */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+.post-actions, .action-btn {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
