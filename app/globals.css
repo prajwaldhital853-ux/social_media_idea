@@ -998,13 +998,15 @@ a:hover {
     right: 0;
     height: auto;
     flex-direction: row;
-    justify-content: space-around;
-    padding: 8px 12px;
+    justify-content: space-evenly;
+    align-items: center;
+    padding: 0;
     border-right: none;
     border-top: 1px solid var(--line);
     background: var(--paper);
     z-index: 50;
     border-radius: 0;
+    gap: 0;
   }
 
   .logo,
@@ -1014,17 +1016,33 @@ a:hover {
   }
 
   .nav-item {
-    padding: 8px;
+    padding: 12px 0;
     justify-content: center;
+    flex: 1;
+    display: flex;
+    align-items: center;
+    min-width: 0;
   }
 
   .nav-item svg {
-    width: 24px;
-    height: 24px;
+    width: 26px;
+    height: 26px;
   }
 
   .rail > div {
     display: none;
+  }
+
+  .rail > a {
+    display: none;
+  }
+
+  .rail > a:nth-child(1),
+  .rail > a:nth-child(2),
+  .rail > a:nth-child(3),
+  .rail > a:nth-child(4),
+  .rail > a:nth-child(5) {
+    display: flex;
   }
 
   .main {
