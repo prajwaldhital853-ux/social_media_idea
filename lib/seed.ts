@@ -21,7 +21,7 @@ export function seed(): Database {
       id: 'p1',
       uid: 'u6',
       text: 'Starlink will bring high-speed internet to remote areas around the world. The constellation now has over 4,000 satellites in orbit! 🛰️🌍',
-      media: [{ type: 'image', src: 'https://images.unsplash.com/photo-1517976487492-5750f3195933?w=800&q=80' }],
+      media: [{ type: 'image' as const, src: 'https://images.unsplash.com/photo-1517976487492-5750f3195933?w=800&q=80' }],
       ts: now - 35 * M,
       status: 'live' as const
     },
@@ -29,7 +29,7 @@ export function seed(): Database {
       id: 'p2',
       uid: 'u7',
       text: 'BREAKING: Apple announces new AI features coming to iOS 18 with enhanced Siri capabilities and on-device machine learning. #Apple #AI',
-      media: [{ type: 'image', src: 'https://images.unsplash.com/photo-1510557880182-3d4d3cba35a5?w=800&q=80' }],
+      media: [{ type: 'image' as const, src: 'https://images.unsplash.com/photo-1510557880182-3d4d3cba35a5?w=800&q=80' }],
       ts: now - 125 * M,
       status: 'live' as const
     },
@@ -38,8 +38,8 @@ export function seed(): Database {
       uid: 'u1',
       text: 'Just witnessed the most beautiful sunset over the Himalayas today. Nature never fails to amaze me! 🏔️✨',
       media: [
-        { type: 'image', src: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800&q=80' },
-        { type: 'image', src: 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=800&q=80' }
+        { type: 'image' as const, src: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800&q=80' },
+        { type: 'image' as const, src: 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=800&q=80' }
       ],
       ts: now - 300 * M,
       status: 'live' as const
@@ -48,7 +48,7 @@ export function seed(): Database {
       id: 'p4',
       uid: 'u5',
       text: 'Morning coffee thoughts: The best way to start your day is with gratitude and a hot cup of coffee. What\'s your morning routine? ☕',
-      media: [{ type: 'image', src: 'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=800&q=80' }],
+      media: [{ type: 'image' as const, src: 'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=800&q=80' }],
       ts: now - 26 * 60 * M,
       status: 'live' as const
     },
@@ -64,7 +64,7 @@ export function seed(): Database {
       id: 'p6',
       uid: 'u3',
       text: 'आज बिहानै चिया खाँदै झ्यालबाहिर हेर्दा हिमाल प्रष्ट देखिएको थियो। यस्तो दिन कमै आउँछ।',
-      media: [{ type: 'image', src: 'https://images.unsplash.com/photo-1579033461380-adb47c3eb938?w=800&q=80' }],
+      media: [{ type: 'image' as const, src: 'https://images.unsplash.com/photo-1579033461380-adb47c3eb938?w=800&q=80' }],
       ts: now - 190 * M,
       status: 'live' as const
     },
@@ -72,7 +72,7 @@ export function seed(): Database {
       id: 'p7',
       uid: 'u4',
       text: 'Does anyone know a good momo place near Baneshwor that is not packed on weekends? Asking for a hungry friend. 🥟',
-      media: [{ type: 'image', src: 'https://images.unsplash.com/photo-1589302168068-964664d93dc0?w=800&q=80' }],
+      media: [{ type: 'image' as const, src: 'https://images.unsplash.com/photo-1589302168068-964664d93dc0?w=800&q=80' }],
       ts: now - 400 * M,
       status: 'live' as const
     },
