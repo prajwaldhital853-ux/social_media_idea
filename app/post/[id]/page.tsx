@@ -57,7 +57,15 @@ export default function PostPage() {
     );
   }
 
-  const author = db.users.find(u => u.id === post.uid) || { username: 'deleted', name: '' };
+  const author = db.users.find(u => u.id === post.uid) || {
+    id: 'deleted',
+    email: '',
+    username: 'deleted',
+    name: '',
+    role: 'user' as const,
+    verified: false,
+    susp: null
+  };
 
   const handleCommentSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -158,7 +166,15 @@ export default function PostPage() {
       </div>
 
       {comments.map(c => {
-        const commentAuthor = db.users.find(u => u.id === c.uid) || { username: 'deleted', name: '' };
+        const commentAuthor = db.users.find(u => u.id === c.uid) || {
+          id: 'deleted',
+          email: '',
+          username: 'deleted',
+          name: '',
+          role: 'user' as const,
+          verified: false,
+          susp: null
+        };
         return (
           <article key={c.id} className="post">
             <div className="post-avatar">
