@@ -96,8 +96,8 @@ export default function PostCard({ post, author, onLike }: PostCardProps) {
       <div className="post-avatar" onClick={() => router.push(`/post/${post.id}`)}>
         <Avatar user={author} size={40} />
       </div>
-      <div className="post-content">
-        <div className="post-header" onClick={() => router.push(`/post/${post.id}`)}>
+      <div className="post-content" onClick={() => router.push(`/post/${post.id}`)}>
+        <div className="post-header">
           <span className="post-name">{esc(author.name || author.username)}</span>
           {author.verified && (
             <span className="post-verified">
@@ -111,7 +111,7 @@ export default function PostCard({ post, author, onLike }: PostCardProps) {
         </div>
 
         {post.text && (
-          <div className="post-text" onClick={() => router.push(`/post/${post.id}`)}>
+          <div className="post-text">
             {esc(post.text)}
           </div>
         )}
