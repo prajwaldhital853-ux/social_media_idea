@@ -8,6 +8,7 @@ import CreatePostModal from './CreatePostModal';
 import { Media } from '@/lib/types';
 import ThemeToggle from './ThemeToggle';
 import { IC } from '@/lib/icons';
+import Link from 'next/link';
 
 export default function Feed() {
   const { db, me, addPost, openDrawer } = useApp();
@@ -66,10 +67,10 @@ export default function Feed() {
             <p className="header-sub">Stories, photos, and clips from around Chautari</p>
           </div>
           <div className="header-actions">
+            <Link href="/explore" className="icon-btn top-icon" aria-label="Search">{IC.search}</Link>
+            <Link href="/notifications" className="icon-btn top-icon" aria-label="Notifications">{IC.bell}</Link>
+            <Link href="/messages" className="icon-btn top-icon" aria-label="Messages">{IC.msg}</Link>
             <ThemeToggle compact />
-            <button type="button" className="icon-btn desktop-only" aria-label="Search">
-              {IC.search}
-            </button>
           </div>
         </div>
         <div className="tabs">

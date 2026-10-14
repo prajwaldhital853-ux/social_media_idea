@@ -13,7 +13,8 @@ export default function TwitterSidebar() {
 
   const navItems = [
     { icon: IC.home, label: 'Home', href: '/' },
-    { icon: IC.search, label: 'Explore', href: '/explore' },
+    { icon: IC.video, label: 'Video', href: '/video' },
+    { icon: IC.market, label: 'Marketplace', href: '/marketplace' },
     { icon: IC.bell, label: 'Notifications', href: '/notifications' },
     { icon: IC.msg, label: 'Messages', href: '/messages' },
     { icon: IC.user, label: 'Profile', href: '/profile' }

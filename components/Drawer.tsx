@@ -17,7 +17,8 @@ export default function Drawer() {
 
   const links = [
     { href: '/', label: 'Home', icon: IC.home },
-    { href: '/explore', label: 'Explore', icon: IC.search },
+    { href: '/video', label: 'Video', icon: IC.video },
+    { href: '/marketplace', label: 'Marketplace', icon: IC.market },
     { href: '/notifications', label: 'Notifications', icon: IC.bell },
     { href: '/messages', label: 'Messages', icon: IC.msg },
     { href: '/profile', label: 'Profile', icon: IC.user }

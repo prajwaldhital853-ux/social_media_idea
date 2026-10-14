@@ -1,28 +1,24 @@
 export const IC = {
+  video: (
+    <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="4" /><path d="M10 9.2v5.6l4.8-2.8z" fill="currentColor" /></svg>
+  ),
+  market: (
+    <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 9.5 5.5 4.5h13L20 9.5" /><path d="M4 9.5a2.7 2.7 0 0 0 5.3 0 2.7 2.7 0 0 0 5.4 0 2.7 2.7 0 0 0 5.3 0" /><path d="M5.5 12v7.5h13V12" /><path d="M10 19.5v-4h4v4" /></svg>
+  ),
   home: (
-    <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor" aria-hidden="true">
-      <path d="M12 3.4 3.8 10.2c-.3.25-.47.62-.47 1.01V20c0 .83.67 1.5 1.5 1.5H9V14.5a.5.5 0 0 1 .5-.5h5a.5.5 0 0 1 .5.5V21.5h4.17c.83 0 1.5-.67 1.5-1.5v-8.79c0-.39-.17-.76-.47-1.01L12 3.4z" />
-    </svg>
+    <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 10.5 12 4l8 6.5V19a1.5 1.5 0 0 1-1.5 1.5H15v-5.5a3 3 0 0 0-6 0v5.5H5.5A1.5 1.5 0 0 1 4 19z" /></svg>
   ),
   search: (
-    <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor" aria-hidden="true">
-      <path d="M10.25 3.75c-3.59 0-6.5 2.91-6.5 6.5s2.91 6.5 6.5 6.5c1.8 0 3.42-.73 4.6-1.9 1.18-1.18 1.9-2.8 1.9-4.6 0-3.59-2.91-6.5-6.5-6.5zm-8.5 6.5c0-4.69 3.81-8.5 8.5-8.5s8.5 3.81 8.5 8.5c0 1.99-.68 3.82-1.82 5.26l4.78 4.78-1.41 1.42-4.78-4.78A8.47 8.47 0 0 1 10.25 18.75c-4.69 0-8.5-3.81-8.5-8.5z" />
-    </svg>
+    <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5" /><path d="m16 16 4 4" /><path d="M8.5 9.5a3 3 0 0 1 2.5-1.5" /></svg>
   ),
   bell: (
-    <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor" aria-hidden="true">
-      <path d="M19.99 14.47c-.02-.02-2.14-1.64-2.1-6.03.02-2.53-.81-4.78-2.35-6.33C14.16 1.56 12.3.79 10.3.78h-.01C8.28.79 6.42 1.56 5.05 2.95 3.51 4.5 2.68 6.75 2.7 9.28c.04 4.33-2.02 5.97-2.1 6.03-.26.19-.37.53-.27.84.1.31.38.51.7.51h15.99c.31 0 .59-.2.69-.5.1-.31 0-.65-.26-.85zM10 19.75c-1.66 0-3.07-.9-3.74-2.25h7.48C13.07 18.85 11.66 19.75 10 19.75z" transform="translate(2 1.25)" />
-    </svg>
+    <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 1.5h-15z" /><path d="M10 20.5a2.2 2.2 0 0 0 4 0" /><circle cx="17.5" cy="5.5" r="1.6" fill="currentColor" stroke="none" /></svg>
   ),
   msg: (
-    <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor" aria-hidden="true">
-      <path d="M1.75 10c0-4.42 3.58-8 8-8h4.37c4.49 0 8.13 3.64 8.13 8.13 0 2.96-1.61 5.68-4.2 7.11l-8.05 4.46v-3.69h-.07c-4.49.1-8.18-3.51-8.18-8.01zm8-6C6.43 4 3.75 6.69 3.75 10c0 3.37 2.77 6.08 6.14 6.01l.35-.01h1.76v2.3l5.09-2.81c1.95-1.08 3.16-3.13 3.16-5.36 0-3.39-2.74-6.13-6.13-6.13H9.75z" />
-    </svg>
+    <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 5h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-7l-4.5 3.5V17H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z" /><path d="M8 10h8M8 13h5" /></svg>
   ),
   user: (
-    <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor" aria-hidden="true">
-      <path d="M5.65 19h12.7c-.34-1.8-1.02-3.21-1.95-4.19C15.32 13.65 13.84 13 12 13s-3.32.65-4.4 1.81c-.92.98-1.61 2.39-1.95 4.19zm.49-5.56C7.63 11.85 9.65 11 12 11s4.37.85 5.86 2.44c1.48 1.58 2.37 3.8 2.63 6.46l.11 1.1H3.4l.11-1.1c.27-2.66 1.16-4.88 2.63-6.46zM12 4c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0-2c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4z" />
-    </svg>
+    <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="8.5" r="3.8" /><path d="M4.5 20c.8-3.6 3.8-5.6 7.5-5.6s6.7 2 7.5 5.6" /></svg>
   ),
   menu: (
     <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">

@@ -1910,3 +1910,8 @@ a:focus:not(:focus-visible) {
 .composer-video svg.ci { stroke: #7C5CFF; }
 .composer-photo svg.ci .dot { fill: var(--blue); }
 .composer-video svg.ci .fillme { fill: #7C5CFF; stroke: none; }
+/* Top header icons */
+.header-actions { display: flex; align-items: center; gap: 4px; }
+.top-icon { width: 38px; height: 38px; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; color: var(--ink); background: var(--tint); }
+.top-icon:hover { color: var(--blue); }
+.top-icon svg { width: 21px; height: 21px; }

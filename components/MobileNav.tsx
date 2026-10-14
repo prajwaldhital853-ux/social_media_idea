@@ -11,8 +11,8 @@ export default function MobileNav() {
 
   const items = [
     { href: '/', label: 'Home', icon: IC.home },
-    { href: '/explore', label: 'Explore', icon: IC.search },
-    { href: '/notifications', label: 'Alerts', icon: IC.bell },
+    { href: '/video', label: 'Video', icon: IC.video },
+    { href: '/marketplace', label: 'Market', icon: IC.market },
     { href: '/messages', label: 'Inbox', icon: IC.msg }
   ];
 
