@@ -67,9 +67,6 @@ export default function Feed() {
             <p className="header-sub">Stories, photos, and clips from around Chautari</p>
           </div>
           <div className="header-actions">
-            <Link href="/explore" className="icon-btn top-icon" aria-label="Search">{IC.search}</Link>
-            <Link href="/notifications" className="icon-btn top-icon" aria-label="Notifications">{IC.bell}</Link>
-            <Link href="/messages" className="icon-btn top-icon" aria-label="Messages">{IC.msg}</Link>
             <ThemeToggle compact />
           </div>
         </div>

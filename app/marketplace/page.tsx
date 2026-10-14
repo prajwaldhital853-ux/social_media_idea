@@ -3,5 +3,5 @@
 import SimplePage from '@/components/SimplePage';
 
 export default function MarketplacePage() {
-  return <SimplePage title="Marketplace" note="Buy and sell with people near you. Listings will show up here." />;
+  return <SimplePage title="Video Marketplace" note="Buy and sell with short videos from people near you. Listings will show up here." />;
 }
