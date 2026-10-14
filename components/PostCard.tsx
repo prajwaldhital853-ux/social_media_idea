@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { Post as PostType, User, Media } from '@/lib/types';
 import { ago, esc, uid } from '@/lib/utils';
@@ -195,8 +196,16 @@ export default function PostCard({ post, author, onLike, featured }: PostCardPro
         </button>
       </div>
 
-      {showComments && (
-        <div className="comment-panel" onClick={e => e.stopPropagation()}>
+      {showComments && typeof document !== 'undefined' && createPortal(
+        <div className="comment-overlay" onClick={() => setShowComments(false)}>
+        <div className="comment-sheet" onClick={e => e.stopPropagation()}>
+          <div className="comment-sheet-head">
+            <b>Comments</b>
+            <button type="button" className="comment-close" aria-label="Close comments" onClick={() => setShowComments(false)}>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
+            </button>
+          </div>
+        <div className="comment-panel">
           {comments.length === 0 && <p className="comment-empty">No comments yet. Start the thread.</p>}
           {comments.map(c => {
             const commentAuthor = db.users.find(u => u.id === c.uid);
@@ -230,6 +239,9 @@ export default function PostCard({ post, author, onLike, featured }: PostCardPro
             </button>
           </form>
         </div>
+        </div>
+        </div>,
+        document.body
       )}
     </article>
   );
