@@ -2,15 +2,15 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import { useApp } from '@/lib/AppContext';
 import { IC } from '@/lib/icons';
+import ThemeToggle from './ThemeToggle';
 
 export default function MobileNav() {
   const pathname = usePathname();
-  const router = useRouter();
   const { me, db, openDrawer, openComposer, t, feature } = useApp();
-  const [query, setQuery] = useState('');
+  const focusedPage = pathname.startsWith('/post/') || pathname === '/explore';
   const [compactPost, setCompactPost] = useState(false);
   const unread = me ? db.notifications.filter(n => n.uid === me.id && !n.read).length : 0;
 
@@ -35,21 +35,18 @@ export default function MobileNav() {
     { href: '/profile', label: t('profile'), icon: IC.user }
   ];
 
+  if (focusedPage) return null;
+
   return (
     <>
       <header className="m-top">
         <button type="button" className="mnav-circle m-drawer" onClick={openDrawer} aria-label="Open menu">{IC.menu}</button>
-        <form className="m-search" role="search" onSubmit={e => {
-          e.preventDefault();
-          router.push(`/explore${query.trim() ? `?q=${encodeURIComponent(query.trim())}` : ''}`);
-        }}>
-          {IC.search}
-          <input type="search" aria-label="Search Exposing" placeholder="Search Exposing" value={query} onChange={e => setQuery(e.target.value)} />
-        </form>
+        <Link className="m-search" href="/explore" aria-label="Search Exposing">{IC.search}<span>Search Exposing</span></Link>
         <Link href="/notifications" className="mnav-circle" aria-label={t('notifications')}>
           {IC.bell}
           {unread > 0 && <span className="mnav-badge">{unread > 9 ? '9+' : unread}</span>}
         </Link>
+        <ThemeToggle compact />
       </header>
 
       <button type="button" className={`post-fab ${compactPost ? 'is-compact' : ''}`} onClick={() => openComposer(null)} aria-label="Create post or reel" aria-haspopup="dialog">

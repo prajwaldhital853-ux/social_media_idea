@@ -1,11 +1,11 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
+import Comments from './Comments';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Post as PostType, User, Media } from '@/lib/types';
-import { ago, uid, compact } from '@/lib/utils';
+import { ago, compact } from '@/lib/utils';
 import { useApp } from '@/lib/AppContext';
 import Avatar from './Avatar';
 import VerifiedBadge from './VerifiedBadge';
@@ -49,8 +49,8 @@ function RichText({ text }: { text: string }) {
   );
 }
 
-function Caption({ text }: { text: string }) {
-  const [expanded, setExpanded] = useState(false);
+function Caption({ text, full = false }: { text: string; full?: boolean }) {
+  const [expanded, setExpanded] = useState(full);
   const [overflows, setOverflows] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -72,10 +72,9 @@ function Caption({ text }: { text: string }) {
 
 export default function PostCard({ post, author, featured }: PostCardProps) {
   const router = useRouter();
-  const { db, me, t, addComment, deleteComment, deletePost, toggleSave, isSaved, openComposer, activePromo, promoEligible, showToast } = useApp();
+  const { db, me, t, deletePost, toggleSave, isSaved, openComposer, activePromo, promoEligible, showToast } = useApp();
   const [menuOpen, setMenuOpen] = useState(false);
   const [showComments, setShowComments] = useState(false);
-  const [commentText, setCommentText] = useState('');
   const [reporting, setReporting] = useState(false);
   const [promoting, setPromoting] = useState(false);
   const [whyOpen, setWhyOpen] = useState(false);
@@ -110,18 +109,6 @@ export default function PostCard({ post, author, featured }: PostCardProps) {
     } catch {
       showToast(url);
     }
-  };
-
-  const handleCommentSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (!me) {
-      router.push('/login');
-      return;
-    }
-    if (!commentText.trim()) return;
-    addComment({ id: uid(), pid: post.id, uid: me.id, text: commentText.slice(0, 1000), ts: Date.now(), status: 'live' });
-    setCommentText('');
   };
 
   const media = (post.media || []).filter(m => m.src || m.gen);
@@ -200,7 +187,7 @@ export default function PostCard({ post, author, featured }: PostCardProps) {
           {post.status === 'hidden' && <p className="post-state-note">{t('hidden')}</p>}
           {post.status === 'removed' && <p className="post-state-note">{t('removed')}</p>}
 
-          {post.text && <Caption text={post.text} />}
+          {post.text && <Caption text={post.text} full={featured} />}
           {(post.mood || post.place) && (
             <div className="post-tags">
               {post.mood && <span className="post-tag">{post.mood}</span>}
@@ -242,7 +229,7 @@ export default function PostCard({ post, author, featured }: PostCardProps) {
           type="button"
           className={`action-btn ${showComments ? 'on' : ''}`}
           aria-label="Comments"
-          onClick={e => { e.preventDefault(); setShowComments(v => !v); }}
+          onClick={e => { e.preventDefault(); if (featured) document.querySelector<HTMLInputElement>('.comments-inline input')?.focus(); else setShowComments(v => !v); }}
         >
           {IC.comment}
           <span>{comments.length > 0 ? compact(comments.length) : ''}</span>
@@ -268,57 +255,7 @@ export default function PostCard({ post, author, featured }: PostCardProps) {
 
       {!db.reactions.some(r => r.targetType === 'post' && r.targetId === post.id) && <small className="first-like">Be first one to like this.</small>}
 
-      {showComments && typeof document !== 'undefined' && createPortal(
-        <div className="comment-overlay" onClick={() => setShowComments(false)}>
-          <div className="comment-sheet" onClick={e => e.stopPropagation()}>
-            <div className="comment-sheet-head">
-              <b>{t('comment')} · {comments.length}</b>
-              <button type="button" className="comment-close" aria-label={t('close')} onClick={() => setShowComments(false)}>
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
-              </button>
-            </div>
-            <div className="comment-panel">
-              {comments.length === 0 && <p className="comment-empty">{t('noComments')}</p>}
-              {comments.map(c => {
-                const commentAuthor = db.users.find(u => u.id === c.uid);
-                if (!commentAuthor) return null;
-                return (
-                  <div key={c.id} className="comment-row">
-                    <Avatar user={commentAuthor} size={28} />
-                    <div className="comment-body">
-                      <div className="comment-meta">
-                        <b>{commentAuthor.name || commentAuthor.username}</b>
-                        {commentAuthor.verified && <VerifiedBadge size={14} />}
-                        <span>@{commentAuthor.username}</span>
-                        <span>{ago(c.ts, db.lang)}</span>
-                        {me?.id === c.uid && (
-                          <button type="button" className="comment-del" onClick={() => deleteComment(c.id)} aria-label={t('del')}>{IC.x}</button>
-                        )}
-                      </div>
-                      <p>{c.text}</p>
-                      <ReactionButton targetType="comment" targetId={c.id} small />
-                    </div>
-                  </div>
-                );
-              })}
-              <form className="comment-form" onSubmit={handleCommentSubmit}>
-                {me && <Avatar user={me} size={28} />}
-                <input
-                  value={commentText}
-                  onChange={e => setCommentText(e.target.value)}
-                  placeholder={me ? t('commentPh') : t('needLogin')}
-                  maxLength={1000}
-                  disabled={!me}
-                />
-                <button type="submit" disabled={!me || !commentText.trim()}>
-                  {t('send')}
-                </button>
-              </form>
-            </div>
-          </div>
-        </div>,
-        document.body
-      )}
+      {showComments && <Comments postId={post.id} onClose={() => setShowComments(false)} />}
 
       {reporting && <ReportModal type="post" targetId={post.id} onClose={() => setReporting(false)} />}
       {promoting && <PromoteModal targetType="post" targetId={post.id} onClose={() => setPromoting(false)} />}

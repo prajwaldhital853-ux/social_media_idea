@@ -2,7 +2,7 @@
 
 import { ReactNode, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useApp } from '@/lib/AppContext';
 import NavRail from './NavRail';
 import Drawer from './Drawer';
@@ -108,16 +108,18 @@ interface AppShellProps {
 }
 
 export default function AppShell({ children }: AppShellProps) {
+  const pathname = usePathname();
+  const focusedPage = pathname.startsWith('/post/') || pathname === '/explore';
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
   if (!mounted) return null;
 
   return (
-    <div className="shell">
+    <div className={`shell ${focusedPage ? 'focused-page' : ''}`}>
       <NavRail />
       <main className="main">
         {children}
-        <SiteFooter />
+        {!focusedPage && <SiteFooter />}
       </main>
       <RightWidgets />
       <Drawer />

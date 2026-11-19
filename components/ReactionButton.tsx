@@ -1,94 +1,57 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { useRouter } from 'next/navigation';
 import { useApp } from '@/lib/AppContext';
-import { REACTIONS, compact, reactionMeta } from '@/lib/utils';
-import { ReactionKind } from '@/lib/types';
+import { REACTIONS, compact } from '@/lib/utils';
 import { IC } from '@/lib/icons';
+import ReactionIcon from './ReactionIcon';
 
-interface ReactionButtonProps {
-  targetType: 'post' | 'comment';
-  targetId: string;
-  small?: boolean;
-}
-
-export default function ReactionButton({ targetType, targetId, small }: ReactionButtonProps) {
+export default function ReactionButton({ targetType, targetId, small }: { targetType: 'post' | 'comment'; targetId: string; small?: boolean }) {
   const { db, me, react, myReaction, t } = useApp();
-  const [open, setOpen] = useState(false);
-  const hoverTo = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const wrapRef = useRef<HTMLDivElement>(null);
-
+  const router = useRouter();
+  const [position, setPosition] = useState<{ left: number; top: number } | null>(null);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const origin = useRef({ x: 0, y: 0 });
+  const held = useRef(false);
+  const button = useRef<HTMLButtonElement>(null);
+  const picker = useRef<HTMLDivElement>(null);
   const mine = myReaction(targetType, targetId);
-  const rows = db.reactions.filter(r => r.targetType === targetType && r.targetId === targetId);
-  const count = rows.length;
-
+  const count = db.reactions.filter(r => r.targetType === targetType && r.targetId === targetId).length;
+  const cancel = () => { if (timer.current) clearTimeout(timer.current); timer.current = null; };
+  const open = () => {
+    if (!me || !button.current) return;
+    const rect = button.current.getBoundingClientRect();
+    setPosition({ left: Math.max(8, Math.min(rect.left - 8, window.innerWidth - 288)), top: rect.top > 100 ? rect.top - 86 : rect.bottom + 8 });
+  };
+  useEffect(() => () => cancel(), []);
   useEffect(() => {
-    if (!open) return;
-    const onDoc = (e: MouseEvent) => {
-      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener('mousedown', onDoc);
-    return () => document.removeEventListener('mousedown', onDoc);
-  }, [open]);
-
-  const pick = (kind: ReactionKind) => {
-    react(targetType, targetId, kind);
-    setOpen(false);
-  };
-
-  const onClick = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (!me) {
-      window.location.href = '/login';
-      return;
-    }
-    if (mine) react(targetType, targetId, mine);
-    else react(targetType, targetId, 'like');
-  };
-
-  const label = mine ? t(reactionMeta(mine).kind) : t('like');
-
-  return (
-    <div
-      className={`react-wrap ${small ? 'small' : ''}`}
-      ref={wrapRef}
-      onMouseEnter={() => {
-        if (!me) return;
-        hoverTo.current = setTimeout(() => setOpen(true), 350);
-      }}
-      onMouseLeave={() => {
-        if (hoverTo.current) clearTimeout(hoverTo.current);
-        setOpen(false);
-      }}
-    >
-      {open && me && (
-        <div className="react-picker" role="menu">
-          {REACTIONS.map(r => (
-            <button
-              key={r.kind}
-              type="button"
-              title={t(r.kind)}
-              aria-label={t(r.kind)}
-              className={mine === r.kind ? 'on' : ''}
-              onClick={e => { e.preventDefault(); e.stopPropagation(); pick(r.kind); }}
-            >
-              {r.emoji}
-            </button>
-          ))}
-        </div>
-      )}
-      <button
-        type="button"
-        aria-pressed={!!mine}
-        className={`action-btn ${mine ? 'reacted' : ''}`}
-        onClick={onClick}
-        aria-label={label}
-      >
-        {mine ? <span className="react-emoji">{reactionMeta(mine).emoji}</span> : IC.thumb}
-        <span>{count > 0 ? compact(count) : ''}</span>
-      </button>
-      {me && <button type="button" className="reaction-options" aria-label="Choose reaction" aria-expanded={open} onClick={e => { e.stopPropagation(); setOpen(value => !value); }}>⌄</button>}
-    </div>
-  );
+    if (!position) return;
+    const outside = (e: PointerEvent) => { if (!picker.current?.contains(e.target as Node) && !button.current?.contains(e.target as Node)) setPosition(null); };
+    const close = () => setPosition(null);
+    const key = (e: KeyboardEvent) => { if (e.key === 'Escape') { close(); button.current?.focus(); } };
+    document.addEventListener('pointerdown', outside);
+    document.addEventListener('keydown', key);
+    window.addEventListener('scroll', close, true);
+    window.addEventListener('resize', close);
+    return () => { document.removeEventListener('pointerdown', outside); document.removeEventListener('keydown', key); window.removeEventListener('scroll', close, true); window.removeEventListener('resize', close); };
+  }, [position]);
+  return <div className={`react-wrap ${small ? 'small' : ''}`}>
+    <button ref={button} type="button" className={`action-btn reaction-trigger ${mine ? 'reacted' : ''}`} aria-label={t(mine || 'like')} aria-pressed={!!mine} aria-haspopup="dialog" aria-expanded={!!position} title="Press and hold for reactions" onPointerDown={e => {
+      if (e.button !== 0) return;
+      cancel(); held.current = false; origin.current = { x: e.clientX, y: e.clientY };
+      timer.current = setTimeout(() => { held.current = true; open(); }, 450);
+    }} onPointerMove={e => { if (Math.hypot(e.clientX - origin.current.x, e.clientY - origin.current.y) > 10) cancel(); }} onPointerUp={cancel} onPointerCancel={cancel} onPointerLeave={cancel} onContextMenu={e => { e.preventDefault(); cancel(); held.current = true; open(); }} onKeyDown={e => { if (e.key === 'ArrowUp') { e.preventDefault(); open(); } }} onClick={e => {
+      e.preventDefault(); e.stopPropagation();
+      if (held.current) { held.current = false; return; }
+      if (!me) { router.push('/login'); return; }
+      react(targetType, targetId, mine || 'like'); setPosition(null);
+    }}>
+      {mine ? <ReactionIcon kind={mine} /> : IC.thumb}<span>{count > 0 ? compact(count) : ''}</span>
+    </button>
+    {position && createPortal(<div ref={picker} className="reaction-tray" role="dialog" aria-label="Choose reaction" style={position} onClick={e => e.stopPropagation()}>
+      {REACTIONS.map((r, index) => <button key={r.kind} type="button" aria-label={t(r.kind)} aria-pressed={mine === r.kind} style={{ animationDelay: `${index * 35}ms` }} onClick={() => { react(targetType, targetId, r.kind); setPosition(null); button.current?.focus(); }}><ReactionIcon kind={r.kind}/><span>{t(r.kind)}</span></button>)}
+    </div>, document.body)}
+  </div>;
 }
