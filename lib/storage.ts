@@ -8,7 +8,7 @@ export function load(): Database | null {
     const raw = localStorage.getItem(KEY);
     if (raw) {
       const d = JSON.parse(raw);
-      if (d && d.users && d.posts) return d;
+      if (d && d.users && d.posts && d.follows && d.settings && d.settings.features) return d;
     }
   } catch (e) {
     console.error('Failed to load from localStorage:', e);

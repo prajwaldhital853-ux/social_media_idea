@@ -1,3 +1,5 @@
+import { ReactionKind } from './types';
+
 export const esc = (s: string): string => {
   return String(s).replace(/[&<>"']/g, (c) => ({
     '&': '&amp;',
@@ -12,8 +14,8 @@ export const uid = (): string => {
   return Math.random().toString(36).slice(2, 10);
 };
 
-export const KEY = 'chautari-demo-v3';
-export const THEME_KEY = 'chautari-theme';
+export const KEY = 'exposing-demo-v1';
+export const THEME_KEY = 'exposing-theme';
 export const DAY = 86400000;
 
 export const hash = (s: string): number => {
@@ -44,6 +46,12 @@ export const num = (n: number, lang: string): string => {
   return String(n);
 };
 
+export const compact = (n: number): string => {
+  if (n < 1000) return String(n);
+  if (n < 1000000) return `${(n / 1000).toFixed(n < 10000 ? 1 : 0).replace(/\.0$/, '')}K`;
+  return `${(n / 1000000).toFixed(1).replace(/\.0$/, '')}M`;
+};
+
 export const cLabel = (n: number, lang: string): string => {
   if (lang === 'ne') {
     return `${num(n, lang)} टिप्पणी`;
@@ -56,6 +64,40 @@ export const fmtDur = (d: number): string => {
   const s = Math.round(d);
   return `${Math.floor(s / 60)}:${('0' + (s % 60)).slice(-2)}`;
 };
+
+export const ageFromDob = (dob: string): number => {
+  if (!dob) return 0;
+  const b = new Date(dob);
+  if (isNaN(b.getTime())) return 0;
+  const now = new Date();
+  let a = now.getFullYear() - b.getFullYear();
+  const m = now.getMonth() - b.getMonth();
+  if (m < 0 || (m === 0 && now.getDate() < b.getDate())) a--;
+  return a;
+};
+
+export const initials = (name: string): string => {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return '?';
+  const first = parts[0][0] || '';
+  const last = parts.length > 1 ? parts[parts.length - 1][0] : '';
+  return (first + last).toUpperCase();
+};
+
+export const COUNTRIES = ['Nepal', 'India', 'United States', 'United Kingdom', 'Australia', 'Japan', 'Germany', 'Other'];
+
+export const POST_TOPICS = ['General', 'Travel', 'Photography', 'Food', 'Tech', 'Sports', 'Music', 'News'];
+
+export const REACTIONS: { kind: ReactionKind; emoji: string; label: string }[] = [
+  { kind: 'like', emoji: '👍', label: 'Like' },
+  { kind: 'love', emoji: '❤️', label: 'Love' },
+  { kind: 'haha', emoji: '😂', label: 'Haha' },
+  { kind: 'wow', emoji: '😮', label: 'Wow' },
+  { kind: 'sad', emoji: '😢', label: 'Sad' }
+];
+
+export const reactionMeta = (kind: ReactionKind) =>
+  REACTIONS.find(r => r.kind === kind) || REACTIONS[0];
 
 export const resizeImage = (file: File): Promise<string> => {
   return new Promise((res, rej) => {

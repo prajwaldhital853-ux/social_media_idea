@@ -2,158 +2,146 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Media, User } from '@/lib/types';
+import Link from 'next/link';
+import { Media, Post } from '@/lib/types';
+import { useApp, PromoConfig } from '@/lib/AppContext';
+import { resizeImage, uid, videoDuration } from '@/lib/utils';
+import { IC } from '@/lib/icons';
 import Avatar from './Avatar';
+import PromoteForm from './PromoteForm';
 
-const MAX = 500;
-const MOODS = ['\u{1F60A} Grateful', '\u26F0 Adventurous', '\u2615 Chill', '\u{1F389} Celebrating', '\u{1F4AD} Thoughtful', '\u{1F525} Motivated'];
-
-interface Props {
-  me: User;
-  open: boolean;
-  onClose: () => void;
-  onPublish: (text: string, media: Media[]) => void;
-}
-
-export default function CreatePostModal({ me, open, onClose, onPublish }: Props) {
-  const [text, setText] = useState('');
-  const [media, setMedia] = useState<Media[]>([]);
-  const [audience, setAudience] = useState<'everyone' | 'circle'>('everyone');
-  const [mood, setMood] = useState<string | null>(null);
-  const [place, setPlace] = useState('');
-  const [showPlace, setShowPlace] = useState(false);
-  const [showMoods, setShowMoods] = useState(false);
+function Composer({ original }: { original?: Post }) {
+  const { me, t, closeComposer, addPost, updatePost, showToast, requestPromotion, feature } = useApp();
+  const [stage, setStage] = useState<'choose' | 'post' | 'reel'>(original ? original.kind || 'post' : 'choose');
+  const [text, setText] = useState(original?.text || '');
+  const [media, setMedia] = useState<Media[]>(original?.media || []);
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [promote, setPromote] = useState(false);
+  const [promoConfig, setPromoConfig] = useState<PromoConfig | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
   const areaRef = useRef<HTMLTextAreaElement>(null);
+  const urls = useRef<string[]>([]);
+  const published = useRef(false);
+  const alive = useRef(true);
 
   useEffect(() => {
-    if (!open) return;
-    setTimeout(() => areaRef.current?.focus(), 60);
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
-    document.addEventListener('keydown', onKey);
+    alive.current = true;
+    const overflow = document.body.style.overflow;
+    const previousFocus = document.activeElement as HTMLElement | null;
     document.body.style.overflow = 'hidden';
+    dialogRef.current?.focus();
     return () => {
-      document.removeEventListener('keydown', onKey);
-      document.body.style.overflow = '';
+      alive.current = false;
+      document.body.style.overflow = overflow;
+      previousFocus?.focus();
+      if (!published.current) urls.current.forEach(url => URL.revokeObjectURL(url));
     };
-  }, [open, onClose]);
+  }, []);
 
-  if (!open || typeof document === 'undefined') return null;
+  useEffect(() => {
+    if (stage === 'post') areaRef.current?.focus();
+  }, [stage]);
 
-  const first = me.name.split(' ')[0] || me.username;
-  const left = MAX - text.length;
-  const canPost = text.trim().length > 0 || media.length > 0;
-  const pct = Math.min(text.length / MAX, 1);
-
-  const pickFiles = (files: FileList | null) => {
-    if (!files) return;
-    Array.from(files).slice(0, 4 - media.length).forEach(f => {
-      const isVideo = f.type.startsWith('video');
-      if (isVideo) {
-        setMedia(m => [...m, { type: 'video', src: URL.createObjectURL(f) }]);
-      } else {
-        const r = new FileReader();
-        r.onload = () => setMedia(m => [...m, { type: 'image', src: String(r.result) }]);
-        r.readAsDataURL(f);
+  const attach = async (files: FileList | null) => {
+    if (!files?.length) return;
+    setBusy(true);
+    setError('');
+    const next = [...media];
+    try {
+      for (const file of Array.from(files)) {
+        const video = file.type.startsWith('video/');
+        if (!video && !['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) throw new Error('Choose a JPEG, PNG, WebP photo or a video.');
+        if (file.size > (video ? 100 : 10) * 1024 * 1024) throw new Error(video ? 'Videos must be under 100 MB.' : 'Photos must be under 10 MB.');
+        if (video && next.some(m => m.type === 'video')) throw new Error('Choose one video at a time.');
+        if (!video && next.filter(m => m.type === 'image').length >= 4) throw new Error('You can attach up to four photos.');
+        if (video) {
+          const src = URL.createObjectURL(file);
+          urls.current.push(src);
+          const dur = await videoDuration(src);
+          if (!Number.isFinite(dur) || dur > 60) throw new Error('Choose a video up to 60 seconds long.');
+          next.push({ type: 'video', src, dur });
+        } else {
+          next.push({ type: 'image', src: await resizeImage(file) });
+        }
       }
-    });
+      if (alive.current) {
+        setMedia(next);
+        if (stage === 'choose') setStage('reel');
+      }
+    } catch (err) {
+      if (alive.current) setError(err instanceof Error ? err.message : 'This file could not be opened. Try another file.');
+    } finally {
+      if (alive.current) setBusy(false);
+    }
   };
 
+  const canPost = !busy && (text.trim().length > 0 || media.length > 0) && (stage !== 'reel' || media.length > 0) && (!promote || !!promoConfig);
   const publish = () => {
-    if (!canPost) return;
-    let body = text.trim();
-    const extras = [mood ? `feeling ${mood}` : '', place.trim() ? `\u{1F4CD} ${place.trim()}` : ''].filter(Boolean);
-    if (extras.length) body += (body ? '\n\n' : '') + extras.join('  ·  ');
-    onPublish(body, media);
-    setText(''); setMedia([]); setMood(null); setPlace(''); setShowPlace(false); setShowMoods(false);
-    onClose();
+    if (!me || !canPost) return;
+    if (!me.emailVerified || (me.susp && (!me.susp.until || me.susp.until > Date.now()))) {
+      setError('A verified, active account is needed to post.');
+      return;
+    }
+    const id = original?.id || uid();
+    if (original) updatePost(id, { text: text.trim(), media, edited: true });
+    else addPost({ id, uid: me.id, kind: stage === 'reel' ? 'reel' : 'post', text: text.trim(), media, ts: Date.now(), status: 'live' });
+    if (promote && promoConfig) requestPromotion('post', id, promoConfig);
+    published.current = true;
+    showToast(original ? 'Post updated.' : stage === 'reel' ? 'Reel posted.' : 'Post published.');
+    closeComposer();
   };
 
   return createPortal(
-    <div className="cp-overlay" onClick={onClose}>
-      <div className="cp-card" onClick={e => e.stopPropagation()} role="dialog" aria-label="Create a post">
+    <div className="cp-overlay" onClick={closeComposer}>
+      <div className={`cp-card ${stage === 'choose' ? 'cp-choose' : ''}`} ref={dialogRef} tabIndex={-1} onClick={e => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="composer-title" onKeyDown={e => {
+        if (e.key === 'Escape') closeComposer();
+        if (e.key !== 'Tab') return;
+        const nodes = dialogRef.current?.querySelectorAll<HTMLElement>('button:not(:disabled), a[href], input:not([hidden]), textarea, select');
+        if (!nodes?.length) return;
+        const first = nodes[0];
+        const last = nodes[nodes.length - 1];
+        if (e.shiftKey && (document.activeElement === first || document.activeElement === dialogRef.current)) { e.preventDefault(); last.focus(); }
+        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+      }}>
         <div className="cp-head">
-          <button type="button" className="cp-icon" onClick={onClose} aria-label="Close">
-            <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" /></svg>
-          </button>
-          <div className="cp-title">
-            <span>New moment</span>
-            <small>Share it with the Chautari</small>
-          </div>
-          <button type="button" className="cp-publish-mini" disabled={!canPost} onClick={publish}>Share</button>
+          <b id="composer-title">{stage === 'choose' ? 'Create' : original ? 'Edit post' : stage === 'reel' ? 'Create reel' : 'Create post'}</b>
+          <button type="button" className="icon-btn cp-close" onClick={closeComposer} aria-label="Close composer">{IC.x}</button>
         </div>
-
-        <div className="cp-body">
-          <div className="cp-author">
-            <Avatar user={me} size={44} />
-            <div>
-              <b>{me.name || me.username}</b>
-              <div className="cp-audience">
-                <button type="button" className={audience === 'everyone' ? 'on' : ''} onClick={() => setAudience('everyone')}>Everyone</button>
-                <button type="button" className={audience === 'circle' ? 'on' : ''} onClick={() => setAudience('circle')}>My circle</button>
-              </div>
+        {!me ? <div className="cp-body"><p>Sign in to create a post or reel.</p><Link className="composer-signin" href="/login" onClick={closeComposer}>Sign in</Link></div> : <>
+          <input ref={fileRef} type="file" aria-label="Attach photos or video" accept="image/jpeg,image/png,image/webp,video/*" multiple hidden onChange={e => { void attach(e.target.files); e.target.value = ''; }} />
+          {stage === 'choose' ? <div className="create-options">
+            <button type="button" onClick={() => setStage('post')} disabled={busy}>{IC.img}<span><b>Post</b><small>Share a thought or a photo</small></span>{IC.plus}</button>
+            <button type="button" onClick={() => fileRef.current?.click()} disabled={busy}>{IC.video}<span><b>Reel</b><small>Choose a video or photo</small></span>{IC.plus}</button>
+          </div> : <>
+            <div className="cp-body">
+              <div className="cp-author"><Avatar user={me} size={40} /><div><b>{me.name}</b><span className="cp-public">{IC.globe} Public</span></div></div>
+              <textarea ref={areaRef} className="cp-text" aria-label="Post caption" placeholder={stage === 'reel' ? 'Add a caption…' : 'What would you like to share?'} value={text} maxLength={500} onChange={e => setText(e.target.value)} />
+              {media.length > 0 && <div className={`cp-media n${media.length}`}>
+                {media.map((item, i) => <div key={item.src || i} className="cp-thumb">
+                  {item.type === 'video' ? <video src={item.src} controls playsInline preload="metadata" /> : <img src={item.src || item.gen} alt={`Attachment ${i + 1}`} />}
+                  <button type="button" aria-label={`Remove attachment ${i + 1}`} onClick={() => setMedia(current => current.filter((_, j) => i !== j))}>{IC.x}</button>
+                </div>)}
+              </div>}
+              <button type="button" className="cp-attach" disabled={busy} onClick={() => fileRef.current?.click()}>{IC.img} Add photos or video</button>
+              {feature('promotion') && !original && <label className="cp-promote-toggle"><span>{t('promoteSection')}<small>Optional · paid with Coins</small></span><input type="checkbox" checked={promote} onChange={e => setPromote(e.target.checked)} /></label>}
+              {promote && <PromoteForm targetType="post" confirmLabel="Use this promotion" onConfirm={cfg => setPromoConfig(cfg)} />}
+              {promote && promoConfig && <small>Promotion selected. It will be requested when you post.</small>}
             </div>
-          </div>
-
-          <textarea
-            ref={areaRef}
-            className="cp-text"
-            placeholder={`Pull up a seat, ${first}. What's the story today?`}
-            value={text}
-            maxLength={MAX}
-            onChange={e => setText(e.target.value)}
-          />
-
-          {(mood || place.trim()) && (
-            <div className="cp-tags">
-              {mood && <span onClick={() => setMood(null)}>feeling {mood} {'\u2715'}</span>}
-              {place.trim() && <span onClick={() => setPlace('')}>{'\u{1F4CD} '}{place} {'\u2715'}</span>}
-            </div>
-          )}
-
-          {media.length > 0 && (
-            <div className={`cp-media n${media.length}`}>
-              {media.map((m, i) => (
-                <div key={i} className="cp-thumb">
-                  {m.type === 'video' ? <video src={m.src} muted /> : <img src={m.src} alt="" />}
-                  <button type="button" onClick={() => setMedia(ms => ms.filter((_, j) => j !== i))} aria-label="Remove">{'\u2715'}</button>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {showMoods && (
-            <div className="cp-moods">
-              {MOODS.map(m => (
-                <button key={m} type="button" className={mood === m ? 'on' : ''} onClick={() => { setMood(m); setShowMoods(false); }}>{m}</button>
-              ))}
-            </div>
-          )}
-
-          {showPlace && (
-            <input className="cp-place" placeholder="Where are you? e.g. Pokhara" value={place} onChange={e => setPlace(e.target.value)} />
-          )}
-
-          <input ref={fileRef} type="file" accept="image/*,video/*" multiple hidden onChange={e => { pickFiles(e.target.files); e.target.value = ''; }} />
-
-          <div className="cp-tools">
-            <button type="button" className="t-photo" onClick={() => fileRef.current?.click()}><i>{'\u{1F4F7}'}</i><span>Photo / Video</span></button>
-            <button type="button" className="t-mood" onClick={() => setShowMoods(v => !v)}><i>{'\u{1F642}'}</i><span>Mood</span></button>
-            <button type="button" className="t-place" onClick={() => setShowPlace(v => !v)}><i>{'\u{1F4CD}'}</i><span>Place</span></button>
-            <button type="button" className="t-live"><i>{'\u{1F3A5}'}</i><span>Go live</span></button>
-          </div>
-        </div>
-
-        <div className="cp-foot">
-          <div className="cp-ring" style={{ ['--p' as string]: pct } as React.CSSProperties} title={`${left} characters left`}>
-            <span className={left < 40 ? 'warn' : ''}>{left}</span>
-          </div>
-          <button type="button" className="cp-publish" disabled={!canPost} onClick={publish}>
-            Share moment
-          </button>
-        </div>
+            <div className="cp-foot"><span className="cp-count">{text.length}/500</span><button type="button" className="cp-publish" disabled={!canPost} onClick={publish}>{original ? 'Save changes' : stage === 'reel' ? 'Post reel' : 'Post'}</button></div>
+          </>}
+          {busy && <p className="cp-feedback" role="status">Preparing your attachment…</p>}
+          {error && <p className="cp-feedback cp-error" role="alert">{error}</p>}
+        </>}
       </div>
-    </div>,
-    document.body
+    </div>, document.body
   );
+}
+
+export default function CreatePostModal() {
+  const { composerPostId, db } = useApp();
+  if (composerPostId === undefined || typeof document === 'undefined') return null;
+  const original = composerPostId ? db.posts.find(p => p.id === composerPostId) : undefined;
+  return <Composer key={composerPostId || 'new'} original={original} />;
 }

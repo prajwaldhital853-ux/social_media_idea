@@ -3,8 +3,9 @@ import './globals.css'
 import { AppProvider } from '@/lib/AppContext'
 
 export const metadata: Metadata = {
-  title: 'Chautari',
-  description: 'A social media platform',
+  title: 'Exposing',
+  description: 'See it. Share it. Exposing. Photos, clips and stories from your corner of the world.',
+  icons: { icon: '/exposing-icon.png' },
 }
 
 export default function RootLayout({
@@ -17,7 +18,7 @@ export default function RootLayout({
       <head>
         <script
           dangerouslySetInnerHTML={{
-            __html: `try{var t=localStorage.getItem('chautari-theme');if(location.pathname.indexOf('/login')===0){t='dark'}else if(t!=='dark'){t='light'}document.documentElement.setAttribute('data-theme',t)}catch(e){}`
+            __html: `try{var t=localStorage.getItem('exposing-theme');if(location.pathname.indexOf('/login')===0){t='dark'}else if(t!=='dark'){t='light'}document.documentElement.setAttribute('data-theme',t)}catch(e){}`
           }}
         />
       </head>

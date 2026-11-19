@@ -8,7 +8,7 @@ import ThemeToggle from './ThemeToggle';
 import { IC } from '@/lib/icons';
 
 export default function Drawer() {
-  const { me, isAdmin, logout, drawerOpen, closeDrawer, db, updateLang } = useApp();
+  const { me, isAdmin, logout, drawerOpen, closeDrawer, db, updateLang, t, feature } = useApp();
 
   useEffect(() => {
     document.body.classList.toggle('noscroll', drawerOpen);
@@ -16,15 +16,17 @@ export default function Drawer() {
   }, [drawerOpen]);
 
   const links = [
-    { href: '/', label: 'Home', icon: IC.home },
-    { href: '/marketplace', label: 'Video Marketplace', icon: IC.vmarket },
-    { href: '/notifications', label: 'Notifications', icon: IC.bell },
-    { href: '/messages', label: 'Messages', icon: IC.msg },
-    { href: '/profile', label: 'Profile', icon: IC.user }
+    ...(me ? [{ href: `/u/${me.username}`, label: t('profile'), icon: IC.user }] : []),
+    { href: '/messages', label: t('messages'), icon: IC.msg },
+    { href: '/saved', label: t('saved'), icon: IC.bookmark },
+    { href: '/wallet', label: t('wallet'), icon: IC.wallet },
+    ...(feature('video') ? [{ href: '/video', label: t('video'), icon: IC.video }] : []),
+    ...(feature('marketplace') ? [{ href: '/marketplace', label: t('marketplace'), icon: IC.store }] : []),
+    { href: '/settings', label: t('settings'), icon: IC.gear }
   ];
 
   if (isAdmin()) {
-    links.push({ href: '/admin', label: 'Admin', icon: IC.menu });
+    links.push({ href: '/admin', label: t('admin'), icon: IC.shield });
   }
 
   return (
@@ -36,20 +38,20 @@ export default function Drawer() {
       />
       <aside className={`drawer ${drawerOpen ? 'open' : ''}`} aria-hidden={!drawerOpen} role="dialog" aria-label="Menu">
         <div className="drawer-head">
-          <span className="drawer-title">Menu</span>
-          <button type="button" className="icon-btn" onClick={closeDrawer} aria-label="Close menu">
+          <span className="drawer-title">{t('more')}</span>
+          <button type="button" className="icon-btn" onClick={closeDrawer} aria-label={t('close')}>
             {IC.x}
           </button>
         </div>
 
         {me && (
-          <div className="drawer-profile">
+          <Link href={`/u/${me.username}`} className="drawer-profile" onClick={closeDrawer}>
             <Avatar user={me} size={48} />
-            <div>
+            <span>
               <b>{me.name || me.username}</b>
               <span>@{me.username}</span>
-            </div>
-          </div>
+            </span>
+          </Link>
         )}
 
         <nav className="drawer-nav">
@@ -73,12 +75,20 @@ export default function Drawer() {
           </button>
           {me ? (
             <button type="button" className="drawer-link danger" onClick={logout}>
-              Log out
+              {IC.logout}
+              <span>{t('logout')}</span>
             </button>
           ) : (
-            <Link href="/login" className="drawer-link" onClick={closeDrawer}>
-              Log in
-            </Link>
+            <>
+              <Link href="/login" className="drawer-link" onClick={closeDrawer}>
+                {IC.user}
+                <span>{t('signIn')}</span>
+              </Link>
+              <Link href="/signup" className="drawer-link" onClick={closeDrawer}>
+                {IC.plus}
+                <span>{t('signUp')}</span>
+              </Link>
+            </>
           )}
         </div>
       </aside>

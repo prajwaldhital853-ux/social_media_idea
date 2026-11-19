@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import TwitterLayout from '@/components/TwitterLayout';
+import AppShell from '@/components/AppShell';
 import { useApp } from '@/lib/AppContext';
 import { esc, ago } from '@/lib/utils';
 
@@ -43,7 +43,7 @@ export default function AdminPage() {
   const openReports = db.reports.filter(r => r.status === 'open').length;
 
   return (
-    <TwitterLayout>
+    <AppShell>
       <header className="header">
         <div className="header-title">Admin Dashboard</div>
       </header>
@@ -189,6 +189,6 @@ export default function AdminPage() {
           </div>
         </div>
       )}
-    </TwitterLayout>
+    </AppShell>
   );
 }

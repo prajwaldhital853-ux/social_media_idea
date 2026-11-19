@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import TwitterLayout from '@/components/TwitterLayout';
+import AppShell from '@/components/AppShell';
 import PostCard from '@/components/PostCard';
 import { useApp } from '@/lib/AppContext';
 import { esc, ago } from '@/lib/utils';
@@ -39,11 +39,11 @@ export default function PostPage() {
   }
 
   const post = db.posts.find(p => p.id === params.id);
-  const comments = db.comments.filter(c => c.pid === params.id).sort((a, b) => a.ts - b.ts);
+  const comments = db.comments.filter(c => c.pid === params.id).sort((a, b) => b.ts - a.ts);
 
   if (!post || (post.status !== 'live' && !(me && (me.id === post.uid || me.role === 'admin')))) {
     return (
-      <TwitterLayout>
+      <AppShell>
         <header className="header">
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px', padding: '16px' }}>
             <button onClick={() => router.push('/')}>
@@ -53,19 +53,11 @@ export default function PostPage() {
           </div>
         </header>
         <p style={{ padding: '32px', textAlign: 'center', color: 'var(--muted)' }}>This post is not available</p>
-      </TwitterLayout>
+      </AppShell>
     );
   }
 
-  const author = db.users.find(u => u.id === post.uid) || {
-    id: 'deleted',
-    email: '',
-    username: 'deleted',
-    name: '',
-    role: 'user' as const,
-    verified: false,
-    susp: null
-  };
+  const author = db.users.find(u => u.id === post.uid);
 
   const handleCommentSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -92,7 +84,7 @@ export default function PostPage() {
   };
 
   return (
-    <TwitterLayout>
+    <AppShell>
       <div className="thread-view">
       <header className="header">
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px', padding: '16px' }}>
@@ -103,12 +95,14 @@ export default function PostPage() {
         </div>
       </header>
 
-      <PostCard post={post} author={author} featured />
+      {author && <PostCard post={post} author={author} featured />}
 
       <div style={{ padding: '16px', borderBottom: '1px solid var(--line)' }}>
-        <div style={{ marginBottom: '16px', color: 'var(--muted)', fontSize: '15px' }}>
-          Replying to <span style={{ color: 'var(--blue)' }}>@{author.username}</span>
-        </div>
+        {author && (
+          <div style={{ marginBottom: '16px', color: 'var(--muted)', fontSize: '15px' }}>
+            Replying to <span style={{ color: 'var(--blue)' }}>@{author.username}</span>
+          </div>
+        )}
 
         {me ? (
           <form onSubmit={handleCommentSubmit} style={{ display: 'flex', gap: '12px' }}>
@@ -167,15 +161,8 @@ export default function PostPage() {
       </div>
 
       {comments.map(c => {
-        const commentAuthor = db.users.find(u => u.id === c.uid) || {
-          id: 'deleted',
-          email: '',
-          username: 'deleted',
-          name: '',
-          role: 'user' as const,
-          verified: false,
-          susp: null
-        };
+        const commentAuthor = db.users.find(u => u.id === c.uid);
+        if (!commentAuthor) return null;
         return (
           <article key={c.id} className="post">
             <div className="post-top">
@@ -207,6 +194,6 @@ export default function PostPage() {
         );
       })}
       </div>
-    </TwitterLayout>
+    </AppShell>
   );
 }
