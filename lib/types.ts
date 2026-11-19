@@ -54,6 +54,7 @@ export interface Media {
 export interface Comment {
   id: string;
   pid: string;
+  parentId?: string;
   uid: string;
   text: string;
   ts: number;
