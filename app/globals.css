@@ -3164,3 +3164,126 @@ textarea {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+/* ===== Nested Replies ===== */
+.comment-replies {
+  margin-top: 12px;
+  padding-left: 32px;
+  border-left: 2px solid var(--line);
+}
+
+.comments-row.reply {
+  margin-top: 8px;
+}
+
+.comments-row.reply .comment-bubble {
+  background: var(--tint);
+}
+
+.cancel-reply {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--surface);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-left: -8px;
+  transition: all 0.2s ease;
+}
+
+.cancel-reply:hover {
+  background: var(--line);
+  transform: scale(1.1);
+}
+
+.cancel-reply svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* ===== Fix Keyboard Coverage ===== */
+.comments-compose {
+  position: sticky;
+  bottom: 0;
+  padding: 12px 16px;
+  background: var(--paper);
+  border-top: 1px solid var(--line);
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.comments-sheet .comments-compose {
+  padding-bottom: calc(12px + env(safe-area-inset-bottom));
+}
+
+.comments-inline .comments-compose {
+  position: relative;
+  margin: 0;
+  padding: 12px 0 0;
+  border-top: 1px solid var(--line);
+  background: transparent;
+  z-index: 1;
+}
+
+/* Ensure comments list scrolls properly when keyboard is open */
+.comments-sheet .comments-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 8px 14px 16px;
+  scroll-padding-bottom: 100px; /* Extra space for keyboard */
+}
+
+/* When keyboard opens, ensure compose field stays visible */
+@media (max-width: 768px) {
+  .comments-compose {
+    scroll-margin-bottom: 20px;
+  }
+
+  .comments-compose input {
+    font-size: 16px; /* Prevent iOS zoom */
+    scroll-margin-bottom: 100px;
+  }
+
+  .comments-compose input:focus {
+    scroll-margin-bottom: 150px;
+  }
+
+  /* Adjust comments list height when keyboard is open */
+  .comments-sheet {
+    max-height: 100vh;
+    max-height: 100dvh; /* Dynamic viewport height */
+  }
+
+  .comments-sheet .comments-list {
+    max-height: calc(100vh - 250px);
+    max-height: calc(100dvh - 250px);
+  }
+
+  /* When input is focused, reduce list height more */
+  .comments-sheet:has(input:focus) .comments-list {
+    max-height: calc(100vh - 350px);
+    max-height: calc(50vh);
+  }
+}
+
+/* ===== Better scrolling behavior ===== */
+.comments-list {
+  scroll-behavior: smooth;
+}
+
+.comments-row {
+  scroll-margin-top: 80px;
+  scroll-margin-bottom: 120px;
+}
+
+/* ===== Reply indicator ===== */
+.comments-compose input[placeholder*="reply" i] {
+  border: 2px solid var(--brand);
+  padding: 10px 14px;
+}
