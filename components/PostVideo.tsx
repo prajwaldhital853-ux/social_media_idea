@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 interface PostVideoProps {
   src: string;
   duration?: number;
+  autoPlay?: boolean;
 }
 
 function formatTime(seconds: number) {
@@ -14,9 +15,9 @@ function formatTime(seconds: number) {
   return `${m}:${String(s).padStart(2, '0')}`;
 }
 
-export default function PostVideo({ src, duration }: PostVideoProps) {
+export default function PostVideo({ src, duration, autoPlay = false }: PostVideoProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const [playing, setPlaying] = useState(false);
+  const [playing, setPlaying] = useState(autoPlay);
   const [muted, setMuted] = useState(true);
   const [current, setCurrent] = useState(0);
   const [total, setTotal] = useState(duration || 0);
@@ -24,6 +25,15 @@ export default function PostVideo({ src, duration }: PostVideoProps) {
   useEffect(() => {
     const el = videoRef.current;
     if (!el) return;
+    
+    if (autoPlay) {
+      el.muted = true;
+      void el.play().catch(() => {
+        // Autoplay failed, likely due to browser policy
+        setPlaying(false);
+      });
+    }
+    
     const onTime = () => setCurrent(el.currentTime);
     const onMeta = () => setTotal(el.duration || duration || 0);
     const onEnd = () => setPlaying(false);
@@ -41,7 +51,7 @@ export default function PostVideo({ src, duration }: PostVideoProps) {
       el.removeEventListener('pause', onPause);
       el.removeEventListener('play', onPlay);
     };
-  }, [duration, src]);
+  }, [duration, src, autoPlay]);
 
   const togglePlay = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -75,6 +85,7 @@ export default function PostVideo({ src, duration }: PostVideoProps) {
         muted={muted}
         preload="metadata"
         onClick={togglePlay}
+        loop={autoPlay}
       />
       {!playing && (
         <button type="button" className="video-play" onClick={togglePlay} aria-label="Play video">

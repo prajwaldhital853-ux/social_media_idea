@@ -79,6 +79,7 @@ export default function PostCard({ post, author, featured }: PostCardProps) {
   const [promoting, setPromoting] = useState(false);
   const [whyOpen, setWhyOpen] = useState(false);
   const [promoHidden, setPromoHidden] = useState(false);
+  const [selectedMediaIndex, setSelectedMediaIndex] = useState<number | null>(null);
 
   const promo = activePromo('post', post.id);
   const own = me?.id === post.uid;
@@ -115,8 +116,35 @@ export default function PostCard({ post, author, featured }: PostCardProps) {
   const videos = media.filter(m => m.type === 'video');
   const images = media.filter(m => m.type === 'image');
   const mixed = videos.length > 0 && images.length > 0;
-  const shown = mixed ? [...videos.slice(0, 1), ...images.slice(0, 4)] : media.slice(0, 4);
-  const extra = media.length - shown.length;
+  
+  // Updated gallery layout: single video auto-plays, mixed media shows video first then images
+  let shown: Media[] = [];
+  let extra = 0;
+  
+  if (mixed) {
+    // Mixed: video(s) first, then up to 4 images
+    shown = [...videos.slice(0, 1), ...images.slice(0, 4)];
+    extra = media.length - shown.length;
+  } else if (videos.length > 0 && videos.length === 1) {
+    // Single video - show only it
+    shown = videos;
+    extra = 0;
+  } else if (videos.length > 1) {
+    // Multiple videos only - show first 4
+    shown = videos.slice(0, 4);
+    extra = videos.length - 4;
+  } else {
+    // Images only
+    if (images.length === 1) {
+      shown = images;
+    } else if (images.length <= 4) {
+      shown = images;
+    } else {
+      // More than 4 images - show first big, then 3 small, +extra
+      shown = images.slice(0, 4);
+      extra = images.length - 4;
+    }
+  }
 
   const onArticleClick = (e: React.MouseEvent) => {
     const el = e.target as HTMLElement;
@@ -202,20 +230,45 @@ export default function PostCard({ post, author, featured }: PostCardProps) {
           {mixed ? (
             <>
               {videos.slice(0, 1).map((item, index) => (
-                <PostVideo key={`v-${index}`} src={item.src || ''} duration={item.dur} />
+                <PostVideo key={`v-${index}`} src={item.src || ''} duration={item.dur} autoPlay={true} />
               ))}
               <div className={`mosaic-photos n${Math.min(images.length, 4)}`}>
                 {images.slice(0, 4).map((item, index) => (
-                  <img key={`i-${index}`} src={item.src || item.gen} alt="" loading="lazy" />
+                  <img 
+                    key={`i-${index}`} 
+                    src={item.src || item.gen} 
+                    alt="" 
+                    loading="lazy"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedMediaIndex(1 + index); // 1-based index accounting for video
+                    }}
+                    style={{ cursor: 'pointer' }}
+                  />
                 ))}
               </div>
             </>
           ) : (
             shown.map((item, index) =>
               item.type === 'video' ? (
-                <PostVideo key={`v-${index}`} src={item.src || ''} duration={item.dur} />
+                <PostVideo 
+                  key={`v-${index}`} 
+                  src={item.src || ''} 
+                  duration={item.dur}
+                  autoPlay={shown.length === 1}
+                />
               ) : (
-                <img key={`i-${index}`} src={item.src || item.gen} alt="" loading="lazy" />
+                <img 
+                  key={`i-${index}`} 
+                  src={item.src || item.gen} 
+                  alt="" 
+                  loading="lazy"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedMediaIndex(index);
+                  }}
+                  style={{ cursor: shown.filter(m => m.type === 'image').length > 1 ? 'pointer' : 'default' }}
+                />
               )
             )
           )}

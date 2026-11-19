@@ -2203,3 +2203,610 @@ a.trend-item:hover { text-decoration: none; }
   .comments-inline .comments-compose { position: fixed; left: 0; right: 0; bottom: 0; }
   .thread-view .post-featured { border-bottom-width: 1px; }
 }
+
+/* ===== Comments Section Improvements ===== */
+.comment-reactions-display {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.comment-reaction-icon {
+  font-size: 18px;
+  display: inline-flex;
+  align-items: center;
+  animation: reactionPop 0.32s cubic-bezier(0.2, 0.8, 0.3, 1.3);
+}
+
+.comment-reaction-icon-small {
+  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  margin-left: 2px;
+}
+
+.comment-reactions-inline {
+  display: flex;
+  gap: 2px;
+  align-items: center;
+}
+
+.delete-comment-btn {
+  font-size: 10px;
+  color: var(--brand);
+  padding: 2px 4px;
+  border-radius: 4px;
+}
+
+.delete-comment-btn:hover {
+  background: var(--tint);
+}
+
+/* Comments sheet fixes */
+.comments-overlay {
+  animation: fadeIn 0.2s ease;
+}
+
+.comments-sheet {
+  animation: commentSheetIn 0.25s cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+
+.comments-compose {
+  position: sticky;
+  bottom: 0;
+  padding-bottom: max(10px, calc(10px + env(safe-area-inset-bottom)));
+  background: var(--paper);
+  border-top: 1px solid var(--line);
+  z-index: 30;
+}
+
+.comments-compose input {
+  max-height: 120px;
+  padding: 12px 16px;
+}
+
+/* Smooth animations for navigation */
+.post {
+  animation: fadeIn 0.28s ease;
+}
+
+.thread-view {
+  animation: threadOpen 0.42s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.comments-inline {
+  animation: slideUp 0.3s ease;
+}
+
+/* ===== Search Page Improvements ===== */
+.search-detail-header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  padding: 12px 16px;
+  background: var(--paper);
+  border-bottom: 1px solid var(--line);
+}
+
+.search-page-header {
+  padding: 16px 16px 8px;
+}
+
+.search-page-header h1 {
+  margin: 0 0 12px;
+  font-size: 20px;
+  font-weight: 800;
+}
+
+.search-page-header .search-input {
+  margin-bottom: 0;
+}
+
+/* ===== Remove scrollbar ===== */
+.widgets::-webkit-scrollbar {
+  display: none;
+}
+
+.widgets {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Hide scrollbar from all overflowing content */
+::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+/* ===== Keyboard/Mobile Fixes ===== */
+@supports (padding: max(0px)) {
+  .comments-compose {
+    padding-bottom: calc(10px + env(safe-area-inset-bottom));
+  }
+}
+
+/* Prevent keyboard from covering input on mobile */
+@media (max-width: 768px) {
+  input:focus,
+  textarea:focus {
+    scroll-margin-bottom: 60px;
+  }
+
+  .comments-compose input {
+    border-radius: 22px;
+  }
+
+  .comments-compose input:focus {
+    border-radius: 16px;
+  }
+}
+
+/* ===== Drawer and Modal Animations ===== */
+.drawer {
+  animation: drawerSlideIn 0.24s cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+
+@keyframes drawerSlideIn {
+  from {
+    transform: translateX(-105%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.drawer-overlay.open {
+  animation: fadeIn 0.24s ease;
+}
+
+.modal-overlay {
+  animation: fadeIn 0.2s ease;
+}
+
+.modal-content {
+  animation: scaleIn 0.2s ease;
+}
+
+/* ===== Post Page Improvements ===== */
+.detail-header {
+  animation: slideUp 0.25s ease;
+}
+
+.thread-view .post-featured {
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 12px;
+}
+
+.thread-view .post-featured .media-mosaic.single {
+  max-height: 60vh;
+  aspect-ratio: auto;
+}
+
+.comments-inline {
+  padding: 12px 16px 16px;
+  border-top: 1px solid var(--line);
+  margin-top: 8px;
+}
+
+.comments-inline .comments-compose {
+  margin: 0 -16px -16px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--line);
+  border-radius: 0;
+}
+
+/* Prevent input fields from being covered by keyboard */
+.comments-compose input {
+  font-size: 16px; /* Prevents zoom on iOS */
+}
+
+.post-text {
+  overflow-wrap: break-word;
+  word-break: break-word;
+  hyphens: auto;
+}
+
+/* ===== Gallery Improvements ===== */
+.media-mosaic {
+  border-radius: 14px;
+}
+
+.media-mosaic.single {
+  aspect-ratio: 16 / 10;
+}
+
+.media-mosaic img,
+.media-mosaic video {
+  transition: transform 0.2s ease;
+}
+
+.media-mosaic img:hover,
+.media-mosaic video:hover {
+  transform: scale(1.01);
+}
+
+/* Fixed layout for comment section - prevent jumping */
+.post-actions {
+  margin-bottom: 0;
+}
+
+.comments-panel {
+  margin: 4px 0 0 52px;
+  padding: 12px 0 0;
+  border-top: 1px solid var(--line);
+  animation: slideUp 0.3s ease;
+}
+
+/* Smooth page transitions */
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeInScale {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Video overlay improvements */
+.video-play {
+  transition: all 0.2s ease;
+}
+
+.post-video:hover .video-play {
+  transform: scale(1.1);
+  background: rgba(15, 20, 25, 0.88);
+}
+
+/* Post and comment interaction smoothing */
+.action-btn {
+  transition: all 0.2s ease;
+}
+
+.action-btn:active {
+  transform: scale(0.95);
+}
+
+/* Better keyboard handling for composition input */
+.cp-text {
+  max-height: 360px;
+  overflow-y: auto;
+}
+
+.cp-compose-wrap {
+  position: sticky;
+  bottom: 0;
+  background: var(--paper);
+  border-top: 1px solid var(--line);
+  padding: 12px 16px;
+  z-index: 30;
+}
+
+/* Smooth drawer transitions */
+@media (max-width: 768px) {
+  .drawer-overlay {
+    animation: fadeIn 0.24s ease;
+  }
+
+  .drawer {
+    transform: translateX(-105%);
+    transition: transform 0.24s cubic-bezier(0.2, 0.9, 0.3, 1);
+  }
+
+  .drawer.open {
+    transform: translateX(0);
+  }
+}
+
+
+/* ===== Post Page Layout ===== */
+.post-page-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  animation: fadeInScale 0.3s ease;
+}
+
+.post-page-comments {
+  padding: 16px;
+  border-top: 1px solid var(--line);
+  background: var(--paper);
+}
+
+.post-page-comments .comments-inline {
+  margin: 0;
+  padding: 0;
+  border-top: none;
+  gap: 12px;
+}
+
+.post-page-comments .comments-list {
+  max-height: calc(100vh - 320px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-bottom: 12px;
+}
+
+.post-page-comments .comments-compose {
+  position: sticky;
+  bottom: 0;
+  margin: 12px -16px -16px;
+  padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--line);
+  background: var(--paper);
+}
+
+/* ===== Featured Post Improvements ===== */
+.post-featured {
+  border-bottom: 8px solid var(--tint);
+}
+
+.post-featured .media-mosaic {
+  margin: 8px 0;
+  border-radius: 14px;
+}
+
+.post-featured .post-caption {
+  padding: 0 16px;
+  margin: 12px 0;
+}
+
+.post-featured .post-actions {
+  padding: 12px 16px;
+  margin: 0;
+  border-top: 1px solid var(--line);
+}
+
+/* Prevent composition input from being covered */
+@media (max-width: 768px) {
+  .post-page-comments .comments-compose {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    margin: 0;
+    padding: 12px 12px calc(12px + env(safe-area-inset-bottom));
+    border-radius: 0;
+    box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.08);
+    z-index: 100;
+  }
+
+  .post-page-comments {
+    padding-bottom: calc(76px + env(safe-area-inset-bottom));
+  }
+
+  .post-page-comments .comments-list {
+    max-height: calc(100vh - 240px);
+  }
+
+  .comments-compose input {
+    font-size: 16px;
+    padding: 12px 14px;
+  }
+
+  .comments-compose input::placeholder {
+    color: var(--muted);
+  }
+}
+
+/* ===== Media Gallery Modal ===== */
+.media-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.92);
+  animation: fadeIn 0.2s ease;
+}
+
+.media-modal-content {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.media-modal img,
+.media-modal video {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  animation: fadeInScale 0.25s ease;
+}
+
+.media-modal-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  padding: 20px;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.media-modal-nav button {
+  pointer-events: auto;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  border: none;
+  cursor: pointer;
+}
+
+.media-modal-nav button:hover {
+  background: rgba(255, 255, 255, 0.4);
+}
+
+.media-modal-nav button:active {
+  transform: scale(0.95);
+}
+
+.media-modal-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.5);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  border: none;
+  cursor: pointer;
+  z-index: 20;
+}
+
+.media-modal-close:hover {
+  background: rgba(0, 0, 0, 0.7);
+}
+
+.media-modal-counter {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.6);
+  color: white;
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+/* ===== Right Scrollbar Removal ===== */
+.widgets {
+  scrollbar-width: none;
+}
+
+.widgets::-webkit-scrollbar {
+  display: none;
+}
+
+.rail {
+  scrollbar-width: none;
+}
+
+.rail::-webkit-scrollbar {
+  display: none;
+}
+
+/* ===== Smooth Page Transitions ===== */
+.detail-header {
+  animation: slideUp 0.25s cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+
+.search-view {
+  animation: fadeIn 0.2s ease;
+}
+
+/* ===== Header Sticky Position ===== */
+.detail-header {
+  position: sticky;
+  top: 0;
+  z-index: 65;
+  background: color-mix(in srgb, var(--paper) 86%, transparent);
+  backdrop-filter: blur(10px);
+}
+
+@media (max-width: 768px) {
+  .detail-header {
+    top: calc(56px + env(safe-area-inset-top));
+  }
+}
+
+/* ===== Input Field Focus Handling ===== */
+input[type="text"],
+input[type="search"],
+textarea {
+  scroll-margin: 100px;
+}
+
+@media (max-width: 768px) {
+  input[type="text"],
+  input[type="search"],
+  textarea {
+    scroll-margin: 200px;
+  }
+
+  input:focus,
+  textarea:focus,
+  .comments-compose input:focus {
+    font-size: 16px;
+    scroll-padding-bottom: 60px;
+  }
+}
+
+/* ===== Post State Improvements ===== */
+.post-state-note {
+  padding: 8px 12px;
+  background: var(--brand-tint);
+  border-left: 3px solid var(--brand);
+  border-radius: 4px;
+  color: var(--ink);
+  font-size: 13px;
+  margin: 8px 0;
+}
+
+/* ===== Reaction Button Improvements ===== */
+.react-wrap {
+  transition: all 0.2s ease;
+}
+
+.react-wrap.reacted {
+  animation: likeBounce 0.3s ease;
+}
+
+/* ===== Mobile Performance ===== */
+@media (max-width: 768px) {
+  .post {
+    animation: fadeIn 0.2s ease;
+  }
+
+  .thread-view {
+    animation: fadeIn 0.2s ease;
+  }
+
+  .comments-inline {
+    animation: slideUp 0.25s ease;
+  }
+
+  .comments-sheet {
+    animation: commentSheetIn 0.3s cubic-bezier(0.2, 0.9, 0.3, 1);
+  }
+}
+
+/* ===== Ensure keyboard doesn't cover input ===== */
+@supports (padding: max(0px)) {
+  body {
+    padding-bottom: env(keyboard-inset-height, 0px);
+  }
+}
