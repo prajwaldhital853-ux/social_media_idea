@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useApp } from '@/lib/AppContext';
 import Avatar from './Avatar';
 import BrandLogo from './BrandLogo';
@@ -9,8 +9,9 @@ import ThemeToggle from './ThemeToggle';
 import { IC } from '@/lib/icons';
 
 export default function NavRail() {
-  const { me, isAdmin, logout, openDrawer, openComposer, t, feature } = useApp();
+  const { me, isAdmin, logout, openDrawer, t, feature } = useApp();
   const pathname = usePathname();
+  const router = useRouter();
 
   const navItems = [
     { icon: IC.home, label: t('home'), href: '/' },
@@ -42,7 +43,11 @@ export default function NavRail() {
         </button>
       </nav>
 
-      <button type="button" className="post-btn" onClick={() => openComposer(null)}>
+      <button 
+        type="button" 
+        className="post-btn" 
+        onClick={() => me ? router.push('/create') : router.push('/login')}
+      >
         {IC.plus}
         <span>{t('post')}</span>
       </button>

@@ -22,11 +22,11 @@ export default function Comments({ postId, onClose }: { postId: string; onClose?
   const sheet = !!onClose;
   const comments = db.comments.filter(c => c.pid === postId && c.status === 'live').sort((a, b) => sort === 'newest' ? b.ts - a.ts : a.ts - b.ts);
   
-  // Get post reactions to show reaction icons
+  // Get post reactions to show only reaction icons that exist on the post
   const post = db.posts.find(p => p.id === postId);
   const postReactions = db.reactions.filter(r => r.targetType === 'post' && r.targetId === postId);
   const reactionKindsSet = new Set(postReactions.map(r => r.kind));
-  const reactionKinds = Array.from(reactionKindsSet);
+  const reactionKinds = Array.from(reactionKindsSet).filter(kind => kind); // Only existing reactions
   
   useEffect(() => {
     if (!sheet) return;
@@ -59,19 +59,22 @@ export default function Comments({ postId, onClose }: { postId: string; onClose?
   }}>
     {sheet && <div className="comments-grip"/>}
     <div className="comments-heading">
-      <span>{postReactions.length ? `${postReactions.length} ${postReactions.length === 1 ? 'reaction' : 'reactions'}` : 'Be the first to like this'}</span>
-      <div className="comment-reactions-display">
-        {reactionKinds.length > 0 && reactionKinds.map(kind => (
-          <span key={kind} className="comment-reaction-icon" title={kind}>
-            {kind === 'like' && '👍'}
-            {kind === 'love' && '❤️'}
-            {kind === 'haha' && '😂'}
-            {kind === 'wow' && '😮'}
-            {kind === 'sad' && '😢'}
-          </span>
-        ))}
+      <div className="comments-reactions-row">
+        {reactionKinds.length > 0 && (
+          <div className="comment-reactions-display">
+            {reactionKinds.map(kind => (
+              <span key={kind} className="comment-reaction-icon" title={kind}>
+                {kind === 'like' && '👍'}
+                {kind === 'love' && '❤️'}
+                {kind === 'haha' && '😂'}
+                {kind === 'wow' && '😮'}
+                {kind === 'sad' && '😢'}
+              </span>
+            ))}
+          </div>
+        )}
+        <span className="reactions-count">{postReactions.length ? `${postReactions.length}` : ''}</span>
       </div>
-      <ReactionButton targetType="post" targetId={postId}/>
       {sheet && <button className="icon-btn" aria-label="Close comments" onClick={onClose}>{IC.x}</button>}
     </div>
     <div className="comments-sort"><label>Comments <select aria-label="Sort comments" value={sort} onChange={e => setSort(e.target.value)}><option value="newest">Newest</option><option value="oldest">Oldest</option></select></label><span>{comments.length}</span></div>
@@ -82,24 +85,35 @@ export default function Comments({ postId, onClose }: { postId: string; onClose?
         const commentReactions = db.reactions.filter(r => r.targetType === 'comment' && r.targetId === c.id);
         const commentReactionKindsSet = new Set(commentReactions.map(r => r.kind));
         const commentReactionKinds = Array.from(commentReactionKindsSet);
-        return author && <div className="comments-row" key={c.id}><Avatar user={author} size={30}/><div className="comments-content"><div className="comment-bubble"><div><b>{author.name}</b>{author.verified && <VerifiedBadge size={13}/>}</div><p>{c.text}</p></div><div className="comment-meta">
-          <time>{ago(c.ts, db.lang)}</time>
-          {commentReactionKinds.length > 0 && (
-            <div className="comment-reactions-inline">
-              {commentReactionKinds.map(kind => (
-                <span key={kind} className="comment-reaction-icon-small" title={kind}>
-                  {kind === 'like' && '👍'}
-                  {kind === 'love' && '❤️'}
-                  {kind === 'haha' && '😂'}
-                  {kind === 'wow' && '😮'}
-                  {kind === 'sad' && '😢'}
-                </span>
-              ))}
+        return author && <div className="comments-row" key={c.id}>
+          <Avatar user={author} size={30}/>
+          <div className="comments-content">
+            <div className="comment-bubble">
+              <div><b>{author.name}</b>{author.verified && <VerifiedBadge size={13}/>}</div>
+              <p>{c.text}</p>
+              {commentReactionKinds.length > 0 && (
+                <div className="comment-bubble-reactions">
+                  {commentReactionKinds.map(kind => (
+                    <span key={kind} className="comment-reaction-badge" title={kind}>
+                      {kind === 'like' && '👍'}
+                      {kind === 'love' && '❤️'}
+                      {kind === 'haha' && '😂'}
+                      {kind === 'wow' && '😮'}
+                      {kind === 'sad' && '😢'}
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
-          )}
-          <ReactionButton targetType="comment" targetId={c.id} small/>
-          {me?.id === c.uid && <button className="delete-comment-btn" onClick={() => deleteComment(c.id)}>Delete</button>}
-        </div></div></div>; 
+            <div className="comment-meta">
+              <time>{ago(c.ts, db.lang)}</time>
+              <button className="comment-action-btn">Love</button>
+              <button className="comment-action-btn">Reply</button>
+              <ReactionButton targetType="comment" targetId={c.id} small/>
+              {me?.id === c.uid && <button className="delete-comment-btn" onClick={() => deleteComment(c.id)}>Delete</button>}
+            </div>
+          </div>
+        </div>; 
       })}
     </div>
     {me ? <form className="comments-compose" onSubmit={e => {

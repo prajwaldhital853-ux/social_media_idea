@@ -2,15 +2,16 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useApp } from '@/lib/AppContext';
 import { IC } from '@/lib/icons';
 import ThemeToggle from './ThemeToggle';
 
 export default function MobileNav() {
   const pathname = usePathname();
-  const { me, db, openDrawer, openComposer, t, feature } = useApp();
-  const focusedPage = pathname.startsWith('/post/') || pathname === '/explore';
+  const router = useRouter();
+  const { me, db, openDrawer, t, feature } = useApp();
+  const focusedPage = pathname.startsWith('/post/') || pathname === '/explore' || pathname === '/create';
   const [compactPost, setCompactPost] = useState(false);
   const unread = me ? db.notifications.filter(n => n.uid === me.id && !n.read).length : 0;
 
@@ -49,7 +50,13 @@ export default function MobileNav() {
         <ThemeToggle compact />
       </header>
 
-      <button type="button" className={`post-fab ${compactPost ? 'is-compact' : ''}`} onClick={() => openComposer(null)} aria-label="Create post or reel" aria-haspopup="dialog">
+      <button 
+        type="button" 
+        className={`post-fab ${compactPost ? 'is-compact' : ''}`} 
+        onClick={() => me ? router.push('/create') : router.push('/login')} 
+        aria-label="Create post or reel" 
+        aria-haspopup="dialog"
+      >
         <span className="post-fab-label">Post</span>
         <span className="post-fab-plus" aria-hidden="true">{IC.plus}</span>
       </button>
