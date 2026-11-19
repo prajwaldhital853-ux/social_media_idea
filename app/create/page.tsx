@@ -13,7 +13,7 @@ export default function CreatePostPage() {
   const [text, setText] = useState('');
   const [media, setMedia] = useState<Array<{type: 'image' | 'video', src?: string, gen?: string, dur?: number}>>([]);
   const [mood, setMood] = useState('');
-  const [location, setLocation] = useState('');
+  const [userLocation, setUserLocation] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -63,7 +63,7 @@ export default function CreatePostPage() {
       ts: Date.now(),
       status: 'live' as const,
       mood: mood || undefined,
-      place: location || undefined,
+      place: userLocation || undefined,
     };
 
     addPost(newPost);
@@ -147,13 +147,13 @@ export default function CreatePostPage() {
           </div>
         )}
 
-        {location && (
+        {userLocation && (
           <div className="create-post-tag">
             <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
               <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
             </svg>
-            {location}
-            <button onClick={() => setLocation('')} className="remove-tag-btn">{IC.x}</button>
+            {userLocation}
+            <button onClick={() => setUserLocation('')} className="remove-tag-btn">{IC.x}</button>
           </div>
         )}
 
@@ -183,7 +183,7 @@ export default function CreatePostPage() {
             className="create-action-btn location"
             onClick={() => {
               const loc = prompt('Enter location:');
-              if (loc) setLocation(loc);
+              if (loc) setUserLocation(loc);
             }}
             title="Add location"
           >

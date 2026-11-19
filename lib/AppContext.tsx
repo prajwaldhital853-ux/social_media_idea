@@ -1,6 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, ReactNode, Dispatch, SetStateAction } from 'react';
+import { usePathname } from 'next/navigation';
 import { Database, User, Post, Comment, ThemeMode, ReactionKind, NotificationKind, FeatureFlags, Promotion } from './types';
 import { getDb, save } from './storage';
 import { THEME_KEY, uid, ageFromDob, DAY } from './utils';
@@ -69,12 +70,18 @@ function readTheme(): ThemeMode {
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export function AppProvider({ children }: { children: ReactNode }) {
+  const pathname = usePathname();
   const [db, setDb] = useState<Database>(getDb());
   const [mounted, setMounted] = useState(false);
   const [theme, setTheme] = useState<ThemeMode>('light');
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [composerPostId, setComposerPostId] = useState<string | null | undefined>(undefined);
   const [toast, setToast] = useState<string | null>(null);
+
+  // Close drawer when navigation occurs
+  useEffect(() => {
+    setDrawerOpen(false);
+  }, [pathname]);
 
   useEffect(() => {
     setMounted(true);

@@ -3203,30 +3203,97 @@ textarea {
   height: 14px;
 }
 
-/* ===== Fix Keyboard Coverage ===== */
-.comments-compose {
-  position: sticky;
+/* ===== Fixed Comment Layout - Like SS3/SS4 ===== */
+.comments-sheet {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  background: var(--paper);
+}
+
+.comments-sheet .comments-heading {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  background: var(--paper);
+  z-index: 1001;
+  border-bottom: 1px solid var(--line);
+  padding: 12px 16px;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.comments-sheet .comments-sort {
+  position: fixed;
+  top: 60px;
+  left: 0;
+  right: 0;
+  background: var(--paper);
+  z-index: 1001;
+  border-bottom: 1px solid var(--line);
+  padding: 8px 16px;
+  margin: 0;
+}
+
+.comments-sheet .comments-list {
+  position: fixed;
+  top: 100px;
+  left: 0;
+  right: 0;
+  bottom: 80px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0 16px 16px;
+  background: var(--paper);
+  z-index: 1000;
+}
+
+.comments-sheet .comments-compose {
+  position: fixed;
+  left: 0;
+  right: 0;
   bottom: 0;
   padding: 12px 16px;
   background: var(--paper);
   border-top: 1px solid var(--line);
-  z-index: 100;
+  z-index: 1002;
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
-.comments-sheet .comments-compose {
-  padding-bottom: calc(12px + env(safe-area-inset-bottom));
+/* Remove keyboard space from SS1 */
+.comments-compose {
+  scroll-margin-bottom: 0;
 }
 
-.comments-inline .comments-compose {
-  position: relative;
-  margin: 0;
-  padding: 12px 0 0;
-  border-top: 1px solid var(--line);
-  background: transparent;
-  z-index: 1;
+.comments-compose input:focus {
+  scroll-margin-bottom: 0;
+}
+
+/* Top caption from left to right */
+.comments-heading {
+  padding: 12px 16px;
+}
+
+.comments-heading .comments-reactions-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: 0;
+  flex: 1;
+}
+
+.comment-reactions-display {
+  margin-left: 0;
 }
 
 /* Ensure comments list scrolls properly when keyboard is open */
@@ -3286,4 +3353,70 @@ textarea {
 .comments-compose input[placeholder*="reply" i] {
   border: 2px solid var(--brand);
   padding: 10px 14px;
+}
+
+/* ===== Fix inline comments for better layout ===== */
+.comments-inline {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  position: relative;
+}
+
+.comments-inline .comments-list {
+  max-height: 400px;
+  overflow-y: auto;
+  margin-bottom: 12px;
+  padding: 8px 0;
+}
+
+.comments-inline .comments-compose {
+  position: relative;
+  margin: 0;
+  padding: 12px 0 0;
+  border-top: 1px solid var(--line);
+  background: transparent;
+  z-index: 1;
+}
+
+/* When keyboard opens, adjust comments list */
+@media (max-width: 768px) {
+  .comments-inline:has(input:focus) .comments-list {
+    max-height: 200px;
+    margin-bottom: 8px;
+  }
+
+  .comments-inline .comments-compose {
+    position: sticky;
+    bottom: 0;
+    background: var(--paper);
+    padding-bottom: calc(12px + env(safe-area-inset-bottom));
+  }
+}
+
+/* Fix comment content layout */
+.comments-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.comment-bubble {
+  max-width: 85%;
+}
+
+/* Ensure comment meta stays visible */
+.comment-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.comment-action-btn {
+  font-size: 13px;
+  color: var(--brand);
+  font-weight: 600;
+  padding: 2px 0;
 }
