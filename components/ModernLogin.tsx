@@ -16,7 +16,8 @@ export default function ModernLogin() {
     if (!email || !password) return;
 
     // Demo login - accept any credentials
-    const user = db.users.find(u => u.email === email.toLowerCase()) || db.users[0];
+    const id = email.trim().toLowerCase().replace(/^@/, '');
+    const user = db.users.find(u => u.email.toLowerCase() === id || u.username.toLowerCase() === id) || db.users[0];
     login(user.id);
     router.push('/');
   };
@@ -80,7 +81,7 @@ export default function ModernLogin() {
         </form>
 
         <p className="login-footer">
-          Don't have an account? <a href="#" onClick={(e) => { e.preventDefault(); handleSocialLogin(); }}>Sign up</a>
+          Don't have an account? <a href="/signup" onClick={e => { e.preventDefault(); router.push('/signup'); }}>Sign up</a>
         </p>
       </div>
     </div>

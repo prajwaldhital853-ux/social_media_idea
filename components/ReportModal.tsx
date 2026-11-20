@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useApp } from '@/lib/AppContext';
+import { useBackClose } from '@/lib/useBackClose';
 import { IC } from '@/lib/icons';
 
 const REASONS = ['r_spam', 'r_abuse', 'r_sexual', 'r_violence', 'r_false', 'r_other'] as const;
@@ -17,6 +18,7 @@ export default function ReportModal({ type, targetId, onClose }: ReportModalProp
   const { t, addReport, db, me } = useApp();
   const [reason, setReason] = useState<string>('r_spam');
   const [note, setNote] = useState('');
+  useBackClose(true, onClose);
 
   const already = me && db.reports.some(r => r.type === type && r.targetId === targetId && r.by === me.id);
 

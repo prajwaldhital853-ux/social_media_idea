@@ -1,0 +1,49 @@
+from django.conf import settings
+from django.db import models
+
+
+class Post(models.Model):
+    class Audience(models.TextChoices):
+        PUBLIC = 'public', 'Public'
+        FOLLOWERS = 'followers', 'Followers only'
+
+    class Status(models.TextChoices):
+        LIVE = 'live', 'Live'
+        HIDDEN = 'hidden', 'Hidden by moderation'
+        REMOVED = 'removed', 'Removed by moderation'
+
+    author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='posts')
+    text = models.TextField(blank=True)
+    audience = models.CharField(max_length=10, choices=Audience.choices, default=Audience.PUBLIC)
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.LIVE)
+    mood = models.CharField(max_length=80, blank=True)
+    place = models.CharField(max_length=120, blank=True)
+    edited = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [models.Index(fields=['-created_at'], name='post_newest_first')]
+
+    def __str__(self):
+        return f'{self.author.username}: {self.text[:40]}'
+
+
+class PostMedia(models.Model):
+    class Kind(models.TextChoices):
+        IMAGE = 'image', 'Image'
+        VIDEO = 'video', 'Video'
+
+    post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name='media')
+    kind = models.CharField(max_length=5, choices=Kind.choices, default=Kind.IMAGE)
+    url = models.URLField(blank=True)
+    file = models.FileField(upload_to='posts/', blank=True)
+    duration = models.FloatField(null=True, blank=True)
+    position = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        ordering = ['position']
+
+    def __str__(self):
+        return f'{self.post_id}#{self.position} {self.kind}'

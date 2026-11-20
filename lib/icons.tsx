@@ -221,6 +221,12 @@ export const IC = {
       <path d="M12 5c4.5 0 8.3 2.7 10 7-1.7 4.3-5.5 7-10 7S3.7 16.3 2 12c1.7-4.3 5.5-7 10-7zm0 2c-3.4 0-6.4 2-7.8 5 1.4 3 4.4 5 7.8 5s6.4-2 7.8-5c-1.4-3-4.4-5-7.8-5zm0 1.5a3.5 3.5 0 1 1 0 7 3.5 3.5 0 0 1 0-7z" />
     </svg>
   ),
+  calendar: (
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
+      <rect x="3.5" y="5" width="17" height="16" rx="2.5" />
+      <path d="M3.5 10h17M8 2.5V6M16 2.5V6" />
+    </svg>
+  ),
   g: (
     <svg viewBox="0 0 48 48">
       <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z" />

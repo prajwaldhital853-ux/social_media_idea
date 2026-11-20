@@ -1,7 +1,138 @@
 'use client';
 
-import SimplePage from '@/components/SimplePage';
+import { useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import AppShell from '@/components/AppShell';
+import Avatar from '@/components/Avatar';
+import VerifiedBadge from '@/components/VerifiedBadge';
+import ThemeToggle from '@/components/ThemeToggle';
+import PeoplePicker from '@/components/PeoplePicker';
+import { useApp } from '@/lib/AppContext';
+import { closeLayerWithoutBack } from '@/lib/useBackClose';
+import { IC } from '@/lib/icons';
+import { ago } from '@/lib/utils';
+import { Message, User } from '@/lib/types';
+
+interface Conversation {
+  other: User;
+  last: Message;
+  unread: number;
+}
 
 export default function MessagesPage() {
-  return <SimplePage title="Messages" note="Direct messages stay in this inbox." />;
+  const router = useRouter();
+  const { db, me, t } = useApp();
+  const lang = db.lang;
+  const [q, setQ] = useState('');
+  const [picker, setPicker] = useState(false);
+
+  const conversations = useMemo<Conversation[]>(() => {
+    if (!me) return [];
+    const byOther = new Map<string, Message[]>();
+    for (const m of db.messages) {
+      if (m.from !== me.id && m.to !== me.id) continue;
+      const otherId = m.from === me.id ? m.to : m.from;
+      const list = byOther.get(otherId) || [];
+      list.push(m);
+      byOther.set(otherId, list);
+    }
+    const out: Conversation[] = [];
+    byOther.forEach((msgs, otherId) => {
+      const other = db.users.find(u => u.id === otherId);
+      if (!other) return;
+      msgs.sort((a, b) => a.ts - b.ts);
+      out.push({
+        other,
+        last: msgs[msgs.length - 1],
+        unread: msgs.filter(m => m.to === me.id && !m.read).length
+      });
+    });
+    return out.sort((a, b) => b.last.ts - a.last.ts);
+  }, [db.messages, db.users, me]);
+
+  const needle = q.trim().toLowerCase();
+  const shown = conversations.filter(c =>
+    !needle || c.other.name.toLowerCase().includes(needle) || c.other.username.toLowerCase().includes(needle)
+  );
+  const totalUnread = conversations.reduce((n, c) => n + c.unread, 0);
+
+  return <AppShell>
+    <div className="inbox-view">
+      <header className="header home-header">
+        <div className="home-header-row">
+          <div className="home-header-copy">
+            <h1 className="header-title">{t('messages')}</h1>
+            <p className="header-sub">{totalUnread > 0 ? `${totalUnread} ${t('unread')}` : t('inbox')}</p>
+          </div>
+          <div className="header-actions">
+            {me && (
+              <button type="button" className="ghost-btn" onClick={() => setPicker(true)}>
+                {IC.plus}<span>{t('newMessage')}</span>
+              </button>
+            )}
+            <ThemeToggle compact/>
+          </div>
+        </div>
+      </header>
+
+      {!me ? (
+        <div className="empty-state">
+          <span className="empty-state-icon">{IC.msg}</span>
+          <h2>{t('needLogin')}</h2>
+          <button type="button" className="empty-state-cta" onClick={() => router.push('/login')}>{t('signIn')}</button>
+        </div>
+      ) : (
+        <>
+          <div className="inbox-search">
+            {IC.search}
+            <input
+              value={q}
+              onChange={e => setQ(e.target.value)}
+              placeholder={t('searchPeople')}
+              aria-label={t('searchPeople')}
+            />
+          </div>
+          {shown.length === 0 ? (
+            <div className="empty-state">
+              <span className="empty-state-icon">{IC.msg}</span>
+              <h2>{t('noMessages')}</h2>
+              <button type="button" className="empty-state-cta" onClick={() => setPicker(true)}>{t('newMessage')}</button>
+            </div>
+          ) : (
+            <div className="inbox-list">
+              {shown.map(c => (
+                <button
+                  type="button"
+                  key={c.other.id}
+                  className={`inbox-row ${c.unread ? 'unread' : ''}`}
+                  onClick={() => router.push(`/messages/${c.other.id}`)}
+                >
+                  <Avatar user={c.other} size={52}/>
+                  <span className="inbox-row-main">
+                    <span className="inbox-row-top">
+                      <b>{c.other.name}{c.other.verified && <VerifiedBadge/>}</b>
+                      <span className="inbox-row-time">{ago(c.last.ts, lang)}</span>
+                    </span>
+                    <span className="inbox-row-preview">
+                      {c.last.from === me.id ? `${t('you')}: ` : ''}{c.last.text}
+                    </span>
+                  </span>
+                  {c.unread > 0 && <span className="inbox-badge">{c.unread}</span>}
+                </button>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+
+      {picker && me && (
+        <PeoplePicker
+          title={t('newMessage')}
+          exclude={[me.id]}
+          onClose={() => setPicker(false)}
+          onSelect={u => { closeLayerWithoutBack(); setPicker(false); router.push(`/messages/${u.id}`); }}
+        />
+      )}
+    </div>
+  </AppShell>;
 }

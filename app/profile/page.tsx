@@ -1,7 +1,14 @@
 'use client';
 
-import SimplePage from '@/components/SimplePage';
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { useApp } from '@/lib/AppContext';
 
-export default function ProfilePage() {
-  return <SimplePage title="Profile" note="Your posts and details will live on this page." />;
+export default function ProfileRedirect() {
+  const { me } = useApp();
+  const router = useRouter();
+  useEffect(() => {
+    router.replace(me ? `/u/${me.username}` : '/login');
+  }, [me, router]);
+  return null;
 }

@@ -45,8 +45,19 @@ export function useBackClose(active: boolean, close: Closer) {
       stack.push(entry);
       history.pushState({ ...(history.state || {}), exposingLayer: stack.length }, '');
     }, 0);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || !pushed) return;
+      if (stack[stack.length - 1] !== entry) return;
+      const i = stack.indexOf(entry);
+      if (i >= 0) stack.splice(i, 1);
+      swallow++;
+      history.back();
+      closeRef.current();
+    };
+    window.addEventListener('keydown', onKey);
     return () => {
       clearTimeout(timer);
+      window.removeEventListener('keydown', onKey);
       if (!pushed) return;
       const i = stack.indexOf(entry);
       if (i >= 0) {

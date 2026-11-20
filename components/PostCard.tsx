@@ -76,6 +76,7 @@ export default function PostCard({ post, author, featured }: PostCardProps) {
   const [promoting, setPromoting] = useState(false);
   const [whyOpen, setWhyOpen] = useState(false);
   const [promoHidden, setPromoHidden] = useState(false);
+  const warmed = useRef(false);
 
   const promo = activePromo('post', post.id);
   const own = me?.id === post.uid;
@@ -121,6 +122,15 @@ export default function PostCard({ post, author, featured }: PostCardProps) {
     openPost();
   };
 
+  const warmRoutes = () => {
+    if (warmed.current) return;
+    warmed.current = true;
+    router.prefetch(`/post/${post.id}`);
+    router.prefetch(`/u/${author.username}`);
+    if (media.length > 0) router.prefetch(`/post/${post.id}/media/0`);
+    if (single && media[0]?.type === 'video') router.prefetch(`/video/${post.id}-0`);
+  };
+
   const menuItem = (label: string, fn: () => void, danger = false) => (
     <button
       type="button"
@@ -132,7 +142,7 @@ export default function PostCard({ post, author, featured }: PostCardProps) {
   );
 
   return (
-    <article className={`post ${featured ? 'post-featured' : ''}`} onClick={onArticleClick}>
+    <article className={`post ${featured ? 'post-featured' : ''}`} onClick={onArticleClick} onPointerEnter={warmRoutes} onTouchStart={warmRoutes}>
       {promo && (
         <div className="promoted-row">
           <span className="promoted-chip">{IC.chart}{t('promoted')}</span>
@@ -204,13 +214,14 @@ export default function PostCard({ post, author, featured }: PostCardProps) {
                   src={item.src || ''}
                   duration={item.dur}
                   preview={!single}
-                  onOpen={() => openReel(index)}
+                  onOpen={() => (single ? openReel(index) : openMedia(index))}
                 />
               ) : (
                 <img
                   src={item.src || item.gen}
                   alt=""
                   loading="lazy"
+                  decoding="async"
                   onClick={() => openMedia(index)}
                 />
               )}

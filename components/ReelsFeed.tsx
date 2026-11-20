@@ -11,7 +11,7 @@ import AutoVideo from './AutoVideo';
 import Comments from './Comments';
 import Avatar from './Avatar';
 import VerifiedBadge from './VerifiedBadge';
-import ReactionIcon from './ReactionIcon';
+import ReactionButton from './ReactionButton';
 import Toast from './Toast';
 import MobileNav from './MobileNav';
 import NavRail from './NavRail';
@@ -28,7 +28,7 @@ interface ReelSlide {
 
 export default function ReelsFeed({ initialKey }: { initialKey?: string }) {
   const router = useRouter();
-  const { db, me, feature, react, myReaction, toggleSave, isSaved, toggleFollow, isFollowing } = useApp();
+  const { db, me, feature, toggleSave, isSaved, toggleFollow, isFollowing } = useApp();
   const [index, setIndex] = useState(0);
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
@@ -53,13 +53,20 @@ export default function ReelsFeed({ initialKey }: { initialKey?: string }) {
     });
 
   const startIndex = Math.max(0, slides.findIndex(s => s.key === initialKey));
+  const signature = slides.map(s => s.key).join('|');
+  const lastSignature = useRef('');
+  const viewedKey = useRef<string | null>(null);
 
   useLayoutEffect(() => {
     const el = scrollRef.current;
-    if (el) el.scrollTop = startIndex * el.clientHeight;
-    indexRef.current = startIndex;
-    setIndex(startIndex);
-  }, [startIndex, mounted]);
+    if (!el || lastSignature.current === signature) return;
+    lastSignature.current = signature;
+    const kept = viewedKey.current ? slides.findIndex(s => s.key === viewedKey.current) : -1;
+    const target = kept >= 0 ? kept : initialKey ? startIndex : 0;
+    el.scrollTop = target * el.clientHeight;
+    indexRef.current = target;
+    setIndex(target);
+  }, [signature, startIndex, initialKey, mounted, slides]);
 
   useEffect(() => {
     const onResize = () => {
@@ -115,6 +122,7 @@ export default function ReelsFeed({ initialKey }: { initialKey?: string }) {
     const i = Math.max(0, Math.min(Math.round(el.scrollTop / el.clientHeight), slides.length - 1));
     if (i !== indexRef.current) {
       indexRef.current = i;
+      viewedKey.current = slides[i]?.key ?? null;
       setIndex(i);
       setCommentsOpen(false);
     }
@@ -137,10 +145,8 @@ export default function ReelsFeed({ initialKey }: { initialKey?: string }) {
         {feature('video') && slides.length > 0 ? (
           <div className="reels-scroll" ref={scrollRef} onScroll={onScroll}>
             {slides.map((slide, i) => {
-              const likeCount = db.reactions.filter(r => (r.targetType === 'post' && r.targetId === slide.post.id) || (r.targetType === 'media' && r.targetId.startsWith(`${slide.post.id}#m`))).length;
               const commentCount = db.comments.filter(c => c.pid === slide.post.id && c.status === 'live').length;
               const saveCount = db.saves.filter(s => s.pid === slide.post.id).length;
-              const mine = myReaction('post', slide.post.id);
               const saved = isSaved(slide.post.id);
               const following = isFollowing(slide.author.id);
               const own = me?.id === slide.author.id;
@@ -166,16 +172,13 @@ export default function ReelsFeed({ initialKey }: { initialKey?: string }) {
                       )}
                     </div>
                     <div className="reel-rail-item">
-                      <button
-                        type="button"
-                        className={mine ? 'on' : ''}
-                        aria-label={mine ? 'Remove reaction' : 'Like this reel'}
-                        aria-pressed={!!mine}
-                        onClick={() => me ? react('post', slide.post.id, mine || 'like') : router.push('/login')}
-                      >
-                        {mine ? <ReactionIcon kind={mine} /> : IC.thumb}
-                      </button>
-                      <span>{likeCount > 0 ? compact(likeCount) : 'Like'}</span>
+                      <ReactionButton
+                        targetType="post"
+                        targetId={slide.post.id}
+                        openOnClick
+                        emptyLabel="Like"
+                        extraCount={db.reactions.filter(r => r.targetType === 'media' && r.targetId.startsWith(`${slide.post.id}#m`)).length}
+                      />
                     </div>
                     <div className="reel-rail-item">
                       <button type="button" aria-label="Comment on this reel" onClick={() => setCommentsOpen(true)}>

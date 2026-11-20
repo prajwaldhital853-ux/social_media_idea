@@ -13,6 +13,7 @@ export default function MobileNav({ barOnly = false }: { barOnly?: boolean }) {
   const router = useRouter();
   const { me, db, openDrawer, t, feature, openCreateChooser } = useApp();
   const focusedPage = pathname.startsWith('/post/') || pathname === '/explore' || pathname === '/create';
+  const inChat = /^\/messages\/[^/]+/.test(pathname);
   const [compactPost, setCompactPost] = useState(false);
   const unread = me ? db.notifications.filter(n => n.uid === me.id && !n.read).length : 0;
 
@@ -65,16 +66,16 @@ export default function MobileNav({ barOnly = false }: { barOnly?: boolean }) {
         <ThemeToggle compact />
       </header>
 
-      <button 
-        type="button" 
-        className={`post-fab ${compactPost ? 'is-compact' : ''}`} 
-        onClick={() => me ? openCreateChooser() : router.push('/login')} 
-        aria-label="Create post or reel" 
+      {!inChat && <button
+        type="button"
+        className={`post-fab ${compactPost ? 'is-compact' : ''}`}
+        onClick={() => me ? openCreateChooser() : router.push('/login')}
+        aria-label="Create post or reel"
         aria-haspopup="dialog"
       >
         <span className="post-fab-label">Post</span>
         <span className="post-fab-plus" aria-hidden="true">{IC.plus}</span>
-      </button>
+      </button>}
 
       <nav className="mobile-nav" aria-label="Primary mobile navigation">
         {tabs.map(tab => {

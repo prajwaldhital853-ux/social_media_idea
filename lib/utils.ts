@@ -151,12 +151,3 @@ export const videoDuration = (url: string): Promise<number> => {
     v.src = url;
   });
 };
-
-export const fileToDataUrl = (file: File): Promise<string> => {
-  return new Promise((res, rej) => {
-    const r = new FileReader();
-    r.onload = () => res(String(r.result));
-    r.onerror = () => rej(new Error('This file could not be read. Try another one.'));
-    r.readAsDataURL(file);
-  });
-};

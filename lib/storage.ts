@@ -23,7 +23,7 @@ export function save(db: Database): boolean {
       return (k === 'src' && typeof v === 'string' && v.indexOf('blob:') === 0) ? undefined : v;
     }));
     copy.posts.forEach((p: any) => {
-      p.media = (p.media || []).filter((m: any) => m.src || m.gen);
+      p.media = (p.media || []).filter((m: any) => m.src || m.gen || m.blobId);
     });
     localStorage.setItem(KEY, JSON.stringify(copy));
     return true;

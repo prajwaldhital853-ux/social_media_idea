@@ -333,7 +333,7 @@ export function seed(): Database {
     { id: 'r3', type: 'listing' as const, targetId: 'l4', by: 'u4', reason: 'r_price', note: 'Price seems misleading', ts: now - 6 * 60 * M, status: 'open' as const }
   ];
 
-  const lang = (typeof navigator !== 'undefined' && navigator.language || '').toLowerCase().indexOf('ne') === 0 ? 'ne' : 'en';
+  const lang = (typeof window !== 'undefined' && navigator.language || '').toLowerCase().indexOf('ne') === 0 ? 'ne' : 'en';
 
   return {
     users,

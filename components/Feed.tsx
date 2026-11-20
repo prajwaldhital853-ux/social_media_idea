@@ -1,19 +1,36 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import PostCard from '@/components/PostCard';
 import { useApp } from '@/lib/AppContext';
 import { canSeePost } from '@/lib/utils';
 import ThemeToggle from './ThemeToggle';
 
+const PAGE_SIZE = 6;
+
 export default function Feed() {
   const { db, me, t, isStaff, openComposer } = useApp();
   const [tab, setTab] = useState<'foryou' | 'following'>('foryou');
+  const [limit, setLimit] = useState(PAGE_SIZE);
+  const sentinel = useRef<HTMLDivElement>(null);
   const followingIds = new Set(db.follows.filter(f => f.follower === me?.id).map(f => f.following));
   const visiblePosts = db.posts
     .filter(p => (p.status === 'live' || me?.id === p.uid || isStaff()) && canSeePost(p, me?.id ?? null, db.follows) && (tab !== 'following' || followingIds.has(p.uid)))
     .sort((a, b) => b.ts - a.ts);
+
+  useEffect(() => setLimit(PAGE_SIZE), [tab]);
+
+  useEffect(() => {
+    const el = sentinel.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      entries => { if (entries[0].isIntersecting) setLimit(l => l + PAGE_SIZE); },
+      { rootMargin: '900px 0px' }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [visiblePosts.length, limit]);
 
   return (
     <>
@@ -37,10 +54,11 @@ export default function Feed() {
         <div className="feed-empty"><p>Sign in to see posts from people you follow.</p><Link href="/login">{t('signIn')}</Link></div>
       ) : visiblePosts.length === 0 ? (
         <div className="feed-empty"><p>{t('followingEmpty')}</p><Link href="/explore">Find people</Link></div>
-      ) : visiblePosts.map(post => {
+      ) : visiblePosts.slice(0, limit).map(post => {
         const author = db.users.find(u => u.id === post.uid);
         return author ? <PostCard key={post.id} post={post} author={author} /> : null;
       })}
+      {limit < visiblePosts.length && <div ref={sentinel} className="feed-sentinel" aria-hidden="true" />}
     </>
   );
 }

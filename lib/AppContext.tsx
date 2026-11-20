@@ -4,6 +4,7 @@ import React, { createContext, useContext, useState, useEffect, ReactNode, Dispa
 import { usePathname } from 'next/navigation';
 import { Database, User, Post, Comment, ThemeMode, ReactionKind, NotificationKind, FeatureFlags, Promotion } from './types';
 import { getDb, save } from './storage';
+import { hydrateVideoSrcs } from './videoStore';
 import { THEME_KEY, uid, ageFromDob, DAY } from './utils';
 import { I18N, TranslationKey } from './i18n';
 
@@ -92,6 +93,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const next = readTheme();
     setTheme(next);
     document.documentElement.setAttribute('data-theme', next);
+    hydrateVideoSrcs(db).then(srcs => {
+      if (!srcs.size) return;
+      setDb(cur => ({
+        ...cur,
+        posts: cur.posts.map(p => ({
+          ...p,
+          media: (p.media || []).map(m => m.blobId && srcs.has(m.blobId) ? { ...m, src: srcs.get(m.blobId) } : m)
+        }))
+      }));
+    }).catch(() => {});
   }, []);
 
   useEffect(() => {

@@ -27,8 +27,20 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 const shot = (page, name) => page.screenshot({ path: `${OUT}/${name}.png` });
 async function goto(page, path) {
   await page.goto('http://localhost:3000' + path, { waitUntil: 'domcontentloaded', timeout: 45000 });
-  await page.waitForSelector('.post, .create-post-page, .search-view, .login-card, .login-container, .modern-login, .reels-page, .media-page', { timeout: 30000 }).catch(() => {});
+  await page.waitForSelector('.post, .create-post-page, .search-view, .login-card, .login-container, .modern-login, .reels-page, .media-page, .profile-view, .profile-missing, .wallet-body, .settings-body, .notif-view, .inbox-view, .chat-view, .market-view, .admin-view, .legal-doc, .signup-container, .saved-list, .empty-state, .feed-empty', { timeout: 30000 }).catch(() => {});
   await sleep(900);
+  if (path === '/') await loadAllFeed(page);
+}
+async function loadAllFeed(page) {
+  for (let i = 0; i < 10; i++) {
+    const before = await page.evaluate(() => document.querySelectorAll('article.post').length);
+    await page.evaluate(() => window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'instant' }));
+    await sleep(320);
+    const after = await page.evaluate(() => document.querySelectorAll('article.post').length);
+    if (after === before) break;
+  }
+  await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
+  await sleep(250);
 }
 const setKb = (page, kb, visible) => page.evaluate(([kb, visible]) => {
   const r = document.documentElement.style;
@@ -48,16 +60,68 @@ const setVal = (page, sel, v) => page.evaluate(([sel, v]) => {
   setter.call(el, v);
   el.dispatchEvent(new Event('input', { bubbles: true }));
 }, [sel, v]);
-const goBack = async page => { await page.goBack({ waitUntil: 'domcontentloaded', timeout: 8000 }).catch(() => {}); await sleep(750); };
+const goBack = async page => {
+  await page.goBack({ waitUntil: 'domcontentloaded', timeout: 8000 }).catch(() => {});
+  await sleep(750);
+  if (await page.evaluate(() => location.pathname) === '/') await loadAllFeed(page);
+};
 const clickPost = (page, text, sel) => page.evaluate(([t, s]) => {
   [...document.querySelectorAll('article.post')].find(a => a.textContent.includes(t))?.querySelector(s)?.click();
 }, [text, sel]);
 const scrollPost = (page, text) => page.evaluate(t => {
   [...document.querySelectorAll('article.post')].find(a => a.textContent.includes(t))?.scrollIntoView({ block: 'center' });
 }, text);
+const swipe = async (page, x1, y1, x2, y2, steps = 14) => {
+  const cdp = await page.createCDPSession();
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: x1, y: y1 }] });
+  for (let i = 1; i <= steps; i++) {
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: x1 + (x2 - x1) * i / steps, y: y1 + (y2 - y1) * i / steps }] });
+    await sleep(16);
+  }
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  await cdp.detach();
+};
 
 // ================= DESKTOP =================
 const d = await newPage({ width: 1280, height: 900 });
+await goto(d, '/');
+
+const layout = await d.evaluate(() => {
+  const cols = getComputedStyle(document.querySelector('.shell')).gridTemplateColumns.split(' ').map(parseFloat);
+  const main = document.querySelector('.main').getBoundingClientRect();
+  const calm = document.querySelector('.side-calm');
+  const cr = calm.getBoundingClientRect();
+  return { cols, mainW: Math.round(main.width), calmW: Math.round(cr.width), calmBg: getComputedStyle(calm).backgroundColor, calmEmpty: calm.children.length === 0, calmRight: Math.abs(cr.right - window.innerWidth) < 2, rail: !!document.querySelector('.rail .nav-item') };
+});
+ok('desktop: left menu + comfortable feed + calm blank right column', layout.cols.length === 3 && layout.mainW >= 640 && layout.mainW <= 700 && layout.calmW > 200 && layout.calmEmpty && layout.calmBg !== 'rgba(0, 0, 0, 0)' && layout.calmRight && layout.rail, JSON.stringify(layout));
+
+await d.goto('http://localhost:3000/', { waitUntil: 'domcontentloaded', timeout: 45000 });
+await d.waitForSelector('article.post', { timeout: 30000 });
+await sleep(600);
+const firstPage = await d.evaluate(() => document.querySelectorAll('article.post').length);
+await loadAllFeed(d);
+const fullPage = await d.evaluate(() => document.querySelectorAll('article.post').length);
+ok('desktop: feed paginates first paint and loads more on scroll', firstPage === 6 && fullPage > firstPage, JSON.stringify({ firstPage, fullPage }));
+
+const clickTime = async (sel, waitSel) => {
+  const start = Date.now();
+  await d.evaluate(s => document.querySelector(s)?.click(), sel);
+  await d.waitForSelector(waitSel, { timeout: 15000 });
+  return Date.now() - start;
+};
+const tSearch = await clickTime('.rail .nav-item[href="/explore"]', '.search-view');
+ok('desktop: Search opens fast (prefetched)', tSearch < 1500, `${tSearch}ms`);
+await goto(d, '/');
+const tReels = await clickTime('.rail .nav-item[href="/video"]', '.reels-page');
+ok('desktop: Reels opens fast (prefetched)', tReels < 1500, `${tReels}ms`);
+await goto(d, '/');
+await d.hover('article.post');
+const tPost = await clickTime('article.post', '.post-page-content');
+ok('desktop: post opens fast (prefetched on hover)', tPost < 1500, `${tPost}ms`);
+await goto(d, '/');
+await d.hover('article.post');
+const tProfile = await clickTime('article.post .post-name', '.profile-view');
+ok('desktop: author profile opens fast (prefetched on hover)', tProfile < 1500, `${tProfile}ms`);
 await goto(d, '/');
 
 ok('desktop: feed renders', await d.evaluate(() => document.querySelectorAll('.post').length >= 10));
@@ -99,25 +163,30 @@ ok('desktop: video pauses when scrolled off-screen', await d.evaluate(() => {
   return a?.querySelector('.media-mosaic.single video')?.paused === true;
 }));
 await scrollPost(d, 'Rain over New Road');
-await sleep(1200);
+await d.waitForFunction(() => {
+  const a = [...document.querySelectorAll('article.post')].find(x => x.textContent.includes('Rain over New Road'));
+  const v = a?.querySelector('.media-mosaic.single video');
+  return v && !v.paused;
+}, { timeout: 6000 }).catch(() => {});
+await sleep(300);
 ok('desktop: video resumes when back in view', await d.evaluate(() => {
   const a = [...document.querySelectorAll('article.post')].find(x => x.textContent.includes('Rain over New Road'));
   return a?.querySelector('.media-mosaic.single video')?.paused === false;
 }));
 
-// Mixed mosaic video click -> Reels at that clip (phase 4: no pause)
+// Mixed mosaic video click -> picture-scrolling media page at that clip (phase 5)
 await scrollPost(d, 'Weekend in Pokhara');
 await sleep(400);
 await clickPost(d, 'Weekend in Pokhara', '.post-video .video-play');
-await d.waitForSelector('.reels-page', { timeout: 8000 });
+await d.waitForSelector('.media-page', { timeout: 8000 });
 await sleep(1400);
-const mixReel = await d.evaluate(() => {
-  const el = document.querySelector('.reels-scroll');
-  const i = Math.round(el.scrollTop / el.clientHeight);
-  const v = document.querySelectorAll('.reel-slide')[i]?.querySelector('video');
-  return { path: location.pathname, src: v?.getAttribute('src'), playing: v ? !v.paused : false };
+const mixMedia = await d.evaluate(() => {
+  const el = document.querySelector('.media-page-scroll');
+  const i = Math.round(el.scrollLeft / el.clientWidth);
+  const v = document.querySelectorAll('.media-page-slide')[i]?.querySelector('video');
+  return { path: location.pathname, i, src: v?.getAttribute('src'), playing: v ? !v.paused : false, count: document.querySelector('.media-page-count')?.textContent, noReels: !document.querySelector('.reels-page') };
 });
-ok('desktop: mixed mosaic video click opens Reels at that clip', /\/video\/p_mix-0$/.test(mixReel.path) && (mixReel.src || '').includes('flower') && mixReel.playing, JSON.stringify(mixReel));
+ok('desktop: mixed mosaic video opens media page at that clip (not Reels)', /\/post\/p_mix\/media\/0$/.test(mixMedia.path) && (mixMedia.src || '').includes('flower') && mixMedia.playing && mixMedia.count === '1 / 8' && mixMedia.noReels, JSON.stringify(mixMedia));
 
 // Mixed photo click -> dedicated media route at 2/8
 await goto(d, '/');
@@ -126,23 +195,36 @@ await sleep(400);
 await clickPost(d, 'Weekend in Pokhara', '.mosaic-cell:nth-child(2) img');
 await d.waitForSelector('.media-page', { timeout: 8000 });
 await sleep(1200);
-const viewer1 = await d.evaluate(() => ({
-  path: location.pathname,
-  count: document.querySelector('.media-page-count')?.textContent,
-  slides: document.querySelectorAll('.media-page-slide').length,
-  snap: getComputedStyle(document.querySelector('.media-page-scroll')).scrollSnapType,
-  slide0Video: !!document.querySelectorAll('.media-page-slide')[0]?.querySelector('video'),
-  slide1Img: !!document.querySelectorAll('.media-page-slide')[1]?.querySelector('img')
-}));
-ok('desktop: photo opens media route at 2/8, 8 slides, snap', /\/post\/.+\/media\/1$/.test(viewer1.path) && viewer1.count === '2 / 8' && viewer1.slides === 8 && viewer1.snap.includes('mandatory') && viewer1.slide0Video && viewer1.slide1Img, JSON.stringify(viewer1));
+const viewer1 = await d.evaluate(() => {
+  const sc = document.querySelector('.media-page-scroll');
+  const cs = getComputedStyle(sc);
+  return {
+    path: location.pathname,
+    count: document.querySelector('.media-page-count')?.textContent,
+    slides: document.querySelectorAll('.media-page-slide').length,
+    snap: cs.scrollSnapType,
+    axis: cs.overflowX + '/' + cs.overflowY,
+    row: cs.flexDirection,
+    slideW: Math.round(document.querySelector('.media-page-slide').getBoundingClientRect().width),
+    clientW: sc.clientWidth,
+    slide0Video: !!document.querySelectorAll('.media-page-slide')[0]?.querySelector('video'),
+    slide1Img: !!document.querySelectorAll('.media-page-slide')[1]?.querySelector('img')
+  };
+});
+ok('desktop: photo opens media route at 2/8, 8 slides, horizontal snap', /\/post\/.+\/media\/1$/.test(viewer1.path) && viewer1.count === '2 / 8' && viewer1.slides === 8 && viewer1.snap === 'x mandatory' && viewer1.axis === 'auto/hidden' && viewer1.row === 'row' && viewer1.slideW === viewer1.clientW && viewer1.slide0Video && viewer1.slide1Img, JSON.stringify(viewer1));
 await shot(d, 'desktop-media-video');
-await d.evaluate(() => { const el = document.querySelector('.media-page-scroll'); el.scrollTo({ top: 0, behavior: 'instant' }); });
+await d.evaluate(() => { const el = document.querySelector('.media-page-scroll'); el.scrollTo({ left: 0, behavior: 'instant' }); });
 await sleep(1000);
 const mediaVid = await d.evaluate(() => ({ count: document.querySelector('.media-page-count')?.textContent, playing: !document.querySelector('.media-page-slide video')?.paused, muted: document.querySelector('.media-page-slide video')?.muted }));
 ok('desktop: media page video slide plays with sound at 1/8', mediaVid.count === '1 / 8' && mediaVid.playing && mediaVid.muted === false, JSON.stringify(mediaVid));
-await d.keyboard.press('ArrowDown');
+await d.keyboard.press('ArrowRight');
 await sleep(700);
-ok('desktop: ArrowDown advances to 2/8', await d.evaluate(() => document.querySelector('.media-page-count')?.textContent === '2 / 8'));
+ok('desktop: ArrowRight advances to 2/8', await d.evaluate(() => document.querySelector('.media-page-count')?.textContent === '2 / 8'));
+await d.keyboard.press('ArrowLeft');
+await sleep(700);
+ok('desktop: ArrowLeft returns to 1/8', await d.evaluate(() => document.querySelector('.media-page-count')?.textContent === '1 / 8'));
+await d.keyboard.press('ArrowRight');
+await sleep(700);
 
 // Per-media like + comment on the media page
 ok('desktop: per-media action bar (like/comment/share)', await d.evaluate(() => !!document.querySelector('.media-page-actions .reaction-trigger') && !!document.querySelector('.media-page-actions button[aria-label^="Comment on"]') && !!document.querySelector('.media-page-actions button[aria-label="Share this media"]')));
@@ -188,7 +270,7 @@ const agg = await d.evaluate(id => {
 }, mixId);
 ok('desktop: post totals include per-media comments+reactions', agg.commentSpan === String(agg.totalComments) && agg.reactSpan === String(agg.totalReactions), JSON.stringify(agg));
 
-// Open-at-index + swipe direction correctness
+// Open-at-index + horizontal swipe direction correctness
 await scrollPost(d, 'Golden hour');
 await sleep(300);
 await clickPost(d, 'Golden hour', '.stack.n4 .mosaic-cell:nth-child(3) img');
@@ -199,13 +281,47 @@ await shot(d, 'desktop-media-third');
 await d.mouse.move(640, 450);
 await d.mouse.wheel({ deltaY: 650 });
 await sleep(900);
-ok('desktop: swipe down advances one slide to 4/4', await d.evaluate(() => document.querySelector('.media-page-count')?.textContent === '4 / 4'));
-await d.mouse.wheel({ deltaY: -650 });
+ok('desktop: wheel advances one slide to 4/4', await d.evaluate(() => document.querySelector('.media-page-count')?.textContent === '4 / 4'));
+await d.mouse.wheel({ deltaX: -650 });
 await sleep(900);
-ok('desktop: swipe up returns to previous slide 3/4 (not top)', await d.evaluate(() => document.querySelector('.media-page-count')?.textContent === '3 / 4'));
-await d.evaluate(() => { const el = document.querySelector('.media-page-scroll'); el.scrollTo({ top: el.clientHeight * 3, behavior: 'instant' }); });
+ok('desktop: horizontal wheel back returns to previous slide 3/4 (not first)', await d.evaluate(() => document.querySelector('.media-page-count')?.textContent === '3 / 4'));
+const hSnap = await d.evaluate(async () => {
+  const el = document.querySelector('.media-page-scroll');
+  el.scrollTo({ left: el.clientWidth * 1.5, behavior: 'smooth' });
+  await new Promise(r => setTimeout(r, 1000));
+  return { left: Math.round(el.scrollLeft), w: el.clientWidth, count: document.querySelector('.media-page-count')?.textContent, vertical: el.scrollTop };
+});
+ok('desktop: horizontal snap settles on a whole slide, no partial flicker', hSnap.left % hSnap.w === 0 && hSnap.vertical === 0 && hSnap.count === `${hSnap.left / hSnap.w + 1} / 4`, JSON.stringify(hSnap));
+const snapTime = await d.evaluate(async () => {
+  const el = document.querySelector('.media-page-scroll');
+  const w = el.clientWidth;
+  el.scrollTo({ left: w * 2, behavior: 'instant' });
+  await new Promise(r => setTimeout(r, 200));
+  const t0 = performance.now();
+  el.dispatchEvent(new WheelEvent('wheel', { deltaY: 400, bubbles: true, cancelable: true }));
+  await new Promise(resolve => {
+    const check = () => {
+      if (Math.abs(el.scrollLeft - w * 3) < 1 || performance.now() - t0 > 2000) resolve();
+      else requestAnimationFrame(check);
+    };
+    requestAnimationFrame(check);
+  });
+  return { ms: Math.round(performance.now() - t0), left: Math.round(el.scrollLeft), w };
+});
+ok('desktop: picture snaps to center immediately (<300ms)', snapTime.ms < 300 && snapTime.left === snapTime.w * 3, JSON.stringify(snapTime));
+await d.evaluate(() => { const el = document.querySelector('.media-page-scroll'); el.scrollTo({ left: el.clientWidth * 3, behavior: 'instant' }); });
 await sleep(500);
-ok('desktop: scroll reaches 4/4', await d.evaluate(() => document.querySelector('.media-page-count')?.textContent === '4 / 4'));
+ok('desktop: horizontal scroll reaches 4/4', await d.evaluate(() => document.querySelector('.media-page-count')?.textContent === '4 / 4'));
+const navBtns = await d.evaluate(() => {
+  const prev = document.querySelector('.media-page-nav.prev');
+  const next = document.querySelector('.media-page-nav.next');
+  const p = prev.getBoundingClientRect(), n = next.getBoundingClientRect();
+  return { prevDisabled: prev.disabled, nextDisabled: next.disabled, sides: p.left < n.left && Math.abs(p.top - n.top) < 2, mid: Math.abs((p.top + p.height / 2) - window.innerHeight / 2) < 4 };
+});
+ok('desktop: side prev/next arrows, next disabled on last slide', navBtns.prevDisabled === false && navBtns.nextDisabled === true && navBtns.sides && navBtns.mid, JSON.stringify(navBtns));
+await d.evaluate(() => document.querySelector('.media-page-nav.prev').click());
+await sleep(800);
+ok('desktop: prev arrow returns to 3/4', await d.evaluate(() => document.querySelector('.media-page-count')?.textContent === '3 / 4'));
 await goBack(d);
 ok('desktop: back from media page lands on feed', await d.evaluate(() => location.pathname === '/' && !document.querySelector('.media-page')));
 
@@ -400,14 +516,46 @@ await sleep(400);
 ok('desktop: inline comment posts', await d.evaluate(() => document.querySelector('.post-page-comments .comments-list').textContent.includes('QA inline comment')));
 await clearKb(d);
 
-// Entry chooser from the rail + button
+// Comment button focus ring removed (SS1)
 await goto(d, '/');
+await d.keyboard.press('Shift');
+const ring = await d.evaluate(() => {
+  const b = document.querySelector('article.post [aria-label="Comments"]');
+  b.focus();
+  const cs = getComputedStyle(b);
+  return { fv: b.matches(':focus-visible'), outline: cs.outlineStyle, w: cs.outlineWidth, bg: cs.backgroundColor };
+});
+ok('desktop: comment button shows no red focus ring', ring.fv && (ring.outline === 'none' || ring.w === '0px'), JSON.stringify(ring));
+await d.evaluate(() => document.activeElement?.blur());
+
+// Entry chooser from the rail + button: compact card
 await d.click('.post-btn');
 await d.waitForSelector('.chooser-overlay', { timeout: 5000 });
 await sleep(350);
-const entryChooser = await d.evaluate(() => [...document.querySelectorAll('.chooser-options button b')].map(b => b.textContent));
-ok('desktop: + button opens Post/Reels chooser', JSON.stringify(entryChooser) === JSON.stringify(['Post', 'Reels']), JSON.stringify(entryChooser));
+const entryChooser = await d.evaluate(() => {
+  const card = document.querySelector('.chooser-card');
+  const r = card.getBoundingClientRect();
+  const btns = [...document.querySelectorAll('.chooser-options button')];
+  const a = btns[0].getBoundingClientRect(), b = btns[1].getBoundingClientRect();
+  return { labels: btns.map(x => x.querySelector('b')?.textContent), h: Math.round(r.height), w: Math.round(r.width), sideBySide: Math.abs(a.top - b.top) < 2, noLongCopy: !card.querySelector('.chooser-copy') && !card.querySelector('.chooser-grip'), icons: btns.every(x => !!x.querySelector('.chooser-icon svg')) };
+});
+ok('desktop: + button opens compact Post/Reels card', JSON.stringify(entryChooser.labels) === JSON.stringify(['Post', 'Reels']) && entryChooser.h < 170 && entryChooser.w <= 320 && entryChooser.sideBySide && entryChooser.noLongCopy && entryChooser.icons, JSON.stringify(entryChooser));
 await shot(d, 'desktop-chooser-entry');
+
+// Reels picker validation: wrong type + over 150 MB both toast clearly
+const chooserInput = await d.$('.chooser-overlay input[type="file"]');
+await chooserInput.uploadFile(`${OUT}/test.png`);
+await sleep(800);
+const invalidPick = await d.evaluate(() => { const t = document.querySelector('.toast'); const r = t?.getBoundingClientRect(); const cs = t ? getComputedStyle(t) : null; return { toast: t?.textContent || '', visible: !!t && cs.opacity === '1' && r.top >= 0 && r.bottom <= window.innerHeight, aboveChooser: !!t && Number(cs.zIndex) > Number(getComputedStyle(document.querySelector('.chooser-overlay')).zIndex), chooserStill: !!document.querySelector('.chooser-overlay'), path: location.pathname }; });
+ok('desktop: Reels picker rejects a photo with a clear toast', /video/i.test(invalidPick.toast) && invalidPick.visible && invalidPick.aboveChooser && invalidPick.chooserStill && invalidPick.path === '/', JSON.stringify(invalidPick));
+fs.writeFileSync(`${OUT}/big.mp4`, '');
+fs.truncateSync(`${OUT}/big.mp4`, 151 * 1024 * 1024);
+await chooserInput.uploadFile(`${OUT}/big.mp4`);
+await sleep(1000);
+const bigPick = await d.evaluate(() => { const t = document.querySelector('.toast'); const r = t?.getBoundingClientRect(); const cs = t ? getComputedStyle(t) : null; return { toast: t?.textContent || '', visible: !!t && cs.opacity === '1' && r.top >= 0 && r.bottom <= window.innerHeight, chooserStill: !!document.querySelector('.chooser-overlay'), path: location.pathname }; });
+ok('desktop: video over 150 MB rejected with size toast', /150 MB/.test(bigPick.toast) && bigPick.visible && bigPick.chooserStill && bigPick.path === '/', JSON.stringify(bigPick));
+await shot(d, 'desktop-chooser-size-toast');
+fs.unlinkSync(`${OUT}/big.mp4`);
 await d.evaluate(() => document.querySelectorAll('.chooser-options button')[0].click());
 await d.waitForSelector('.create-post-page', { timeout: 8000 });
 ok('desktop: chooser Post lands on create page', await d.evaluate(() => location.pathname === '/create'));
@@ -446,6 +594,15 @@ await shot(d, 'desktop-publish-progress');
 await d.waitForFunction(() => location.pathname === '/', { timeout: 10000 });
 await sleep(900);
 ok('desktop: reel published with kind reel', await d.evaluate(() => JSON.parse(localStorage.getItem('exposing-demo-v1')).posts[0].kind === 'reel'));
+const storedReel = await d.evaluate(() => { const p = JSON.parse(localStorage.getItem('exposing-demo-v1')).posts[0]; return { kind: p.kind, blobId: p.media[0]?.blobId, src: p.media[0]?.src || null }; });
+ok('desktop: reel clip stored on device, not in localStorage', !!storedReel.blobId && storedReel.src === null, JSON.stringify(storedReel));
+await goto(d, '/video');
+await d.waitForSelector('.reels-page', { timeout: 10000 });
+await d.waitForFunction(() => { const v = document.querySelector('.reel-slide video'); return v && (v.getAttribute('src') || '').startsWith('blob:') && !v.paused; }, { timeout: 9000 }).catch(() => {});
+await sleep(700);
+const reloaded = await d.evaluate(() => { const v = document.querySelector('.reel-slide video'); return { src: v?.getAttribute('src'), playing: v ? !v.paused : false, ready: v?.readyState, count: document.querySelector('.reel-count')?.textContent }; });
+ok('desktop: published reel survives reload and plays', (reloaded.src || '').startsWith('blob:') && reloaded.playing && reloaded.count?.startsWith('1 /'), JSON.stringify(reloaded));
+await shot(d, 'desktop-reels-published');
 
 // Create page basics
 await goto(d, '/create');
@@ -576,7 +733,8 @@ await shot(d, 'desktop-reels-startindex');
 // Reels page (desktop)
 await goto(d, '/video');
 await d.waitForSelector('.reels-page', { timeout: 10000 });
-await sleep(1500);
+await d.waitForFunction(() => { const v = document.querySelector('.reel-slide video'); return v && !v.paused && v.readyState >= 2; }, { timeout: 9000 }).catch(() => {});
+await sleep(600);
 const reels1 = await d.evaluate(() => ({
   slides: document.querySelectorAll('.reel-slide').length,
   playing: !document.querySelector('.reel-slide video')?.paused,
@@ -607,8 +765,8 @@ await d.mouse.click(800, 450);
 await sleep(90);
 await d.mouse.click(800, 450);
 await sleep(350);
-const seekR = await d.evaluate(() => ({ t: document.querySelector('.reel-slide video').currentTime, badge: !!document.querySelector('.av-seek.right') }));
-ok('desktop: double-tap right seeks +10s with badge', (seekR.t > t0 + 9 || seekR.t < t0) && seekR.badge, JSON.stringify({ t0, ...seekR, note: 'wrap allowed: 5s clip loops at end' }));
+const seekR = await d.evaluate(() => { const v = document.querySelector('.reel-slide video'); return { t: v.currentTime, dur: v.duration, badge: !!document.querySelector('.av-seek.right') }; });
+ok('desktop: double-tap right seeks +10s with badge', (seekR.t >= Math.min(seekR.dur, t0 + 10) - 0.4 || seekR.t < t0) && seekR.badge, JSON.stringify({ t0, ...seekR, note: 'short clip clamps to end / loops' }));
 await shot(d, 'desktop-reels-seek');
 await sleep(600);
 const t1 = await d.evaluate(() => document.querySelector('.reel-slide video').currentTime);
@@ -626,20 +784,33 @@ ok('desktop: single tap pauses reel', await d.evaluate(() => document.querySelec
 await d.mouse.click(640, 450);
 await sleep(600);
 ok('desktop: single tap resumes reel', await d.evaluate(() => !document.querySelector('.reel-slide video').paused));
-// rail actions
+// rail actions: Like press opens the reaction tray
 const railBefore = await d.evaluate(() => {
-  const btn = document.querySelector('.reel-rail-item button[aria-label="Like this reel"], .reel-rail-item button[aria-label="Remove reaction"]');
-  const label = btn?.getAttribute('aria-label');
-  btn?.click();
-  return { label };
+  const btn = document.querySelector('.reel-rail-item .reaction-trigger');
+  const r = btn.getBoundingClientRect();
+  btn.click();
+  return { label: btn.getAttribute('aria-label'), size: Math.round(r.width), labelBelow: btn.querySelector('span')?.textContent };
 });
-await sleep(400);
+await sleep(450);
+const reelTray = await d.evaluate(() => {
+  const tray = document.querySelector('.reaction-tray');
+  if (!tray) return { open: false };
+  const r = tray.getBoundingClientRect();
+  const btn = document.querySelector('.reel-rail-item .reaction-trigger').getBoundingClientRect();
+  return { open: true, kinds: [...tray.querySelectorAll('button')].map(b => b.getAttribute('aria-label')), inView: r.left >= 0 && r.right <= window.innerWidth && r.top >= 0, above: r.bottom <= btn.top + 2, z: getComputedStyle(tray).zIndex };
+});
+ok('desktop: reel Like press opens reaction tray above the button', railBefore.label === 'Choose reaction' && railBefore.size === 46 && reelTray.open && reelTray.kinds.length >= 5 && reelTray.inView && reelTray.above && Number(reelTray.z) > 1200, JSON.stringify({ railBefore, reelTray }));
+await shot(d, 'desktop-reels-tray');
+await d.evaluate(() => [...document.querySelectorAll('.reaction-tray button')].find(b => b.getAttribute('aria-label') === 'Love')?.click());
+await sleep(450);
 const railAfter = await d.evaluate(() => {
   const db = JSON.parse(localStorage.getItem('exposing-demo-v1'));
   const newest = db.posts.filter(p => p.media.some(m => m.type === 'video')).sort((a, b) => b.ts - a.ts)[0];
-  return { newestId: newest?.id, newestKind: newest?.kind, mine: db.reactions.filter(r => r.targetType === 'post' && r.targetId === newest?.id && r.uid === db.meId).map(r => r.kind), path: location.pathname };
+  const btn = document.querySelector('.reel-rail-item .reaction-trigger');
+  return { newestId: newest?.id, newestKind: newest?.kind, mine: db.reactions.filter(r => r.targetType === 'post' && r.targetId === newest?.id && r.uid === db.meId).map(r => r.kind), trayGone: !document.querySelector('.reaction-tray'), reacted: btn.classList.contains('reacted'), art: !!btn.querySelector('.reaction-art'), count: btn.querySelector('span')?.textContent, path: location.pathname };
 });
-ok('desktop: reel rail like stores post reaction', railAfter.mine.length > 0 && railAfter.newestKind === 'reel' && railBefore.label === 'Like this reel', JSON.stringify({ ...railBefore, ...railAfter }));
+ok('desktop: tray pick stores the chosen reel reaction', railAfter.mine.includes('love') && railAfter.newestKind === 'reel' && railAfter.trayGone && railAfter.reacted && railAfter.art && railAfter.count === '1', JSON.stringify(railAfter));
+await shot(d, 'desktop-reels-reacted');
 await d.evaluate(() => document.querySelector('.reel-rail-item button[aria-label="Save this reel"], .reel-rail-item button[aria-label="Unsave this reel"]').click());
 await sleep(350);
 ok('desktop: reel rail save toggles saved post', await d.evaluate(() => {
@@ -684,7 +855,8 @@ await d.evaluate(() => document.querySelector('.reels-nav .rail .nav-item[href="
 const dNavOk = await d.waitForFunction(() => location.pathname === '/marketplace', { timeout: 6000 }).then(() => true).catch(() => false);
 ok('desktop: reels nav rail navigates to Marketplace', dNavOk);
 await goto(d, '/video');
-await sleep(1200);
+await d.waitForSelector('.reel-home', { timeout: 20000 });
+await sleep(600);
 await d.evaluate(() => document.querySelector('.reel-home').click());
 await sleep(800);
 ok('desktop: reels home button returns to feed', await d.evaluate(() => location.pathname === '/'));
@@ -704,6 +876,442 @@ await sleep(700);
 ok('desktop: search finds Sita', await d.evaluate(() => document.body.textContent.includes('Sita Karki')));
 await shot(d, 'desktop-search');
 
+// 404 recovery page
+await d.goto('http://localhost:3000/this-route-does-not-exist', { waitUntil: 'domcontentloaded', timeout: 45000 });
+await d.waitForSelector('.notfound-card', { timeout: 15000 });
+await sleep(500);
+const nf = await d.evaluate(() => {
+  const mark = document.querySelector('.notfound-mark');
+  const card = document.querySelector('.notfound-card').getBoundingClientRect();
+  return { markLoaded: (mark?.naturalWidth || 0) > 0, title: document.querySelector('.notfound-title')?.textContent, homeHref: document.querySelector('.notfound-primary')?.getAttribute('href'), onScreen: card.top >= 0 && card.bottom <= window.innerHeight, noOverflow: document.documentElement.scrollWidth <= window.innerWidth + 1 };
+});
+ok('desktop: branded 404 with loaded mark + home action', nf.markLoaded && nf.title === "This page doesn't exist" && nf.homeHref === '/' && nf.onScreen && nf.noOverflow, JSON.stringify(nf));
+await shot(d, 'desktop-notfound');
+await d.evaluate(() => document.querySelector('.notfound-primary').click());
+await d.waitForSelector('article.post', { timeout: 15000 });
+ok('desktop: 404 Back to Home lands on feed', await d.evaluate(() => location.pathname === '/' && document.querySelectorAll('article.post').length > 0));
+
+// ================= PHASE 7: DESKTOP =================
+const getDb = page => page.evaluate(() => JSON.parse(localStorage.getItem('exposing-demo-v1')));
+const setTextarea = (page, sel, v) => page.evaluate(([sel, v]) => {
+  const el = document.querySelector(sel);
+  const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set;
+  setter.call(el, v);
+  el.dispatchEvent(new Event('input', { bubbles: true }));
+}, [sel, v]);
+const clickBtnByText = (page, scope, re) => page.evaluate(([scope, re]) => {
+  const rx = new RegExp(re, 'i');
+  const btn = [...document.querySelectorAll(scope + ' button')].find(b => rx.test(b.textContent));
+  if (btn) btn.click();
+  return !!btn;
+}, [scope, re]);
+
+// Profile via author name
+const profTarget = await d.evaluate(() => {
+  const link = [...document.querySelectorAll('article.post .post-name')].find(a => a.getAttribute('href') !== '/u/sita_k');
+  const href = link.getAttribute('href');
+  link.click();
+  return href;
+});
+await d.waitForSelector('.profile-view', { timeout: 10000 }).catch(() => {});
+await sleep(700);
+const profUser = await d.evaluate(href => {
+  const db = JSON.parse(localStorage.getItem('exposing-demo-v1'));
+  return db.users.find(u => `/u/${u.username}` === href);
+}, profTarget);
+const profInfo = await d.evaluate(() => ({
+  path: location.pathname,
+  name: document.querySelector('.profile-name')?.textContent,
+  cover: !!document.querySelector('.profile-cover'),
+  stats: document.querySelectorAll('.profile-stat').length,
+  posts: document.querySelectorAll('.profile-posts article.post').length,
+  followOn: document.querySelector('.profile-actions .follow-btn')?.classList.contains('on')
+}));
+ok('desktop: author profile renders cover/name/stats/posts', profInfo.path === profTarget && profInfo.name.includes(profUser.name) && profInfo.cover && profInfo.stats === 3 && profInfo.posts > 0, JSON.stringify(profInfo));
+await d.evaluate(() => document.querySelector('.profile-actions .follow-btn').click());
+await sleep(350);
+const followed = await d.evaluate(uid => {
+  const db = JSON.parse(localStorage.getItem('exposing-demo-v1'));
+  return db.follows.some(f => f.follower === db.meId && f.following === uid);
+}, profUser.id);
+ok('desktop: follow toggle persists', followed === !profInfo.followOn, `now following=${followed}`);
+await d.evaluate(() => document.querySelector('.profile-actions .follow-btn').click());
+await sleep(300);
+await d.evaluate(() => document.querySelectorAll('.tabs .tab')[1].click());
+await sleep(400);
+ok('desktop: profile media tab shows grid', await d.evaluate(() => !!document.querySelector('.profile-media-grid') || !!document.querySelector('.profile-view .feed-empty')));
+await d.evaluate(() => document.querySelectorAll('.tabs .tab')[2].click());
+await sleep(400);
+ok('desktop: profile about tab shows cards', await d.evaluate(() => document.querySelectorAll('.about-card').length === 2));
+await d.evaluate(() => document.querySelector('.profile-stats button.profile-stat').click());
+await sleep(400);
+ok('desktop: followers list opens people modal', await d.evaluate(() => !!document.querySelector('.people-modal')));
+await d.keyboard.press('Escape');
+await sleep(400);
+ok('desktop: Escape closes people modal', await d.evaluate(() => !document.querySelector('.people-modal')));
+
+// Own profile + edit
+await goto(d, '/u/sita_k');
+await d.evaluate(() => document.querySelector('.profile-actions .follow-btn').click());
+await d.waitForSelector('.edit-profile-modal', { timeout: 5000 }).catch(() => {});
+await setTextarea(d, '.edit-profile-form textarea', 'QA bio — lakeside tester.');
+await d.evaluate(() => document.querySelector('.edit-profile-form button[type="submit"]').click());
+await sleep(500);
+const bioOk = await d.evaluate(() => {
+  const db = JSON.parse(localStorage.getItem('exposing-demo-v1'));
+  return { stored: db.users.find(u => u.id === 'u1').bio, shown: document.querySelector('.profile-bio')?.textContent, closed: !document.querySelector('.edit-profile-modal') };
+});
+ok('desktop: edit profile saves bio', bioOk.stored === 'QA bio — lakeside tester.' && bioOk.shown === bioOk.stored && bioOk.closed, JSON.stringify(bioOk));
+await shot(d, 'desktop-profile');
+await goto(d, '/u/does_not_exist_xyz');
+ok('desktop: unknown profile shows missing state', await d.evaluate(() => !!document.querySelector('.profile-missing')));
+
+// Saved
+await goto(d, '/saved');
+const savedBefore = await d.evaluate(() => document.querySelectorAll('.saved-list article.post').length);
+ok('desktop: saved page lists saved posts', savedBefore >= 2, `${savedBefore} posts`);
+await d.evaluate(() => document.querySelector('.saved-list article.post .save-action').click());
+await sleep(450);
+const savedAfter = await d.evaluate(() => ({
+  count: document.querySelectorAll('.saved-list article.post').length,
+  saves: JSON.parse(localStorage.getItem('exposing-demo-v1')).saves.filter(s => s.uid === 'u1').length
+}));
+ok('desktop: unsaving removes post from saved list', savedAfter.count === savedBefore - 1, JSON.stringify(savedAfter));
+await shot(d, 'desktop-saved');
+
+// Wallet buy request
+await goto(d, '/wallet');
+const bal0 = await d.evaluate(() => ({ coins: JSON.parse(localStorage.getItem('exposing-demo-v1')).users.find(u => u.id === 'u1').coins, shown: document.querySelector('.wallet-balance-num')?.textContent }));
+ok('desktop: wallet balance matches account', bal0.shown.includes(String(bal0.coins)), JSON.stringify(bal0));
+await d.evaluate(() => document.querySelectorAll('.wallet-amount')[2].click());
+await d.evaluate(() => document.querySelectorAll('.wallet-method')[1].click());
+await sleep(300);
+ok('desktop: QR method renders demo QR', await d.evaluate(() => !!document.querySelector('.wallet-qr') && document.querySelector('.wallet-total')?.textContent.includes('2000')));
+await d.evaluate(() => document.querySelector('.wallet-buy button[type="submit"]').click());
+await sleep(300);
+ok('desktop: buy without reference shows error', await d.evaluate(() => !!document.querySelector('.wallet-error')));
+await d.type('.wallet-buy .field input', 'TXN-QA-77');
+const shotInput = await d.$('.wallet-screenshot input[type="file"]');
+await shotInput.uploadFile(`${OUT}/test.png`);
+await d.waitForSelector('.wallet-screenshot-preview', { timeout: 5000 });
+await d.evaluate(() => document.querySelector('.wallet-buy button[type="submit"]').click());
+await sleep(500);
+const reqOk = await d.evaluate(() => {
+  const db = JSON.parse(localStorage.getItem('exposing-demo-v1'));
+  const r = db.coinRequests.find(x => x.reference === 'TXN-QA-77');
+  return r && { uid: r.uid, coins: r.coins, amount: r.amount, method: r.method, status: r.status, shot: !!r.screenshot, row: !!document.querySelector('.wallet-row') };
+});
+ok('desktop: coin request stored pending with screenshot', reqOk && reqOk.uid === 'u1' && reqOk.coins === 200 && reqOk.amount === 2000 && reqOk.method === 'qr' && reqOk.status === 'pending' && reqOk.shot && reqOk.row, JSON.stringify(reqOk));
+await shot(d, 'desktop-wallet');
+
+// Settings
+await goto(d, '/settings');
+await d.evaluate(() => document.querySelector('.settings-card .switch').click());
+await sleep(300);
+ok('desktop: two-step toggle persists', await d.evaluate(() => JSON.parse(localStorage.getItem('exposing-demo-v1')).users.find(u => u.id === 'u1').twoStep === true));
+await d.evaluate(() => document.querySelector('.settings-card .switch').click());
+await sleep(300);
+await d.evaluate(() => document.querySelectorAll('.settings-card')[1].querySelectorAll('.settings-choice')[1].click());
+await sleep(400);
+const neOk = await d.evaluate(() => ({ lang: JSON.parse(localStorage.getItem('exposing-demo-v1')).lang, title: document.querySelector('.header-title')?.textContent }));
+ok('desktop: language switch to Nepali persists', neOk.lang === 'ne' && neOk.title !== 'Settings', JSON.stringify(neOk));
+await d.evaluate(() => document.querySelectorAll('.settings-card')[1].querySelectorAll('.settings-choice')[0].click());
+await sleep(400);
+await d.evaluate(() => document.querySelectorAll('.settings-card')[0].querySelectorAll('.settings-choice')[1].click());
+await sleep(400);
+ok('desktop: dark choice applies theme', await d.evaluate(() => document.documentElement.dataset.theme === 'dark'));
+await d.evaluate(() => document.querySelectorAll('.settings-card')[0].querySelectorAll('.settings-choice')[0].click());
+await sleep(400);
+ok('desktop: light choice restores theme', await d.evaluate(() => document.documentElement.dataset.theme === 'light'));
+await shot(d, 'desktop-settings');
+
+// Notifications
+await goto(d, '/notifications');
+const notif0 = await d.evaluate(() => ({
+  rows: document.querySelectorAll('.notif-row').length,
+  unread: document.querySelectorAll('.notif-row.unread').length,
+  groups: document.querySelectorAll('.notif-group-label').length
+}));
+ok('desktop: notifications render grouped with unread', notif0.rows >= 5 && notif0.unread >= 1 && notif0.groups >= 1, JSON.stringify(notif0));
+await shot(d, 'desktop-notifications');
+await d.evaluate(() => document.querySelector('.notif-mark').click());
+await sleep(400);
+ok('desktop: mark all read clears unread', await d.evaluate(() => {
+  const db = JSON.parse(localStorage.getItem('exposing-demo-v1'));
+  return !document.querySelector('.notif-row.unread') && db.notifications.filter(n => n.uid === 'u1').every(n => n.read);
+}));
+const notifHref = await d.evaluate(() => {
+  const row = document.querySelector('.notif-row');
+  row.click();
+  return true;
+});
+await sleep(900);
+ok('desktop: notification opens its target', notifHref && await d.evaluate(() => location.pathname !== '/notifications'));
+
+// Messages
+await goto(d, '/messages');
+const inbox0 = await d.evaluate(() => ({ rows: document.querySelectorAll('.inbox-row').length, unread: document.querySelectorAll('.inbox-row.unread').length }));
+ok('desktop: inbox lists conversations', inbox0.rows >= 1, JSON.stringify(inbox0));
+await d.evaluate(() => [...document.querySelectorAll('.inbox-row')].find(r => r.textContent.includes('Bikash'))?.click());
+await d.waitForSelector('.chat-view', { timeout: 8000 }).catch(() => {});
+await sleep(700);
+const chat0 = await d.evaluate(() => {
+  const db = JSON.parse(localStorage.getItem('exposing-demo-v1'));
+  return { path: location.pathname, bubbles: document.querySelectorAll('.chat-bubble').length, incomingRead: db.messages.filter(m => m.from === 'u2' && m.to === 'u1').every(m => m.read) };
+});
+ok('desktop: conversation opens and marks incoming read', chat0.path === '/messages/u2' && chat0.bubbles >= 1 && chat0.incomingRead, JSON.stringify(chat0));
+await d.type('.chat-compose input', 'QA desktop hello');
+await d.evaluate(() => document.querySelector('.chat-send').click());
+await sleep(500);
+const sentOk = await d.evaluate(() => {
+  const db = JSON.parse(localStorage.getItem('exposing-demo-v1'));
+  const m = db.messages.filter(x => x.from === 'u1' && x.to === 'u2').sort((a, b) => b.ts - a.ts)[0];
+  const n = db.notifications.find(x => x.uid === 'u2' && x.kind === 'message' && x.href === '/messages/u1');
+  return { text: m?.text, mine: [...document.querySelectorAll('.chat-bubble-row.mine')].some(b => b.textContent.includes('QA desktop hello')), notified: !!n };
+});
+ok('desktop: send stores message + notifies recipient', sentOk.text === 'QA desktop hello' && sentOk.mine && sentOk.notified, JSON.stringify(sentOk));
+await shot(d, 'desktop-chat');
+await goto(d, '/messages');
+await d.evaluate(() => document.querySelector('.inbox-view .header-actions .ghost-btn').click());
+await d.waitForSelector('.people-modal', { timeout: 5000 }).catch(() => {});
+await d.type('.people-search input', 'himal');
+await sleep(400);
+await d.evaluate(() => document.querySelector('.people-pick')?.click());
+await d.waitForSelector('.chat-view', { timeout: 8000 }).catch(() => {});
+ok('desktop: new-message picker opens chosen chat', await d.evaluate(() => location.pathname === '/messages/u10'));
+
+// Marketplace
+await goto(d, '/marketplace');
+const market0 = await d.evaluate(() => document.querySelectorAll('.market-card').length);
+ok('desktop: marketplace grid renders listings', market0 >= 5, `${market0} cards`);
+await d.type('.market-search input', 'kayak');
+await sleep(450);
+ok('desktop: marketplace search filters', await d.evaluate(() => document.querySelectorAll('.market-card').length === 1 && document.querySelector('.market-card').textContent.includes('kayak')));
+await d.evaluate(() => document.querySelector('.market-clear').click());
+await sleep(400);
+const catExpected = await d.evaluate(() => {
+  const db = JSON.parse(localStorage.getItem('exposing-demo-v1'));
+  return db.listings.filter(l => (l.status === 'active' || l.status === 'sold') && l.category === 'Services').length;
+});
+await d.select('.market-filters select', 'Services');
+await sleep(450);
+ok('desktop: category filter matches data', await d.evaluate(() => document.querySelectorAll('.market-card').length) === catExpected && catExpected > 0, `expected ${catExpected}`);
+await d.evaluate(() => document.querySelector('.market-clear').click());
+await sleep(400);
+await shot(d, 'desktop-market');
+await d.evaluate(() => document.querySelector('.market-view .header-actions .ghost-btn').click());
+await d.waitForSelector('.listing-form-modal', { timeout: 5000 }).catch(() => {});
+await d.type('.listing-form label.field:nth-of-type(1) input', 'QA test listing');
+await d.type('.listing-form .field-row input[type="number"]', '1234');
+const listFile = await d.$('.listing-form input[type="file"]');
+await listFile.uploadFile(`${OUT}/test.png`);
+await d.waitForSelector('.listing-form-thumb img', { timeout: 5000 });
+await d.evaluate(() => document.querySelector('.listing-form button[type="submit"]').click());
+await d.waitForSelector('.listing-modal', { timeout: 5000 }).catch(() => {});
+await sleep(500);
+const created = await d.evaluate(() => {
+  const db = JSON.parse(localStorage.getItem('exposing-demo-v1'));
+  const l = db.listings.find(x => x.title === 'QA test listing');
+  return l && { uid: l.uid, price: l.price, media: l.media.length, status: l.status, mineTab: document.querySelectorAll('.market-tabs .tab')[1].classList.contains('active'), shown: document.querySelector('.listing-title')?.textContent };
+});
+ok('desktop: create listing stores + opens detail on My listings', created && created.uid === 'u1' && created.price === 1234 && created.media === 1 && created.status === 'active' && created.mineTab && created.shown === 'QA test listing', JSON.stringify(created));
+await shot(d, 'desktop-listing');
+await clickBtnByText(d, '.listing-actions', 'sold');
+await sleep(450);
+ok('desktop: mark sold updates listing + flag', await d.evaluate(() => {
+  const db = JSON.parse(localStorage.getItem('exposing-demo-v1'));
+  return db.listings.find(x => x.title === 'QA test listing').status === 'sold' && !!document.querySelector('.listing-sold-flag');
+}));
+await clickBtnByText(d, '.listing-actions', 'relist');
+await sleep(450);
+ok('desktop: relist restores active', await d.evaluate(() => JSON.parse(localStorage.getItem('exposing-demo-v1')).listings.find(x => x.title === 'QA test listing').status === 'active'));
+await d.keyboard.press('Escape');
+await sleep(450);
+ok('desktop: Escape closes listing detail', await d.evaluate(() => !document.querySelector('.listing-modal')));
+await d.evaluate(() => document.querySelectorAll('.market-tabs .tab')[0].click());
+await sleep(400);
+await d.type('.market-search input', 'kayak');
+await sleep(450);
+await d.evaluate(() => document.querySelector('.market-card').click());
+await d.waitForSelector('.listing-modal', { timeout: 5000 }).catch(() => {});
+await d.evaluate(() => document.querySelector('.listing-actions .promote-submit').click());
+await d.waitForSelector('.chat-view', { timeout: 8000 }).catch(() => {});
+ok('desktop: contact seller opens chat with seller', await d.evaluate(() => location.pathname === '/messages/u5'));
+
+// Admin console (switch to admin account, inject one pending promo)
+await d.evaluate(() => {
+  const db = JSON.parse(localStorage.getItem('exposing-demo-v1'));
+  db.meId = 'u_admin';
+  db.promotions.unshift({ id: 'pr_qa', uid: 'u1', targetType: 'post', targetId: 'p3', packageId: 'pk_starter', category: 'Travel', ageMin: 18, ageMax: 35, country: 'Nepal', city: '', coins: 100, ts: Date.now(), ends: 0, status: 'pending', impressions: 0, clicks: 0 });
+  localStorage.setItem('exposing-demo-v1', JSON.stringify(db));
+});
+await goto(d, '/admin');
+const admin0 = await d.evaluate(() => ({ tabs: document.querySelectorAll('.admin-tabs .tab').length, stats: document.querySelectorAll('.admin-stat').length, badges: document.querySelectorAll('.admin-tab-badge').length }));
+ok('desktop: admin overview renders tabs/stats/badges', admin0.tabs === 7 && admin0.stats === 4 && admin0.badges >= 2, JSON.stringify(admin0));
+await shot(d, 'desktop-admin');
+await d.evaluate(() => document.querySelectorAll('.admin-tabs .tab')[1].click());
+await sleep(450);
+ok('desktop: reports queue lists open reports', await d.evaluate(() => document.querySelectorAll('.admin-report').length === 3));
+await clickBtnByText(d, '.admin-report', 'dismiss');
+await sleep(450);
+const dismissed = await d.evaluate(() => {
+  const db = JSON.parse(localStorage.getItem('exposing-demo-v1'));
+  return { open: db.reports.filter(r => r.status === 'open').length, cards: document.querySelectorAll('.admin-report').length, audit: db.audit.some(a => a.action === 'dismiss_report') };
+});
+ok('desktop: dismiss report updates queue + audit', dismissed.open === 2 && dismissed.cards === 2 && dismissed.audit, JSON.stringify(dismissed));
+await d.evaluate(() => document.querySelector('.admin-report .ghost-btn.danger').click());
+await sleep(500);
+const removedPost = await d.evaluate(() => {
+  const db = JSON.parse(localStorage.getItem('exposing-demo-v1'));
+  const p = db.posts.find(x => x.id === 'p6');
+  return { status: p.status, reason: p.removedReason, notified: db.notifications.some(n => n.uid === p.uid && n.kind === 'warning'), actioned: db.reports.filter(r => r.status === 'actioned').length };
+});
+ok('desktop: remove report hides post + notifies owner', removedPost.status === 'removed' && !!removedPost.reason && removedPost.notified && removedPost.actioned === 1, JSON.stringify(removedPost));
+await d.evaluate(() => document.querySelector('.admin-report .ghost-btn.danger').click());
+await sleep(500);
+ok('desktop: remove listing report takes listing down', await d.evaluate(() => {
+  const db = JSON.parse(localStorage.getItem('exposing-demo-v1'));
+  return db.listings.find(l => l.id === 'l4').status === 'removed' && !!document.querySelector('.admin-view .empty-state');
+}));
+await d.evaluate(() => document.querySelectorAll('.admin-tabs .tab')[3].click());
+await sleep(450);
+await d.evaluate(() => document.querySelectorAll('.admin-chip')[1].click());
+await sleep(400);
+ok('desktop: pending coins filter shows both requests', await d.evaluate(() => document.querySelectorAll('.admin-coin').length === 2));
+await d.evaluate(() => [...document.querySelectorAll('.admin-coin')].find(c => c.textContent.includes('TXN-88412'))?.querySelector('.promote-submit').click());
+await sleep(500);
+const approved = await d.evaluate(() => {
+  const db = JSON.parse(localStorage.getItem('exposing-demo-v1'));
+  return {
+    status: db.coinRequests.find(r => r.id === 'cr1').status,
+    coins: db.users.find(u => u.id === 'u2').coins,
+    ledger: db.ledger.some(l => l.uid === 'u2' && l.delta === 100 && l.kind === 'purchase'),
+    notified: db.notifications.some(n => n.uid === 'u2' && n.kind === 'coins')
+  };
+});
+ok('desktop: approve coins credits wallet + ledger + notice', approved.status === 'approved' && approved.coins === 140 && approved.ledger && approved.notified, JSON.stringify(approved));
+await d.evaluate(() => [...document.querySelectorAll('.admin-coin')].find(c => c.textContent.includes('TXN-QA-77'))?.querySelector('.promote-submit').click());
+await sleep(500);
+ok('desktop: approve QA request credits buyer', await d.evaluate(() => {
+  const db = JSON.parse(localStorage.getItem('exposing-demo-v1'));
+  return db.users.find(u => u.id === 'u1').coins === 460 && db.coinRequests.find(r => r.reference === 'TXN-QA-77').status === 'approved';
+}));
+await shot(d, 'desktop-admin-coins');
+await d.evaluate(() => document.querySelectorAll('.admin-tabs .tab')[4].click());
+await sleep(450);
+await d.evaluate(() => [...document.querySelectorAll('.admin-promo')].find(c => c.textContent.includes('Sita'))?.querySelector('.promote-submit').click());
+await sleep(500);
+const promoOn = await d.evaluate(() => {
+  const db = JSON.parse(localStorage.getItem('exposing-demo-v1'));
+  const p = db.promotions.find(x => x.id === 'pr_qa');
+  return { status: p.status, ends: p.ends > Date.now(), notified: db.notifications.some(n => n.uid === 'u1' && n.kind === 'promotion') };
+});
+ok('desktop: activate promo sets active window + notice', promoOn.status === 'active' && promoOn.ends && promoOn.notified, JSON.stringify(promoOn));
+await d.evaluate(() => [...document.querySelectorAll('.admin-promo')].find(c => c.textContent.includes('Sita'))?.querySelector('.ghost-btn').click());
+await sleep(500);
+ok('desktop: end promo closes campaign', await d.evaluate(() => JSON.parse(localStorage.getItem('exposing-demo-v1')).promotions.find(x => x.id === 'pr_qa').status === 'ended'));
+await d.evaluate(() => document.querySelectorAll('.admin-tabs .tab')[2].click());
+await sleep(450);
+await d.type('.admin-search input', 'bikash');
+await sleep(450);
+ok('desktop: user search narrows list', await d.evaluate(() => document.querySelectorAll('.admin-user').length === 1));
+await d.evaluate(() => document.querySelector('.admin-user .ghost-btn').click());
+await d.waitForSelector('.admin-manage-modal', { timeout: 5000 }).catch(() => {});
+await setTextarea(d, '.admin-manage-modal textarea', 'QA warning: keep it civil.');
+await clickBtnByText(d, '.admin-manage-modal', '^.*warn');
+await sleep(450);
+const warned = await d.evaluate(() => {
+  const db = JSON.parse(localStorage.getItem('exposing-demo-v1'));
+  return { warning: db.users.find(u => u.id === 'u2').warning, notified: db.notifications.some(n => n.uid === 'u2' && n.kind === 'warning' && n.text.includes('keep it civil')) };
+});
+ok('desktop: warn user stores warning + notifies', warned.warning === 'QA warning: keep it civil.' && warned.notified, JSON.stringify(warned));
+await d.type('.admin-manage-modal .field-row input', 'QA suspend');
+await d.evaluate(() => document.querySelector('.admin-manage-modal .ghost-btn.danger').click());
+await sleep(450);
+const suspOk = await d.evaluate(() => {
+  const s = JSON.parse(localStorage.getItem('exposing-demo-v1')).users.find(u => u.id === 'u2').susp;
+  return s && Math.abs(s.until - (Date.now() + 7 * 86400000)) < 60000 && s.reason === 'QA suspend';
+});
+ok('desktop: suspend 7 days sets window + reason', !!suspOk, JSON.stringify(suspOk));
+await d.evaluate(() => document.querySelector('.admin-manage-modal .promote-submit').click());
+await sleep(450);
+ok('desktop: reinstate clears suspension', await d.evaluate(() => JSON.parse(localStorage.getItem('exposing-demo-v1')).users.find(u => u.id === 'u2').susp === null));
+await d.keyboard.press('Escape');
+await sleep(400);
+await d.evaluate(() => document.querySelectorAll('.admin-tabs .tab')[6].click());
+await sleep(450);
+await setVal(d, '.admin-settings-card input[type="number"]', '5');
+await d.evaluate(() => document.querySelector('.admin-save').click());
+await sleep(450);
+const settingsSaved = await d.evaluate(() => {
+  const db = JSON.parse(localStorage.getItem('exposing-demo-v1'));
+  return { threshold: db.settings.threshold, audit: db.audit.some(a => a.action === 'update_settings') };
+});
+ok('desktop: admin settings save persists + audits', settingsSaved.threshold === 5 && settingsSaved.audit, JSON.stringify(settingsSaved));
+await setVal(d, '.admin-settings-card input[type="number"]', '3');
+await d.evaluate(() => document.querySelector('.admin-save').click());
+await sleep(400);
+await d.evaluate(() => document.querySelectorAll('.admin-tabs .tab')[5].click());
+await sleep(450);
+ok('desktop: audit log lists actions + export control', await d.evaluate(() => document.querySelectorAll('.admin-audit-row').length > 6 && [...document.querySelectorAll('.admin-panel .ghost-btn')].some(b => /csv/i.test(b.textContent))));
+await d.evaluate(() => {
+  const db = JSON.parse(localStorage.getItem('exposing-demo-v1'));
+  db.meId = 'u1';
+  localStorage.setItem('exposing-demo-v1', JSON.stringify(db));
+});
+await goto(d, '/');
+
+// Legal pages
+for (const slug of ['privacy', 'terms', 'user-policy', 'cookies']) {
+  await goto(d, `/legal/${slug}`);
+  const legal = await d.evaluate(() => ({
+    h1: document.querySelector('.legal-doc h1')?.textContent || '',
+    sections: document.querySelectorAll('.legal-section').length,
+    toc: document.querySelectorAll('.legal-toc a').length,
+    noOverflow: document.documentElement.scrollWidth <= window.innerWidth + 1
+  }));
+  ok(`desktop: /legal/${slug} renders full document`, legal.h1.length > 3 && legal.sections >= 4 && legal.toc === legal.sections && legal.noOverflow, JSON.stringify(legal));
+}
+await shot(d, 'desktop-legal');
+
+// Signup
+await goto(d, '/signup');
+ok('desktop: signup form renders', await d.evaluate(() => document.querySelectorAll('.signup-form input.login-input').length === 7 && document.querySelectorAll('.signup-check input').length === 2));
+await d.evaluate(() => document.querySelector('.signup-form button[type="submit"]').click());
+await sleep(350);
+ok('desktop: empty signup shows validation error', await d.evaluate(() => !!document.querySelector('.signup-error')));
+const fillSignup = async (username, email) => {
+  await d.evaluate(([username, email]) => {
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+    const inputs = [...document.querySelectorAll('.signup-form input.login-input')];
+    const values = ['QA Tester', username, email, 'password123', '1995-05-05', 'Bagmati', 'Kathmandu'];
+    inputs.forEach((el, i) => { setter.call(el, values[i]); el.dispatchEvent(new Event('input', { bubbles: true })); });
+    document.querySelectorAll('.signup-check input').forEach(c => { if (!c.checked) c.click(); });
+  }, [username, email]);
+  await sleep(250);
+};
+await fillSignup('sita_k', 'qa.tester@demo.test');
+await d.evaluate(() => document.querySelector('.signup-form button[type="submit"]').click());
+await sleep(400);
+ok('desktop: duplicate username rejected', await d.evaluate(() => (document.querySelector('.signup-error')?.textContent || '').length > 0 && location.pathname === '/signup'));
+await fillSignup('qa_tester', 'qa.tester@demo.test');
+await shot(d, 'desktop-signup');
+await d.evaluate(() => document.querySelector('.signup-form button[type="submit"]').click());
+await d.waitForSelector('article.post', { timeout: 15000 }).catch(() => {});
+await sleep(600);
+const signupOk = await d.evaluate(() => {
+  const db = JSON.parse(localStorage.getItem('exposing-demo-v1'));
+  const u = db.users.find(x => x.username === 'qa_tester');
+  return { created: !!u, loggedIn: db.meId === u?.id, path: location.pathname };
+});
+ok('desktop: signup creates account and signs in', signupOk.created && signupOk.loggedIn && signupOk.path === '/', JSON.stringify(signupOk));
+await d.evaluate(() => {
+  const db = JSON.parse(localStorage.getItem('exposing-demo-v1'));
+  db.meId = 'u1';
+  localStorage.setItem('exposing-demo-v1', JSON.stringify(db));
+});
+await goto(d, '/');
+
 await d.close();
 
 // ================= MOBILE =================
@@ -713,6 +1321,13 @@ ok('mobile: top bar + bottom nav + fab', await m.evaluate(() => {
   const vis = el => el && getComputedStyle(el).display !== 'none';
   return vis(document.querySelector('.m-top')) && vis(document.querySelector('.mobile-nav')) && vis(document.querySelector('.post-fab'));
 }));
+const mLayout = await m.evaluate(() => {
+  const hidden = el => !el || getComputedStyle(el).display === 'none';
+  const main = document.querySelector('.main').getBoundingClientRect();
+  const nav = document.querySelector('.mobile-nav').getBoundingClientRect();
+  return { railHidden: hidden(document.querySelector('.rail')), calmHidden: hidden(document.querySelector('.side-calm')), mainW: Math.round(main.width), navBottom: Math.abs(nav.bottom - window.innerHeight) < 2, navFixed: getComputedStyle(document.querySelector('.mobile-nav')).position === 'fixed' };
+});
+ok('mobile: single column, rail/calm hidden, bottom nav pinned', mLayout.railHidden && mLayout.calmHidden && mLayout.mainW >= 380 && mLayout.navBottom && mLayout.navFixed, JSON.stringify(mLayout));
 ok('mobile: no horizontal overflow', await m.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1));
 await shot(m, 'mobile-feed');
 
@@ -728,6 +1343,13 @@ await m.tap('.post-fab');
 await m.waitForSelector('.chooser-overlay', { timeout: 5000 });
 await sleep(400);
 ok('mobile: Post + fab opens Post/Reels chooser', await m.evaluate(() => [...document.querySelectorAll('.chooser-options button b')].map(b => b.textContent).join(',') === 'Post,Reels'));
+const mChooserCard = await m.evaluate(() => {
+  const card = document.querySelector('.chooser-card');
+  const r = card.getBoundingClientRect();
+  const btns = [...document.querySelectorAll('.chooser-options button')].map(b => b.getBoundingClientRect());
+  return { h: Math.round(r.height), w: Math.round(r.width), sideBySide: Math.abs(btns[0].top - btns[1].top) < 2, onScreen: r.bottom <= window.innerHeight && r.top >= 0 && r.left >= 0 && r.right <= window.innerWidth, noLongCopy: !card.querySelector('.chooser-copy') };
+});
+ok('mobile: chooser is a small compact card on screen', mChooserCard.h < 170 && mChooserCard.w <= 320 && mChooserCard.sideBySide && mChooserCard.onScreen && mChooserCard.noLongCopy, JSON.stringify(mChooserCard));
 await shot(m, 'mobile-chooser-entry');
 await m.evaluate(() => document.querySelectorAll('.chooser-options button')[0].click());
 await m.waitForSelector('.create-post-page', { timeout: 8000 });
@@ -772,6 +1394,29 @@ await m.evaluate(() => document.querySelector('.comments-overlay').click());
 await sleep(500);
 ok('mobile: overlay tap closes sheet without navigating', await m.evaluate(() => !document.querySelector('.comments-overlay') && location.pathname === '/'));
 
+// Mixed post video on mobile opens the picture page; single video opens Reels
+await scrollPost(m, 'Weekend in Pokhara');
+await sleep(400);
+await clickPost(m, 'Weekend in Pokhara', '.post-video .video-play');
+await m.waitForSelector('.media-page', { timeout: 8000 });
+await sleep(1300);
+const mMixMedia = await m.evaluate(() => ({ path: location.pathname, count: document.querySelector('.media-page-count')?.textContent, playing: !document.querySelector('.media-page-slide video')?.paused, noReels: !document.querySelector('.reels-page') }));
+ok('mobile: mixed video opens picture page at 1/8, not Reels', /\/post\/p_mix\/media\/0$/.test(mMixMedia.path) && mMixMedia.count === '1 / 8' && mMixMedia.playing && mMixMedia.noReels, JSON.stringify(mMixMedia));
+await goBack(m);
+await scrollPost(m, 'Rain over New Road');
+await sleep(600);
+await clickPost(m, 'Rain over New Road', '.media-mosaic .auto-video');
+await m.waitForSelector('.reels-page', { timeout: 10000 });
+await sleep(1400);
+const mSingleReel = await m.evaluate(() => {
+  const el = document.querySelector('.reels-scroll');
+  const i = Math.round(el.scrollTop / el.clientHeight);
+  const v = document.querySelectorAll('.reel-slide')[i]?.querySelector('video');
+  return { path: location.pathname, src: v?.getAttribute('src'), playing: v ? !v.paused : false };
+});
+ok('mobile: single-video post opens Reels at that clip', /\/video\/p11-0$/.test(mSingleReel.path) && (mSingleReel.src || '').includes('mov_bbb') && mSingleReel.playing, JSON.stringify(mSingleReel));
+await goto(m, '/');
+
 // Media page on mobile: open 3rd, keyboard-safe photo comments (SS1 fix)
 await scrollPost(m, 'Golden hour');
 await sleep(400);
@@ -813,30 +1458,62 @@ await sleep(250);
 await m.evaluate(() => document.querySelector('.comments-overlay').click());
 await sleep(500);
 ok('mobile: closing photo sheet keeps media page', await m.evaluate(() => !document.querySelector('.comments-overlay') && !!document.querySelector('.media-page')));
-await m.evaluate(() => { const el = document.querySelector('.media-page-scroll'); el.scrollTo({ top: el.clientHeight * 3, behavior: 'smooth' }); });
+await swipe(m, 330, 400, 60, 400);
+await sleep(1000);
+const mSwipeL = await m.evaluate(() => {
+  const el = document.querySelector('.media-page-scroll');
+  return { count: document.querySelector('.media-page-count')?.textContent, left: Math.round(el.scrollLeft), w: el.clientWidth, top: el.scrollTop };
+});
+ok('mobile: left swipe advances to 4/4 and snaps fully', mSwipeL.count === '4 / 4' && mSwipeL.left === mSwipeL.w * 3 && mSwipeL.top === 0, JSON.stringify(mSwipeL));
+await shot(m, 'mobile-media-last');
+await swipe(m, 60, 400, 330, 400);
+await sleep(1000);
+const mSwipeR = await m.evaluate(() => {
+  const el = document.querySelector('.media-page-scroll');
+  return { count: document.querySelector('.media-page-count')?.textContent, left: Math.round(el.scrollLeft), w: el.clientWidth };
+});
+ok('mobile: right swipe returns to 3/4, not first', mSwipeR.count === '3 / 4' && mSwipeR.left === mSwipeR.w * 2, JSON.stringify(mSwipeR));
+const mDots = await m.evaluate(() => {
+  const dots = document.querySelector('.media-page-dots');
+  const r = dots.getBoundingClientRect();
+  const acts = document.querySelector('.media-page-slide:nth-child(3) .media-page-actions').getBoundingClientRect();
+  return { row: getComputedStyle(dots).flexDirection, on: [...dots.children].findIndex(s => s.classList.contains('on')), centered: Math.abs((r.left + r.width / 2) - window.innerWidth / 2) < 3, aboveActions: r.bottom <= acts.top + 1, navHidden: getComputedStyle(document.querySelector('.media-page-nav.prev')).display === 'none' };
+});
+ok('mobile: bottom-center dots track the slide, arrows hidden', mDots.row === 'row' && mDots.on === 2 && mDots.centered && mDots.aboveActions && mDots.navHidden, JSON.stringify(mDots));
+await m.evaluate(() => { const el = document.querySelector('.media-page-scroll'); el.scrollTo({ left: el.clientWidth * 3, behavior: 'smooth' }); });
 await sleep(900);
-ok('mobile: swipe down reaches 4/4', await m.evaluate(() => document.querySelector('.media-page-count')?.textContent === '4 / 4'));
-await m.evaluate(() => { const el = document.querySelector('.media-page-scroll'); el.scrollTo({ top: el.clientHeight * 2, behavior: 'smooth' }); });
-await sleep(900);
-ok('mobile: swipe up returns to 3/4, not first', await m.evaluate(() => document.querySelector('.media-page-count')?.textContent === '3 / 4'));
+ok('mobile: horizontal scroll reaches 4/4', await m.evaluate(() => document.querySelector('.media-page-count')?.textContent === '4 / 4'));
 await goBack(m);
 ok('mobile: phone-back from media page returns to feed', await m.evaluate(() => location.pathname === '/' && !document.querySelector('.media-page')));
 
-// Post page keyboard
-await goto(m, '/post/p3');
-await m.waitForSelector('.post-page-comments', { timeout: 10000 });
-await sleep(400);
+// Post page keyboard: very first tap, no scroll needed (SS2)
+await m.goto('http://localhost:3000/post/p3', { waitUntil: 'domcontentloaded', timeout: 45000 });
+await m.waitForSelector('.post-page-comments input', { timeout: 20000 });
+const preScroll = await m.evaluate(() => window.scrollY);
 await m.tap('.post-page-comments input');
 await sleep(250);
 await setKb(m, 300, 544);
-await sleep(450);
+await sleep(500);
 const mInline = await m.evaluate(() => {
-  const c = document.querySelector('.post-page-comments .comments-compose').getBoundingClientRect();
-  return { bottom: c.bottom, pos: getComputedStyle(document.querySelector('.post-page-comments .comments-compose')).position };
+  const compose = document.querySelector('.post-page-comments .comments-compose');
+  const c = compose.getBoundingClientRect();
+  const ancestors = ['.shell', '.main', '.page-enter', '.thread-view', '.post-page-content', '.post-page-comments', '.comments-inline']
+    .map(s => { const el = document.querySelector(s); return el ? getComputedStyle(el).transform : 'missing'; });
+  return { bottom: Math.round(c.bottom), h: Math.round(c.height), pos: getComputedStyle(compose).position, ancestors, typing: document.documentElement.dataset.typing, scrollY: window.scrollY };
 });
-ok('mobile: post-page compose above keyboard', mInline.pos === 'fixed' && Math.abs(mInline.bottom - 544) < 2, JSON.stringify(mInline));
+ok('mobile: first tap keeps post-page compose above keyboard, no scroll needed', mInline.pos === 'fixed' && Math.abs(mInline.bottom - 544) < 2 && mInline.h > 30 && mInline.ancestors.every(t => t === 'none') && mInline.typing === 'true', JSON.stringify({ preScroll, ...mInline }));
 await shot(m, 'mobile-postpage-keyboard');
+await m.evaluate(() => document.activeElement?.blur());
 await clearKb(m);
+await sleep(200);
+await m.evaluate(() => window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'instant' }));
+await sleep(350);
+const mInlineNoKb = await m.evaluate(() => {
+  const c = document.querySelector('.post-page-comments .comments-compose').getBoundingClientRect();
+  const last = [...document.querySelectorAll('.post-page-comments .comments-row')].pop()?.getBoundingClientRect();
+  return { bottom: Math.round(c.bottom), innerH: window.innerHeight, lastClear: last ? last.bottom <= c.top + 1 : true };
+});
+ok('mobile: compose rests at screen bottom and never covers comments', Math.abs(mInlineNoKb.bottom - mInlineNoKb.innerH) < 2 && mInlineNoKb.lastClear, JSON.stringify(mInlineNoKb));
 
 // Create page keyboard
 await goto(m, '/create');
@@ -884,7 +1561,8 @@ ok('mobile: chooser + progress publishes to feed', await m.evaluate(() => docume
 // Reels on mobile
 await goto(m, '/video');
 await m.waitForSelector('.reels-page', { timeout: 10000 });
-await sleep(1500);
+await m.waitForFunction(() => { const v = document.querySelector('.reel-slide video'); return v && !v.paused && v.readyState >= 2; }, { timeout: 9000 }).catch(() => {});
+await sleep(600);
 const mReels = await m.evaluate(() => {
   const nav = document.querySelector('.reels-nav .mobile-nav');
   const nr = nav?.getBoundingClientRect();
@@ -906,13 +1584,32 @@ const mReels = await m.evaluate(() => {
 ok('mobile: reels full-screen video feed, sound on, rail + caption', mReels.slides >= 2 && mReels.playing && mReels.muted === false && mReels.rail && mReels.meta, JSON.stringify(mReels));
 ok('mobile: reels keeps bottom nav visible above safe area', mReels.hasNav && mReels.navVisible && mReels.navTabs >= 4 && mReels.navAtBottom && mReels.pageLifted, JSON.stringify(mReels));
 await shot(m, 'mobile-reels');
+await m.evaluate(() => document.querySelector('.reel-rail-item .reaction-trigger').click());
+await sleep(500);
+const mTray = await m.evaluate(() => {
+  const t = document.querySelector('.reaction-tray');
+  if (!t) return { open: false };
+  const r = t.getBoundingClientRect();
+  const b = document.querySelector('.reel-rail-item .reaction-trigger').getBoundingClientRect();
+  return { open: true, kinds: t.querySelectorAll('button').length, inView: r.left >= 0 && r.right <= window.innerWidth && r.top >= 0 && r.bottom <= window.innerHeight, above: r.bottom <= b.top + 2 };
+});
+ok('mobile: reel Like tap opens reaction tray fully on screen', mTray.open && mTray.kinds >= 5 && mTray.inView && mTray.above, JSON.stringify(mTray));
+await shot(m, 'mobile-reels-tray');
+await m.evaluate(() => [...document.querySelectorAll('.reaction-tray button')].find(b => b.getAttribute('aria-label') === 'Haha')?.click());
+await sleep(450);
+ok('mobile: tray pick stores the reel reaction', await m.evaluate(() => {
+  const db = JSON.parse(localStorage.getItem('exposing-demo-v1'));
+  const newest = db.posts.filter(p => p.media.some(m => m.type === 'video')).sort((a, b) => b.ts - a.ts)[0];
+  return db.reactions.some(r => r.targetType === 'post' && r.targetId === newest.id && r.uid === db.meId && r.kind === 'haha') && !document.querySelector('.reaction-tray') && !!document.querySelector('.reel-rail-item .reaction-trigger.reacted .reaction-art');
+}));
+await shot(m, 'mobile-reels-reacted');
 const mt0 = await m.evaluate(() => document.querySelector('.reel-slide video').currentTime);
 await m.touchscreen.tap(300, 400);
 await sleep(90);
 await m.touchscreen.tap(300, 400);
 await sleep(350);
-const mSeekR = await m.evaluate(() => ({ t: document.querySelector('.reel-slide video').currentTime, badge: !!document.querySelector('.av-seek.right') }));
-ok('mobile: double-tap right seeks +10s', (mSeekR.t > mt0 + 9 || mSeekR.t < mt0) && mSeekR.badge, JSON.stringify({ mt0, ...mSeekR }));
+const mSeekR = await m.evaluate(() => { const v = document.querySelector('.reel-slide video'); return { t: v.currentTime, dur: v.duration, badge: !!document.querySelector('.av-seek.right') }; });
+ok('mobile: double-tap right seeks +10s', (mSeekR.t >= Math.min(mSeekR.dur, mt0 + 10) - 0.4 || mSeekR.t < mt0) && mSeekR.badge, JSON.stringify({ mt0, ...mSeekR }));
 await sleep(500);
 await m.evaluate(() => document.querySelector('.reel-rail-item button[aria-label="Comment on this reel"]').click());
 await m.waitForSelector('.comments-overlay', { timeout: 5000 });
@@ -938,6 +1635,7 @@ ok('mobile: swipe to next reel pauses previous', await m.evaluate(() => ({
   firstPaused: document.querySelectorAll('.reel-slide video')[0].paused,
   secondPlaying: !document.querySelectorAll('.reel-slide video')[1].paused
 })).then(r => r.count?.startsWith('2 /') && r.firstPaused && r.secondPlaying));
+await m.waitForSelector('.reel-home', { timeout: 20000 });
 await m.evaluate(() => document.querySelector('.reel-home').click());
 await sleep(800);
 ok('mobile: reels home button returns to feed', await m.evaluate(() => location.pathname === '/'));
@@ -995,6 +1693,124 @@ const loginBrand = await lp.evaluate(() => {
 ok('login: real Exposing logo + wordmark', loginBrand.hasBrand && loginBrand.loaded && loginBrand.src === '/exposing-logo-dark.png' && (loginBrand.title || '').includes('Exposing'), JSON.stringify(loginBrand));
 await shot(lp, 'desktop-login-brand');
 await lp.close();
+
+// ================= PHASE 7: MOBILE =================
+await goto(m, '/');
+ok('mobile: unread badge on bell', await m.evaluate(() => !!document.querySelector('.m-top .mnav-badge')));
+
+await goto(m, '/notifications');
+const mNotif = await m.evaluate(() => ({
+  rows: document.querySelectorAll('.notif-row').length,
+  unread: document.querySelectorAll('.notif-row.unread').length,
+  noOverflow: document.documentElement.scrollWidth <= window.innerWidth + 1
+}));
+ok('mobile: notifications render with unread', mNotif.rows >= 5 && mNotif.unread >= 1 && mNotif.noOverflow, JSON.stringify(mNotif));
+await shot(m, 'mobile-notifications');
+await m.evaluate(() => document.querySelector('.notif-mark')?.click());
+await sleep(400);
+ok('mobile: mark all read clears badge', await m.evaluate(() => !document.querySelector('.notif-row.unread')));
+
+await goto(m, '/messages/u2');
+await m.tap('.chat-compose input');
+await sleep(300);
+await setKb(m, 300, 544);
+await sleep(450);
+const mChatKb = await m.evaluate(() => {
+  const view = document.querySelector('.chat-view').getBoundingClientRect();
+  const compose = document.querySelector('.chat-compose').getBoundingClientRect();
+  return { viewH: Math.round(view.height), composeBottom: Math.round(compose.bottom), visible: compose.bottom <= 544 && compose.top > 0 };
+});
+ok('mobile: chat resizes for keyboard, compose stays reachable', mChatKb.viewH >= 380 && mChatKb.viewH <= 440 && mChatKb.visible, JSON.stringify(mChatKb));
+await m.type('.chat-compose input', 'QA mobile hi');
+await m.evaluate(() => document.querySelector('.chat-send').click());
+await sleep(450);
+ok('mobile: chat send lands in thread + store', await m.evaluate(() => {
+  const db = JSON.parse(localStorage.getItem('exposing-demo-v1'));
+  return [...document.querySelectorAll('.chat-bubble-row.mine')].some(b => b.textContent.includes('QA mobile hi')) && db.messages.some(x => x.from === 'u1' && x.to === 'u2' && x.text === 'QA mobile hi');
+}));
+await clearKb(m);
+await sleep(350);
+const mSendClear = await m.evaluate(() => {
+  const send = document.querySelector('.chat-send');
+  const r = send.getBoundingClientRect();
+  const el = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+  return { fab: !!document.querySelector('.post-fab'), hit: !!el && (el === send || send.contains(el)) };
+});
+ok('mobile: chat send button uncovered (no Post FAB on conversation)', !mSendClear.fab && mSendClear.hit, JSON.stringify(mSendClear));
+await shot(m, 'mobile-chat');
+
+await goto(m, '/marketplace');
+const mMarket = await m.evaluate(() => ({
+  cards: document.querySelectorAll('.market-card').length,
+  cols: getComputedStyle(document.querySelector('.market-grid')).gridTemplateColumns.split(' ').length,
+  noOverflow: document.documentElement.scrollWidth <= window.innerWidth + 1
+}));
+ok('mobile: marketplace two-column grid fits', mMarket.cards >= 5 && mMarket.cols === 2 && mMarket.noOverflow, JSON.stringify(mMarket));
+await shot(m, 'mobile-market');
+await m.evaluate(() => document.querySelector('.market-card').click());
+await sleep(600);
+const mListing = await m.evaluate(() => {
+  const modal = document.querySelector('.listing-modal').getBoundingClientRect();
+  return { fits: modal.width <= window.innerWidth && modal.left >= 0, actions: document.querySelectorAll('.listing-actions button').length };
+});
+ok('mobile: listing detail fits viewport with actions', mListing.fits && mListing.actions >= 1, JSON.stringify(mListing));
+await goBack(m);
+ok('mobile: phone-back closes listing detail', await m.evaluate(() => !document.querySelector('.listing-modal') && location.pathname === '/marketplace'));
+
+await goto(m, '/wallet');
+ok('mobile: wallet renders balance without overflow', await m.evaluate(() => !!document.querySelector('.wallet-balance') && document.documentElement.scrollWidth <= window.innerWidth + 1));
+await shot(m, 'mobile-wallet');
+
+await goto(m, '/saved');
+ok('mobile: saved list renders', await m.evaluate(() => !!document.querySelector('.saved-list') || !!document.querySelector('.empty-state')));
+await shot(m, 'mobile-saved');
+
+await goto(m, '/settings');
+await m.evaluate(() => document.querySelector('.settings-card .switch').click());
+await sleep(350);
+ok('mobile: settings toggle persists', await m.evaluate(() => JSON.parse(localStorage.getItem('exposing-demo-v1')).users.find(u => u.id === 'u1').twoStep === true));
+await m.evaluate(() => document.querySelector('.settings-card .switch').click());
+await sleep(300);
+await shot(m, 'mobile-settings');
+
+await goto(m, '/u/himal_lens');
+const mProf = await m.evaluate(() => ({
+  cover: Math.round(document.querySelector('.profile-cover').getBoundingClientRect().height),
+  actions: document.querySelector('.profile-actions').getBoundingClientRect().width > 0,
+  noOverflow: document.documentElement.scrollWidth <= window.innerWidth + 1
+}));
+ok('mobile: profile cover compact, actions visible, no overflow', mProf.cover <= 170 && mProf.actions && mProf.noOverflow, JSON.stringify(mProf));
+await shot(m, 'mobile-profile');
+
+await goto(m, '/signup');
+const mSignup = await m.evaluate(() => {
+  const first = document.querySelector('.signup-form input.login-input').getBoundingClientRect();
+  return { firstVisible: first.top >= 0 && first.top < window.innerHeight, noOverflow: document.documentElement.scrollWidth <= window.innerWidth + 1, scrollable: document.querySelector('.signup-container').scrollHeight > window.innerHeight };
+});
+ok('mobile: signup scrolls from top, first field reachable', mSignup.firstVisible && mSignup.noOverflow, JSON.stringify(mSignup));
+await shot(m, 'mobile-signup');
+
+await goto(m, '/legal/terms');
+ok('mobile: legal doc renders sections', await m.evaluate(() => document.querySelectorAll('.legal-section').length >= 4 && document.documentElement.scrollWidth <= window.innerWidth + 1));
+await shot(m, 'mobile-legal');
+
+await goto(m, '/admin');
+ok('mobile: non-staff blocked from admin', await m.evaluate(() => !!document.querySelector('.empty-state') && !document.querySelector('.admin-tabs')));
+
+// 404 recovery page on phone
+await m.goto('http://localhost:3000/this-route-does-not-exist', { waitUntil: 'domcontentloaded', timeout: 45000 });
+await m.waitForSelector('.notfound-card', { timeout: 15000 });
+await sleep(500);
+const mnf = await m.evaluate(() => {
+  const card = document.querySelector('.notfound-card').getBoundingClientRect();
+  const actions = [...document.querySelectorAll('.notfound-actions a')].map(a => a.getBoundingClientRect());
+  return { onScreen: card.top >= 0 && card.bottom <= window.innerHeight, bothVisible: actions.every(r => r.width > 0 && r.bottom <= window.innerHeight), noOverflow: document.documentElement.scrollWidth <= window.innerWidth + 1 };
+});
+ok('mobile: 404 card fits with both actions reachable', mnf.onScreen && mnf.bothVisible && mnf.noOverflow, JSON.stringify(mnf));
+await shot(m, 'mobile-notfound');
+await m.tap('.notfound-primary');
+await m.waitForSelector('article.post', { timeout: 15000 });
+ok('mobile: 404 Back to Home lands on feed', await m.evaluate(() => location.pathname === '/'));
 
 await m.close();
 await browser.close();

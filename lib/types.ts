@@ -50,6 +50,7 @@ export interface Media {
   src?: string;
   gen?: string;
   dur?: number;
+  blobId?: string;
 }
 
 export interface Comment {

@@ -9,7 +9,7 @@ import { ReactionKind } from '@/lib/types';
 import { IC } from '@/lib/icons';
 import ReactionIcon from './ReactionIcon';
 
-export default function ReactionButton({ targetType, targetId, small, kinds, extraCount = 0 }: { targetType: 'post' | 'comment' | 'media'; targetId: string; small?: boolean; kinds?: ReactionKind[]; extraCount?: number }) {
+export default function ReactionButton({ targetType, targetId, small, kinds, extraCount = 0, openOnClick, emptyLabel = '' }: { targetType: 'post' | 'comment' | 'media'; targetId: string; small?: boolean; kinds?: ReactionKind[]; extraCount?: number; openOnClick?: boolean; emptyLabel?: string }) {
   const { db, me, react, myReaction, t } = useApp();
   const list = kinds?.length ? REACTIONS.filter(r => kinds.includes(r.kind)) : REACTIONS;
   const trayWidth = list.length * 53 + 14;
@@ -26,7 +26,8 @@ export default function ReactionButton({ targetType, targetId, small, kinds, ext
   const open = () => {
     if (!me || !button.current) return;
     const rect = button.current.getBoundingClientRect();
-    setPosition({ left: Math.max(8, Math.min(rect.left - 8, window.innerWidth - trayWidth - 8)), top: rect.top > 100 ? rect.top - 86 : rect.bottom + 8 });
+    const rawTop = rect.top > 100 ? rect.top - 86 : rect.bottom + 8;
+    setPosition({ left: Math.max(8, Math.min(rect.left - 8, window.innerWidth - trayWidth - 8)), top: Math.max(8, Math.min(rawTop, window.innerHeight - 88)) });
   };
   useEffect(() => () => cancel(), []);
   useEffect(() => {
@@ -41,7 +42,7 @@ export default function ReactionButton({ targetType, targetId, small, kinds, ext
     return () => { document.removeEventListener('pointerdown', outside); document.removeEventListener('keydown', key); window.removeEventListener('scroll', close, true); window.removeEventListener('resize', close); };
   }, [position]);
   return <div className={`react-wrap ${small ? 'small' : ''}`}>
-    <button ref={button} type="button" className={`action-btn reaction-trigger ${mine ? 'reacted' : ''}`} aria-label={t(mine || 'like')} aria-pressed={!!mine} aria-haspopup="dialog" aria-expanded={!!position} title="Press and hold for reactions" onPointerDown={e => {
+    <button ref={button} type="button" className={`action-btn reaction-trigger ${mine ? 'reacted' : ''}`} aria-label={openOnClick ? 'Choose reaction' : t(mine || 'like')} aria-pressed={!!mine} aria-haspopup="dialog" aria-expanded={!!position} title={openOnClick ? 'Tap to choose a reaction' : 'Press and hold for reactions'} onPointerDown={e => {
       if (e.button !== 0) return;
       cancel(); held.current = false; origin.current = { x: e.clientX, y: e.clientY };
       timer.current = setTimeout(() => { held.current = true; open(); }, 450);
@@ -49,9 +50,10 @@ export default function ReactionButton({ targetType, targetId, small, kinds, ext
       e.preventDefault(); e.stopPropagation();
       if (held.current) { held.current = false; return; }
       if (!me) { router.push('/login'); return; }
+      if (openOnClick) { if (position) setPosition(null); else open(); return; }
       react(targetType, targetId, mine || list[0].kind); setPosition(null);
     }}>
-      {mine ? <ReactionIcon kind={mine} /> : IC.thumb}<span>{count > 0 ? compact(count) : ''}</span>
+      {mine ? <ReactionIcon kind={mine} /> : IC.thumb}<span>{count > 0 ? compact(count) : emptyLabel}</span>
     </button>
     {position && createPortal(<div ref={picker} className="reaction-tray" role="dialog" aria-label="Choose reaction" style={{ ...position, width: trayWidth }} onClick={e => e.stopPropagation()}>
       {list.map((r, index) => <button key={r.kind} type="button" aria-label={t(r.kind)} aria-pressed={mine === r.kind} style={{ animationDelay: `${index * 35}ms` }} onClick={() => { react(targetType, targetId, r.kind); setPosition(null); button.current?.focus(); }}><ReactionIcon kind={r.kind}/><span>{t(r.kind)}</span></button>)}

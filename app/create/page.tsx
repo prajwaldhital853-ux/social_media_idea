@@ -8,7 +8,8 @@ import { useApp } from '@/lib/AppContext';
 import Avatar from '@/components/Avatar';
 import { IC } from '@/lib/icons';
 import { Media } from '@/lib/types';
-import { resizeImage, uid, videoDuration, fmtDur, fileToDataUrl } from '@/lib/utils';
+import { uid, fmtDur } from '@/lib/utils';
+import { mediaFromFile } from '@/lib/mediaFile';
 import { takeCreateDraft } from '@/lib/draftMedia';
 import { useBackClose } from '@/lib/useBackClose';
 
@@ -97,18 +98,9 @@ export default function CreatePostPage() {
     try {
       for (const file of Array.from(files)) {
         const video = file.type.startsWith('video/');
-        if (!video && !['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) throw new Error('Choose a JPEG, PNG or WebP photo, or a video.');
-        if (file.size > (video ? 5 : 10) * 1024 * 1024) throw new Error(video ? 'Videos must be under 5 MB.' : 'Photos must be under 10 MB.');
         if (video && next.filter(m => m.type === 'video').length >= MAX_VIDEOS) throw new Error(`Up to ${MAX_VIDEOS} videos per post — remove a clip first.`);
         if (!video && next.filter(m => m.type === 'image').length >= MAX_PHOTOS) throw new Error(`You can attach up to ${MAX_PHOTOS} photos.`);
-        if (video) {
-          const src = await fileToDataUrl(file);
-          const dur = await videoDuration(src);
-          if (!Number.isFinite(dur) || dur > 60) throw new Error('Choose a video up to 60 seconds long.');
-          next.push({ type: 'video', src, dur });
-        } else {
-          next.push({ type: 'image', src: await resizeImage(file) });
-        }
+        next.push(await mediaFromFile(file));
       }
       setMedia(next);
     } catch (err) {

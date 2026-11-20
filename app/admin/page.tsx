@@ -1,194 +1,292 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import AppShell from '@/components/AppShell';
+import ThemeToggle from '@/components/ThemeToggle';
+import AdminReports from '@/components/AdminReports';
+import AdminUsers from '@/components/AdminUsers';
+import AdminCoins from '@/components/AdminCoins';
+import AdminPromos from '@/components/AdminPromos';
 import { useApp } from '@/lib/AppContext';
-import { esc, ago } from '@/lib/utils';
+import { IC } from '@/lib/icons';
+import { ago } from '@/lib/utils';
+import { FeatureFlags, Settings } from '@/lib/types';
+import { TranslationKey } from '@/lib/i18n';
+
+type AdminTab = 'overview' | 'reports' | 'users' | 'coins' | 'promos' | 'audit' | 'settings';
+
+const FEATURE_LABELS: { key: keyof FeatureFlags; label: string }[] = [
+  { key: 'video', label: 'video' },
+  { key: 'marketplace', label: 'marketplace' },
+  { key: 'promotion', label: 'promotions' },
+  { key: 'googleLogin', label: 'google' },
+  { key: 'facebookLogin', label: 'facebook' },
+  { key: 'appleLogin', label: 'apple' }
+];
 
 export default function AdminPage() {
-  const { db, me, isAdmin, isAuthenticated } = useApp();
   const router = useRouter();
-  const [adminTab, setAdminTab] = useState<'overview' | 'reports' | 'users' | 'audit' | 'settings'>('overview');
-  const [mounted, setMounted] = useState(false);
+  const { db, me, t, isStaff, setDb, showToast, logAudit } = useApp();
+  const lang = db.lang;
+  const [tab, setTab] = useState<AdminTab>('overview');
+  const [draft, setDraft] = useState<Settings>(() => JSON.parse(JSON.stringify(db.settings)));
+  const [newCat, setNewCat] = useState('');
 
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  useEffect(() => {
-    if (mounted && !isAuthenticated) {
-      router.push('/login');
-    }
-  }, [isAuthenticated, router, mounted]);
-
-  useEffect(() => {
-    if (mounted && !isAdmin()) {
-      router.push('/');
-    }
-  }, [isAdmin, router, mounted]);
-
-  if (!mounted) {
-    return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh' }}>
-        <div style={{ color: 'var(--muted)' }}>Loading...</div>
+  if (!me) {
+    return <AppShell>
+      <div className="empty-state">
+        <span className="empty-state-icon">{IC.shield}</span>
+        <h2>{t('needLogin')}</h2>
+        <button type="button" className="empty-state-cta" onClick={() => router.push('/login')}>{t('signIn')}</button>
       </div>
-    );
+    </AppShell>;
   }
 
-  if (!isAuthenticated || !isAdmin()) {
-    return null;
+  if (!isStaff()) {
+    return <AppShell>
+      <div className="empty-state">
+        <span className="empty-state-icon">{IC.lock}</span>
+        <h2>{t('adminOnly')}</h2>
+        <button type="button" className="empty-state-cta" onClick={() => router.push('/')}>{t('backFeed')}</button>
+      </div>
+    </AppShell>;
   }
 
   const openReports = db.reports.filter(r => r.status === 'open').length;
+  const pendingCoins = db.coinRequests.filter(r => r.status === 'pending').length;
+  const pendingPromos = db.promotions.filter(p => p.status === 'pending').length;
 
-  return (
-    <AppShell>
-      <header className="header">
-        <div className="header-title">Admin Dashboard</div>
+  const tabs: { id: AdminTab; label: string; badge?: number }[] = [
+    { id: 'overview', label: t('tOverview') },
+    { id: 'reports', label: t('tReports'), badge: openReports },
+    { id: 'users', label: t('tUsers') },
+    { id: 'coins', label: t('coinRequests'), badge: pendingCoins },
+    { id: 'promos', label: t('promotions'), badge: pendingPromos },
+    { id: 'audit', label: t('tAudit') },
+    { id: 'settings', label: t('tSettings') }
+  ];
+
+  const exportCsv = () => {
+    const rows = [['ts', 'actor', 'action', 'target', 'reason'], ...db.audit.map(a => [
+      new Date(a.ts).toISOString(), a.actor, a.action, a.target, a.reason.replace(/"/g, '""')
+    ])];
+    const csv = rows.map(r => r.map(c => `"${c}"`).join(',')).join('\n');
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'exposing-audit.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const saveSettings = () => {
+    const clean: Settings = {
+      ...draft,
+      threshold: Math.min(20, Math.max(1, Math.round(draft.threshold) || 1)),
+      coinPrice: Math.max(1, Math.round(draft.coinPrice) || 1),
+      packages: draft.packages.map(p => ({ ...p, coins: Math.max(1, Math.round(p.coins) || 1), days: Math.max(1, Math.round(p.days) || 1) })),
+      categories: draft.categories.filter(c => c.trim())
+    };
+    setDb(prev => ({ ...prev, settings: clean }));
+    setDraft(JSON.parse(JSON.stringify(clean)));
+    logAudit('update_settings', 'settings', `threshold ${clean.threshold}, coin NPR ${clean.coinPrice}`);
+    showToast(t('savedOk'));
+  };
+
+  const actorName = (id: string) => db.users.find(u => u.id === id)?.name ?? id;
+
+  return <AppShell>
+    <div className="admin-view">
+      <header className="header home-header">
+        <div className="home-header-row">
+          <div className="home-header-copy">
+            <h1 className="header-title">{t('admin')}</h1>
+            <p className="header-sub">{me.name} · {me.role}</p>
+          </div>
+          <div className="header-actions"><ThemeToggle compact/></div>
+        </div>
       </header>
 
-      <div className="tabs">
-        {(['overview', 'reports', 'users', 'audit', 'settings'] as const).map(tab => (
-          <div
-            key={tab}
-            className={`tab ${adminTab === tab ? 'active' : ''}`}
-            onClick={() => setAdminTab(tab)}
-          >
-            {tab.charAt(0).toUpperCase() + tab.slice(1)}
-            {tab === 'reports' && openReports > 0 && ` (${openReports})`}
-          </div>
+      <div className="tabs admin-tabs">
+        {tabs.map(x => (
+          <button key={x.id} type="button" className={`tab ${tab === x.id ? 'active' : ''}`} onClick={() => setTab(x.id)}>
+            {x.label}
+            {!!x.badge && <span className="admin-tab-badge">{x.badge}</span>}
+          </button>
         ))}
       </div>
 
-      {adminTab === 'overview' && (
-        <div style={{ padding: '16px' }}>
-          <div style={{ display: 'flex', gap: '24px', marginBottom: '24px' }}>
-            <div>
-              <div style={{ fontSize: '32px', fontWeight: '800' }}>{db.users.length}</div>
-              <div style={{ color: 'var(--muted)' }}>Users</div>
-            </div>
-            <div>
-              <div style={{ fontSize: '32px', fontWeight: '800' }}>{db.posts.length}</div>
-              <div style={{ color: 'var(--muted)' }}>Posts</div>
-            </div>
-            <div>
-              <div style={{ fontSize: '32px', fontWeight: '800' }}>{db.comments.length}</div>
-              <div style={{ color: 'var(--muted)' }}>Comments</div>
-            </div>
-            <div>
-              <div style={{ fontSize: '32px', fontWeight: '800' }}>{openReports}</div>
-              <div style={{ color: 'var(--muted)' }}>Reports</div>
-            </div>
+      {tab === 'overview' && (
+        <div className="admin-panel">
+          <div className="admin-stats">
+            <div className="admin-stat"><b>{db.users.length}</b><span>{t('sUsers')}</span></div>
+            <div className="admin-stat"><b>{db.posts.filter(p => p.status === 'live').length}</b><span>{t('sPosts')}</span></div>
+            <div className="admin-stat"><b>{db.comments.filter(c => c.status === 'live').length}</b><span>{t('sComments')}</span></div>
+            <button type="button" className="admin-stat alert" onClick={() => setTab('reports')}><b>{openReports}</b><span>{t('sReports')}</span></button>
           </div>
-
-          <h3 style={{ fontSize: '20px', fontWeight: '800', marginBottom: '16px' }}>Recent Actions</h3>
-          {db.audit.slice(0, 5).map(a => (
-            <div key={a.id} style={{ padding: '16px 0', borderBottom: '1px solid var(--line)' }}>
-              <div>
-                <b>{esc(a.action)}</b> <span style={{ color: 'var(--muted)' }}>{esc(a.target)}</span>
-                {a.reason && <div style={{ color: 'var(--muted)', fontSize: '15px', marginTop: '4px' }}>{esc(a.reason)}</div>}
-              </div>
-              <div style={{ color: 'var(--muted)', fontSize: '14px', marginTop: '4px' }}>
-                @{esc(a.actor)} · {ago(a.ts, 'en')}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {adminTab === 'users' && (
-        <div style={{ padding: '16px' }}>
-          {db.users.map(u => (
-            <div key={u.id} style={{ padding: '16px 0', borderBottom: '1px solid var(--line)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div>
-                <b>{esc(u.name || u.username)}</b> <span style={{ color: 'var(--muted)' }}>@{esc(u.username)}</span>
-                <br />
-                <span style={{ color: 'var(--muted)', fontSize: '14px' }}>
-                  {esc(u.email)} · {u.role === 'admin' ? 'Admin' : 'User'} · {db.posts.filter(p => p.uid === u.id).length} posts
-                </span>
-              </div>
-              {u.role !== 'admin' && (
-                <button style={{ padding: '8px 16px', borderRadius: '9999px', border: '1px solid var(--line)', background: 'transparent', cursor: 'pointer' }}>
-                  Manage
-                </button>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-
-      {adminTab === 'reports' && (
-        <div style={{ padding: '16px' }}>
-          {openReports === 0 ? (
-            <p style={{ color: 'var(--muted)', textAlign: 'center', padding: '32px' }}>No open reports</p>
-          ) : (
-            db.reports
-              .filter(r => r.status === 'open')
-              .map(r => (
-                <div key={r.id} style={{ padding: '16px', borderBottom: '1px solid var(--line)', background: 'var(--tint)', borderRadius: '8px', marginBottom: '8px' }}>
-                  <div style={{ marginBottom: '8px' }}>
-                    <span style={{ padding: '4px 12px', borderRadius: '9999px', background: 'var(--line)', fontSize: '13px' }}>
-                      {r.type === 'post' ? 'Post' : 'Comment'}
-                    </span>
-                    <span style={{ padding: '4px 12px', borderRadius: '9999px', background: 'var(--red)', color: 'white', fontSize: '13px', marginLeft: '8px' }}>
-                      {r.reason}
-                    </span>
-                  </div>
-                  <div style={{ color: 'var(--muted)', fontSize: '15px' }}>{esc(r.note)}</div>
-                  <div style={{ marginTop: '12px', display: 'flex', gap: '8px' }}>
-                    <button style={{ padding: '8px 16px', borderRadius: '9999px', border: '1px solid var(--line)', background: 'transparent', cursor: 'pointer' }}>
-                      Dismiss
-                    </button>
-                    <button style={{ padding: '8px 16px', borderRadius: '9999px', border: '1px solid var(--red)', color: 'var(--red)', background: 'transparent', cursor: 'pointer' }}>
-                      Remove
-                    </button>
-                  </div>
-                </div>
-              ))
-          )}
-        </div>
-      )}
-
-      {adminTab === 'audit' && (
-        <div style={{ padding: '16px' }}>
+          <div className="admin-queues">
+            <button type="button" className="admin-queue" onClick={() => setTab('coins')}>
+              {IC.coin}<span>{t('coinRequests')}</span><b>{pendingCoins}</b>{IC.chev}
+            </button>
+            <button type="button" className="admin-queue" onClick={() => setTab('promos')}>
+              {IC.chart}<span>{t('promotions')}</span><b>{pendingPromos}</b>{IC.chev}
+            </button>
+          </div>
+          <h2 className="admin-section-title">{t('recent')}</h2>
           {db.audit.length === 0 ? (
-            <p style={{ color: 'var(--muted)', textAlign: 'center', padding: '32px' }}>—</p>
+            <p className="feed-empty">{t('noAudit')}</p>
           ) : (
-            db.audit.map(a => (
-              <div key={a.id} style={{ padding: '16px 0', borderBottom: '1px solid var(--line)' }}>
-                <div>
-                  <b>{esc(a.action)}</b> <span style={{ color: 'var(--muted)' }}>{esc(a.target)}</span>
-                  {a.reason && <div style={{ color: 'var(--muted)', fontSize: '15px', marginTop: '4px' }}>{esc(a.reason)}</div>}
+            <div className="admin-list">
+              {db.audit.slice(0, 6).map(a => (
+                <div key={a.id} className="admin-audit-row">
+                  <span className="admin-audit-main">
+                    <b>{a.action}</b>
+                    <span>{a.target}{a.reason ? ` · ${a.reason}` : ''}</span>
+                  </span>
+                  <span className="admin-audit-meta">{actorName(a.actor)} · {ago(a.ts, lang)}</span>
                 </div>
-                <div style={{ color: 'var(--muted)', fontSize: '14px', marginTop: '4px' }}>
-                  @{esc(a.actor)} · {ago(a.ts, 'en')}
-                </div>
-              </div>
-            ))
+              ))}
+            </div>
           )}
         </div>
       )}
 
-      {adminTab === 'settings' && (
-        <div style={{ padding: '16px' }}>
-          <div style={{ marginBottom: '24px' }}>
-            <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500' }}>
-              Auto-hide threshold
-            </label>
-            <input
-              type="number"
-              min="1"
-              max="20"
-              defaultValue={db.settings.threshold}
-              style={{ padding: '12px', borderRadius: '4px', border: '1px solid var(--line)', width: '100%', maxWidth: '200px' }}
-            />
-            <div style={{ color: 'var(--muted)', fontSize: '14px', marginTop: '4px' }}>
-              Hide a post automatically after this many reports
-            </div>
+      {tab === 'reports' && <AdminReports/>}
+      {tab === 'users' && <AdminUsers/>}
+      {tab === 'coins' && <AdminCoins/>}
+      {tab === 'promos' && <AdminPromos/>}
+
+      {tab === 'audit' && (
+        <div className="admin-panel">
+          <div className="admin-panel-head">
+            <h2 className="admin-section-title">{t('tAudit')}</h2>
+            <button type="button" className="ghost-btn" onClick={exportCsv} disabled={db.audit.length === 0}>{IC.chart}{t('exportCsv')}</button>
           </div>
+          {db.audit.length === 0 ? (
+            <p className="feed-empty">{t('noAudit')}</p>
+          ) : (
+            <div className="admin-list">
+              {db.audit.map(a => (
+                <div key={a.id} className="admin-audit-row">
+                  <span className="admin-audit-main">
+                    <b>{a.action}</b>
+                    <span>{a.target}{a.reason ? ` · ${a.reason}` : ''}</span>
+                  </span>
+                  <span className="admin-audit-meta">{actorName(a.actor)} · {ago(a.ts, lang)}</span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
-    </AppShell>
-  );
+
+      {tab === 'settings' && (
+        <div className="admin-panel">
+          <section className="settings-card admin-settings-card">
+            <h2>{IC.shield}{t('moderation')}</h2>
+            <label className="field">
+              <span>{t('threshold')}</span>
+              <input type="number" min={1} max={20} value={draft.threshold} onChange={e => setDraft({ ...draft, threshold: Number(e.target.value) })}/>
+            </label>
+            <p className="settings-hint">{t('thr')}</p>
+          </section>
+
+          <section className="settings-card admin-settings-card">
+            <h2>{IC.coin}{t('economy')}</h2>
+            <div className="field-row">
+              <label className="field">
+                <span>{t('coinPrice')}</span>
+                <input type="number" min={1} value={draft.coinPrice} onChange={e => setDraft({ ...draft, coinPrice: Number(e.target.value) })}/>
+              </label>
+              <label className="field">
+                <span>{t('bankName')}</span>
+                <input value={draft.bankName} onChange={e => setDraft({ ...draft, bankName: e.target.value })}/>
+              </label>
+            </div>
+            <div className="field-row">
+              <label className="field">
+                <span>{t('accountNumber')}</span>
+                <input value={draft.bankAccount} onChange={e => setDraft({ ...draft, bankAccount: e.target.value })}/>
+              </label>
+              <label className="field">
+                <span>{t('accountHolder')}</span>
+                <input value={draft.bankHolder} onChange={e => setDraft({ ...draft, bankHolder: e.target.value })}/>
+              </label>
+            </div>
+          </section>
+
+          <section className="settings-card admin-settings-card">
+            <h2>{IC.gear}{t('featureFlags')}</h2>
+            {FEATURE_LABELS.map(f => (
+              <div key={f.key} className="settings-row">
+                <span className="settings-row-copy"><b>{t(f.label as TranslationKey)}</b></span>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={draft.features[f.key]}
+                  aria-label={t(f.label as TranslationKey)}
+                  className={`switch ${draft.features[f.key] ? 'on' : ''}`}
+                  onClick={() => setDraft({ ...draft, features: { ...draft.features, [f.key]: !draft.features[f.key] } })}
+                >
+                  <span className="switch-knob"/>
+                </button>
+              </div>
+            ))}
+          </section>
+
+          <section className="settings-card admin-settings-card">
+            <h2>{IC.chart}{t('promotions')}</h2>
+            {draft.packages.map((p, i) => (
+              <div key={p.id} className="admin-package">
+                <label className="field">
+                  <span>{t('packageName')}</span>
+                  <input value={p.name} onChange={e => setDraft({ ...draft, packages: draft.packages.map((x, j) => j === i ? { ...x, name: e.target.value } : x) })}/>
+                </label>
+                <div className="field-row">
+                  <label className="field">
+                    <span>{t('coins')}</span>
+                    <input type="number" min={1} value={p.coins} onChange={e => setDraft({ ...draft, packages: draft.packages.map((x, j) => j === i ? { ...x, coins: Number(e.target.value) } : x) })}/>
+                  </label>
+                  <label className="field">
+                    <span>{t('days')}</span>
+                    <input type="number" min={1} value={p.days} onChange={e => setDraft({ ...draft, packages: draft.packages.map((x, j) => j === i ? { ...x, days: Number(e.target.value) } : x) })}/>
+                  </label>
+                </div>
+                <label className="field">
+                  <span>{t('reach')}</span>
+                  <input value={p.reach} onChange={e => setDraft({ ...draft, packages: draft.packages.map((x, j) => j === i ? { ...x, reach: e.target.value } : x) })}/>
+                </label>
+              </div>
+            ))}
+          </section>
+
+          <section className="settings-card admin-settings-card">
+            <h2>{IC.store}{t('categories')}</h2>
+            <div className="admin-cats">
+              {draft.categories.map(c => (
+                <span key={c} className="admin-cat">
+                  {c}
+                  <button type="button" aria-label={`${t('del')} ${c}`} onClick={() => setDraft({ ...draft, categories: draft.categories.filter(x => x !== c) })}>{IC.x}</button>
+                </span>
+              ))}
+            </div>
+            <div className="admin-cat-add">
+              <input value={newCat} onChange={e => setNewCat(e.target.value)} maxLength={40} placeholder={t('addCategory')} aria-label={t('addCategory')}/>
+              <button
+                type="button"
+                className="ghost-btn"
+                disabled={!newCat.trim() || draft.categories.includes(newCat.trim())}
+                onClick={() => { setDraft({ ...draft, categories: [...draft.categories, newCat.trim()] }); setNewCat(''); }}
+              >
+                {IC.plus}{t('addCategory')}
+              </button>
+            </div>
+          </section>
+
+          <button type="button" className="promote-submit admin-save" onClick={saveSettings}>{IC.check}{t('save')}</button>
+        </div>
+      )}
+    </div>
+  </AppShell>;
 }

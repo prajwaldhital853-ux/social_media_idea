@@ -1,0 +1,227 @@
+PASS  desktop: left menu + comfortable feed + calm blank right column  — {"cols":[264,680,336],"mainW":680,"calmW":336,"calmBg":"rgb(243, 239, 233)","calmEmpty":true,"calmRight":true,"rail":true}
+PASS  desktop: feed paginates first paint and loads more on scroll  — {"firstPage":6,"fullPage":15}
+PASS  desktop: Search opens fast (prefetched)  — 76ms
+PASS  desktop: Reels opens fast (prefetched)  — 281ms
+PASS  desktop: post opens fast (prefetched on hover)  — 154ms
+PASS  desktop: author profile opens fast (prefetched on hover)  — 167ms
+PASS  desktop: feed renders
+PASS  desktop: window scrollbar hidden
+PASS  desktop: no horizontal overflow
+PASS  desktop: page-enter animation
+PASS  desktop: real favicon + rail logo loaded  — {"favicon":"/exposing-icon.png","apple":"/apple-icon.png","logoLoaded":true,"logoSrc":"/exposing-logo.png"}
+PASS  desktop: p_mix stack n5, 5 cells, +3  — {"cls":"media-mosaic stack n5","cells":5,"more":"+3","preview":true,"previewPaused":true}
+PASS  desktop: mixed video is paused preview
+PASS  desktop: single video autoplays with sound + loop  — {"paused":false,"muted":false,"loop":true}
+PASS  desktop: video pauses when scrolled off-screen
+PASS  desktop: video resumes when back in view
+PASS  desktop: mixed mosaic video opens media page at that clip (not Reels)  — {"path":"/post/p_mix/media/0","i":0,"src":"https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4","playing":true,"count":"1 / 8","noReels":true}
+PASS  desktop: photo opens media route at 2/8, 8 slides, horizontal snap  — {"path":"/post/p_mix/media/1","count":"2 / 8","slides":8,"snap":"x mandatory","axis":"auto/hidden","row":"row","slideW":1280,"clientW":1280,"slide0Video":true,"slide1Img":true}
+PASS  desktop: media page video slide plays with sound at 1/8  — {"count":"1 / 8","playing":true,"muted":false}
+PASS  desktop: ArrowRight advances to 2/8
+PASS  desktop: ArrowLeft returns to 1/8
+PASS  desktop: per-media action bar (like/comment/share)
+PASS  desktop: per-media like stored as media reaction
+PASS  desktop: photo comment sheet layers above media page  — {"sheetZ":"1450","pageZ":"1200","sheetVisible":true}
+PASS  desktop: photo comment stored with mediaIndex
+PASS  desktop: Escape closes photo sheet, media page stays
+PASS  desktop: phone-back returns to feed without reload  — {"path":"/","marker":true,"page":false}
+PASS  desktop: post totals include per-media comments+reactions  — {"commentSpan":"5","reactSpan":"9","totalComments":5,"totalReactions":9}
+PASS  desktop: 3rd photo opens media page at 3/4
+PASS  desktop: wheel advances one slide to 4/4
+PASS  desktop: horizontal wheel back returns to previous slide 3/4 (not first)
+PASS  desktop: horizontal snap settles on a whole slide, no partial flicker  — {"left":1280,"w":1280,"count":"2 / 4","vertical":0}
+PASS  desktop: picture snaps to center immediately (<300ms)  — {"ms":50,"left":3840,"w":1280}
+PASS  desktop: horizontal scroll reaches 4/4
+PASS  desktop: side prev/next arrows, next disabled on last slide  — {"prevDisabled":false,"nextDisabled":true,"sides":true,"mid":true}
+PASS  desktop: prev arrow returns to 3/4
+PASS  desktop: back from media page lands on feed
+PASS  desktop: suggestion emojis mirror post kinds  — {"kinds":["haha","like","love","sad","wow"],"suggestKinds":["haha","like","love","sad","wow"],"head":5,"chips":["Nice!","Beautiful!","Congrats!","Love this!","Amazing!","So good!","Well done!"],"rowScrollable":true,"rowScrollbar":"none","inputAutocomplete":"off"}
+PASS  desktop: heading shows post reaction icons
+PASS  desktop: suggestion chips render + row scrolls
+PASS  desktop: suggestion row scrollbar hidden  — none
+PASS  desktop: comment input disables autofill
+PASS  desktop: chip fills field, keeps focus + keyboard, no auto-post  — {"active":"INPUT","isInput":true,"val":"Nice!","kb":"380px","count":21}
+PASS  desktop: emoji picker opens + inserts without dropping keyboard  — {"pickerFocus":true,"isInput":true,"val":"Nice!🔥","kb":"380px"}
+PASS  desktop: Escape closes picker, keeps sheet
+PASS  desktop: scrim = visible viewport, compose sits on keyboard edge  — {"top":0,"fullH":520,"composeBottom":499.1875,"listScrolled":true,"composeVisible":true}
+PASS  desktop: first-open focus + keyboard keeps compose visible
+PASS  desktop: View 4 replies expands thread  — View 4 replies / 4
+PASS  desktop: reply reaction badge uses ReactionIcon art
+PASS  desktop: reply banner + prefill  — {"banner":"Replying to Maya Gurung","val":"@Maya Gurung "}
+PASS  desktop: reply paging shows 4 + view more (1)  — {"shown":4,"more":"View more replies (1)"}
+PASS  desktop: view more loads the 5th reply
+PASS  desktop: reply @mention rendered in blue  — {"text":"@Maya","color":"rgb(29, 111, 214)"}
+PASS  desktop: comment tray limited to post kinds  — ["haha","like","love","sad","wow"]
+PASS  desktop: Escape closes tray but keeps sheet
+PASS  desktop: heading icon quick-react toggles on
+PASS  desktop: phone-back closes comment sheet
+PASS  desktop: like+love post shows only those icons  — {"suggest":["Insert Like emoji","Insert Love emoji"],"head":2}
+PASS  desktop: comment tray also only like+love
+PASS  desktop: inline compose in normal flow, list visible  — {"bottom":884.03125,"fixed":"relative","listH":360}
+PASS  desktop: inline comment posts
+PASS  desktop: comment button shows no red focus ring  — {"fv":true,"outline":"none","w":"3px","bg":"rgba(0, 0, 0, 0)"}
+PASS  desktop: + button opens compact Post/Reels card  — {"labels":["Post","Reels"],"h":146,"w":308,"sideBySide":true,"noLongCopy":true,"icons":true}
+PASS  desktop: Reels picker rejects a photo with a clear toast  — {"toast":"Reels need a video — choose a video file.","visible":true,"aboveChooser":true,"chooserStill":true,"path":"/"}
+PASS  desktop: video over 150 MB rejected with size toast  — {"toast":"Video must be under 150 MB — this one is 151 MB.","visible":true,"chooserStill":true,"path":"/"}
+PASS  desktop: chooser Post lands on create page
+PASS  desktop: Reels gallery pick auto-attaches clip in reel mode  — {"path":"/create","title":"Create reel","videos":1,"chooserGone":true}
+PASS  desktop: publish chooser offers Post + enabled Reel  — {"options":["Post","Reel"],"reelEnabled":true}
+PASS  desktop: publish ring stages % and labels reel  — 2% -> 45% / Publishing your reel…
+PASS  desktop: reel published with kind reel
+PASS  desktop: reel clip stored on device, not in localStorage  — {"kind":"reel","blobId":"w6e2071o","src":null}
+PASS  desktop: published reel survives reload and plays  — {"src":"blob:http://localhost:3000/81ec1cde-3f14-4c30-81a3-3f698cb328a8","playing":true,"ready":4,"count":"1 / 4"}
+PASS  desktop: textarea capped at 320px
+PASS  desktop: location panel opens
+PASS  desktop: place input avoids autofill heuristics
+PASS  desktop: mood + place chips  — ["😊 feeling happy","Pokhara"]
+PASS  desktop: attachment thumbnail renders
+PASS  desktop: publish returns home with new post + tags  — {"text":true,"tags":2}
+PASS  desktop: create footer above keyboard  — {"pageH":520,"footerBottom":520}
+PASS  desktop: audience menu offers Public + Followers
+PASS  desktop: audience chip switches to Followers
+PASS  desktop: followers-only post published with badge, visible to owner  — {"id":"p1syru8u","audience":"followers","badge":true,"visibleToOwner":true}
+PASS  desktop: followers-only post hidden from non-follower (feed + detail)  — {"hiddenFeed":true,"hiddenDetail":true}
+PASS  desktop: 10 photos attached, accept switches to video-only  — {"items":10,"accept":"video/*","addon":"10/10 photos · 0/3 videos","addTile":true}
+PASS  desktop: 11th photo rejected with clear error
+PASS  desktop: feed video click opens Reels at that clip, playing  — {"path":"/video/p11-0","i":2,"src":"https://www.w3schools.com/html/mov_bbb.mp4","playing":true,"count":"3 / 4","total":4}
+PASS  desktop: reels page = video-only snap feed with sound on  — {"slides":4,"playing":true,"muted":false,"snap":"y mandatory","rail":true,"onlyVideos":true,"caption":true,"noFeedCards":true}
+PASS  desktop: reels keeps left nav rail fixed, no frame overlap  — {"present":true,"position":"fixed","visible":true,"overlapsFrame":false,"links":["/","/notifications","/explore","/video","/marketplace",null]}
+PASS  desktop: reels preload=auto buffers next clip  — {"preload":"auto","nextReady":4}
+PASS  desktop: double-tap right seeks +10s with badge  — {"t0":1.807069,"t":0.276146,"dur":5.055,"badge":true,"note":"short clip clamps to end / loops"}
+PASS  desktop: double-tap left seeks -10s with badge  — {"t1":1.253018,"t":0.308724,"badge":true}
+PASS  desktop: single tap pauses reel
+PASS  desktop: single tap resumes reel
+PASS  desktop: reel Like press opens reaction tray above the button  — {"railBefore":{"label":"Choose reaction","size":46,"labelBelow":"Like"},"reelTray":{"open":true,"kinds":["Like","Love","Haha","Wow","Sad"],"inView":true,"above":true,"z":"1500"}}
+PASS  desktop: tray pick stores the chosen reel reaction  — {"newestId":"1vqri45a","newestKind":"reel","mine":["love"],"trayGone":true,"reacted":true,"art":true,"count":"1","path":"/video"}
+PASS  desktop: reel rail save toggles saved post
+PASS  desktop: reel comment sheet opens above reels
+PASS  desktop: ArrowDown snaps to next reel, previous pauses  — {"count":"2 / 4","firstPaused":true,"secondPlaying":true}
+PASS  desktop: wheel snaps cleanly to next reel, fully settled  — {"ms":582,"scrollTop":899,"clientHeight":900,"count":"2 / 4"}
+PASS  desktop: reels nav rail navigates to Marketplace
+PASS  desktop: reels home button returns to feed
+PASS  desktop: search field below title row  — {"fieldBelow":true,"gapFromTop":10}
+PASS  desktop: search finds Sita
+PASS  desktop: branded 404 with loaded mark + home action  — {"markLoaded":true,"title":"This page doesn't exist","homeHref":"/","onScreen":true,"noOverflow":true}
+PASS  desktop: 404 Back to Home lands on feed
+PASS  desktop: author profile renders cover/name/stats/posts  — {"path":"/u/maya_g","name":"Maya Gurung","cover":true,"stats":3,"posts":2,"followOn":true}
+PASS  desktop: follow toggle persists  — now following=false
+PASS  desktop: profile media tab shows grid
+PASS  desktop: profile about tab shows cards
+PASS  desktop: followers list opens people modal
+PASS  desktop: Escape closes people modal
+PASS  desktop: edit profile saves bio  — {"stored":"QA bio — lakeside tester.","shown":"QA bio — lakeside tester.","closed":true}
+PASS  desktop: unknown profile shows missing state
+PASS  desktop: saved page lists saved posts  — 3 posts
+PASS  desktop: unsaving removes post from saved list  — {"count":2,"saves":2}
+PASS  desktop: wallet balance matches account  — {"coins":260,"shown":"260"}
+PASS  desktop: QR method renders demo QR
+PASS  desktop: buy without reference shows error
+PASS  desktop: coin request stored pending with screenshot  — {"uid":"u1","coins":200,"amount":2000,"method":"qr","status":"pending","shot":true,"row":true}
+PASS  desktop: two-step toggle persists
+PASS  desktop: language switch to Nepali persists  — {"lang":"ne","title":"सेटिङ"}
+PASS  desktop: dark choice applies theme
+PASS  desktop: light choice restores theme
+PASS  desktop: notifications render grouped with unread  — {"rows":5,"unread":3,"groups":2}
+PASS  desktop: mark all read clears unread
+PASS  desktop: notification opens its target
+PASS  desktop: inbox lists conversations  — {"rows":2,"unread":2}
+PASS  desktop: conversation opens and marks incoming read  — {"path":"/messages/u2","bubbles":3,"incomingRead":true}
+PASS  desktop: send stores message + notifies recipient  — {"text":"QA desktop hello","mine":true,"notified":true}
+PASS  desktop: new-message picker opens chosen chat
+PASS  desktop: marketplace grid renders listings  — 6 cards
+PASS  desktop: marketplace search filters
+PASS  desktop: category filter matches data  — expected 1
+PASS  desktop: create listing stores + opens detail on My listings  — {"uid":"u1","price":1234,"media":1,"status":"active","mineTab":true,"shown":"QA test listing"}
+PASS  desktop: mark sold updates listing + flag
+PASS  desktop: relist restores active
+PASS  desktop: Escape closes listing detail
+PASS  desktop: contact seller opens chat with seller
+PASS  desktop: admin overview renders tabs/stats/badges  — {"tabs":7,"stats":4,"badges":3}
+PASS  desktop: reports queue lists open reports
+PASS  desktop: dismiss report updates queue + audit  — {"open":2,"cards":2,"audit":true}
+PASS  desktop: remove report hides post + notifies owner  — {"status":"removed","reason":"r_spam","notified":true,"actioned":1}
+PASS  desktop: remove listing report takes listing down
+PASS  desktop: pending coins filter shows both requests
+PASS  desktop: approve coins credits wallet + ledger + notice  — {"status":"approved","coins":140,"ledger":true,"notified":true}
+PASS  desktop: approve QA request credits buyer
+PASS  desktop: activate promo sets active window + notice  — {"status":"active","ends":true,"notified":true}
+PASS  desktop: end promo closes campaign
+PASS  desktop: user search narrows list
+PASS  desktop: warn user stores warning + notifies  — {"warning":"QA warning: keep it civil.","notified":true}
+PASS  desktop: suspend 7 days sets window + reason  — true
+PASS  desktop: reinstate clears suspension
+PASS  desktop: admin settings save persists + audits  — {"threshold":5,"audit":true}
+PASS  desktop: audit log lists actions + export control
+PASS  desktop: /legal/privacy renders full document  — {"h1":"Privacy Policy","sections":10,"toc":10,"noOverflow":true}
+PASS  desktop: /legal/terms renders full document  — {"h1":"Terms of Service","sections":12,"toc":12,"noOverflow":true}
+PASS  desktop: /legal/user-policy renders full document  — {"h1":"User Policy","sections":10,"toc":10,"noOverflow":true}
+PASS  desktop: /legal/cookies renders full document  — {"h1":"Cookies Policy","sections":6,"toc":6,"noOverflow":true}
+PASS  desktop: signup form renders
+PASS  desktop: empty signup shows validation error
+PASS  desktop: duplicate username rejected
+PASS  desktop: signup creates account and signs in  — {"created":true,"loggedIn":true,"path":"/"}
+PASS  mobile: top bar + bottom nav + fab
+PASS  mobile: single column, rail/calm hidden, bottom nav pinned  — {"railHidden":true,"calmHidden":true,"mainW":390,"navBottom":true,"navFixed":true}
+PASS  mobile: no horizontal overflow
+PASS  mobile: stack mosaic ~280px + 3 overlay  — {"h":278,"more":"+3"}
+PASS  mobile: Post + fab opens Post/Reels chooser
+PASS  mobile: chooser is a small compact card on screen  — {"h":146,"w":308,"sideBySide":true,"onScreen":true,"noLongCopy":true}
+PASS  mobile: chooser Post opens create page
+PASS  mobile: chip tap keeps keyboard up (no down/up cycle)  — {"isInput":true,"val":"Nice!","kb":"300px"}
+PASS  mobile: scrim = visible area, suggestions+compose on keyboard edge, list scrolls  — {"top":0,"fullH":544,"composeBottom":544,"suggVisible":true,"listScrolled":true,"listH":236,"rowScrollbar":"none"}
+PASS  mobile: overlay tap closes sheet without navigating
+PASS  mobile: mixed video opens picture page at 1/8, not Reels  — {"path":"/post/p_mix/media/0","count":"1 / 8","playing":true,"noReels":true}
+PASS  mobile: single-video post opens Reels at that clip  — {"path":"/video/p11-0","src":"https://www.w3schools.com/html/mov_bbb.mp4","playing":true}
+PASS  mobile: media page opens at 3/4
+PASS  mobile: per-media like works on media page
+PASS  mobile: photo comment field sits above keypad (SS1 fixed)  — {"composeBottom":544,"ovH":544,"visible":true}
+PASS  mobile: photo comment stored with mediaIndex
+PASS  mobile: closing photo sheet keeps media page
+PASS  mobile: left swipe advances to 4/4 and snaps fully  — {"count":"4 / 4","left":1170,"w":390,"top":0}
+PASS  mobile: right swipe returns to 3/4, not first  — {"count":"3 / 4","left":780,"w":390}
+PASS  mobile: bottom-center dots track the slide, arrows hidden  — {"row":"row","on":2,"centered":true,"aboveActions":true,"navHidden":true}
+PASS  mobile: horizontal scroll reaches 4/4
+PASS  mobile: phone-back from media page returns to feed
+PASS  mobile: first tap keeps post-page compose above keyboard, no scroll needed  — {"preScroll":0,"bottom":544,"h":69,"pos":"fixed","ancestors":["none","none","none","none","none","none","none"],"typing":"true","scrollY":0}
+PASS  mobile: compose rests at screen bottom and never covers comments  — {"bottom":844,"innerH":844,"lastClear":true}
+PASS  mobile: create header+footer visible above keyboard, body scrolls  — {"footerBottom":544,"headerTop":0,"bodyScroll":true,"pageH":544}
+PASS  mobile: location panel reachable with keyboard open
+PASS  mobile: chooser + progress publishes to feed
+PASS  mobile: reels full-screen video feed, sound on, rail + caption  — {"slides":4,"playing":true,"muted":false,"rail":true,"meta":true,"hasNav":true,"navVisible":true,"navTabs":5,"navAtBottom":true,"pageLifted":true}
+PASS  mobile: reels keeps bottom nav visible above safe area  — {"slides":4,"playing":true,"muted":false,"rail":true,"meta":true,"hasNav":true,"navVisible":true,"navTabs":5,"navAtBottom":true,"pageLifted":true}
+PASS  mobile: reel Like tap opens reaction tray fully on screen  — {"open":true,"kinds":5,"inView":true,"above":true}
+PASS  mobile: tray pick stores the reel reaction
+PASS  mobile: double-tap right seeks +10s  — {"mt0":4.184592,"t":0.262844,"dur":5.055,"badge":true}
+PASS  mobile: reel comment compose above keypad
+PASS  mobile: swipe to next reel pauses previous
+PASS  mobile: reels home button returns to feed
+PASS  mobile: reels bottom nav navigates to Marketplace
+PASS  mobile: drawer opens with faded overlay  — {"open":true,"op":"1"}
+PASS  mobile: phone-back closes drawer
+PASS  mobile: drawer closes via overlay
+PASS  mobile: search field below title
+PASS  mobile: theme toggle works  — theme=dark
+PASS  login: real Exposing logo + wordmark  — {"hasBrand":true,"src":"/exposing-logo-dark.png","loaded":true,"title":"Sign in to Exposing"}
+PASS  mobile: unread badge on bell
+PASS  mobile: notifications render with unread  — {"rows":8,"unread":3,"noOverflow":true}
+PASS  mobile: mark all read clears badge
+PASS  mobile: chat resizes for keyboard, compose stays reachable  — {"viewH":424,"composeBottom":480,"visible":true}
+PASS  mobile: chat send lands in thread + store
+PASS  mobile: marketplace two-column grid fits  — {"cards":6,"cols":2,"noOverflow":true}
+PASS  mobile: listing detail fits viewport with actions  — {"fits":true,"actions":3}
+PASS  mobile: phone-back closes listing detail
+PASS  mobile: wallet renders balance without overflow
+PASS  mobile: saved list renders
+PASS  mobile: settings toggle persists
+PASS  mobile: profile cover compact, actions visible, no overflow  — {"cover":160,"actions":true,"noOverflow":true}
+PASS  mobile: signup scrolls from top, first field reachable  — {"firstVisible":true,"noOverflow":true,"scrollable":true}
+PASS  mobile: legal doc renders sections
+PASS  mobile: non-staff blocked from admin
+PASS  mobile: 404 card fits with both actions reachable  — {"onScreen":true,"bothVisible":true,"noOverflow":true}
+PASS  mobile: 404 Back to Home lands on feed
+PASS  no uncaught page errors
+
+Resource/console errors (informational):
+  console: Failed to load resource: the server responded with a status of 404 (Not Found)
+
+==== 222/222 passed ====

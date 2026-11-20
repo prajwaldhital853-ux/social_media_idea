@@ -39,6 +39,7 @@ export default function AutoVideo({ src, dur, active = true, observe = false, lo
   const [needGesture, setNeedGesture] = useState(false);
   const mutedRef = useRef(false);
   const userPaused = useRef(false);
+  const wantPlay = useRef(false);
   const tapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastTap = useRef<{ t: number; zone: 'left' | 'right' } | null>(null);
   const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -48,7 +49,10 @@ export default function AutoVideo({ src, dur, active = true, observe = false, lo
     const el = video.current;
     if (!el) return;
     el.muted = mutedRef.current;
-    void el.play().catch(() => {
+    void el.play().catch((err: unknown) => {
+      const name = (err as DOMException | undefined)?.name;
+      // A play() interrupted by pause() or a src swap must not trip the muted fallback.
+      if (name === 'AbortError' || name === 'NotSupportedError') return;
       if (!mutedRef.current) {
         mutedRef.current = true;
         el.muted = true;
@@ -64,9 +68,10 @@ export default function AutoVideo({ src, dur, active = true, observe = false, lo
   useEffect(() => {
     const el = video.current;
     if (!el) return;
-    if (active && inView && !userPaused.current) attemptPlay();
+    wantPlay.current = active && inView && !userPaused.current;
+    if (wantPlay.current) attemptPlay();
     else el.pause();
-  }, [active, inView, attemptPlay]);
+  }, [active, inView, src, attemptPlay]);
 
   useEffect(() => {
     if (!needGesture) return;
@@ -105,19 +110,22 @@ export default function AutoVideo({ src, dur, active = true, observe = false, lo
     const onPlay = () => setPlaying(true);
     const onPause = () => setPlaying(false);
     const onEnd = () => setPlaying(false);
+    const onReady = () => { if (wantPlay.current && el.paused) attemptPlay(); };
     el.addEventListener('timeupdate', onTime);
     el.addEventListener('loadedmetadata', onMeta);
+    el.addEventListener('loadeddata', onReady);
     el.addEventListener('play', onPlay);
     el.addEventListener('pause', onPause);
     el.addEventListener('ended', onEnd);
     return () => {
       el.removeEventListener('timeupdate', onTime);
       el.removeEventListener('loadedmetadata', onMeta);
+      el.removeEventListener('loadeddata', onReady);
       el.removeEventListener('play', onPlay);
       el.removeEventListener('pause', onPause);
       el.removeEventListener('ended', onEnd);
     };
-  }, [src, dur]);
+  }, [src, dur, attemptPlay]);
 
   useEffect(() => () => {
     if (tapTimer.current) clearTimeout(tapTimer.current);
@@ -136,10 +144,12 @@ export default function AutoVideo({ src, dur, active = true, observe = false, lo
     if (!el) return;
     if (el.paused) {
       userPaused.current = false;
+      wantPlay.current = true;
       attemptPlay();
       showFlash('play');
     } else {
       userPaused.current = true;
+      wantPlay.current = false;
       el.pause();
       showFlash('pause');
     }

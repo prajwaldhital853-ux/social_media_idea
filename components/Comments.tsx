@@ -223,8 +223,9 @@ export default function Comments({ postId, onClose, mediaIndex }: { postId: stri
       onClick={e => e.stopPropagation()}
       onKeyDown={e => {
         if (e.key === 'Escape') {
-          if (emojiOpen) { setEmojiOpen(false); return; }
           if (document.querySelector('.reaction-tray')) return;
+          e.stopPropagation();
+          if (emojiOpen) { setEmojiOpen(false); return; }
           if (replyingTo) { setReplyingTo(null); setText(''); }
           else requestClose();
         }

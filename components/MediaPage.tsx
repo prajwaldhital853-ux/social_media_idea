@@ -27,18 +27,22 @@ export default function MediaPage({ postId, initialIndex }: MediaPageProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const indexRef = useRef(start);
   const [mounted, setMounted] = useState(false);
+  const wheelAcc = useRef(0);
+  const wheelTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => setMounted(true), []);
 
   useLayoutEffect(() => {
     const el = scrollRef.current;
-    if (el) el.scrollTop = start * el.clientHeight;
+    if (el) el.scrollLeft = start * el.clientWidth;
+    indexRef.current = start;
+    setIndex(start);
   }, [start, mounted]);
 
   useEffect(() => {
     const onResize = () => {
       const el = scrollRef.current;
-      if (el) el.scrollTop = indexRef.current * el.clientHeight;
+      if (el) el.scrollLeft = indexRef.current * el.clientWidth;
     };
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
@@ -48,7 +52,7 @@ export default function MediaPage({ postId, initialIndex }: MediaPageProps) {
     const el = scrollRef.current;
     if (!el) return;
     const next = Math.max(0, Math.min(i, media.length - 1));
-    el.scrollTo({ top: next * el.clientHeight, behavior: 'smooth' });
+    el.scrollTo({ left: next * el.clientWidth, behavior: 'instant' });
   }, [media.length]);
 
   useEffect(() => {
@@ -56,19 +60,40 @@ export default function MediaPage({ postId, initialIndex }: MediaPageProps) {
       const target = e.target as HTMLElement;
       if (target.closest('input, textarea, select, [contenteditable="true"], .comments-overlay, .reaction-tray')) return;
       if (e.key === 'Escape') router.back();
-      if (e.key === 'ArrowDown' || e.key === 'ArrowRight') { e.preventDefault(); go(indexRef.current + 1); }
-      if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') { e.preventDefault(); go(indexRef.current - 1); }
+      if (e.key === 'ArrowRight' || e.key === 'ArrowDown') { e.preventDefault(); go(indexRef.current + 1); }
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') { e.preventDefault(); go(indexRef.current - 1); }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [go, router]);
 
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el || !window.matchMedia('(pointer: fine)').matches) return;
+    const onWheel = (e: WheelEvent) => {
+      if ((e.target as HTMLElement).closest('.comments-overlay, .reaction-tray, .drawer')) return;
+      e.preventDefault();
+      wheelAcc.current += Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+      if (wheelTimer.current) clearTimeout(wheelTimer.current);
+      wheelTimer.current = setTimeout(() => {
+        const acc = wheelAcc.current;
+        wheelAcc.current = 0;
+        if (Math.abs(acc) > 32) go(indexRef.current + (acc > 0 ? 1 : -1));
+      }, 40);
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => {
+      el.removeEventListener('wheel', onWheel);
+      if (wheelTimer.current) clearTimeout(wheelTimer.current);
+    };
+  }, [go, mounted]);
+
   if (!mounted) return <div className="media-page" />;
 
   const onScroll = () => {
     const el = scrollRef.current;
-    if (!el || !el.clientHeight) return;
-    const i = Math.max(0, Math.min(Math.round(el.scrollTop / el.clientHeight), media.length - 1));
+    if (!el || !el.clientWidth) return;
+    const i = Math.max(0, Math.min(Math.round(el.scrollLeft / el.clientWidth), media.length - 1));
     if (i !== indexRef.current) {
       indexRef.current = i;
       setIndex(i);
@@ -101,7 +126,7 @@ export default function MediaPage({ postId, initialIndex }: MediaPageProps) {
                 {item.type === 'video' ? (
                   <AutoVideo src={item.src || ''} dur={item.dur} active={i === index} seek loop />
                 ) : (
-                  <img src={item.src || item.gen} alt={`Photo ${i + 1} of ${media.length}`} />
+                  <img src={item.src || item.gen} alt={`Photo ${i + 1} of ${media.length}`} loading={Math.abs(i - index) <= 1 ? 'eager' : 'lazy'} decoding="async" />
                 )}
                 <div className="media-page-actions">
                   <ReactionButton targetType="media" targetId={`${postId}#m${i}`} />
@@ -123,11 +148,11 @@ export default function MediaPage({ postId, initialIndex }: MediaPageProps) {
           </div>
           {media.length > 1 && (
             <>
-              <button type="button" className="media-page-nav up" disabled={index === 0} onClick={() => go(index - 1)} aria-label="Previous media">
-                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M6 15l6-6 6 6" /></svg>
+              <button type="button" className="media-page-nav prev" disabled={index === 0} onClick={() => go(index - 1)} aria-label="Previous media">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M15 6l-6 6 6 6" /></svg>
               </button>
-              <button type="button" className="media-page-nav down" disabled={index === media.length - 1} onClick={() => go(index + 1)} aria-label="Next media">
-                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9l6 6 6-6" /></svg>
+              <button type="button" className="media-page-nav next" disabled={index === media.length - 1} onClick={() => go(index + 1)} aria-label="Next media">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6" /></svg>
               </button>
               {media.length <= 10 && (
                 <div className="media-page-dots" aria-hidden="true">

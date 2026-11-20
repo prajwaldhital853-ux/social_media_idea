@@ -1,6 +1,36 @@
 {
   "results": [
     {
+      "name": "desktop: left menu + comfortable feed + calm blank right column",
+      "pass": true,
+      "detail": "{\"cols\":[264,680,336],\"mainW\":680,\"calmW\":336,\"calmBg\":\"rgb(243, 239, 233)\",\"calmEmpty\":true,\"calmRight\":true,\"rail\":true}"
+    },
+    {
+      "name": "desktop: feed paginates first paint and loads more on scroll",
+      "pass": true,
+      "detail": "{\"firstPage\":6,\"fullPage\":15}"
+    },
+    {
+      "name": "desktop: Search opens fast (prefetched)",
+      "pass": true,
+      "detail": "76ms"
+    },
+    {
+      "name": "desktop: Reels opens fast (prefetched)",
+      "pass": true,
+      "detail": "281ms"
+    },
+    {
+      "name": "desktop: post opens fast (prefetched on hover)",
+      "pass": true,
+      "detail": "154ms"
+    },
+    {
+      "name": "desktop: author profile opens fast (prefetched on hover)",
+      "pass": true,
+      "detail": "167ms"
+    },
+    {
       "name": "desktop: feed renders",
       "pass": true,
       "detail": ""
@@ -51,14 +81,14 @@
       "detail": ""
     },
     {
-      "name": "desktop: mixed mosaic video click opens Reels at that clip",
+      "name": "desktop: mixed mosaic video opens media page at that clip (not Reels)",
       "pass": true,
-      "detail": "{\"path\":\"/video/p_mix-0\",\"src\":\"https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4\",\"playing\":true}"
+      "detail": "{\"path\":\"/post/p_mix/media/0\",\"i\":0,\"src\":\"https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4\",\"playing\":true,\"count\":\"1 / 8\",\"noReels\":true}"
     },
     {
-      "name": "desktop: photo opens media route at 2/8, 8 slides, snap",
+      "name": "desktop: photo opens media route at 2/8, 8 slides, horizontal snap",
       "pass": true,
-      "detail": "{\"path\":\"/post/p_mix/media/1\",\"count\":\"2 / 8\",\"slides\":8,\"snap\":\"y mandatory\",\"slide0Video\":true,\"slide1Img\":true}"
+      "detail": "{\"path\":\"/post/p_mix/media/1\",\"count\":\"2 / 8\",\"slides\":8,\"snap\":\"x mandatory\",\"axis\":\"auto/hidden\",\"row\":\"row\",\"slideW\":1280,\"clientW\":1280,\"slide0Video\":true,\"slide1Img\":true}"
     },
     {
       "name": "desktop: media page video slide plays with sound at 1/8",
@@ -66,7 +96,12 @@
       "detail": "{\"count\":\"1 / 8\",\"playing\":true,\"muted\":false}"
     },
     {
-      "name": "desktop: ArrowDown advances to 2/8",
+      "name": "desktop: ArrowRight advances to 2/8",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop: ArrowLeft returns to 1/8",
       "pass": true,
       "detail": ""
     },
@@ -111,17 +146,37 @@
       "detail": ""
     },
     {
-      "name": "desktop: swipe down advances one slide to 4/4",
+      "name": "desktop: wheel advances one slide to 4/4",
       "pass": true,
       "detail": ""
     },
     {
-      "name": "desktop: swipe up returns to previous slide 3/4 (not top)",
+      "name": "desktop: horizontal wheel back returns to previous slide 3/4 (not first)",
       "pass": true,
       "detail": ""
     },
     {
-      "name": "desktop: scroll reaches 4/4",
+      "name": "desktop: horizontal snap settles on a whole slide, no partial flicker",
+      "pass": true,
+      "detail": "{\"left\":1280,\"w\":1280,\"count\":\"2 / 4\",\"vertical\":0}"
+    },
+    {
+      "name": "desktop: picture snaps to center immediately (<300ms)",
+      "pass": true,
+      "detail": "{\"ms\":50,\"left\":3840,\"w\":1280}"
+    },
+    {
+      "name": "desktop: horizontal scroll reaches 4/4",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop: side prev/next arrows, next disabled on last slide",
+      "pass": true,
+      "detail": "{\"prevDisabled\":false,\"nextDisabled\":true,\"sides\":true,\"mid\":true}"
+    },
+    {
+      "name": "desktop: prev arrow returns to 3/4",
       "pass": true,
       "detail": ""
     },
@@ -251,9 +306,24 @@
       "detail": ""
     },
     {
-      "name": "desktop: + button opens Post/Reels chooser",
+      "name": "desktop: comment button shows no red focus ring",
       "pass": true,
-      "detail": "[\"Post\",\"Reels\"]"
+      "detail": "{\"fv\":true,\"outline\":\"none\",\"w\":\"3px\",\"bg\":\"rgba(0, 0, 0, 0)\"}"
+    },
+    {
+      "name": "desktop: + button opens compact Post/Reels card",
+      "pass": true,
+      "detail": "{\"labels\":[\"Post\",\"Reels\"],\"h\":146,\"w\":308,\"sideBySide\":true,\"noLongCopy\":true,\"icons\":true}"
+    },
+    {
+      "name": "desktop: Reels picker rejects a photo with a clear toast",
+      "pass": true,
+      "detail": "{\"toast\":\"Reels need a video — choose a video file.\",\"visible\":true,\"aboveChooser\":true,\"chooserStill\":true,\"path\":\"/\"}"
+    },
+    {
+      "name": "desktop: video over 150 MB rejected with size toast",
+      "pass": true,
+      "detail": "{\"toast\":\"Video must be under 150 MB — this one is 151 MB.\",\"visible\":true,\"chooserStill\":true,\"path\":\"/\"}"
     },
     {
       "name": "desktop: chooser Post lands on create page",
@@ -279,6 +349,16 @@
       "name": "desktop: reel published with kind reel",
       "pass": true,
       "detail": ""
+    },
+    {
+      "name": "desktop: reel clip stored on device, not in localStorage",
+      "pass": true,
+      "detail": "{\"kind\":\"reel\",\"blobId\":\"w6e2071o\",\"src\":null}"
+    },
+    {
+      "name": "desktop: published reel survives reload and plays",
+      "pass": true,
+      "detail": "{\"src\":\"blob:http://localhost:3000/81ec1cde-3f14-4c30-81a3-3f698cb328a8\",\"playing\":true,\"ready\":4,\"count\":\"1 / 4\"}"
     },
     {
       "name": "desktop: textarea capped at 320px",
@@ -328,7 +408,7 @@
     {
       "name": "desktop: followers-only post published with badge, visible to owner",
       "pass": true,
-      "detail": "{\"id\":\"ylaqxwaw\",\"audience\":\"followers\",\"badge\":true,\"visibleToOwner\":true}"
+      "detail": "{\"id\":\"p1syru8u\",\"audience\":\"followers\",\"badge\":true,\"visibleToOwner\":true}"
     },
     {
       "name": "desktop: followers-only post hidden from non-follower (feed + detail)",
@@ -368,12 +448,12 @@
     {
       "name": "desktop: double-tap right seeks +10s with badge",
       "pass": true,
-      "detail": "{\"t0\":1.980003,\"t\":0.287487,\"badge\":true,\"note\":\"wrap allowed: 5s clip loops at end\"}"
+      "detail": "{\"t0\":1.807069,\"t\":0.276146,\"dur\":5.055,\"badge\":true,\"note\":\"short clip clamps to end / loops\"}"
     },
     {
       "name": "desktop: double-tap left seeks -10s with badge",
       "pass": true,
-      "detail": "{\"t1\":1.298524,\"t\":0.289265,\"badge\":true}"
+      "detail": "{\"t1\":1.253018,\"t\":0.308724,\"badge\":true}"
     },
     {
       "name": "desktop: single tap pauses reel",
@@ -386,9 +466,14 @@
       "detail": ""
     },
     {
-      "name": "desktop: reel rail like stores post reaction",
+      "name": "desktop: reel Like press opens reaction tray above the button",
       "pass": true,
-      "detail": "{\"label\":\"Like this reel\",\"newestId\":\"tqsxk2wd\",\"newestKind\":\"reel\",\"mine\":[\"like\"],\"path\":\"/video\"}"
+      "detail": "{\"railBefore\":{\"label\":\"Choose reaction\",\"size\":46,\"labelBelow\":\"Like\"},\"reelTray\":{\"open\":true,\"kinds\":[\"Like\",\"Love\",\"Haha\",\"Wow\",\"Sad\"],\"inView\":true,\"above\":true,\"z\":\"1500\"}}"
+    },
+    {
+      "name": "desktop: tray pick stores the chosen reel reaction",
+      "pass": true,
+      "detail": "{\"newestId\":\"1vqri45a\",\"newestKind\":\"reel\",\"mine\":[\"love\"],\"trayGone\":true,\"reacted\":true,\"art\":true,\"count\":\"1\",\"path\":\"/video\"}"
     },
     {
       "name": "desktop: reel rail save toggles saved post",
@@ -408,7 +493,7 @@
     {
       "name": "desktop: wheel snaps cleanly to next reel, fully settled",
       "pass": true,
-      "detail": "{\"ms\":580,\"scrollTop\":899,\"clientHeight\":900,\"count\":\"2 / 4\"}"
+      "detail": "{\"ms\":582,\"scrollTop\":899,\"clientHeight\":900,\"count\":\"2 / 4\"}"
     },
     {
       "name": "desktop: reels nav rail navigates to Marketplace",
@@ -431,9 +516,309 @@
       "detail": ""
     },
     {
+      "name": "desktop: branded 404 with loaded mark + home action",
+      "pass": true,
+      "detail": "{\"markLoaded\":true,\"title\":\"This page doesn't exist\",\"homeHref\":\"/\",\"onScreen\":true,\"noOverflow\":true}"
+    },
+    {
+      "name": "desktop: 404 Back to Home lands on feed",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop: author profile renders cover/name/stats/posts",
+      "pass": true,
+      "detail": "{\"path\":\"/u/maya_g\",\"name\":\"Maya Gurung\",\"cover\":true,\"stats\":3,\"posts\":2,\"followOn\":true}"
+    },
+    {
+      "name": "desktop: follow toggle persists",
+      "pass": true,
+      "detail": "now following=false"
+    },
+    {
+      "name": "desktop: profile media tab shows grid",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop: profile about tab shows cards",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop: followers list opens people modal",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop: Escape closes people modal",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop: edit profile saves bio",
+      "pass": true,
+      "detail": "{\"stored\":\"QA bio — lakeside tester.\",\"shown\":\"QA bio — lakeside tester.\",\"closed\":true}"
+    },
+    {
+      "name": "desktop: unknown profile shows missing state",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop: saved page lists saved posts",
+      "pass": true,
+      "detail": "3 posts"
+    },
+    {
+      "name": "desktop: unsaving removes post from saved list",
+      "pass": true,
+      "detail": "{\"count\":2,\"saves\":2}"
+    },
+    {
+      "name": "desktop: wallet balance matches account",
+      "pass": true,
+      "detail": "{\"coins\":260,\"shown\":\"260\"}"
+    },
+    {
+      "name": "desktop: QR method renders demo QR",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop: buy without reference shows error",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop: coin request stored pending with screenshot",
+      "pass": true,
+      "detail": "{\"uid\":\"u1\",\"coins\":200,\"amount\":2000,\"method\":\"qr\",\"status\":\"pending\",\"shot\":true,\"row\":true}"
+    },
+    {
+      "name": "desktop: two-step toggle persists",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop: language switch to Nepali persists",
+      "pass": true,
+      "detail": "{\"lang\":\"ne\",\"title\":\"सेटिङ\"}"
+    },
+    {
+      "name": "desktop: dark choice applies theme",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop: light choice restores theme",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop: notifications render grouped with unread",
+      "pass": true,
+      "detail": "{\"rows\":5,\"unread\":3,\"groups\":2}"
+    },
+    {
+      "name": "desktop: mark all read clears unread",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop: notification opens its target",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop: inbox lists conversations",
+      "pass": true,
+      "detail": "{\"rows\":2,\"unread\":2}"
+    },
+    {
+      "name": "desktop: conversation opens and marks incoming read",
+      "pass": true,
+      "detail": "{\"path\":\"/messages/u2\",\"bubbles\":3,\"incomingRead\":true}"
+    },
+    {
+      "name": "desktop: send stores message + notifies recipient",
+      "pass": true,
+      "detail": "{\"text\":\"QA desktop hello\",\"mine\":true,\"notified\":true}"
+    },
+    {
+      "name": "desktop: new-message picker opens chosen chat",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop: marketplace grid renders listings",
+      "pass": true,
+      "detail": "6 cards"
+    },
+    {
+      "name": "desktop: marketplace search filters",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop: category filter matches data",
+      "pass": true,
+      "detail": "expected 1"
+    },
+    {
+      "name": "desktop: create listing stores + opens detail on My listings",
+      "pass": true,
+      "detail": "{\"uid\":\"u1\",\"price\":1234,\"media\":1,\"status\":\"active\",\"mineTab\":true,\"shown\":\"QA test listing\"}"
+    },
+    {
+      "name": "desktop: mark sold updates listing + flag",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop: relist restores active",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop: Escape closes listing detail",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop: contact seller opens chat with seller",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop: admin overview renders tabs/stats/badges",
+      "pass": true,
+      "detail": "{\"tabs\":7,\"stats\":4,\"badges\":3}"
+    },
+    {
+      "name": "desktop: reports queue lists open reports",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop: dismiss report updates queue + audit",
+      "pass": true,
+      "detail": "{\"open\":2,\"cards\":2,\"audit\":true}"
+    },
+    {
+      "name": "desktop: remove report hides post + notifies owner",
+      "pass": true,
+      "detail": "{\"status\":\"removed\",\"reason\":\"r_spam\",\"notified\":true,\"actioned\":1}"
+    },
+    {
+      "name": "desktop: remove listing report takes listing down",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop: pending coins filter shows both requests",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop: approve coins credits wallet + ledger + notice",
+      "pass": true,
+      "detail": "{\"status\":\"approved\",\"coins\":140,\"ledger\":true,\"notified\":true}"
+    },
+    {
+      "name": "desktop: approve QA request credits buyer",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop: activate promo sets active window + notice",
+      "pass": true,
+      "detail": "{\"status\":\"active\",\"ends\":true,\"notified\":true}"
+    },
+    {
+      "name": "desktop: end promo closes campaign",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop: user search narrows list",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop: warn user stores warning + notifies",
+      "pass": true,
+      "detail": "{\"warning\":\"QA warning: keep it civil.\",\"notified\":true}"
+    },
+    {
+      "name": "desktop: suspend 7 days sets window + reason",
+      "pass": true,
+      "detail": "true"
+    },
+    {
+      "name": "desktop: reinstate clears suspension",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop: admin settings save persists + audits",
+      "pass": true,
+      "detail": "{\"threshold\":5,\"audit\":true}"
+    },
+    {
+      "name": "desktop: audit log lists actions + export control",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop: /legal/privacy renders full document",
+      "pass": true,
+      "detail": "{\"h1\":\"Privacy Policy\",\"sections\":10,\"toc\":10,\"noOverflow\":true}"
+    },
+    {
+      "name": "desktop: /legal/terms renders full document",
+      "pass": true,
+      "detail": "{\"h1\":\"Terms of Service\",\"sections\":12,\"toc\":12,\"noOverflow\":true}"
+    },
+    {
+      "name": "desktop: /legal/user-policy renders full document",
+      "pass": true,
+      "detail": "{\"h1\":\"User Policy\",\"sections\":10,\"toc\":10,\"noOverflow\":true}"
+    },
+    {
+      "name": "desktop: /legal/cookies renders full document",
+      "pass": true,
+      "detail": "{\"h1\":\"Cookies Policy\",\"sections\":6,\"toc\":6,\"noOverflow\":true}"
+    },
+    {
+      "name": "desktop: signup form renders",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop: empty signup shows validation error",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop: duplicate username rejected",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop: signup creates account and signs in",
+      "pass": true,
+      "detail": "{\"created\":true,\"loggedIn\":true,\"path\":\"/\"}"
+    },
+    {
       "name": "mobile: top bar + bottom nav + fab",
       "pass": true,
       "detail": ""
+    },
+    {
+      "name": "mobile: single column, rail/calm hidden, bottom nav pinned",
+      "pass": true,
+      "detail": "{\"railHidden\":true,\"calmHidden\":true,\"mainW\":390,\"navBottom\":true,\"navFixed\":true}"
     },
     {
       "name": "mobile: no horizontal overflow",
@@ -449,6 +834,11 @@
       "name": "mobile: Post + fab opens Post/Reels chooser",
       "pass": true,
       "detail": ""
+    },
+    {
+      "name": "mobile: chooser is a small compact card on screen",
+      "pass": true,
+      "detail": "{\"h\":146,\"w\":308,\"sideBySide\":true,\"onScreen\":true,\"noLongCopy\":true}"
     },
     {
       "name": "mobile: chooser Post opens create page",
@@ -469,6 +859,16 @@
       "name": "mobile: overlay tap closes sheet without navigating",
       "pass": true,
       "detail": ""
+    },
+    {
+      "name": "mobile: mixed video opens picture page at 1/8, not Reels",
+      "pass": true,
+      "detail": "{\"path\":\"/post/p_mix/media/0\",\"count\":\"1 / 8\",\"playing\":true,\"noReels\":true}"
+    },
+    {
+      "name": "mobile: single-video post opens Reels at that clip",
+      "pass": true,
+      "detail": "{\"path\":\"/video/p11-0\",\"src\":\"https://www.w3schools.com/html/mov_bbb.mp4\",\"playing\":true}"
     },
     {
       "name": "mobile: media page opens at 3/4",
@@ -496,12 +896,22 @@
       "detail": ""
     },
     {
-      "name": "mobile: swipe down reaches 4/4",
+      "name": "mobile: left swipe advances to 4/4 and snaps fully",
       "pass": true,
-      "detail": ""
+      "detail": "{\"count\":\"4 / 4\",\"left\":1170,\"w\":390,\"top\":0}"
     },
     {
-      "name": "mobile: swipe up returns to 3/4, not first",
+      "name": "mobile: right swipe returns to 3/4, not first",
+      "pass": true,
+      "detail": "{\"count\":\"3 / 4\",\"left\":780,\"w\":390}"
+    },
+    {
+      "name": "mobile: bottom-center dots track the slide, arrows hidden",
+      "pass": true,
+      "detail": "{\"row\":\"row\",\"on\":2,\"centered\":true,\"aboveActions\":true,\"navHidden\":true}"
+    },
+    {
+      "name": "mobile: horizontal scroll reaches 4/4",
       "pass": true,
       "detail": ""
     },
@@ -511,9 +921,14 @@
       "detail": ""
     },
     {
-      "name": "mobile: post-page compose above keyboard",
+      "name": "mobile: first tap keeps post-page compose above keyboard, no scroll needed",
       "pass": true,
-      "detail": "{\"bottom\":544,\"pos\":\"fixed\"}"
+      "detail": "{\"preScroll\":0,\"bottom\":544,\"h\":69,\"pos\":\"fixed\",\"ancestors\":[\"none\",\"none\",\"none\",\"none\",\"none\",\"none\",\"none\"],\"typing\":\"true\",\"scrollY\":0}"
+    },
+    {
+      "name": "mobile: compose rests at screen bottom and never covers comments",
+      "pass": true,
+      "detail": "{\"bottom\":844,\"innerH\":844,\"lastClear\":true}"
     },
     {
       "name": "mobile: create header+footer visible above keyboard, body scrolls",
@@ -541,9 +956,19 @@
       "detail": "{\"slides\":4,\"playing\":true,\"muted\":false,\"rail\":true,\"meta\":true,\"hasNav\":true,\"navVisible\":true,\"navTabs\":5,\"navAtBottom\":true,\"pageLifted\":true}"
     },
     {
+      "name": "mobile: reel Like tap opens reaction tray fully on screen",
+      "pass": true,
+      "detail": "{\"open\":true,\"kinds\":5,\"inView\":true,\"above\":true}"
+    },
+    {
+      "name": "mobile: tray pick stores the reel reaction",
+      "pass": true,
+      "detail": ""
+    },
+    {
       "name": "mobile: double-tap right seeks +10s",
       "pass": true,
-      "detail": "{\"mt0\":2.054089,\"t\":0.272987,\"badge\":true}"
+      "detail": "{\"mt0\":4.184592,\"t\":0.262844,\"dur\":5.055,\"badge\":true}"
     },
     {
       "name": "mobile: reel comment compose above keypad",
@@ -596,10 +1021,98 @@
       "detail": "{\"hasBrand\":true,\"src\":\"/exposing-logo-dark.png\",\"loaded\":true,\"title\":\"Sign in to Exposing\"}"
     },
     {
+      "name": "mobile: unread badge on bell",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile: notifications render with unread",
+      "pass": true,
+      "detail": "{\"rows\":8,\"unread\":3,\"noOverflow\":true}"
+    },
+    {
+      "name": "mobile: mark all read clears badge",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile: chat resizes for keyboard, compose stays reachable",
+      "pass": true,
+      "detail": "{\"viewH\":424,\"composeBottom\":480,\"visible\":true}"
+    },
+    {
+      "name": "mobile: chat send lands in thread + store",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile: marketplace two-column grid fits",
+      "pass": true,
+      "detail": "{\"cards\":6,\"cols\":2,\"noOverflow\":true}"
+    },
+    {
+      "name": "mobile: listing detail fits viewport with actions",
+      "pass": true,
+      "detail": "{\"fits\":true,\"actions\":3}"
+    },
+    {
+      "name": "mobile: phone-back closes listing detail",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile: wallet renders balance without overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile: saved list renders",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile: settings toggle persists",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile: profile cover compact, actions visible, no overflow",
+      "pass": true,
+      "detail": "{\"cover\":160,\"actions\":true,\"noOverflow\":true}"
+    },
+    {
+      "name": "mobile: signup scrolls from top, first field reachable",
+      "pass": true,
+      "detail": "{\"firstVisible\":true,\"noOverflow\":true,\"scrollable\":true}"
+    },
+    {
+      "name": "mobile: legal doc renders sections",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile: non-staff blocked from admin",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile: 404 card fits with both actions reachable",
+      "pass": true,
+      "detail": "{\"onScreen\":true,\"bothVisible\":true,\"noOverflow\":true}"
+    },
+    {
+      "name": "mobile: 404 Back to Home lands on feed",
+      "pass": true,
+      "detail": ""
+    },
+    {
       "name": "no uncaught page errors",
       "pass": true,
       "detail": ""
     }
   ],
-  "errors": []
+  "errors": [
+    "console: Failed to load resource: the server responded with a status of 404 (Not Found)",
+    "console: Failed to load resource: the server responded with a status of 404 (Not Found)"
+  ]
 }

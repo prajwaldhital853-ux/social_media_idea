@@ -2,6 +2,7 @@
 
 import { createPortal } from 'react-dom';
 import { useApp } from '@/lib/AppContext';
+import { useBackClose } from '@/lib/useBackClose';
 import PromoteForm from './PromoteForm';
 import { IC } from '@/lib/icons';
 
@@ -14,6 +15,7 @@ interface PromoteModalProps {
 
 export default function PromoteModal({ targetType, targetId, defaultCategory, onClose }: PromoteModalProps) {
   const { t, requestPromotion } = useApp();
+  useBackClose(true, onClose);
   if (typeof document === 'undefined') return null;
 
   return createPortal(
