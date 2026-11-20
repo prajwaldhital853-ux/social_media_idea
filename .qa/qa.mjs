@@ -27,7 +27,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 const shot = (page, name) => page.screenshot({ path: `${OUT}/${name}.png` });
 async function goto(page, path) {
   await page.goto('http://localhost:3000' + path, { waitUntil: 'domcontentloaded', timeout: 45000 });
-  await page.waitForSelector('.post, .create-post-page, .search-view, .login-card, .modern-login, .reels-page, .media-page', { timeout: 30000 }).catch(() => {});
+  await page.waitForSelector('.post, .create-post-page, .search-view, .login-card, .login-container, .modern-login, .reels-page, .media-page', { timeout: 30000 }).catch(() => {});
   await sleep(900);
 }
 const setKb = (page, kb, visible) => page.evaluate(([kb, visible]) => {
@@ -66,6 +66,14 @@ ok('desktop: no horizontal overflow', await d.evaluate(() => document.documentEl
 ok('desktop: page-enter animation', await d.evaluate(() => getComputedStyle(document.querySelector('.page-enter')).animationName === 'pageIn'));
 await shot(d, 'desktop-feed');
 
+const brand = await d.evaluate(() => {
+  const icon = document.querySelector('link[rel="icon"]');
+  const apple = document.querySelector('link[rel="apple-touch-icon"]');
+  const img = document.querySelector('.rail .brand-logo-light');
+  return { favicon: icon?.getAttribute('href'), apple: apple?.getAttribute('href'), logoLoaded: (img?.naturalWidth || 0) > 0, logoSrc: img?.getAttribute('src') };
+});
+ok('desktop: real favicon + rail logo loaded', brand.favicon === '/exposing-icon.png' && brand.apple === '/apple-icon.png' && brand.logoLoaded && brand.logoSrc === '/exposing-logo.png', JSON.stringify(brand));
+
 const mix = await articleBy(d, 'Weekend in Pokhara');
 const mixInfo = await d.evaluate(el => {
   const m = el.querySelector('.media-mosaic');
@@ -97,22 +105,41 @@ ok('desktop: video resumes when back in view', await d.evaluate(() => {
   return a?.querySelector('.media-mosaic.single video')?.paused === false;
 }));
 
-// Mixed video click -> dedicated media route, plays at 1/8
+// Mixed mosaic video click -> Reels at that clip (phase 4: no pause)
 await scrollPost(d, 'Weekend in Pokhara');
 await sleep(400);
 await clickPost(d, 'Weekend in Pokhara', '.post-video .video-play');
+await d.waitForSelector('.reels-page', { timeout: 8000 });
+await sleep(1400);
+const mixReel = await d.evaluate(() => {
+  const el = document.querySelector('.reels-scroll');
+  const i = Math.round(el.scrollTop / el.clientHeight);
+  const v = document.querySelectorAll('.reel-slide')[i]?.querySelector('video');
+  return { path: location.pathname, src: v?.getAttribute('src'), playing: v ? !v.paused : false };
+});
+ok('desktop: mixed mosaic video click opens Reels at that clip', /\/video\/p_mix-0$/.test(mixReel.path) && (mixReel.src || '').includes('flower') && mixReel.playing, JSON.stringify(mixReel));
+
+// Mixed photo click -> dedicated media route at 2/8
+await goto(d, '/');
+await scrollPost(d, 'Weekend in Pokhara');
+await sleep(400);
+await clickPost(d, 'Weekend in Pokhara', '.mosaic-cell:nth-child(2) img');
 await d.waitForSelector('.media-page', { timeout: 8000 });
 await sleep(1200);
 const viewer1 = await d.evaluate(() => ({
   path: location.pathname,
   count: document.querySelector('.media-page-count')?.textContent,
-  playing: !document.querySelector('.media-page-slide video')?.paused,
-  muted: document.querySelector('.media-page-slide video')?.muted,
   slides: document.querySelectorAll('.media-page-slide').length,
-  snap: getComputedStyle(document.querySelector('.media-page-scroll')).scrollSnapType
+  snap: getComputedStyle(document.querySelector('.media-page-scroll')).scrollSnapType,
+  slide0Video: !!document.querySelectorAll('.media-page-slide')[0]?.querySelector('video'),
+  slide1Img: !!document.querySelectorAll('.media-page-slide')[1]?.querySelector('img')
 }));
-ok('desktop: media opens as separate route at 1/8, video plays with sound', /\/post\/.+\/media\/0$/.test(viewer1.path) && viewer1.count === '1 / 8' && viewer1.playing && viewer1.muted === false && viewer1.slides === 8 && viewer1.snap.includes('mandatory'), JSON.stringify(viewer1));
+ok('desktop: photo opens media route at 2/8, 8 slides, snap', /\/post\/.+\/media\/1$/.test(viewer1.path) && viewer1.count === '2 / 8' && viewer1.slides === 8 && viewer1.snap.includes('mandatory') && viewer1.slide0Video && viewer1.slide1Img, JSON.stringify(viewer1));
 await shot(d, 'desktop-media-video');
+await d.evaluate(() => { const el = document.querySelector('.media-page-scroll'); el.scrollTo({ top: 0, behavior: 'instant' }); });
+await sleep(1000);
+const mediaVid = await d.evaluate(() => ({ count: document.querySelector('.media-page-count')?.textContent, playing: !document.querySelector('.media-page-slide video')?.paused, muted: document.querySelector('.media-page-slide video')?.muted }));
+ok('desktop: media page video slide plays with sound at 1/8', mediaVid.count === '1 / 8' && mediaVid.playing && mediaVid.muted === false, JSON.stringify(mediaVid));
 await d.keyboard.press('ArrowDown');
 await sleep(700);
 ok('desktop: ArrowDown advances to 2/8', await d.evaluate(() => document.querySelector('.media-page-count')?.textContent === '2 / 8'));
@@ -530,6 +557,22 @@ await sleep(500);
 ok('desktop: 11th photo rejected with clear error', await d.evaluate(() => document.querySelector('.create-feedback.error')?.textContent.includes('up to 10 photos')));
 await shot(d, 'desktop-create-caps');
 
+// Feed video click opens Reels at that clip (no pause)
+await goto(d, '/');
+await scrollPost(d, 'Rain over New Road');
+await sleep(600);
+await clickPost(d, 'Rain over New Road', '.media-mosaic .auto-video');
+await d.waitForSelector('.reels-page', { timeout: 10000 });
+await sleep(1500);
+const startAt = await d.evaluate(() => {
+  const el = document.querySelector('.reels-scroll');
+  const i = Math.round(el.scrollTop / el.clientHeight);
+  const v = document.querySelectorAll('.reel-slide')[i]?.querySelector('video');
+  return { path: location.pathname, i, src: v?.getAttribute('src'), playing: v ? !v.paused : false, count: document.querySelector('.reel-count')?.textContent, total: document.querySelectorAll('.reel-slide').length };
+});
+ok('desktop: feed video click opens Reels at that clip, playing', /\/video\/p11-0$/.test(startAt.path) && (startAt.src || '').includes('mov_bbb') && startAt.i > 0 && startAt.count?.startsWith(`${startAt.i + 1} /`) && startAt.playing, JSON.stringify(startAt));
+await shot(d, 'desktop-reels-startindex');
+
 // Reels page (desktop)
 await goto(d, '/video');
 await d.waitForSelector('.reels-page', { timeout: 10000 });
@@ -545,6 +588,18 @@ const reels1 = await d.evaluate(() => ({
   noFeedCards: !document.querySelector('article.post')
 }));
 ok('desktop: reels page = video-only snap feed with sound on', reels1.slides >= 2 && reels1.playing && reels1.muted === false && reels1.snap.includes('mandatory') && reels1.rail && reels1.onlyVideos && reels1.caption && reels1.noFeedCards, JSON.stringify(reels1));
+const dNav = await d.evaluate(() => {
+  const rail = document.querySelector('.reels-nav .rail');
+  if (!rail) return { present: false };
+  const cs = getComputedStyle(rail);
+  const r = rail.getBoundingClientRect();
+  const frame = document.querySelector('.reels-frame').getBoundingClientRect();
+  return { present: true, position: cs.position, visible: cs.display !== 'none' && r.width > 0, overlapsFrame: r.right > frame.left + 1, links: [...rail.querySelectorAll('.nav-item')].map(a => a.getAttribute('href')) };
+});
+ok('desktop: reels keeps left nav rail fixed, no frame overlap', dNav.present && dNav.position === 'fixed' && dNav.visible && !dNav.overlapsFrame && dNav.links.includes('/') && dNav.links.includes('/marketplace'), JSON.stringify(dNav));
+await d.waitForFunction(() => { const v = document.querySelectorAll('.reel-slide video')[1]; return v && v.readyState >= 2; }, { timeout: 9000 }).catch(() => {});
+const pre = await d.evaluate(() => { const vids = [...document.querySelectorAll('.reel-slide video')]; return { preload: vids[0]?.getAttribute('preload'), nextReady: vids[1]?.readyState }; });
+ok('desktop: reels preload=auto buffers next clip', pre.preload === 'auto' && pre.nextReady >= 2, JSON.stringify(pre));
 await shot(d, 'desktop-reels');
 // double-tap right = +10s
 const t0 = await d.evaluate(() => document.querySelector('.reel-slide video').currentTime);
@@ -606,6 +661,30 @@ const reels2 = await d.evaluate(() => ({
   secondPlaying: !document.querySelectorAll('.reel-slide video')[1].paused
 }));
 ok('desktop: ArrowDown snaps to next reel, previous pauses', reels2.count?.startsWith('2 /') && reels2.firstPaused && reels2.secondPlaying, JSON.stringify(reels2));
+// wheel = one clean full-slide snap, no partial-clip lag
+await d.evaluate(() => { document.querySelector('.reels-scroll').scrollTop = 0; });
+await sleep(400);
+const wheelRes = await d.evaluate(async () => {
+  const el = document.querySelector('.reels-scroll');
+  const start = performance.now();
+  el.dispatchEvent(new WheelEvent('wheel', { deltaY: 420, bubbles: true, cancelable: true }));
+  await new Promise(res => {
+    const check = () => {
+      if (Math.abs(el.scrollTop - el.clientHeight) < 2) return res();
+      if (performance.now() - start > 2500) return res();
+      requestAnimationFrame(check);
+    };
+    requestAnimationFrame(check);
+  });
+  return { ms: Math.round(performance.now() - start), scrollTop: Math.round(el.scrollTop), clientHeight: el.clientHeight, count: document.querySelector('.reel-count')?.textContent };
+});
+ok('desktop: wheel snaps cleanly to next reel, fully settled', wheelRes.ms < 1200 && Math.abs(wheelRes.scrollTop - wheelRes.clientHeight) < 2 && wheelRes.count?.startsWith('2 /'), JSON.stringify(wheelRes));
+// persistent nav rail navigates to other pages
+await d.evaluate(() => document.querySelector('.reels-nav .rail .nav-item[href="/marketplace"]').click());
+const dNavOk = await d.waitForFunction(() => location.pathname === '/marketplace', { timeout: 6000 }).then(() => true).catch(() => false);
+ok('desktop: reels nav rail navigates to Marketplace', dNavOk);
+await goto(d, '/video');
+await sleep(1200);
 await d.evaluate(() => document.querySelector('.reel-home').click());
 await sleep(800);
 ok('desktop: reels home button returns to feed', await d.evaluate(() => location.pathname === '/'));
@@ -806,15 +885,26 @@ ok('mobile: chooser + progress publishes to feed', await m.evaluate(() => docume
 await goto(m, '/video');
 await m.waitForSelector('.reels-page', { timeout: 10000 });
 await sleep(1500);
-const mReels = await m.evaluate(() => ({
-  slides: document.querySelectorAll('.reel-slide').length,
-  playing: !document.querySelector('.reel-slide video')?.paused,
-  muted: document.querySelector('.reel-slide video')?.muted,
-  rail: !!document.querySelector('.reel-rail'),
-  meta: !!document.querySelector('.reel-meta'),
-  noNav: !document.querySelector('.mobile-nav')
-}));
-ok('mobile: reels full-screen video feed, sound on, rail + caption', mReels.slides >= 2 && mReels.playing && mReels.muted === false && mReels.rail && mReels.meta && mReels.noNav, JSON.stringify(mReels));
+const mReels = await m.evaluate(() => {
+  const nav = document.querySelector('.reels-nav .mobile-nav');
+  const nr = nav?.getBoundingClientRect();
+  const page = document.querySelector('.reels-page').getBoundingClientRect();
+  const cs = nav ? getComputedStyle(nav) : null;
+  return {
+    slides: document.querySelectorAll('.reel-slide').length,
+    playing: !document.querySelector('.reel-slide video')?.paused,
+    muted: document.querySelector('.reel-slide video')?.muted,
+    rail: !!document.querySelector('.reel-rail'),
+    meta: !!document.querySelector('.reel-meta'),
+    hasNav: !!nav,
+    navVisible: cs ? cs.display !== 'none' && nr.height > 0 : false,
+    navTabs: nav ? nav.querySelectorAll('.mnav-tab').length : 0,
+    navAtBottom: nr ? Math.abs(nr.bottom - window.innerHeight) < 2 : false,
+    pageLifted: Math.abs((window.innerHeight - page.bottom) - 58) < 3
+  };
+});
+ok('mobile: reels full-screen video feed, sound on, rail + caption', mReels.slides >= 2 && mReels.playing && mReels.muted === false && mReels.rail && mReels.meta, JSON.stringify(mReels));
+ok('mobile: reels keeps bottom nav visible above safe area', mReels.hasNav && mReels.navVisible && mReels.navTabs >= 4 && mReels.navAtBottom && mReels.pageLifted, JSON.stringify(mReels));
 await shot(m, 'mobile-reels');
 const mt0 = await m.evaluate(() => document.querySelector('.reel-slide video').currentTime);
 await m.touchscreen.tap(300, 400);
@@ -851,6 +941,13 @@ ok('mobile: swipe to next reel pauses previous', await m.evaluate(() => ({
 await m.evaluate(() => document.querySelector('.reel-home').click());
 await sleep(800);
 ok('mobile: reels home button returns to feed', await m.evaluate(() => location.pathname === '/'));
+await goto(m, '/video');
+await m.waitForSelector('.reels-page', { timeout: 10000 });
+await sleep(1200);
+await m.evaluate(() => document.querySelector('.reels-nav .mobile-nav .mnav-tab[href="/marketplace"]').click());
+await m.waitForFunction(() => location.pathname === '/marketplace', { timeout: 6000 }).catch(() => {});
+ok('mobile: reels bottom nav navigates to Marketplace', await m.evaluate(() => location.pathname === '/marketplace'));
+await goto(m, '/');
 
 // Drawer + back button
 await m.tap('.m-drawer');
@@ -886,6 +983,18 @@ await m.evaluate(() => document.querySelector('.drawer-overlay').click());
 await sleep(450);
 await shot(m, 'mobile-dark');
 ok('mobile: theme toggle works', theme === 'dark' || theme === 'light', `theme=${theme}`);
+
+// Login brand
+const lp = await newPage({ width: 1280, height: 900 });
+await goto(lp, '/login');
+await sleep(700);
+const loginBrand = await lp.evaluate(() => {
+  const img = document.querySelector('.login-brand .brand-logo-dark');
+  return { hasBrand: !!document.querySelector('.login-brand'), src: img?.getAttribute('src'), loaded: (img?.naturalWidth || 0) > 0, title: document.querySelector('.login-title')?.textContent };
+});
+ok('login: real Exposing logo + wordmark', loginBrand.hasBrand && loginBrand.loaded && loginBrand.src === '/exposing-logo-dark.png' && (loginBrand.title || '').includes('Exposing'), JSON.stringify(loginBrand));
+await shot(lp, 'desktop-login-brand');
+await lp.close();
 
 await m.close();
 await browser.close();

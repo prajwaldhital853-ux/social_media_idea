@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useApp } from '@/lib/AppContext';
+import BrandLogo from './BrandLogo';
 
 export default function ModernLogin() {
   const { db, login } = useApp();
@@ -32,7 +33,8 @@ export default function ModernLogin() {
   return (
     <div className="login-container">
       <div className="login-content">
-        <h1 className="login-title">Sign in to Chautari</h1>
+        <BrandLogo height={64} className="login-brand" href="/" />
+        <h1 className="login-title">Sign in to Exposing</h1>
 
         <button className="social-btn" onClick={handleSocialLogin}>
           <svg width="20" height="20" viewBox="0 0 24 24">

@@ -6,6 +6,7 @@ interface PostVideoProps {
   src: string;
   duration?: number;
   onOpen?: () => void;
+  preview?: boolean;
 }
 
 function formatTime(seconds: number) {
@@ -15,10 +16,10 @@ function formatTime(seconds: number) {
   return `${m}:${String(s).padStart(2, '0')}`;
 }
 
-export default function PostVideo({ src, duration, onOpen }: PostVideoProps) {
-  if (onOpen) {
+export default function PostVideo({ src, duration, onOpen, preview = false }: PostVideoProps) {
+  if (preview) {
     return (
-      <div className="post-video preview" onClick={e => { e.stopPropagation(); onOpen(); }}>
+      <div className="post-video preview" onClick={e => { e.stopPropagation(); onOpen?.(); }}>
         <video src={src} muted playsInline preload="metadata" />
         <button type="button" className="video-play" aria-label="Open video">
           <svg viewBox="0 0 24 24" width="28" height="28" fill="currentColor" aria-hidden="true">
@@ -31,5 +32,5 @@ export default function PostVideo({ src, duration, onOpen }: PostVideoProps) {
       </div>
     );
   }
-  return <AutoVideo src={src} dur={duration} observe loop cover={false} />;
+  return <AutoVideo src={src} dur={duration} observe loop cover={false} onOpen={onOpen} />;
 }

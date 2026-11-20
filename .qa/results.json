@@ -21,6 +21,11 @@
       "detail": ""
     },
     {
+      "name": "desktop: real favicon + rail logo loaded",
+      "pass": true,
+      "detail": "{\"favicon\":\"/exposing-icon.png\",\"apple\":\"/apple-icon.png\",\"logoLoaded\":true,\"logoSrc\":\"/exposing-logo.png\"}"
+    },
+    {
       "name": "desktop: p_mix stack n5, 5 cells, +3",
       "pass": true,
       "detail": "{\"cls\":\"media-mosaic stack n5\",\"cells\":5,\"more\":\"+3\",\"preview\":true,\"previewPaused\":true}"
@@ -46,9 +51,19 @@
       "detail": ""
     },
     {
-      "name": "desktop: media opens as separate route at 1/8, video plays with sound",
+      "name": "desktop: mixed mosaic video click opens Reels at that clip",
       "pass": true,
-      "detail": "{\"path\":\"/post/p_mix/media/0\",\"count\":\"1 / 8\",\"playing\":true,\"muted\":false,\"slides\":8,\"snap\":\"y mandatory\"}"
+      "detail": "{\"path\":\"/video/p_mix-0\",\"src\":\"https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4\",\"playing\":true}"
+    },
+    {
+      "name": "desktop: photo opens media route at 2/8, 8 slides, snap",
+      "pass": true,
+      "detail": "{\"path\":\"/post/p_mix/media/1\",\"count\":\"2 / 8\",\"slides\":8,\"snap\":\"y mandatory\",\"slide0Video\":true,\"slide1Img\":true}"
+    },
+    {
+      "name": "desktop: media page video slide plays with sound at 1/8",
+      "pass": true,
+      "detail": "{\"count\":\"1 / 8\",\"playing\":true,\"muted\":false}"
     },
     {
       "name": "desktop: ArrowDown advances to 2/8",
@@ -313,7 +328,7 @@
     {
       "name": "desktop: followers-only post published with badge, visible to owner",
       "pass": true,
-      "detail": "{\"id\":\"u2u3586x\",\"audience\":\"followers\",\"badge\":true,\"visibleToOwner\":true}"
+      "detail": "{\"id\":\"ylaqxwaw\",\"audience\":\"followers\",\"badge\":true,\"visibleToOwner\":true}"
     },
     {
       "name": "desktop: followers-only post hidden from non-follower (feed + detail)",
@@ -331,19 +346,34 @@
       "detail": ""
     },
     {
+      "name": "desktop: feed video click opens Reels at that clip, playing",
+      "pass": true,
+      "detail": "{\"path\":\"/video/p11-0\",\"i\":2,\"src\":\"https://www.w3schools.com/html/mov_bbb.mp4\",\"playing\":true,\"count\":\"3 / 4\",\"total\":4}"
+    },
+    {
       "name": "desktop: reels page = video-only snap feed with sound on",
       "pass": true,
       "detail": "{\"slides\":4,\"playing\":true,\"muted\":false,\"snap\":\"y mandatory\",\"rail\":true,\"onlyVideos\":true,\"caption\":true,\"noFeedCards\":true}"
     },
     {
+      "name": "desktop: reels keeps left nav rail fixed, no frame overlap",
+      "pass": true,
+      "detail": "{\"present\":true,\"position\":\"fixed\",\"visible\":true,\"overlapsFrame\":false,\"links\":[\"/\",\"/notifications\",\"/explore\",\"/video\",\"/marketplace\",null]}"
+    },
+    {
+      "name": "desktop: reels preload=auto buffers next clip",
+      "pass": true,
+      "detail": "{\"preload\":\"auto\",\"nextReady\":4}"
+    },
+    {
       "name": "desktop: double-tap right seeks +10s with badge",
       "pass": true,
-      "detail": "{\"t0\":1.448666,\"t\":0.262647,\"badge\":true,\"note\":\"wrap allowed: 5s clip loops at end\"}"
+      "detail": "{\"t0\":1.980003,\"t\":0.287487,\"badge\":true,\"note\":\"wrap allowed: 5s clip loops at end\"}"
     },
     {
       "name": "desktop: double-tap left seeks -10s with badge",
       "pass": true,
-      "detail": "{\"t1\":1.385003,\"t\":0.301826,\"badge\":true}"
+      "detail": "{\"t1\":1.298524,\"t\":0.289265,\"badge\":true}"
     },
     {
       "name": "desktop: single tap pauses reel",
@@ -358,7 +388,7 @@
     {
       "name": "desktop: reel rail like stores post reaction",
       "pass": true,
-      "detail": "{\"label\":\"Like this reel\",\"newestId\":\"exe7wcsy\",\"newestKind\":\"reel\",\"mine\":[\"like\"],\"path\":\"/video\"}"
+      "detail": "{\"label\":\"Like this reel\",\"newestId\":\"tqsxk2wd\",\"newestKind\":\"reel\",\"mine\":[\"like\"],\"path\":\"/video\"}"
     },
     {
       "name": "desktop: reel rail save toggles saved post",
@@ -374,6 +404,16 @@
       "name": "desktop: ArrowDown snaps to next reel, previous pauses",
       "pass": true,
       "detail": "{\"count\":\"2 / 4\",\"firstPaused\":true,\"secondPlaying\":true}"
+    },
+    {
+      "name": "desktop: wheel snaps cleanly to next reel, fully settled",
+      "pass": true,
+      "detail": "{\"ms\":580,\"scrollTop\":899,\"clientHeight\":900,\"count\":\"2 / 4\"}"
+    },
+    {
+      "name": "desktop: reels nav rail navigates to Marketplace",
+      "pass": true,
+      "detail": ""
     },
     {
       "name": "desktop: reels home button returns to feed",
@@ -493,12 +533,17 @@
     {
       "name": "mobile: reels full-screen video feed, sound on, rail + caption",
       "pass": true,
-      "detail": "{\"slides\":4,\"playing\":true,\"muted\":false,\"rail\":true,\"meta\":true,\"noNav\":true}"
+      "detail": "{\"slides\":4,\"playing\":true,\"muted\":false,\"rail\":true,\"meta\":true,\"hasNav\":true,\"navVisible\":true,\"navTabs\":5,\"navAtBottom\":true,\"pageLifted\":true}"
+    },
+    {
+      "name": "mobile: reels keeps bottom nav visible above safe area",
+      "pass": true,
+      "detail": "{\"slides\":4,\"playing\":true,\"muted\":false,\"rail\":true,\"meta\":true,\"hasNav\":true,\"navVisible\":true,\"navTabs\":5,\"navAtBottom\":true,\"pageLifted\":true}"
     },
     {
       "name": "mobile: double-tap right seeks +10s",
       "pass": true,
-      "detail": "{\"mt0\":2.068214,\"t\":0.255029,\"badge\":true}"
+      "detail": "{\"mt0\":2.054089,\"t\":0.272987,\"badge\":true}"
     },
     {
       "name": "mobile: reel comment compose above keypad",
@@ -512,6 +557,11 @@
     },
     {
       "name": "mobile: reels home button returns to feed",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile: reels bottom nav navigates to Marketplace",
       "pass": true,
       "detail": ""
     },
@@ -539,6 +589,11 @@
       "name": "mobile: theme toggle works",
       "pass": true,
       "detail": "theme=dark"
+    },
+    {
+      "name": "login: real Exposing logo + wordmark",
+      "pass": true,
+      "detail": "{\"hasBrand\":true,\"src\":\"/exposing-logo-dark.png\",\"loaded\":true,\"title\":\"Sign in to Exposing\"}"
     },
     {
       "name": "no uncaught page errors",

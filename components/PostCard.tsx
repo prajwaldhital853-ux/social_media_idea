@@ -90,6 +90,7 @@ export default function PostCard({ post, author, featured }: PostCardProps) {
 
   const openPost = () => router.push(`/post/${post.id}`);
   const openMedia = (index: number) => router.push(`/post/${post.id}/media/${index}`);
+  const openReel = (index: number) => router.push(`/video/${post.id}-${index}`);
 
   const handleShare = async (e?: React.MouseEvent, copyOnly = false) => {
     e?.preventDefault();
@@ -202,7 +203,8 @@ export default function PostCard({ post, author, featured }: PostCardProps) {
                 <PostVideo
                   src={item.src || ''}
                   duration={item.dur}
-                  onOpen={single ? undefined : () => openMedia(index)}
+                  preview={!single}
+                  onOpen={() => openReel(index)}
                 />
               ) : (
                 <img

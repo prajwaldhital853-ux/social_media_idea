@@ -30,7 +30,7 @@ export default function NavRail() {
           <Link
             key={item.href}
             href={item.href}
-            className={`nav-item ${pathname === item.href ? 'active' : ''}`}
+            className={`nav-item ${pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href + '/')) ? 'active' : ''}`}
           >
             {item.icon}
             <span>{item.label}</span>

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useApp } from '@/lib/AppContext';
 import { useBackClose, closeLayerWithoutBack } from '@/lib/useBackClose';
 import Avatar from './Avatar';
+import BrandLogo from './BrandLogo';
 import ThemeToggle from './ThemeToggle';
 import { IC } from '@/lib/icons';
 
@@ -41,6 +42,9 @@ export default function Drawer() {
         aria-hidden={!drawerOpen}
       />
       <aside className={`drawer ${drawerOpen ? 'open' : ''}`} aria-hidden={!drawerOpen} role="dialog" aria-label="Menu">
+        <div className="drawer-brand">
+          <BrandLogo height={38} />
+        </div>
         <div className="drawer-head">
           <span className="drawer-title">{t('more')}</span>
           <button type="button" className="icon-btn" onClick={closeDrawer} aria-label={t('close')}>

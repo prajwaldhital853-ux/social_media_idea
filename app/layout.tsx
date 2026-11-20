@@ -6,7 +6,10 @@ import ViewportSync from '@/components/ViewportSync'
 export const metadata: Metadata = {
   title: 'Exposing',
   description: 'See it. Share it. Exposing. Photos, clips and stories from your corner of the world.',
-  icons: { icon: '/exposing-icon.png' },
+  icons: {
+    icon: [{ url: '/exposing-icon.png', sizes: '512x512', type: 'image/png' }],
+    apple: [{ url: '/apple-icon.png', sizes: '180x180', type: 'image/png' }],
+  },
 }
 
 export default function RootLayout({

@@ -1,4 +1,4 @@
-# Chautari - Modern Social Media Platform
+# Exposing - Modern Social Media Platform
 
 A Twitter-inspired social media platform built with Next.js 14, featuring a modern UI, smooth animations, and full responsiveness.
 
@@ -106,7 +106,7 @@ npm start
 5. **Admin**: Access admin dashboard by logging in as admin user
 
 ### Demo Credentials
-- **Admin**: `admin@chautari.demo` (any password)
+- **Admin**: `admin@exposing.demo` (any password)
 - **Regular User**: Any demo user from the seed data
 
 ## 🛠️ Technology Stack
@@ -155,7 +155,7 @@ The app uses demo authentication:
 
 ## 📊 Data Structure
 
-All data stored in LocalStorage under `chautari-demo-v1`:
+All data stored in LocalStorage under `exposing-demo-v1`:
 - Users with profiles
 - Posts with media
 - Comments

@@ -10,6 +10,8 @@ interface AutoVideoProps {
   loop?: boolean;
   seek?: boolean;
   cover?: boolean;
+  preload?: 'metadata' | 'auto' | 'none';
+  onOpen?: () => void;
 }
 
 function formatTime(seconds: number) {
@@ -24,7 +26,7 @@ const PAUSE_SVG = <svg viewBox="0 0 24 24" width="26" height="26" fill="currentC
 const SOUND_SVG = <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9H4zm11.5 3c0-1.77-1-3.29-2.5-4.03v8.06c1.5-.74 2.5-2.26 2.5-4.03zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z" /></svg>;
 const MUTED_SVG = <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9H4zm12.5 3l2.1-2.1 1.4 1.4L18 13.4l2 2-1.4 1.4-2.1-2.1-2.1 2.1-1.4-1.4 2.1-2-2.1-2.1 1.4-1.4 2.1 2.1z" /></svg>;
 
-export default function AutoVideo({ src, dur, active = true, observe = false, loop = false, seek = false, cover = false }: AutoVideoProps) {
+export default function AutoVideo({ src, dur, active = true, observe = false, loop = false, seek = false, cover = false, preload = 'metadata', onOpen }: AutoVideoProps) {
   const video = useRef<HTMLVideoElement>(null);
   const wrap = useRef<HTMLDivElement>(null);
   const [playing, setPlaying] = useState(false);
@@ -155,6 +157,7 @@ export default function AutoVideo({ src, dur, active = true, observe = false, lo
   };
 
   const onTap = (e: React.MouseEvent) => {
+    if (onOpen) { onOpen(); return; }
     if (!seek) { togglePlay(); return; }
     const rect = wrap.current?.getBoundingClientRect();
     if (!rect) return;
@@ -195,7 +198,7 @@ export default function AutoVideo({ src, dur, active = true, observe = false, lo
 
   return (
     <div className={`auto-video ${cover ? 'cover' : ''}`} ref={wrap} onClick={onTap}>
-      <video ref={video} src={src} playsInline loop={loop} preload="metadata" muted={muted} />
+      <video ref={video} src={src} playsInline loop={loop} preload={preload} muted={muted} />
       {flash && <span className={`av-flash ${flash}`} aria-hidden="true">{flash === 'play' ? PLAY_SVG : PAUSE_SVG}</span>}
       {badge && (
         <span className={`av-seek ${badge.dir}`} key={badge.id} aria-hidden="true">
@@ -206,7 +209,7 @@ export default function AutoVideo({ src, dur, active = true, observe = false, lo
         </span>
       )}
       {!playing && (
-        <button type="button" className="video-play" aria-label="Play video" onClick={e => { e.stopPropagation(); togglePlay(); }}>
+        <button type="button" className="video-play" aria-label="Play video" onClick={e => { e.stopPropagation(); if (onOpen) onOpen(); else togglePlay(); }}>
           {PLAY_SVG}
         </button>
       )}
