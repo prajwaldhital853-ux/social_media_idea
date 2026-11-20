@@ -5,11 +5,14 @@ import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { useApp } from '@/lib/AppContext';
 import { REACTIONS, compact } from '@/lib/utils';
+import { ReactionKind } from '@/lib/types';
 import { IC } from '@/lib/icons';
 import ReactionIcon from './ReactionIcon';
 
-export default function ReactionButton({ targetType, targetId, small }: { targetType: 'post' | 'comment'; targetId: string; small?: boolean }) {
+export default function ReactionButton({ targetType, targetId, small, kinds }: { targetType: 'post' | 'comment'; targetId: string; small?: boolean; kinds?: ReactionKind[] }) {
   const { db, me, react, myReaction, t } = useApp();
+  const list = kinds?.length ? REACTIONS.filter(r => kinds.includes(r.kind)) : REACTIONS;
+  const trayWidth = list.length * 53 + 14;
   const router = useRouter();
   const [position, setPosition] = useState<{ left: number; top: number } | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -23,14 +26,14 @@ export default function ReactionButton({ targetType, targetId, small }: { target
   const open = () => {
     if (!me || !button.current) return;
     const rect = button.current.getBoundingClientRect();
-    setPosition({ left: Math.max(8, Math.min(rect.left - 8, window.innerWidth - 288)), top: rect.top > 100 ? rect.top - 86 : rect.bottom + 8 });
+    setPosition({ left: Math.max(8, Math.min(rect.left - 8, window.innerWidth - trayWidth - 8)), top: rect.top > 100 ? rect.top - 86 : rect.bottom + 8 });
   };
   useEffect(() => () => cancel(), []);
   useEffect(() => {
     if (!position) return;
     const outside = (e: PointerEvent) => { if (!picker.current?.contains(e.target as Node) && !button.current?.contains(e.target as Node)) setPosition(null); };
     const close = () => setPosition(null);
-    const key = (e: KeyboardEvent) => { if (e.key === 'Escape') { close(); button.current?.focus(); } };
+    const key = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopPropagation(); close(); button.current?.focus(); } };
     document.addEventListener('pointerdown', outside);
     document.addEventListener('keydown', key);
     window.addEventListener('scroll', close, true);
@@ -46,12 +49,12 @@ export default function ReactionButton({ targetType, targetId, small }: { target
       e.preventDefault(); e.stopPropagation();
       if (held.current) { held.current = false; return; }
       if (!me) { router.push('/login'); return; }
-      react(targetType, targetId, mine || 'like'); setPosition(null);
+      react(targetType, targetId, mine || list[0].kind); setPosition(null);
     }}>
       {mine ? <ReactionIcon kind={mine} /> : IC.thumb}<span>{count > 0 ? compact(count) : ''}</span>
     </button>
-    {position && createPortal(<div ref={picker} className="reaction-tray" role="dialog" aria-label="Choose reaction" style={position} onClick={e => e.stopPropagation()}>
-      {REACTIONS.map((r, index) => <button key={r.kind} type="button" aria-label={t(r.kind)} aria-pressed={mine === r.kind} style={{ animationDelay: `${index * 35}ms` }} onClick={() => { react(targetType, targetId, r.kind); setPosition(null); button.current?.focus(); }}><ReactionIcon kind={r.kind}/><span>{t(r.kind)}</span></button>)}
+    {position && createPortal(<div ref={picker} className="reaction-tray" role="dialog" aria-label="Choose reaction" style={{ ...position, width: trayWidth }} onClick={e => e.stopPropagation()}>
+      {list.map((r, index) => <button key={r.kind} type="button" aria-label={t(r.kind)} aria-pressed={mine === r.kind} style={{ animationDelay: `${index * 35}ms` }} onClick={() => { react(targetType, targetId, r.kind); setPosition(null); button.current?.focus(); }}><ReactionIcon kind={r.kind}/><span>{t(r.kind)}</span></button>)}
     </div>, document.body)}
   </div>;
 }

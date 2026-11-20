@@ -227,6 +227,7 @@ export interface Database {
   settings: Settings;
   meId: string | null;
   lang: 'en' | 'ne';
+  seedVersion?: number;
 }
 
 export type ThemeMode = 'light' | 'dark';

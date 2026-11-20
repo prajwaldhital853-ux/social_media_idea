@@ -19,12 +19,22 @@ function Composer({ original }: { original?: Post }) {
   const [busy, setBusy] = useState(false);
   const [promote, setPromote] = useState(false);
   const [promoConfig, setPromoConfig] = useState<PromoConfig | null>(null);
+  const [closing, setClosing] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
   const areaRef = useRef<HTMLTextAreaElement>(null);
   const urls = useRef<string[]>([]);
   const published = useRef(false);
   const alive = useRef(true);
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const requestClose = () => {
+    if (closeTimer.current) return;
+    setClosing(true);
+    closeTimer.current = setTimeout(closeComposer, 190);
+  };
+
+  useEffect(() => () => { if (closeTimer.current) clearTimeout(closeTimer.current); }, []);
 
   useEffect(() => {
     alive.current = true;
@@ -90,13 +100,13 @@ function Composer({ original }: { original?: Post }) {
     if (promote && promoConfig) requestPromotion('post', id, promoConfig);
     published.current = true;
     showToast(original ? 'Post updated.' : stage === 'reel' ? 'Reel posted.' : 'Post published.');
-    closeComposer();
+    requestClose();
   };
 
   return createPortal(
-    <div className="cp-overlay" onClick={closeComposer}>
+    <div className={`cp-overlay ${closing ? 'closing' : ''}`} onClick={requestClose}>
       <div className={`cp-card ${stage === 'choose' ? 'cp-choose' : ''}`} ref={dialogRef} tabIndex={-1} onClick={e => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="composer-title" onKeyDown={e => {
-        if (e.key === 'Escape') closeComposer();
+        if (e.key === 'Escape') requestClose();
         if (e.key !== 'Tab') return;
         const nodes = dialogRef.current?.querySelectorAll<HTMLElement>('button:not(:disabled), a[href], input:not([hidden]), textarea, select');
         if (!nodes?.length) return;
@@ -107,9 +117,9 @@ function Composer({ original }: { original?: Post }) {
       }}>
         <div className="cp-head">
           <b id="composer-title">{stage === 'choose' ? 'Create' : original ? 'Edit post' : stage === 'reel' ? 'Create reel' : 'Create post'}</b>
-          <button type="button" className="icon-btn cp-close" onClick={closeComposer} aria-label="Close composer">{IC.x}</button>
+          <button type="button" className="icon-btn cp-close" onClick={requestClose} aria-label="Close composer">{IC.x}</button>
         </div>
-        {!me ? <div className="cp-body"><p>Sign in to create a post or reel.</p><Link className="composer-signin" href="/login" onClick={closeComposer}>Sign in</Link></div> : <>
+        {!me ? <div className="cp-body"><p>Sign in to create a post or reel.</p><Link className="composer-signin" href="/login" onClick={requestClose}>Sign in</Link></div> : <>
           <input ref={fileRef} type="file" aria-label="Attach photos or video" accept="image/jpeg,image/png,image/webp,video/*" multiple hidden onChange={e => { void attach(e.target.files); e.target.value = ''; }} />
           {stage === 'choose' ? <div className="create-options">
             <button type="button" onClick={() => setStage('post')} disabled={busy}>{IC.img}<span><b>Post</b><small>Share a thought or a photo</small></span>{IC.plus}</button>

@@ -1,0 +1,255 @@
+{
+  "results": [
+    {
+      "name": "desktop: feed renders",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop: window scrollbar hidden",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop: no horizontal overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop: page-enter animation",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop: p_mix stack n5, 5 cells, +3",
+      "pass": true,
+      "detail": "{\"cls\":\"media-mosaic stack n5\",\"cells\":5,\"more\":\"+3\",\"preview\":true,\"previewPaused\":true,\"h\":338}"
+    },
+    {
+      "name": "desktop: mixed video is paused preview",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop: single video autoplays muted+loop",
+      "pass": true,
+      "detail": "{\"paused\":false,\"muted\":true,\"ready\":4,\"loop\":true}"
+    },
+    {
+      "name": "desktop: viewer opens at 1/8 and plays video",
+      "pass": true,
+      "detail": "{\"count\":\"1 / 8\",\"playing\":true,\"slides\":8}"
+    },
+    {
+      "name": "desktop: ArrowDown advances to 2/8",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop: Escape closes viewer",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop: 3rd photo opens viewer at 3/4",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop: scroll reaches 4/4",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop: quickreact mirrors post kinds",
+      "pass": true,
+      "detail": "{\"kinds\":[\"haha\",\"like\",\"love\",\"sad\",\"wow\"],\"quick\":[\"haha\",\"like\",\"love\",\"sad\",\"wow\"],\"head\":5,\"sheetH\":720,\"listScrollable\":false}"
+    },
+    {
+      "name": "desktop: heading shows post reaction icons",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop: View 4 replies expands thread",
+      "pass": true,
+      "detail": "View 4 replies / 4"
+    },
+    {
+      "name": "desktop: reply reaction badge uses ReactionIcon art",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop: reply banner + prefill",
+      "pass": true,
+      "detail": "{\"banner\":\"Replying to Maya Gurung\",\"val\":\"@Maya Gurung \"}"
+    },
+    {
+      "name": "desktop: reply posted into thread",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop: comment tray limited to post kinds",
+      "pass": true,
+      "detail": "[\"haha\",\"like\",\"love\",\"sad\",\"wow\"]"
+    },
+    {
+      "name": "desktop: Escape closes tray but keeps sheet",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop: quickreact toggles on",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop: sheet shrinks with keyboard, compose above it, list scrolls",
+      "pass": true,
+      "detail": "{\"ovH\":520,\"composeBottom\":499.1875,\"listScrolled\":true,\"composeVisible\":true}"
+    },
+    {
+      "name": "desktop: sheet closes with exit animation",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop: like+love post shows only those icons",
+      "pass": true,
+      "detail": "{\"quick\":[\"like\",\"love\"],\"head\":2}"
+    },
+    {
+      "name": "desktop: comment tray also only like+love",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop: inline compose in normal flow, list visible",
+      "pass": true,
+      "detail": "{\"bottom\":884.03125,\"fixed\":\"relative\",\"listH\":360}"
+    },
+    {
+      "name": "desktop: inline comment posts",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop: textarea capped at 320px",
+      "pass": true,
+      "detail": "h=207"
+    },
+    {
+      "name": "desktop: location panel opens",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop: mood + place chips",
+      "pass": true,
+      "detail": "[\"😊 feeling happy\",\"Pokhara\"]"
+    },
+    {
+      "name": "desktop: attachment thumbnail renders",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop: publish returns home with new post + tags",
+      "pass": true,
+      "detail": "{\"text\":true,\"tags\":2}"
+    },
+    {
+      "name": "desktop: create footer above keyboard, body scrolls",
+      "pass": true,
+      "detail": "{\"pageH\":520,\"footerBottom\":520,\"bodyScrollable\":true}"
+    },
+    {
+      "name": "desktop: search field below title row",
+      "pass": true,
+      "detail": "{\"rowTop\":10,\"fieldTop\":56,\"fieldBelow\":true,\"gapFromTop\":10}"
+    },
+    {
+      "name": "desktop: search finds Sita",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile: top bar + bottom nav + fab",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile: no horizontal overflow",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile: stack mosaic ~280px + 3 overlay",
+      "pass": true,
+      "detail": "{\"h\":278,\"more\":\"+3\"}"
+    },
+    {
+      "name": "mobile: keyboard shrinks sheet; quickreact+compose visible; list scrolls",
+      "pass": true,
+      "detail": "{\"ovH\":544,\"composeBottom\":544,\"quickVisible\":true,\"listScrolled\":true,\"listH\":296}"
+    },
+    {
+      "name": "mobile: overlay tap closes sheet without navigating",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile: viewer opens at 3/4",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile: swipe/scroll to 4/4",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile: post-page compose above keyboard",
+      "pass": true,
+      "detail": "{\"bottom\":544,\"pos\":\"fixed\",\"listVisible\":true}"
+    },
+    {
+      "name": "mobile: create header+footer visible above keyboard, body scrolls",
+      "pass": true,
+      "detail": "{\"footerBottom\":544,\"headerTop\":0,\"bodyScroll\":true,\"pageH\":544}"
+    },
+    {
+      "name": "mobile: location panel reachable with keyboard open",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile: drawer opens with faded overlay",
+      "pass": true,
+      "detail": "{\"open\":true,\"op\":\"1\"}"
+    },
+    {
+      "name": "mobile: drawer closes",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile: search field below title",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile: theme toggle works",
+      "pass": true,
+      "detail": "theme=dark"
+    },
+    {
+      "name": "no uncaught page errors",
+      "pass": true,
+      "detail": ""
+    }
+  ],
+  "errors": []
+}

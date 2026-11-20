@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next'
 import './globals.css'
 import { AppProvider } from '@/lib/AppContext'
+import ViewportSync from '@/components/ViewportSync'
 
 export const metadata: Metadata = {
   title: 'Exposing',
@@ -23,7 +24,10 @@ export default function RootLayout({
         />
       </head>
       <body>
-        <AppProvider>{children}</AppProvider>
+        <AppProvider>
+          <ViewportSync />
+          {children}
+        </AppProvider>
       </body>
     </html>
   )

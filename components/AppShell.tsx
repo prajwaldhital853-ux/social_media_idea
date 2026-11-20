@@ -109,7 +109,7 @@ interface AppShellProps {
 
 export default function AppShell({ children }: AppShellProps) {
   const pathname = usePathname();
-  const focusedPage = pathname.startsWith('/post/') || pathname === '/explore';
+  const focusedPage = pathname.startsWith('/post/') || pathname === '/explore' || pathname === '/create';
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
   if (!mounted) return null;
@@ -118,8 +118,10 @@ export default function AppShell({ children }: AppShellProps) {
     <div className={`shell ${focusedPage ? 'focused-page' : ''}`}>
       <NavRail />
       <main className="main">
-        {children}
-        {!focusedPage && <SiteFooter />}
+        <div className="page-enter" key={pathname}>
+          {children}
+          {!focusedPage && <SiteFooter />}
+        </div>
       </main>
       <RightWidgets />
       <Drawer />

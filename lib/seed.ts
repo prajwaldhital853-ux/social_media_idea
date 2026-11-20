@@ -48,7 +48,10 @@ export function seed(): Database {
         { type: 'image' as const, src: 'https://images.unsplash.com/photo-1544735716-392fe2489ffa?w=1200&q=80' },
         { type: 'image' as const, src: 'https://images.unsplash.com/photo-1605640840605-14ac1855827b?w=1200&q=80' },
         { type: 'image' as const, src: 'https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?w=1200&q=80' },
-        { type: 'image' as const, src: 'https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=1200&q=80' }
+        { type: 'image' as const, src: 'https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=1200&q=80' },
+        { type: 'image' as const, src: 'https://images.unsplash.com/photo-1519681393784-d120267933ba?w=1200&q=80' },
+        { type: 'image' as const, src: 'https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?w=1200&q=80' },
+        { type: 'image' as const, src: 'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?w=1200&q=80' }
       ],
       ts: now - 12 * M, status: 'live' as const
     },
@@ -172,7 +175,16 @@ export function seed(): Database {
     { id: 'c8', pid: 'p9', uid: 'u5', text: 'Frame two is the one. Print that.', ts: now - 40 * M, status: 'live' as const },
     { id: 'c9', pid: 'p10', uid: 'u4', text: 'Saving this. Recipe when?', ts: now - 60 * M, status: 'live' as const },
     { id: 'c10', pid: 'p11', uid: 'u1', text: 'That clip feels like a music video.', ts: now - 85 * M, status: 'live' as const },
-    { id: 'c11', pid: 'p12', uid: 'u2', text: 'Left foot still needs work but the run is clean.', ts: now - 140 * M, status: 'live' as const }
+    { id: 'c11', pid: 'p12', uid: 'u2', text: 'Left foot still needs work but the run is clean.', ts: now - 140 * M, status: 'live' as const },
+    { id: 'c1r1', pid: 'p3', parentId: 'c1', uid: 'u5', text: 'Clear until nine, then the mist came back like it owns the place.', ts: now - 22 * M, status: 'live' as const },
+    { id: 'c1r2', pid: 'p3', parentId: 'c1', uid: 'u4', text: '@Maya Gurung same story every winter 😅', ts: now - 19 * M, status: 'live' as const },
+    { id: 'c1r3', pid: 'p3', parentId: 'c1', uid: 'u1', text: 'Worth the early alarm either way.', ts: now - 15 * M, status: 'live' as const },
+    { id: 'c1r4', pid: 'p3', parentId: 'c1', uid: 'u3', text: 'Saving this spot for Saturday.', ts: now - 12 * M, status: 'live' as const },
+    { id: 'c6r1', pid: 'p_mix', parentId: 'c6', uid: 'u5', text: 'Thank you! The clip was one take, pure luck.', ts: now - 6 * M, status: 'live' as const },
+    { id: 'c6r2', pid: 'p_mix', parentId: 'c6', uid: 'u2', text: 'One take?? Teach me.', ts: now - 4 * M, status: 'live' as const },
+    { id: 'c9r1', pid: 'p9', parentId: 'c9', uid: 'u9', text: 'Recipe drops this Friday, promise.', ts: now - 50 * M, status: 'live' as const },
+    { id: 'c9r2', pid: 'p9', parentId: 'c9', uid: 'u4', text: 'Friday cannot come soon enough.', ts: now - 44 * M, status: 'live' as const },
+    { id: 'c9r3', pid: 'p9', parentId: 'c9', uid: 'u1', text: 'Setting a reminder right now.', ts: now - 30 * M, status: 'live' as const }
   ];
 
   const followPairs: [string, string][] = [
@@ -204,7 +216,10 @@ export function seed(): Database {
   );
   reactions.push(
     { id: 'rx_c1', targetType: 'comment', targetId: 'c1', uid: 'u1', kind: 'like', ts: now - 28 * M },
-    { id: 'rx_c6', targetType: 'comment', targetId: 'c6', uid: 'u5', kind: 'love', ts: now - 7 * M }
+    { id: 'rx_c6', targetType: 'comment', targetId: 'c6', uid: 'u5', kind: 'love', ts: now - 7 * M },
+    { id: 'rx_c1r1', targetType: 'comment', targetId: 'c1r1', uid: 'u4', kind: 'love', ts: now - 20 * M },
+    { id: 'rx_c1r3', targetType: 'comment', targetId: 'c1r3', uid: 'u5', kind: 'like', ts: now - 14 * M },
+    { id: 'rx_c6r1', targetType: 'comment', targetId: 'c6r1', uid: 'u1', kind: 'haha', ts: now - 5 * M }
   );
 
   const saves = [
@@ -352,7 +367,8 @@ export function seed(): Database {
       ],
       categories: ['Electronics', 'Vehicles', 'Property', 'Fashion', 'Home & Garden', 'Jobs', 'Services', 'Other']
     },
-    meId: null,
-    lang
+    meId: 'u1',
+    lang,
+    seedVersion: 2
   };
 }

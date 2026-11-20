@@ -36,10 +36,15 @@ function SearchResults() {
   const search = (value: string) => router.replace(`/explore${value.trim() ? `?q=${encodeURIComponent(value.trim())}` : ''}`);
   return <div className="search-view">
     <header className="detail-header search-detail-header">
-      <button className="icon-btn" type="button" aria-label="Back" onClick={() => window.history.length > 1 ? router.back() : router.push('/')}>{IC.back}</button>
-      <form role="search" onSubmit={e => { e.preventDefault(); search(input); }}>
-        <input type="search" aria-label="Search posts and people" placeholder="Search Exposing" maxLength={128} value={input} onChange={e => { setInput(e.target.value); if (!e.target.value) search(''); }}/>
-        <button type="submit" className="icon-btn" aria-label="Search">{IC.search}</button>
+      <div className="search-head-row">
+        <button className="icon-btn" type="button" aria-label="Back" onClick={() => window.history.length > 1 ? router.back() : router.push('/')}>{IC.back}</button>
+        <h1>Search</h1>
+        <span className="detail-header-spacer"/>
+      </div>
+      <form role="search" className="search-field" onSubmit={e => { e.preventDefault(); search(input); }}>
+        <span className="search-field-icon">{IC.search}</span>
+        <input type="search" aria-label="Search posts and people" placeholder="Search people, posts and hashtags" maxLength={128} value={input} onChange={e => { setInput(e.target.value); if (!e.target.value) search(''); }}/>
+        <button type="submit" className="search-field-go" aria-label="Search">Search</button>
       </form>
     </header>
     {!normalized ? <section className="recent-searches"><h1>Recent searches</h1>

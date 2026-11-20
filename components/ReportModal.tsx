@@ -29,7 +29,7 @@ export default function ReportModal({ type, targetId, onClose }: ReportModalProp
   if (typeof document === 'undefined') return null;
 
   return createPortal(
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay" onClick={e => { e.stopPropagation(); onClose(); }}>
       <div className="modal-content report-modal" onClick={e => e.stopPropagation()} role="dialog" aria-label={t('reportTitle')}>
         <div className="modal-header">
           <b>{t('reportTitle')}</b>

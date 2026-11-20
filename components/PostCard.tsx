@@ -4,12 +4,13 @@ import { useEffect, useRef, useState } from 'react';
 import Comments from './Comments';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Post as PostType, User, Media } from '@/lib/types';
+import { Post as PostType, User } from '@/lib/types';
 import { ago, compact } from '@/lib/utils';
 import { useApp } from '@/lib/AppContext';
 import Avatar from './Avatar';
 import VerifiedBadge from './VerifiedBadge';
 import PostVideo from './PostVideo';
+import MediaViewer from './MediaViewer';
 import ReactionButton from './ReactionButton';
 import ReportModal from './ReportModal';
 import PromoteModal from './PromoteModal';
@@ -21,15 +22,12 @@ interface PostCardProps {
   featured?: boolean;
 }
 
-function mosaicClass(media: Media[]) {
-  const n = media.length;
-  const hasVideo = media.some(m => m.type === 'video');
-  const hasImage = media.some(m => m.type === 'image');
-  if (n === 1) return 'single';
-  if (hasVideo && hasImage) return `mixed n${n}`;
-  if (n === 2) return 'two';
-  if (n === 3) return 'three';
-  return 'four';
+function mosaicClass(count: number) {
+  if (count === 1) return 'single';
+  if (count === 2) return 'two';
+  if (count === 3) return 'three';
+  if (count === 4) return 'stack n4';
+  return 'stack n5';
 }
 
 function RichText({ text }: { text: string }) {
@@ -113,38 +111,9 @@ export default function PostCard({ post, author, featured }: PostCardProps) {
   };
 
   const media = (post.media || []).filter(m => m.src || m.gen);
-  const videos = media.filter(m => m.type === 'video');
-  const images = media.filter(m => m.type === 'image');
-  const mixed = videos.length > 0 && images.length > 0;
-  
-  // Updated gallery layout: single video auto-plays, mixed media shows video first then images
-  let shown: Media[] = [];
-  let extra = 0;
-  
-  if (mixed) {
-    // Mixed: video(s) first, then up to 4 images
-    shown = [...videos.slice(0, 1), ...images.slice(0, 4)];
-    extra = media.length - shown.length;
-  } else if (videos.length > 0 && videos.length === 1) {
-    // Single video - show only it
-    shown = videos;
-    extra = 0;
-  } else if (videos.length > 1) {
-    // Multiple videos only - show first 4
-    shown = videos.slice(0, 4);
-    extra = videos.length - 4;
-  } else {
-    // Images only
-    if (images.length === 1) {
-      shown = images;
-    } else if (images.length <= 4) {
-      shown = images;
-    } else {
-      // More than 4 images - show first big, then 3 small, +extra
-      shown = images.slice(0, 4);
-      extra = images.length - 4;
-    }
-  }
+  const single = media.length === 1;
+  const shown = single ? media : media.slice(0, 5);
+  const extra = media.length - shown.length;
 
   const onArticleClick = (e: React.MouseEvent) => {
     const el = e.target as HTMLElement;
@@ -226,54 +195,35 @@ export default function PostCard({ post, author, featured }: PostCardProps) {
       </div>
 
       {shown.length > 0 && (
-        <div className={`media-mosaic ${mosaicClass(shown)}`} onClick={e => e.stopPropagation()}>
-          {mixed ? (
-            <>
-              {videos.slice(0, 1).map((item, index) => (
-                <PostVideo key={`v-${index}`} src={item.src || ''} duration={item.dur} autoPlay={true} />
-              ))}
-              <div className={`mosaic-photos n${Math.min(images.length, 4)}`}>
-                {images.slice(0, 4).map((item, index) => (
-                  <img 
-                    key={`i-${index}`} 
-                    src={item.src || item.gen} 
-                    alt="" 
-                    loading="lazy"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSelectedMediaIndex(1 + index); // 1-based index accounting for video
-                    }}
-                    style={{ cursor: 'pointer' }}
-                  />
-                ))}
-              </div>
-            </>
-          ) : (
-            shown.map((item, index) =>
-              item.type === 'video' ? (
-                <PostVideo 
-                  key={`v-${index}`} 
-                  src={item.src || ''} 
+        <div className={`media-mosaic ${mosaicClass(shown.length)}`} onClick={e => e.stopPropagation()}>
+          {shown.map((item, index) => (
+            <div className="mosaic-cell" key={`${item.type}-${item.src || item.gen || index}`}>
+              {item.type === 'video' ? (
+                <PostVideo
+                  src={item.src || ''}
                   duration={item.dur}
-                  autoPlay={shown.length === 1}
+                  autoPlay={single}
+                  onOpen={single ? undefined : () => setSelectedMediaIndex(index)}
                 />
               ) : (
-                <img 
-                  key={`i-${index}`} 
-                  src={item.src || item.gen} 
-                  alt="" 
+                <img
+                  src={item.src || item.gen}
+                  alt=""
                   loading="lazy"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setSelectedMediaIndex(index);
-                  }}
-                  style={{ cursor: shown.filter(m => m.type === 'image').length > 1 ? 'pointer' : 'default' }}
+                  onClick={() => setSelectedMediaIndex(index)}
                 />
-              )
-            )
-          )}
-          {extra > 0 && <span className="media-more">+{extra}</span>}
+              )}
+              {extra > 0 && index === shown.length - 1 && (
+                <button type="button" className="media-more" onClick={() => setSelectedMediaIndex(index)} aria-label={`View ${extra} more attachments`}>
+                  +{extra}
+                </button>
+              )}
+            </div>
+          ))}
         </div>
+      )}
+      {selectedMediaIndex !== null && (
+        <MediaViewer media={media} initialIndex={selectedMediaIndex} onClose={() => setSelectedMediaIndex(null)} />
       )}
 
       <div className="post-actions" onClick={e => e.stopPropagation()}>

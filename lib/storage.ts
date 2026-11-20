@@ -32,5 +32,15 @@ export function save(db: Database): void {
 }
 
 export function getDb(): Database {
-  return load() || seed();
+  const d = load() || seed();
+  if (!d.seedVersion) {
+    const fresh = seed();
+    const existing = new Set(d.comments.map(c => c.id));
+    const added = fresh.comments.filter(c => c.parentId && !existing.has(c.id));
+    const addedIds = new Set(added.map(c => c.id));
+    d.comments = [...d.comments, ...added];
+    d.reactions = [...d.reactions, ...fresh.reactions.filter(r => addedIds.has(r.targetId) && !d.reactions.some(x => x.id === r.id))];
+    d.seedVersion = 2;
+  }
+  return d;
 }

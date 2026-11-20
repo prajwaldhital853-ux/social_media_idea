@@ -17,7 +17,7 @@ export default function PromoteModal({ targetType, targetId, defaultCategory, on
   if (typeof document === 'undefined') return null;
 
   return createPortal(
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay" onClick={e => { e.stopPropagation(); onClose(); }}>
       <div className="modal-content promote-modal" onClick={e => e.stopPropagation()} role="dialog" aria-label={t('promoteSection')}>
         <div className="modal-header">
           <b>{t('promoteSection')}</b>
