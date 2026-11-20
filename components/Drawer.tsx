@@ -3,12 +3,16 @@
 import { useEffect } from 'react';
 import Link from 'next/link';
 import { useApp } from '@/lib/AppContext';
+import { useBackClose, closeLayerWithoutBack } from '@/lib/useBackClose';
 import Avatar from './Avatar';
 import ThemeToggle from './ThemeToggle';
 import { IC } from '@/lib/icons';
 
 export default function Drawer() {
   const { me, isAdmin, logout, drawerOpen, closeDrawer, db, updateLang, t, feature } = useApp();
+
+  useBackClose(drawerOpen, closeDrawer);
+  const navigateClose = () => { closeLayerWithoutBack(); closeDrawer(); };
 
   useEffect(() => {
     document.body.classList.toggle('noscroll', drawerOpen);
@@ -45,7 +49,7 @@ export default function Drawer() {
         </div>
 
         {me && (
-          <Link href={`/u/${me.username}`} className="drawer-profile" onClick={closeDrawer}>
+          <Link href={`/u/${me.username}`} className="drawer-profile" onClick={navigateClose}>
             <Avatar user={me} size={48} />
             <span>
               <b>{me.name || me.username}</b>
@@ -56,7 +60,7 @@ export default function Drawer() {
 
         <nav className="drawer-nav">
           {links.map(item => (
-            <Link key={item.href} href={item.href} className="drawer-link" onClick={closeDrawer}>
+            <Link key={item.href} href={item.href} className="drawer-link" onClick={navigateClose}>
               {item.icon}
               <span>{item.label}</span>
             </Link>
@@ -80,11 +84,11 @@ export default function Drawer() {
             </button>
           ) : (
             <>
-              <Link href="/login" className="drawer-link" onClick={closeDrawer}>
+              <Link href="/login" className="drawer-link" onClick={navigateClose}>
                 {IC.user}
                 <span>{t('signIn')}</span>
               </Link>
-              <Link href="/signup" className="drawer-link" onClick={closeDrawer}>
+              <Link href="/signup" className="drawer-link" onClick={navigateClose}>
                 {IC.plus}
                 <span>{t('signUp')}</span>
               </Link>

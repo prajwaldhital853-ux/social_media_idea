@@ -42,6 +42,7 @@ export interface Post {
   removedReason?: string;
   mood?: string;
   place?: string;
+  audience?: 'public' | 'followers';
 }
 
 export interface Media {
@@ -55,6 +56,7 @@ export interface Comment {
   id: string;
   pid: string;
   parentId?: string;
+  mediaIndex?: number;
   uid: string;
   text: string;
   ts: number;
@@ -69,7 +71,7 @@ export interface Follow {
 
 export interface Reaction {
   id: string;
-  targetType: 'post' | 'comment';
+  targetType: 'post' | 'comment' | 'media';
   targetId: string;
   uid: string;
   kind: ReactionKind;

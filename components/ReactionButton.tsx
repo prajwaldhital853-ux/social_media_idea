@@ -9,7 +9,7 @@ import { ReactionKind } from '@/lib/types';
 import { IC } from '@/lib/icons';
 import ReactionIcon from './ReactionIcon';
 
-export default function ReactionButton({ targetType, targetId, small, kinds }: { targetType: 'post' | 'comment'; targetId: string; small?: boolean; kinds?: ReactionKind[] }) {
+export default function ReactionButton({ targetType, targetId, small, kinds, extraCount = 0 }: { targetType: 'post' | 'comment' | 'media'; targetId: string; small?: boolean; kinds?: ReactionKind[]; extraCount?: number }) {
   const { db, me, react, myReaction, t } = useApp();
   const list = kinds?.length ? REACTIONS.filter(r => kinds.includes(r.kind)) : REACTIONS;
   const trayWidth = list.length * 53 + 14;
@@ -21,7 +21,7 @@ export default function ReactionButton({ targetType, targetId, small, kinds }: {
   const button = useRef<HTMLButtonElement>(null);
   const picker = useRef<HTMLDivElement>(null);
   const mine = myReaction(targetType, targetId);
-  const count = db.reactions.filter(r => r.targetType === targetType && r.targetId === targetId).length;
+  const count = db.reactions.filter(r => r.targetType === targetType && r.targetId === targetId).length + extraCount;
   const cancel = () => { if (timer.current) clearTimeout(timer.current); timer.current = null; };
   const open = () => {
     if (!me || !button.current) return;

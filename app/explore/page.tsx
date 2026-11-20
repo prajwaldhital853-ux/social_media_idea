@@ -7,6 +7,7 @@ import AppShell from '@/components/AppShell';
 import PostCard from '@/components/PostCard';
 import Avatar from '@/components/Avatar';
 import { useApp } from '@/lib/AppContext';
+import { canSeePost } from '@/lib/utils';
 import { IC } from '@/lib/icons';
 
 function SearchResults() {
@@ -32,7 +33,7 @@ function SearchResults() {
   }, [query, key]);
   const normalized = query.trim().toLocaleLowerCase();
   const users = normalized ? db.users.filter(u => `${u.name} ${u.username}`.toLocaleLowerCase().includes(normalized.replace(/^@/, ''))) : [];
-  const posts = normalized ? db.posts.filter(p => p.status === 'live' && p.text.toLocaleLowerCase().includes(normalized)).sort((a, b) => b.ts - a.ts) : [];
+  const posts = normalized ? db.posts.filter(p => p.status === 'live' && canSeePost(p, me?.id ?? null, db.follows) && p.text.toLocaleLowerCase().includes(normalized)).sort((a, b) => b.ts - a.ts) : [];
   const search = (value: string) => router.replace(`/explore${value.trim() ? `?q=${encodeURIComponent(value.trim())}` : ''}`);
   return <div className="search-view">
     <header className="detail-header search-detail-header">
@@ -43,7 +44,7 @@ function SearchResults() {
       </div>
       <form role="search" className="search-field" onSubmit={e => { e.preventDefault(); search(input); }}>
         <span className="search-field-icon">{IC.search}</span>
-        <input type="search" aria-label="Search posts and people" placeholder="Search people, posts and hashtags" maxLength={128} value={input} onChange={e => { setInput(e.target.value); if (!e.target.value) search(''); }}/>
+        <input type="search" aria-label="Search posts and people" placeholder="Search people, posts and hashtags" maxLength={128} autoComplete="off" value={input} onChange={e => { setInput(e.target.value); if (!e.target.value) search(''); }}/>
         <button type="submit" className="search-field-go" aria-label="Search">Search</button>
       </form>
     </header>

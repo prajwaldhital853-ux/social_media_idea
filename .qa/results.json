@@ -46,9 +46,34 @@
       "detail": ""
     },
     {
-      "name": "desktop: Escape closes viewer",
+      "name": "desktop: viewer has per-media action bar",
       "pass": true,
       "detail": ""
+    },
+    {
+      "name": "desktop: per-media like stored as media reaction",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop: photo comment sheet layers above viewer",
+      "pass": true,
+      "detail": "{\"sheetZ\":\"1450\",\"modalZ\":\"1400\",\"sheetVisible\":true}"
+    },
+    {
+      "name": "desktop: photo comment stored with mediaIndex",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop: Escape closes photo sheet, viewer stays",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop: post totals include per-media comments+reactions",
+      "pass": true,
+      "detail": "{\"commentSpan\":\"5\",\"reactSpan\":\"9\",\"totalComments\":5,\"totalReactions\":9}"
     },
     {
       "name": "desktop: 3rd photo opens viewer at 3/4",
@@ -56,17 +81,52 @@
       "detail": ""
     },
     {
+      "name": "desktop: viewer pushed a history layer",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop: phone-back closes viewer without reload, stays on feed",
+      "pass": true,
+      "detail": "{\"modal\":false,\"marker\":true,\"path\":\"/\",\"layer\":null}"
+    },
+    {
       "name": "desktop: scroll reaches 4/4",
       "pass": true,
       "detail": ""
     },
     {
-      "name": "desktop: quickreact mirrors post kinds",
+      "name": "desktop: suggestion emojis mirror post kinds",
       "pass": true,
-      "detail": "{\"kinds\":[\"haha\",\"like\",\"love\",\"sad\",\"wow\"],\"quick\":[\"haha\",\"like\",\"love\",\"sad\",\"wow\"],\"head\":5,\"sheetH\":720,\"listScrollable\":false}"
+      "detail": "{\"kinds\":[\"haha\",\"like\",\"love\",\"sad\",\"wow\"],\"suggestKinds\":[\"haha\",\"like\",\"love\",\"sad\",\"wow\"],\"head\":5,\"chips\":[\"Nice!\",\"Beautiful!\",\"Congrats!\",\"Love this!\",\"Amazing!\",\"So good!\",\"Well done!\"],\"rowScrollable\":true,\"inputAutocomplete\":\"off\"}"
     },
     {
       "name": "desktop: heading shows post reaction icons",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop: suggestion chips render + row scrolls",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop: comment input disables autofill",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop: chip fills field, does not auto-post",
+      "pass": true,
+      "detail": "{\"val\":\"Nice!\",\"count\":21}"
+    },
+    {
+      "name": "desktop: emoji picker inserts emoji into field",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop: Escape closes picker, keeps sheet",
       "pass": true,
       "detail": ""
     },
@@ -86,9 +146,19 @@
       "detail": "{\"banner\":\"Replying to Maya Gurung\",\"val\":\"@Maya Gurung \"}"
     },
     {
-      "name": "desktop: reply posted into thread",
+      "name": "desktop: reply paging shows 4 + view more (1)",
+      "pass": true,
+      "detail": "{\"shown\":4,\"more\":\"View more replies (1)\"}"
+    },
+    {
+      "name": "desktop: view more loads the 5th reply",
       "pass": true,
       "detail": ""
+    },
+    {
+      "name": "desktop: reply @mention rendered in blue",
+      "pass": true,
+      "detail": "{\"text\":\"@Maya\",\"color\":\"rgb(29, 111, 214)\"}"
     },
     {
       "name": "desktop: comment tray limited to post kinds",
@@ -101,24 +171,24 @@
       "detail": ""
     },
     {
-      "name": "desktop: quickreact toggles on",
+      "name": "desktop: heading icon quick-react toggles on",
       "pass": true,
       "detail": ""
     },
     {
-      "name": "desktop: sheet shrinks with keyboard, compose above it, list scrolls",
+      "name": "desktop: full scrim + compose tracks keyboard, list scrolls",
       "pass": true,
-      "detail": "{\"ovH\":520,\"composeBottom\":499.1875,\"listScrolled\":true,\"composeVisible\":true}"
+      "detail": "{\"pad\":\"380px\",\"fullH\":900,\"composeBottom\":499.1875,\"listScrolled\":true,\"composeVisible\":true}"
     },
     {
-      "name": "desktop: sheet closes with exit animation",
+      "name": "desktop: phone-back closes comment sheet",
       "pass": true,
       "detail": ""
     },
     {
       "name": "desktop: like+love post shows only those icons",
       "pass": true,
-      "detail": "{\"quick\":[\"like\",\"love\"],\"head\":2}"
+      "detail": "{\"suggest\":[\"Insert Like emoji\",\"Insert Love emoji\"],\"head\":2}"
     },
     {
       "name": "desktop: comment tray also only like+love",
@@ -138,10 +208,15 @@
     {
       "name": "desktop: textarea capped at 320px",
       "pass": true,
-      "detail": "h=207"
+      "detail": "h=205"
     },
     {
       "name": "desktop: location panel opens",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop: place input avoids autofill heuristics",
       "pass": true,
       "detail": ""
     },
@@ -156,6 +231,16 @@
       "detail": ""
     },
     {
+      "name": "desktop: post/reel chooser appears, reel gated on video",
+      "pass": true,
+      "detail": "{\"options\":[\"Post\",\"Reel\"],\"reelDisabled\":true}"
+    },
+    {
+      "name": "desktop: publish shows spinner ring with staged %",
+      "pass": true,
+      "detail": "2% -> 45%"
+    },
+    {
       "name": "desktop: publish returns home with new post + tags",
       "pass": true,
       "detail": "{\"text\":true,\"tags\":2}"
@@ -164,6 +249,36 @@
       "name": "desktop: create footer above keyboard, body scrolls",
       "pass": true,
       "detail": "{\"pageH\":520,\"footerBottom\":520,\"bodyScrollable\":true}"
+    },
+    {
+      "name": "desktop: audience menu offers Public + Followers",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop: audience chip switches to Followers",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop: followers-only post published with badge, visible to owner",
+      "pass": true,
+      "detail": "{\"id\":\"31boxik2\",\"audience\":\"followers\",\"badge\":true,\"visibleToOwner\":true}"
+    },
+    {
+      "name": "desktop: followers-only post hidden from non-follower (feed + detail)",
+      "pass": true,
+      "detail": "{\"hiddenFeed\":true,\"hiddenDetail\":true}"
+    },
+    {
+      "name": "desktop: 10 photos attached, accept switches to video-only",
+      "pass": true,
+      "detail": "{\"items\":10,\"accept\":\"video/*\",\"addon\":\"10/10 photos · 0/3 videos\",\"addTile\":true}"
+    },
+    {
+      "name": "desktop: 11th photo rejected with clear error",
+      "pass": true,
+      "detail": ""
     },
     {
       "name": "desktop: search field below title row",
@@ -191,9 +306,9 @@
       "detail": "{\"h\":278,\"more\":\"+3\"}"
     },
     {
-      "name": "mobile: keyboard shrinks sheet; quickreact+compose visible; list scrolls",
+      "name": "mobile: full scrim, suggestions+compose align with keyboard, list scrolls",
       "pass": true,
-      "detail": "{\"ovH\":544,\"composeBottom\":544,\"quickVisible\":true,\"listScrolled\":true,\"listH\":296}"
+      "detail": "{\"pad\":\"300px\",\"fullH\":844,\"composeBottom\":544,\"suggVisible\":true,\"listScrolled\":true,\"listH\":301}"
     },
     {
       "name": "mobile: overlay tap closes sheet without navigating",
@@ -206,9 +321,29 @@
       "detail": ""
     },
     {
+      "name": "mobile: per-media like works in viewer",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile: photo comment stored with mediaIndex",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile: closing photo sheet keeps viewer open",
+      "pass": true,
+      "detail": ""
+    },
+    {
       "name": "mobile: swipe/scroll to 4/4",
       "pass": true,
       "detail": ""
+    },
+    {
+      "name": "mobile: phone-back closes viewer, stays on feed",
+      "pass": true,
+      "detail": "{\"modal\":false,\"path\":\"/\",\"layer\":null}"
     },
     {
       "name": "mobile: post-page compose above keyboard",
@@ -226,12 +361,22 @@
       "detail": ""
     },
     {
+      "name": "mobile: chooser + progress publishes to feed",
+      "pass": true,
+      "detail": ""
+    },
+    {
       "name": "mobile: drawer opens with faded overlay",
       "pass": true,
       "detail": "{\"open\":true,\"op\":\"1\"}"
     },
     {
-      "name": "mobile: drawer closes",
+      "name": "mobile: phone-back closes drawer",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile: drawer closes via overlay",
       "pass": true,
       "detail": ""
     },

@@ -163,6 +163,7 @@ export default function PostCard({ post, author, featured }: PostCardProps) {
             {author.verified && <VerifiedBadge />}
             <span className="post-handle">@{author.username}</span>
             <span className="post-time">{ago(post.ts, db.lang)}</span>
+            {post.audience === 'followers' && <span className="post-audience" title="Followers only">{IC.users}</span>}
             {post.edited && <span className="post-edited">· {t('edited')}</span>}
             <div className="post-menu-wrap">
               <button type="button" className="icon-btn post-menu-btn" aria-label="More" onClick={e => { e.stopPropagation(); setMenuOpen(v => !v); }}>
@@ -223,11 +224,11 @@ export default function PostCard({ post, author, featured }: PostCardProps) {
         </div>
       )}
       {selectedMediaIndex !== null && (
-        <MediaViewer media={media} initialIndex={selectedMediaIndex} onClose={() => setSelectedMediaIndex(null)} />
+        <MediaViewer media={media} initialIndex={selectedMediaIndex} onClose={() => setSelectedMediaIndex(null)} postId={post.id} />
       )}
 
       <div className="post-actions" onClick={e => e.stopPropagation()}>
-        <ReactionButton targetType="post" targetId={post.id} />
+        <ReactionButton targetType="post" targetId={post.id} extraCount={db.reactions.filter(r => r.targetType === 'media' && r.targetId.startsWith(`${post.id}#m`)).length} />
         <button
           type="button"
           className={`action-btn ${showComments ? 'on' : ''}`}
@@ -256,7 +257,7 @@ export default function PostCard({ post, author, featured }: PostCardProps) {
         </button>
       </div>
 
-      {!db.reactions.some(r => r.targetType === 'post' && r.targetId === post.id) && <small className="first-like">Be first one to like this.</small>}
+      {!db.reactions.some(r => (r.targetType === 'post' && r.targetId === post.id) || (r.targetType === 'media' && r.targetId.startsWith(`${post.id}#m`))) && <small className="first-like">Be first one to like this.</small>}
 
       {showComments && <Comments postId={post.id} onClose={() => setShowComments(false)} />}
 

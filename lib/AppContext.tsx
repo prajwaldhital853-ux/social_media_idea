@@ -22,8 +22,8 @@ interface AppContextType {
   deleteComment: (id: string) => void;
   toggleFollow: (targetId: string) => void;
   isFollowing: (targetId: string) => boolean;
-  react: (targetType: 'post' | 'comment', targetId: string, kind: ReactionKind) => void;
-  myReaction: (targetType: 'post' | 'comment', targetId: string) => ReactionKind | null;
+  react: (targetType: 'post' | 'comment' | 'media', targetId: string, kind: ReactionKind) => void;
+  myReaction: (targetType: 'post' | 'comment' | 'media', targetId: string) => ReactionKind | null;
   toggleSave: (pid: string) => void;
   isSaved: (pid: string) => boolean;
   notify: (uid: string, kind: NotificationKind, text: string, href?: string, actor?: string) => void;
@@ -158,12 +158,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }));
   };
 
-  const myReaction = (targetType: 'post' | 'comment', targetId: string) => {
+  const myReaction = (targetType: 'post' | 'comment' | 'media', targetId: string) => {
     if (!me) return null;
     return db.reactions.find(r => r.targetType === targetType && r.targetId === targetId && r.uid === me.id)?.kind || null;
   };
 
-  const react = (targetType: 'post' | 'comment', targetId: string, kind: ReactionKind) => {
+  const react = (targetType: 'post' | 'comment' | 'media', targetId: string, kind: ReactionKind) => {
     if (!me) return;
     const existing = myReaction(targetType, targetId);
     setDb(prev => {
@@ -171,9 +171,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (existing === kind) return { ...prev, reactions: rest };
       const ownerId = targetType === 'post'
         ? prev.posts.find(p => p.id === targetId)?.uid
-        : prev.comments.find(c => c.id === targetId)?.uid;
+        : targetType === 'media'
+          ? prev.posts.find(p => p.id === targetId.split('#m')[0])?.uid
+          : prev.comments.find(c => c.id === targetId)?.uid;
       const notifications = ownerId && ownerId !== me.id
-        ? [{ id: uid(), uid: ownerId, kind: 'reaction' as const, actor: me.id, text: `reacted ${kind} to your ${targetType}`, href: targetType === 'post' ? `/post/${targetId}` : undefined, ts: Date.now(), read: false }, ...prev.notifications]
+        ? [{ id: uid(), uid: ownerId, kind: 'reaction' as const, actor: me.id, text: `reacted ${kind} to your ${targetType === 'media' ? 'photo' : targetType}`, href: targetType === 'comment' ? undefined : `/post/${targetType === 'media' ? targetId.split('#m')[0] : targetId}`, ts: Date.now(), read: false }, ...prev.notifications]
         : prev.notifications;
       return { ...prev, reactions: [...rest, { id: uid(), targetType, targetId, uid: me.id, kind, ts: Date.now() }], notifications };
     });

@@ -1,4 +1,7 @@
-import { ReactionKind } from './types';
+import { Follow, Post, ReactionKind } from './types';
+
+export const canSeePost = (post: Post, meId: string | null, follows: Follow[]): boolean =>
+  post.audience !== 'followers' || post.uid === meId || (!!meId && follows.some(f => f.follower === meId && f.following === post.uid));
 
 export const esc = (s: string): string => {
   return String(s).replace(/[&<>"']/g, (c) => ({

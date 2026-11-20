@@ -4,17 +4,24 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import { createPortal } from 'react-dom';
 import { Media } from '@/lib/types';
 import { IC } from '@/lib/icons';
+import { useApp } from '@/lib/AppContext';
+import { useBackClose } from '@/lib/useBackClose';
+import ReactionButton from './ReactionButton';
+import Comments from './Comments';
 
 interface MediaViewerProps {
   media: Media[];
   initialIndex: number;
   onClose: () => void;
+  postId?: string;
 }
 
-export default function MediaViewer({ media, initialIndex, onClose }: MediaViewerProps) {
+export default function MediaViewer({ media, initialIndex, onClose, postId }: MediaViewerProps) {
+  const { db } = useApp();
   const start = Math.max(0, Math.min(initialIndex, media.length - 1));
   const [index, setIndex] = useState(start);
   const [closing, setClosing] = useState(false);
+  const [commentsOpen, setCommentsOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const videos = useRef<(HTMLVideoElement | null)[]>([]);
   const indexRef = useRef(start);
@@ -27,6 +34,8 @@ export default function MediaViewer({ media, initialIndex, onClose }: MediaViewe
     setClosing(true);
     closeTimer.current = setTimeout(onClose, 190);
   }, [onClose]);
+
+  useBackClose(true, requestClose);
 
   useEffect(() => () => { if (closeTimer.current) clearTimeout(closeTimer.current); }, []);
 
@@ -72,6 +81,8 @@ export default function MediaViewer({ media, initialIndex, onClose }: MediaViewe
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.closest('input, textarea, select, [contenteditable="true"], .comments-overlay, .reaction-tray')) return;
       if (e.key === 'Escape') requestClose();
       if (e.key === 'ArrowDown' || e.key === 'ArrowRight') { e.preventDefault(); go(indexRef.current + 1); }
       if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') { e.preventDefault(); go(indexRef.current - 1); }
@@ -104,7 +115,7 @@ export default function MediaViewer({ media, initialIndex, onClose }: MediaViewe
         {media.map((item, i) => (
           <div
             className="media-slide"
-            key={item.src || item.gen || i}
+            key={`${item.src || item.gen || ''}-${i}`}
             onClick={e => { if (e.target === e.currentTarget) requestClose(); }}
           >
             {item.type === 'video' ? (
@@ -149,6 +160,23 @@ export default function MediaViewer({ media, initialIndex, onClose }: MediaViewe
           )}
           <span className="media-viewer-hint">Scroll or swipe for more</span>
         </>
+      )}
+      {postId && (
+        <div className="media-viewer-actions" onClick={e => e.stopPropagation()}>
+          <ReactionButton targetType="media" targetId={`${postId}#m${index}`} />
+          <button
+            type="button"
+            className="action-btn media-comment-btn"
+            aria-label="Comment on this photo"
+            onClick={() => setCommentsOpen(true)}
+          >
+            {IC.msg}
+            <span>{db.comments.filter(c => c.pid === postId && c.mediaIndex === index && c.status === 'live').length || ''}</span>
+          </button>
+        </div>
+      )}
+      {postId && commentsOpen && (
+        <Comments postId={postId} mediaIndex={index} onClose={() => setCommentsOpen(false)} />
       )}
     </div>,
     document.body

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import AppShell from '@/components/AppShell';
 import { useApp } from '@/lib/AppContext';
@@ -8,6 +9,7 @@ import Avatar from '@/components/Avatar';
 import { IC } from '@/lib/icons';
 import { Media } from '@/lib/types';
 import { resizeImage, uid, videoDuration, fmtDur } from '@/lib/utils';
+import { useBackClose } from '@/lib/useBackClose';
 
 const PLACES = ['Kathmandu', 'Pokhara', 'Lalitpur', 'Bhaktapur', 'Chitwan', 'Butwal', 'Dharan', 'Nepalgunj'];
 const MOODS = [
@@ -21,6 +23,9 @@ const MOODS = [
   { emoji: '😴', label: 'tired' }
 ];
 const CHAR_LIMIT = 3000;
+const MAX_PHOTOS = 10;
+const MAX_VIDEOS = 3;
+const PROGRESS_STEPS = [2, 5, 20, 45, 70, 90, 100];
 
 export default function CreatePostPage() {
   const router = useRouter();
@@ -31,12 +36,18 @@ export default function CreatePostPage() {
   const [place, setPlace] = useState('');
   const [placeDraft, setPlaceDraft] = useState('');
   const [panel, setPanel] = useState<'location' | 'feeling' | null>(null);
+  const [audience, setAudience] = useState<'public' | 'followers'>('public');
+  const [audienceOpen, setAudienceOpen] = useState(false);
+  const [chooserOpen, setChooserOpen] = useState(false);
+  const [publishKind, setPublishKind] = useState<'post' | 'reel'>('post');
+  const [progress, setProgress] = useState<number | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const urls = useRef<string[]>([]);
   const published = useRef(false);
+  const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
 
   useEffect(() => {
     if (!me) router.replace('/login');
@@ -46,6 +57,7 @@ export default function CreatePostPage() {
     published.current = false;
     return () => {
       if (!published.current) urls.current.forEach(url => URL.revokeObjectURL(url));
+      timers.current.forEach(clearTimeout);
     };
   }, []);
 
@@ -55,6 +67,24 @@ export default function CreatePostPage() {
     el.style.height = 'auto';
     el.style.height = `${Math.min(el.scrollHeight, 320)}px`;
   }, [text]);
+
+  useBackClose(chooserOpen, () => setChooserOpen(false));
+
+  useEffect(() => {
+    if (!audienceOpen) return;
+    const onDown = (e: PointerEvent) => {
+      if (!(e.target as HTMLElement).closest('.audience-wrap')) setAudienceOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setAudienceOpen(false); };
+    document.addEventListener('pointerdown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => { document.removeEventListener('pointerdown', onDown); document.removeEventListener('keydown', onKey); };
+  }, [audienceOpen]);
+
+  const photoCount = media.filter(m => m.type === 'image').length;
+  const videoCount = media.filter(m => m.type === 'video').length;
+  const atCap = photoCount >= MAX_PHOTOS && videoCount >= MAX_VIDEOS;
+  const accept = photoCount >= MAX_PHOTOS ? 'video/*' : videoCount >= MAX_VIDEOS ? 'image/jpeg,image/png,image/webp' : 'image/jpeg,image/png,image/webp,video/*';
 
   const attach = async (files: FileList | null) => {
     if (!files?.length) return;
@@ -66,8 +96,8 @@ export default function CreatePostPage() {
         const video = file.type.startsWith('video/');
         if (!video && !['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) throw new Error('Choose a JPEG, PNG or WebP photo, or a video.');
         if (file.size > (video ? 100 : 10) * 1024 * 1024) throw new Error(video ? 'Videos must be under 100 MB.' : 'Photos must be under 10 MB.');
-        if (video && next.some(m => m.type === 'video')) throw new Error('One video per post — remove the current clip first.');
-        if (!video && next.filter(m => m.type === 'image').length >= 4) throw new Error('You can attach up to four photos.');
+        if (video && next.filter(m => m.type === 'video').length >= MAX_VIDEOS) throw new Error(`Up to ${MAX_VIDEOS} videos per post — remove a clip first.`);
+        if (!video && next.filter(m => m.type === 'image').length >= MAX_PHOTOS) throw new Error(`You can attach up to ${MAX_PHOTOS} photos.`);
         if (video) {
           const src = URL.createObjectURL(file);
           urls.current.push(src);
@@ -88,24 +118,33 @@ export default function CreatePostPage() {
 
   const removeMedia = (index: number) => setMedia(prev => prev.filter((_, i) => i !== index));
 
-  const canPost = !busy && (text.trim().length > 0 || media.length > 0);
+  const canPost = !busy && progress === null && (text.trim().length > 0 || media.length > 0);
 
-  const publish = () => {
+  const publish = (kind: 'post' | 'reel') => {
     if (!me || !canPost) return;
-    published.current = true;
-    addPost({
-      id: uid(),
-      uid: me.id,
-      kind: 'post',
-      text: text.trim(),
-      media,
-      ts: Date.now(),
-      status: 'live',
-      mood: mood || undefined,
-      place: place || undefined
+    setChooserOpen(false);
+    setPublishKind(kind);
+    setProgress(PROGRESS_STEPS[0]);
+    PROGRESS_STEPS.slice(1).forEach((step, i) => {
+      timers.current.push(setTimeout(() => setProgress(step), 230 * (i + 1)));
     });
-    showToast('Post published.');
-    router.push('/');
+    timers.current.push(setTimeout(() => {
+      published.current = true;
+      addPost({
+        id: uid(),
+        uid: me.id,
+        kind,
+        text: text.trim(),
+        media,
+        ts: Date.now(),
+        status: 'live',
+        audience,
+        mood: mood || undefined,
+        place: place || undefined
+      });
+      showToast(kind === 'reel' ? 'Reel published.' : 'Post published.');
+      router.push('/');
+    }, 230 * PROGRESS_STEPS.length + 260));
   };
 
   if (!me) return null;
@@ -118,7 +157,7 @@ export default function CreatePostPage() {
         <header className="create-post-header">
           <button type="button" className="icon-btn" aria-label="Back" onClick={() => router.back()}>{IC.back}</button>
           <h1>Create post</h1>
-          <button type="button" className="post-btn-header" onClick={publish} disabled={!canPost}>Post</button>
+          <button type="button" className="post-btn-header" onClick={() => setChooserOpen(true)} disabled={!canPost}>Post</button>
         </header>
 
         <div className="create-post-body">
@@ -126,7 +165,31 @@ export default function CreatePostPage() {
             <Avatar user={me} size={44} />
             <div>
               <b className="create-post-name">{me.name}</b>
-              <span className="create-audience">{IC.globe} Public</span>
+              <div className="audience-wrap">
+                <button
+                  type="button"
+                  className="create-audience"
+                  aria-expanded={audienceOpen}
+                  aria-haspopup="menu"
+                  onClick={() => setAudienceOpen(v => !v)}
+                >
+                  {audience === 'public' ? IC.globe : IC.users}
+                  {audience === 'public' ? 'Public' : 'Followers'}
+                  {IC.chev}
+                </button>
+                {audienceOpen && (
+                  <div className="audience-menu" role="menu" onClick={e => e.stopPropagation()}>
+                    <button type="button" role="menuitemradio" aria-checked={audience === 'public'} className={audience === 'public' ? 'on' : ''} onClick={() => { setAudience('public'); setAudienceOpen(false); }}>
+                      {IC.globe}
+                      <span><b>Public</b><small>Anyone on Exposing</small></span>
+                    </button>
+                    <button type="button" role="menuitemradio" aria-checked={audience === 'followers'} className={audience === 'followers' ? 'on' : ''} onClick={() => { setAudience('followers'); setAudienceOpen(false); }}>
+                      {IC.users}
+                      <span><b>Followers</b><small>Only people who follow you</small></span>
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
@@ -138,6 +201,10 @@ export default function CreatePostPage() {
             onChange={e => setText(e.target.value)}
             maxLength={CHAR_LIMIT}
             aria-label="Post caption"
+            autoComplete="off"
+            autoCorrect="on"
+            spellCheck={false}
+            name="post-caption"
           />
 
           {(mood || place) && (
@@ -160,7 +227,7 @@ export default function CreatePostPage() {
 
           <div className={`create-media ${media.length === 1 ? 'single' : ''}`}>
             {media.map((item, i) => (
-              <div className="create-media-item" key={item.src || i}>
+              <div className="create-media-item" key={`${item.type}-${item.src || item.gen || ''}-${i}`}>
                 {item.type === 'video' ? (
                   <>
                     <video src={item.src} muted playsInline preload="metadata" />
@@ -172,7 +239,7 @@ export default function CreatePostPage() {
                 <button type="button" className="remove-media-btn" aria-label={`Remove attachment ${i + 1}`} onClick={() => removeMedia(i)}>{IC.x}</button>
               </div>
             ))}
-            {media.length < 5 && (
+            {!atCap && (
               <button type="button" className="create-media-add" disabled={busy} onClick={() => fileRef.current?.click()}>
                 <span className="create-media-plus">{IC.plus}</span>
                 <span>Photo/video</span>
@@ -183,14 +250,16 @@ export default function CreatePostPage() {
           <div className="create-addons">
             <div className="create-addons-title">Add to your post</div>
 
-            <button type="button" className="create-addon-row" onClick={() => fileRef.current?.click()} disabled={busy}>
-              <span className="addon-bubble green">{IC.img}</span>
-              <span className="addon-copy">
-                <b>Photos/videos</b>
-                <small>{media.length ? `${media.length} attached` : 'Up to 4 photos or one clip'}</small>
-              </span>
-              <span className="addon-go">{IC.plus}</span>
-            </button>
+            {!atCap && (
+              <button type="button" className="create-addon-row" onClick={() => fileRef.current?.click()} disabled={busy}>
+                <span className="addon-bubble green">{IC.img}</span>
+                <span className="addon-copy">
+                  <b>Photos/videos</b>
+                  <small>{media.length ? `${photoCount}/${MAX_PHOTOS} photos · ${videoCount}/${MAX_VIDEOS} videos` : `Up to ${MAX_PHOTOS} photos + ${MAX_VIDEOS} videos`}</small>
+                </span>
+                <span className="addon-go">{IC.plus}</span>
+              </button>
+            )}
 
             <button
               type="button"
@@ -211,6 +280,7 @@ export default function CreatePostPage() {
               <div className="addon-panel-inner">
                 <form
                   className="place-form"
+                  autoComplete="off"
                   onSubmit={e => {
                     e.preventDefault();
                     if (placeDraft.trim()) { setPlace(placeDraft.trim()); setPanel(null); }
@@ -218,8 +288,10 @@ export default function CreatePostPage() {
                 >
                   <input
                     type="text"
-                    name="location"
+                    name="place-tag"
                     autoComplete="off"
+                    autoCorrect="off"
+                    spellCheck={false}
                     enterKeyHint="done"
                     placeholder="Search or type a place…"
                     value={placeDraft}
@@ -271,17 +343,57 @@ export default function CreatePostPage() {
 
         <footer className="create-post-footer">
           <span className={`char-count ${text.length > CHAR_LIMIT - 100 ? 'warning' : ''}`}>{text.length}/{CHAR_LIMIT}</span>
-          <button type="button" className="create-publish" onClick={publish} disabled={!canPost}>Post</button>
+          <button type="button" className="create-publish" onClick={() => setChooserOpen(true)} disabled={!canPost}>Post</button>
         </footer>
 
         <input
           ref={fileRef}
           type="file"
-          accept="image/jpeg,image/png,image/webp,video/*"
+          accept={accept}
           multiple
           hidden
           onChange={e => { void attach(e.target.files); e.target.value = ''; }}
         />
+
+        {chooserOpen && createPortal(
+          <div className="chooser-overlay" onClick={() => setChooserOpen(false)}>
+            <div className="chooser-card" role="dialog" aria-modal="true" aria-label="Choose post type" onClick={e => e.stopPropagation()}>
+              <div className="chooser-grip" />
+              <h2>Share as</h2>
+              <div className="chooser-options">
+                <button type="button" onClick={() => publish('post')}>
+                  <span className="chooser-icon post">{IC.img}</span>
+                  <span className="chooser-copy"><b>Post</b><small>Share to the feed with photos, videos and text</small></span>
+                  <span className="chooser-go">{IC.chev}</span>
+                </button>
+                <button type="button" disabled={videoCount === 0} onClick={() => publish('reel')}>
+                  <span className="chooser-icon reel">{IC.video}</span>
+                  <span className="chooser-copy"><b>Reel</b><small>{videoCount === 0 ? 'Attach a video first to publish a reel' : 'Short vertical video for the Video tab'}</small></span>
+                  <span className="chooser-go">{IC.chev}</span>
+                </button>
+              </div>
+              <button type="button" className="chooser-cancel" onClick={() => setChooserOpen(false)}>Cancel</button>
+            </div>
+          </div>,
+          document.body
+        )}
+
+        {progress !== null && createPortal(
+          <div className="publish-overlay" role="alertdialog" aria-modal="true" aria-label="Publishing">
+            <div className="publish-card">
+              <div className="publish-ring">
+                <svg viewBox="0 0 80 80" aria-hidden="true">
+                  <circle className="publish-ring-track" cx="40" cy="40" r="34" />
+                  <circle className="publish-ring-fill" cx="40" cy="40" r="34" strokeDasharray={2 * Math.PI * 34} strokeDashoffset={2 * Math.PI * 34 * (1 - progress / 100)} />
+                </svg>
+                <span className="publish-pct">{progress}%</span>
+              </div>
+              <b>Publishing your {publishKind === 'reel' ? 'reel' : 'post'}…</b>
+              <small>{progress < 45 ? 'Preparing media' : progress < 90 ? 'Uploading to your feed' : 'Almost there'}</small>
+            </div>
+          </div>,
+          document.body
+        )}
       </div>
     </AppShell>
   );

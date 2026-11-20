@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import PostCard from '@/components/PostCard';
 import { useApp } from '@/lib/AppContext';
+import { canSeePost } from '@/lib/utils';
 import ThemeToggle from './ThemeToggle';
 
 export default function Feed() {
@@ -11,7 +12,7 @@ export default function Feed() {
   const [tab, setTab] = useState<'foryou' | 'following'>('foryou');
   const followingIds = new Set(db.follows.filter(f => f.follower === me?.id).map(f => f.following));
   const visiblePosts = db.posts
-    .filter(p => (p.status === 'live' || me?.id === p.uid || isStaff()) && (tab !== 'following' || followingIds.has(p.uid)))
+    .filter(p => (p.status === 'live' || me?.id === p.uid || isStaff()) && canSeePost(p, me?.id ?? null, db.follows) && (tab !== 'following' || followingIds.has(p.uid)))
     .sort((a, b) => b.ts - a.ts);
 
   return (
