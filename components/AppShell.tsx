@@ -11,6 +11,7 @@ import SiteFooter from './SiteFooter';
 import Toast from './Toast';
 import Avatar from './Avatar';
 import CreatePostModal from './CreatePostModal';
+import CreateChooser from './CreateChooser';
 import { IC } from '@/lib/icons';
 import { compact } from '@/lib/utils';
 
@@ -127,6 +128,7 @@ export default function AppShell({ children }: AppShellProps) {
       <Drawer />
       <MobileNav />
       <CreatePostModal />
+      <CreateChooser />
       <Toast />
     </div>
   );

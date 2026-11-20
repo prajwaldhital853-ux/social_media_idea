@@ -47,6 +47,9 @@ interface AppContextType {
   composerPostId: string | null | undefined;
   openComposer: (postId?: string | null) => void;
   closeComposer: () => void;
+  createChooserOpen: boolean;
+  openCreateChooser: () => void;
+  closeCreateChooser: () => void;
   toast: string | null;
   showToast: (msg: string) => void;
 }
@@ -76,6 +79,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [theme, setTheme] = useState<ThemeMode>('light');
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [composerPostId, setComposerPostId] = useState<string | null | undefined>(undefined);
+  const [createChooserOpen, setCreateChooserOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
   // Close drawer when navigation occurs
@@ -91,7 +95,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (mounted) save(db);
+    if (mounted && !save(db)) setToast('Device storage is full — the latest change may not persist.');
   }, [db, mounted]);
 
   useEffect(() => {
@@ -314,6 +318,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         composerPostId,
         openComposer: (postId = null) => setComposerPostId(postId),
         closeComposer: () => setComposerPostId(undefined),
+        createChooserOpen,
+        openCreateChooser: () => setCreateChooserOpen(true),
+        closeCreateChooser: () => setCreateChooserOpen(false),
         toast, showToast
       }}
     >

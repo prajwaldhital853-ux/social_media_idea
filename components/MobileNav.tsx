@@ -10,7 +10,7 @@ import ThemeToggle from './ThemeToggle';
 export default function MobileNav() {
   const pathname = usePathname();
   const router = useRouter();
-  const { me, db, openDrawer, t, feature } = useApp();
+  const { me, db, openDrawer, t, feature, openCreateChooser } = useApp();
   const focusedPage = pathname.startsWith('/post/') || pathname === '/explore' || pathname === '/create';
   const [compactPost, setCompactPost] = useState(false);
   const unread = me ? db.notifications.filter(n => n.uid === me.id && !n.read).length : 0;
@@ -53,7 +53,7 @@ export default function MobileNav() {
       <button 
         type="button" 
         className={`post-fab ${compactPost ? 'is-compact' : ''}`} 
-        onClick={() => me ? router.push('/create') : router.push('/login')} 
+        onClick={() => me ? openCreateChooser() : router.push('/login')} 
         aria-label="Create post or reel" 
         aria-haspopup="dialog"
       >

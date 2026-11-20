@@ -16,8 +16,8 @@ export function load(): Database | null {
   return null;
 }
 
-export function save(db: Database): void {
-  if (typeof window === 'undefined') return;
+export function save(db: Database): boolean {
+  if (typeof window === 'undefined') return true;
   try {
     const copy = JSON.parse(JSON.stringify(db, (k, v) => {
       return (k === 'src' && typeof v === 'string' && v.indexOf('blob:') === 0) ? undefined : v;
@@ -26,8 +26,10 @@ export function save(db: Database): void {
       p.media = (p.media || []).filter((m: any) => m.src || m.gen);
     });
     localStorage.setItem(KEY, JSON.stringify(copy));
+    return true;
   } catch (e) {
     console.error('Failed to save to localStorage:', e);
+    return false;
   }
 }
 

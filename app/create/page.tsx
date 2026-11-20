@@ -8,7 +8,8 @@ import { useApp } from '@/lib/AppContext';
 import Avatar from '@/components/Avatar';
 import { IC } from '@/lib/icons';
 import { Media } from '@/lib/types';
-import { resizeImage, uid, videoDuration, fmtDur } from '@/lib/utils';
+import { resizeImage, uid, videoDuration, fmtDur, fileToDataUrl } from '@/lib/utils';
+import { takeCreateDraft } from '@/lib/draftMedia';
 import { useBackClose } from '@/lib/useBackClose';
 
 const PLACES = ['Kathmandu', 'Pokhara', 'Lalitpur', 'Bhaktapur', 'Chitwan', 'Butwal', 'Dharan', 'Nepalgunj'];
@@ -38,6 +39,7 @@ export default function CreatePostPage() {
   const [panel, setPanel] = useState<'location' | 'feeling' | null>(null);
   const [audience, setAudience] = useState<'public' | 'followers'>('public');
   const [audienceOpen, setAudienceOpen] = useState(false);
+  const [kind, setKind] = useState<'post' | 'reel'>('post');
   const [chooserOpen, setChooserOpen] = useState(false);
   const [publishKind, setPublishKind] = useState<'post' | 'reel'>('post');
   const [progress, setProgress] = useState<number | null>(null);
@@ -45,8 +47,6 @@ export default function CreatePostPage() {
   const [busy, setBusy] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
-  const urls = useRef<string[]>([]);
-  const published = useRef(false);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
 
   useEffect(() => {
@@ -54,9 +54,12 @@ export default function CreatePostPage() {
   }, [me, router]);
 
   useEffect(() => {
-    published.current = false;
+    const draft = takeCreateDraft();
+    if (draft) {
+      setMedia(draft.media);
+      setKind(draft.kind);
+    }
     return () => {
-      if (!published.current) urls.current.forEach(url => URL.revokeObjectURL(url));
       timers.current.forEach(clearTimeout);
     };
   }, []);
@@ -95,12 +98,11 @@ export default function CreatePostPage() {
       for (const file of Array.from(files)) {
         const video = file.type.startsWith('video/');
         if (!video && !['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) throw new Error('Choose a JPEG, PNG or WebP photo, or a video.');
-        if (file.size > (video ? 100 : 10) * 1024 * 1024) throw new Error(video ? 'Videos must be under 100 MB.' : 'Photos must be under 10 MB.');
+        if (file.size > (video ? 5 : 10) * 1024 * 1024) throw new Error(video ? 'Videos must be under 5 MB.' : 'Photos must be under 10 MB.');
         if (video && next.filter(m => m.type === 'video').length >= MAX_VIDEOS) throw new Error(`Up to ${MAX_VIDEOS} videos per post — remove a clip first.`);
         if (!video && next.filter(m => m.type === 'image').length >= MAX_PHOTOS) throw new Error(`You can attach up to ${MAX_PHOTOS} photos.`);
         if (video) {
-          const src = URL.createObjectURL(file);
-          urls.current.push(src);
+          const src = await fileToDataUrl(file);
           const dur = await videoDuration(src);
           if (!Number.isFinite(dur) || dur > 60) throw new Error('Choose a video up to 60 seconds long.');
           next.push({ type: 'video', src, dur });
@@ -129,7 +131,6 @@ export default function CreatePostPage() {
       timers.current.push(setTimeout(() => setProgress(step), 230 * (i + 1)));
     });
     timers.current.push(setTimeout(() => {
-      published.current = true;
       addPost({
         id: uid(),
         uid: me.id,
@@ -156,7 +157,7 @@ export default function CreatePostPage() {
       <div className="create-post-page">
         <header className="create-post-header">
           <button type="button" className="icon-btn" aria-label="Back" onClick={() => router.back()}>{IC.back}</button>
-          <h1>Create post</h1>
+          <h1>{kind === 'reel' ? 'Create reel' : 'Create post'}</h1>
           <button type="button" className="post-btn-header" onClick={() => setChooserOpen(true)} disabled={!canPost}>Post</button>
         </header>
 

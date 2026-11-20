@@ -9,7 +9,7 @@ import ThemeToggle from './ThemeToggle';
 import { IC } from '@/lib/icons';
 
 export default function NavRail() {
-  const { me, isAdmin, logout, openDrawer, t, feature } = useApp();
+  const { me, isAdmin, logout, openDrawer, t, feature, openCreateChooser } = useApp();
   const pathname = usePathname();
   const router = useRouter();
 
@@ -46,7 +46,7 @@ export default function NavRail() {
       <button 
         type="button" 
         className="post-btn" 
-        onClick={() => me ? router.push('/create') : router.push('/login')}
+        onClick={() => me ? openCreateChooser() : router.push('/login')}
       >
         {IC.plus}
         <span>{t('post')}</span>

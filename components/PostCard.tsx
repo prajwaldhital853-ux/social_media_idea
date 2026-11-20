@@ -10,7 +10,6 @@ import { useApp } from '@/lib/AppContext';
 import Avatar from './Avatar';
 import VerifiedBadge from './VerifiedBadge';
 import PostVideo from './PostVideo';
-import MediaViewer from './MediaViewer';
 import ReactionButton from './ReactionButton';
 import ReportModal from './ReportModal';
 import PromoteModal from './PromoteModal';
@@ -77,7 +76,6 @@ export default function PostCard({ post, author, featured }: PostCardProps) {
   const [promoting, setPromoting] = useState(false);
   const [whyOpen, setWhyOpen] = useState(false);
   const [promoHidden, setPromoHidden] = useState(false);
-  const [selectedMediaIndex, setSelectedMediaIndex] = useState<number | null>(null);
 
   const promo = activePromo('post', post.id);
   const own = me?.id === post.uid;
@@ -91,6 +89,7 @@ export default function PostCard({ post, author, featured }: PostCardProps) {
   if (promo && !own && !promoEligible(promo)) return null;
 
   const openPost = () => router.push(`/post/${post.id}`);
+  const openMedia = (index: number) => router.push(`/post/${post.id}/media/${index}`);
 
   const handleShare = async (e?: React.MouseEvent, copyOnly = false) => {
     e?.preventDefault();
@@ -203,28 +202,24 @@ export default function PostCard({ post, author, featured }: PostCardProps) {
                 <PostVideo
                   src={item.src || ''}
                   duration={item.dur}
-                  autoPlay={single}
-                  onOpen={single ? undefined : () => setSelectedMediaIndex(index)}
+                  onOpen={single ? undefined : () => openMedia(index)}
                 />
               ) : (
                 <img
                   src={item.src || item.gen}
                   alt=""
                   loading="lazy"
-                  onClick={() => setSelectedMediaIndex(index)}
+                  onClick={() => openMedia(index)}
                 />
               )}
               {extra > 0 && index === shown.length - 1 && (
-                <button type="button" className="media-more" onClick={() => setSelectedMediaIndex(index)} aria-label={`View ${extra} more attachments`}>
+                <button type="button" className="media-more" onClick={() => openMedia(index)} aria-label={`View ${extra} more attachments`}>
                   +{extra}
                 </button>
               )}
             </div>
           ))}
         </div>
-      )}
-      {selectedMediaIndex !== null && (
-        <MediaViewer media={media} initialIndex={selectedMediaIndex} onClose={() => setSelectedMediaIndex(null)} postId={post.id} />
       )}
 
       <div className="post-actions" onClick={e => e.stopPropagation()}>

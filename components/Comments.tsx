@@ -170,7 +170,7 @@ export default function Comments({ postId, onClose, mediaIndex }: { postId: stri
           <div className="comment-meta">
             <time>{ago(comment.ts, db.lang)}</time>
             <ReactionButton targetType="comment" targetId={comment.id} small kinds={postKinds.length ? postKinds : undefined} />
-            <button type="button" className="comment-action-btn" onClick={() => handleReply(comment, author.name, isReply)}>
+            <button type="button" className="comment-action-btn" onPointerDown={e => e.preventDefault()} onClick={() => handleReply(comment, author.name, isReply)}>
               Reply
             </button>
             {me?.id === comment.uid && (
@@ -185,6 +185,7 @@ export default function Comments({ postId, onClose, mediaIndex }: { postId: stri
                 type="button"
                 className={`view-replies ${threadOpen ? 'open' : ''}`}
                 aria-expanded={threadOpen}
+                onPointerDown={e => e.preventDefault()}
                 onClick={() => {
                   setOpenThreads(prev => ({ ...prev, [comment.id]: !threadOpen }));
                   if (!threadOpen) setThreadLimit(prev => ({ ...prev, [comment.id]: prev[comment.id] || PAGE }));
@@ -198,7 +199,7 @@ export default function Comments({ postId, onClose, mediaIndex }: { postId: stri
                 <div className="comment-replies">
                   {shownReplies.map(reply => renderComment(reply, true))}
                   {replies.length > limit && (
-                    <button type="button" className="view-more-replies" onClick={() => setThreadLimit(prev => ({ ...prev, [comment.id]: limit + PAGE }))}>
+                    <button type="button" className="view-more-replies" onPointerDown={e => e.preventDefault()} onClick={() => setThreadLimit(prev => ({ ...prev, [comment.id]: limit + PAGE }))}>
                       View more replies ({replies.length - limit})
                     </button>
                   )}
@@ -248,6 +249,7 @@ export default function Comments({ postId, onClose, mediaIndex }: { postId: stri
                   title={t(kind)}
                   aria-label={t(kind)}
                   aria-pressed={myPostReaction === kind}
+                  onPointerDown={e => e.preventDefault()}
                   onClick={() => react(targetType, targetId, kind)}
                 >
                   <ReactionIcon kind={kind} />
@@ -277,25 +279,25 @@ export default function Comments({ postId, onClose, mediaIndex }: { postId: stri
           {sheet && (
             <div className="comments-suggestions" role="group" aria-label="Quick suggestions">
               {quickKinds.map(kind => (
-                <button key={kind} type="button" className="suggest-emoji" aria-label={`Insert ${reactionMeta(kind).label} emoji`} onClick={() => insertEmoji(reactionMeta(kind).emoji)}>
+                <button key={kind} type="button" className="suggest-emoji" aria-label={`Insert ${reactionMeta(kind).label} emoji`} onPointerDown={e => e.preventDefault()} onClick={() => insertEmoji(reactionMeta(kind).emoji)}>
                   <span>{reactionMeta(kind).emoji}</span>
                 </button>
               ))}
               {SUGGESTIONS.map(s => (
-                <button key={s} type="button" className="suggest-chip" onClick={() => appendToken(s)}>{s}</button>
+                <button key={s} type="button" className="suggest-chip" onPointerDown={e => e.preventDefault()} onClick={() => appendToken(s)}>{s}</button>
               ))}
             </div>
           )}
           {replyingTo && (
             <div className="reply-banner">
               <span>Replying to <b>{replyingTo.name}</b></span>
-              <button type="button" aria-label="Cancel reply" onClick={() => { setReplyingTo(null); setText(''); }}>{IC.x}</button>
+              <button type="button" aria-label="Cancel reply" onPointerDown={e => e.preventDefault()} onClick={() => { setReplyingTo(null); setText(''); inputRef.current?.focus(); }}>{IC.x}</button>
             </div>
           )}
           {emojiOpen && (
             <div className="emoji-picker" role="dialog" aria-label="Choose emoji">
               {EMOJIS.map(em => (
-                <button key={em} type="button" aria-label={`Insert ${em}`} onClick={() => insertEmoji(em)}>{em}</button>
+                <button key={em} type="button" aria-label={`Insert ${em}`} onPointerDown={e => e.preventDefault()} onClick={() => insertEmoji(em)}>{em}</button>
               ))}
             </div>
           )}
@@ -316,8 +318,8 @@ export default function Comments({ postId, onClose, mediaIndex }: { postId: stri
               value={text}
               onChange={e => setText(e.target.value)}
             />
-            <button type="button" className="emoji-btn" aria-label="Emoji" aria-expanded={emojiOpen} onClick={() => setEmojiOpen(v => !v)}>{IC.smile}</button>
-            <button type="submit" aria-label="Send comment" disabled={!text.trim()}>
+            <button type="button" className="emoji-btn" aria-label="Emoji" aria-expanded={emojiOpen} onPointerDown={e => e.preventDefault()} onClick={() => { setEmojiOpen(v => !v); inputRef.current?.focus(); }}>{IC.smile}</button>
+            <button type="submit" aria-label="Send comment" disabled={!text.trim()} onPointerDown={e => e.preventDefault()}>
               {IC.send}
             </button>
           </div>

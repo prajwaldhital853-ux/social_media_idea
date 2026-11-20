@@ -23,7 +23,7 @@
     {
       "name": "desktop: p_mix stack n5, 5 cells, +3",
       "pass": true,
-      "detail": "{\"cls\":\"media-mosaic stack n5\",\"cells\":5,\"more\":\"+3\",\"preview\":true,\"previewPaused\":true,\"h\":338}"
+      "detail": "{\"cls\":\"media-mosaic stack n5\",\"cells\":5,\"more\":\"+3\",\"preview\":true,\"previewPaused\":true}"
     },
     {
       "name": "desktop: mixed video is paused preview",
@@ -31,14 +31,24 @@
       "detail": ""
     },
     {
-      "name": "desktop: single video autoplays muted+loop",
+      "name": "desktop: single video autoplays with sound + loop",
       "pass": true,
-      "detail": "{\"paused\":false,\"muted\":true,\"ready\":4,\"loop\":true}"
+      "detail": "{\"paused\":false,\"muted\":false,\"loop\":true}"
     },
     {
-      "name": "desktop: viewer opens at 1/8 and plays video",
+      "name": "desktop: video pauses when scrolled off-screen",
       "pass": true,
-      "detail": "{\"count\":\"1 / 8\",\"playing\":true,\"slides\":8}"
+      "detail": ""
+    },
+    {
+      "name": "desktop: video resumes when back in view",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop: media opens as separate route at 1/8, video plays with sound",
+      "pass": true,
+      "detail": "{\"path\":\"/post/p_mix/media/0\",\"count\":\"1 / 8\",\"playing\":true,\"muted\":false,\"slides\":8,\"snap\":\"y mandatory\"}"
     },
     {
       "name": "desktop: ArrowDown advances to 2/8",
@@ -46,7 +56,7 @@
       "detail": ""
     },
     {
-      "name": "desktop: viewer has per-media action bar",
+      "name": "desktop: per-media action bar (like/comment/share)",
       "pass": true,
       "detail": ""
     },
@@ -56,9 +66,9 @@
       "detail": ""
     },
     {
-      "name": "desktop: photo comment sheet layers above viewer",
+      "name": "desktop: photo comment sheet layers above media page",
       "pass": true,
-      "detail": "{\"sheetZ\":\"1450\",\"modalZ\":\"1400\",\"sheetVisible\":true}"
+      "detail": "{\"sheetZ\":\"1450\",\"pageZ\":\"1200\",\"sheetVisible\":true}"
     },
     {
       "name": "desktop: photo comment stored with mediaIndex",
@@ -66,9 +76,14 @@
       "detail": ""
     },
     {
-      "name": "desktop: Escape closes photo sheet, viewer stays",
+      "name": "desktop: Escape closes photo sheet, media page stays",
       "pass": true,
       "detail": ""
+    },
+    {
+      "name": "desktop: phone-back returns to feed without reload",
+      "pass": true,
+      "detail": "{\"path\":\"/\",\"marker\":true,\"page\":false}"
     },
     {
       "name": "desktop: post totals include per-media comments+reactions",
@@ -76,19 +91,19 @@
       "detail": "{\"commentSpan\":\"5\",\"reactSpan\":\"9\",\"totalComments\":5,\"totalReactions\":9}"
     },
     {
-      "name": "desktop: 3rd photo opens viewer at 3/4",
+      "name": "desktop: 3rd photo opens media page at 3/4",
       "pass": true,
       "detail": ""
     },
     {
-      "name": "desktop: viewer pushed a history layer",
+      "name": "desktop: swipe down advances one slide to 4/4",
       "pass": true,
       "detail": ""
     },
     {
-      "name": "desktop: phone-back closes viewer without reload, stays on feed",
+      "name": "desktop: swipe up returns to previous slide 3/4 (not top)",
       "pass": true,
-      "detail": "{\"modal\":false,\"marker\":true,\"path\":\"/\",\"layer\":null}"
+      "detail": ""
     },
     {
       "name": "desktop: scroll reaches 4/4",
@@ -96,9 +111,14 @@
       "detail": ""
     },
     {
+      "name": "desktop: back from media page lands on feed",
+      "pass": true,
+      "detail": ""
+    },
+    {
       "name": "desktop: suggestion emojis mirror post kinds",
       "pass": true,
-      "detail": "{\"kinds\":[\"haha\",\"like\",\"love\",\"sad\",\"wow\"],\"suggestKinds\":[\"haha\",\"like\",\"love\",\"sad\",\"wow\"],\"head\":5,\"chips\":[\"Nice!\",\"Beautiful!\",\"Congrats!\",\"Love this!\",\"Amazing!\",\"So good!\",\"Well done!\"],\"rowScrollable\":true,\"inputAutocomplete\":\"off\"}"
+      "detail": "{\"kinds\":[\"haha\",\"like\",\"love\",\"sad\",\"wow\"],\"suggestKinds\":[\"haha\",\"like\",\"love\",\"sad\",\"wow\"],\"head\":5,\"chips\":[\"Nice!\",\"Beautiful!\",\"Congrats!\",\"Love this!\",\"Amazing!\",\"So good!\",\"Well done!\"],\"rowScrollable\":true,\"rowScrollbar\":\"none\",\"inputAutocomplete\":\"off\"}"
     },
     {
       "name": "desktop: heading shows post reaction icons",
@@ -111,22 +131,37 @@
       "detail": ""
     },
     {
+      "name": "desktop: suggestion row scrollbar hidden",
+      "pass": true,
+      "detail": "none"
+    },
+    {
       "name": "desktop: comment input disables autofill",
       "pass": true,
       "detail": ""
     },
     {
-      "name": "desktop: chip fills field, does not auto-post",
+      "name": "desktop: chip fills field, keeps focus + keyboard, no auto-post",
       "pass": true,
-      "detail": "{\"val\":\"Nice!\",\"count\":21}"
+      "detail": "{\"active\":\"INPUT\",\"isInput\":true,\"val\":\"Nice!\",\"kb\":\"380px\",\"count\":21}"
     },
     {
-      "name": "desktop: emoji picker inserts emoji into field",
+      "name": "desktop: emoji picker opens + inserts without dropping keyboard",
+      "pass": true,
+      "detail": "{\"pickerFocus\":true,\"isInput\":true,\"val\":\"Nice!🔥\",\"kb\":\"380px\"}"
+    },
+    {
+      "name": "desktop: Escape closes picker, keeps sheet",
       "pass": true,
       "detail": ""
     },
     {
-      "name": "desktop: Escape closes picker, keeps sheet",
+      "name": "desktop: scrim = visible viewport, compose sits on keyboard edge",
+      "pass": true,
+      "detail": "{\"top\":0,\"fullH\":520,\"composeBottom\":499.1875,\"listScrolled\":true,\"composeVisible\":true}"
+    },
+    {
+      "name": "desktop: first-open focus + keyboard keeps compose visible",
       "pass": true,
       "detail": ""
     },
@@ -176,11 +211,6 @@
       "detail": ""
     },
     {
-      "name": "desktop: full scrim + compose tracks keyboard, list scrolls",
-      "pass": true,
-      "detail": "{\"pad\":\"380px\",\"fullH\":900,\"composeBottom\":499.1875,\"listScrolled\":true,\"composeVisible\":true}"
-    },
-    {
       "name": "desktop: phone-back closes comment sheet",
       "pass": true,
       "detail": ""
@@ -206,9 +236,39 @@
       "detail": ""
     },
     {
+      "name": "desktop: + button opens Post/Reels chooser",
+      "pass": true,
+      "detail": "[\"Post\",\"Reels\"]"
+    },
+    {
+      "name": "desktop: chooser Post lands on create page",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop: Reels gallery pick auto-attaches clip in reel mode",
+      "pass": true,
+      "detail": "{\"path\":\"/create\",\"title\":\"Create reel\",\"videos\":1,\"chooserGone\":true}"
+    },
+    {
+      "name": "desktop: publish chooser offers Post + enabled Reel",
+      "pass": true,
+      "detail": "{\"options\":[\"Post\",\"Reel\"],\"reelEnabled\":true}"
+    },
+    {
+      "name": "desktop: publish ring stages % and labels reel",
+      "pass": true,
+      "detail": "2% -> 45% / Publishing your reel…"
+    },
+    {
+      "name": "desktop: reel published with kind reel",
+      "pass": true,
+      "detail": ""
+    },
+    {
       "name": "desktop: textarea capped at 320px",
       "pass": true,
-      "detail": "h=205"
+      "detail": ""
     },
     {
       "name": "desktop: location panel opens",
@@ -231,24 +291,14 @@
       "detail": ""
     },
     {
-      "name": "desktop: post/reel chooser appears, reel gated on video",
-      "pass": true,
-      "detail": "{\"options\":[\"Post\",\"Reel\"],\"reelDisabled\":true}"
-    },
-    {
-      "name": "desktop: publish shows spinner ring with staged %",
-      "pass": true,
-      "detail": "2% -> 45%"
-    },
-    {
       "name": "desktop: publish returns home with new post + tags",
       "pass": true,
       "detail": "{\"text\":true,\"tags\":2}"
     },
     {
-      "name": "desktop: create footer above keyboard, body scrolls",
+      "name": "desktop: create footer above keyboard",
       "pass": true,
-      "detail": "{\"pageH\":520,\"footerBottom\":520,\"bodyScrollable\":true}"
+      "detail": "{\"pageH\":520,\"footerBottom\":520}"
     },
     {
       "name": "desktop: audience menu offers Public + Followers",
@@ -263,7 +313,7 @@
     {
       "name": "desktop: followers-only post published with badge, visible to owner",
       "pass": true,
-      "detail": "{\"id\":\"31boxik2\",\"audience\":\"followers\",\"badge\":true,\"visibleToOwner\":true}"
+      "detail": "{\"id\":\"u2u3586x\",\"audience\":\"followers\",\"badge\":true,\"visibleToOwner\":true}"
     },
     {
       "name": "desktop: followers-only post hidden from non-follower (feed + detail)",
@@ -281,9 +331,59 @@
       "detail": ""
     },
     {
+      "name": "desktop: reels page = video-only snap feed with sound on",
+      "pass": true,
+      "detail": "{\"slides\":4,\"playing\":true,\"muted\":false,\"snap\":\"y mandatory\",\"rail\":true,\"onlyVideos\":true,\"caption\":true,\"noFeedCards\":true}"
+    },
+    {
+      "name": "desktop: double-tap right seeks +10s with badge",
+      "pass": true,
+      "detail": "{\"t0\":1.448666,\"t\":0.262647,\"badge\":true,\"note\":\"wrap allowed: 5s clip loops at end\"}"
+    },
+    {
+      "name": "desktop: double-tap left seeks -10s with badge",
+      "pass": true,
+      "detail": "{\"t1\":1.385003,\"t\":0.301826,\"badge\":true}"
+    },
+    {
+      "name": "desktop: single tap pauses reel",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop: single tap resumes reel",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop: reel rail like stores post reaction",
+      "pass": true,
+      "detail": "{\"label\":\"Like this reel\",\"newestId\":\"exe7wcsy\",\"newestKind\":\"reel\",\"mine\":[\"like\"],\"path\":\"/video\"}"
+    },
+    {
+      "name": "desktop: reel rail save toggles saved post",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop: reel comment sheet opens above reels",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop: ArrowDown snaps to next reel, previous pauses",
+      "pass": true,
+      "detail": "{\"count\":\"2 / 4\",\"firstPaused\":true,\"secondPlaying\":true}"
+    },
+    {
+      "name": "desktop: reels home button returns to feed",
+      "pass": true,
+      "detail": ""
+    },
+    {
       "name": "desktop: search field below title row",
       "pass": true,
-      "detail": "{\"rowTop\":10,\"fieldTop\":56,\"fieldBelow\":true,\"gapFromTop\":10}"
+      "detail": "{\"fieldBelow\":true,\"gapFromTop\":10}"
     },
     {
       "name": "desktop: search finds Sita",
@@ -306,9 +406,24 @@
       "detail": "{\"h\":278,\"more\":\"+3\"}"
     },
     {
-      "name": "mobile: full scrim, suggestions+compose align with keyboard, list scrolls",
+      "name": "mobile: Post + fab opens Post/Reels chooser",
       "pass": true,
-      "detail": "{\"pad\":\"300px\",\"fullH\":844,\"composeBottom\":544,\"suggVisible\":true,\"listScrolled\":true,\"listH\":301}"
+      "detail": ""
+    },
+    {
+      "name": "mobile: chooser Post opens create page",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile: chip tap keeps keyboard up (no down/up cycle)",
+      "pass": true,
+      "detail": "{\"isInput\":true,\"val\":\"Nice!\",\"kb\":\"300px\"}"
+    },
+    {
+      "name": "mobile: scrim = visible area, suggestions+compose on keyboard edge, list scrolls",
+      "pass": true,
+      "detail": "{\"top\":0,\"fullH\":544,\"composeBottom\":544,\"suggVisible\":true,\"listScrolled\":true,\"listH\":236,\"rowScrollbar\":\"none\"}"
     },
     {
       "name": "mobile: overlay tap closes sheet without navigating",
@@ -316,14 +431,19 @@
       "detail": ""
     },
     {
-      "name": "mobile: viewer opens at 3/4",
+      "name": "mobile: media page opens at 3/4",
       "pass": true,
       "detail": ""
     },
     {
-      "name": "mobile: per-media like works in viewer",
+      "name": "mobile: per-media like works on media page",
       "pass": true,
       "detail": ""
+    },
+    {
+      "name": "mobile: photo comment field sits above keypad (SS1 fixed)",
+      "pass": true,
+      "detail": "{\"composeBottom\":544,\"ovH\":544,\"visible\":true}"
     },
     {
       "name": "mobile: photo comment stored with mediaIndex",
@@ -331,24 +451,29 @@
       "detail": ""
     },
     {
-      "name": "mobile: closing photo sheet keeps viewer open",
+      "name": "mobile: closing photo sheet keeps media page",
       "pass": true,
       "detail": ""
     },
     {
-      "name": "mobile: swipe/scroll to 4/4",
+      "name": "mobile: swipe down reaches 4/4",
       "pass": true,
       "detail": ""
     },
     {
-      "name": "mobile: phone-back closes viewer, stays on feed",
+      "name": "mobile: swipe up returns to 3/4, not first",
       "pass": true,
-      "detail": "{\"modal\":false,\"path\":\"/\",\"layer\":null}"
+      "detail": ""
+    },
+    {
+      "name": "mobile: phone-back from media page returns to feed",
+      "pass": true,
+      "detail": ""
     },
     {
       "name": "mobile: post-page compose above keyboard",
       "pass": true,
-      "detail": "{\"bottom\":544,\"pos\":\"fixed\",\"listVisible\":true}"
+      "detail": "{\"bottom\":544,\"pos\":\"fixed\"}"
     },
     {
       "name": "mobile: create header+footer visible above keyboard, body scrolls",
@@ -362,6 +487,31 @@
     },
     {
       "name": "mobile: chooser + progress publishes to feed",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile: reels full-screen video feed, sound on, rail + caption",
+      "pass": true,
+      "detail": "{\"slides\":4,\"playing\":true,\"muted\":false,\"rail\":true,\"meta\":true,\"noNav\":true}"
+    },
+    {
+      "name": "mobile: double-tap right seeks +10s",
+      "pass": true,
+      "detail": "{\"mt0\":2.068214,\"t\":0.255029,\"badge\":true}"
+    },
+    {
+      "name": "mobile: reel comment compose above keypad",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile: swipe to next reel pauses previous",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile: reels home button returns to feed",
       "pass": true,
       "detail": ""
     },
