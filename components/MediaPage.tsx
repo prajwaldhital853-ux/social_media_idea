@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useApp } from '@/lib/AppContext';
+import { useRemoteRow } from '@/lib/useRemoteRow';
 import { canSeePost } from '@/lib/utils';
 import { IC } from '@/lib/icons';
 import AutoVideo from './AutoVideo';
@@ -19,6 +20,8 @@ export default function MediaPage({ postId, initialIndex }: MediaPageProps) {
   const router = useRouter();
   const { db, me, isStaff, showToast, t } = useApp();
   const post = db.posts.find(p => p.id === postId);
+  // A direct link to /post/<id>/media/<n> has no list behind it; ask for the row.
+  const { remote, pull } = useRemoteRow('post', postId, !!post);
   const available = !!post && (post.status === 'live' || me?.id === post.uid || isStaff()) && canSeePost(post, me?.id ?? null, db.follows);
   const media = (post?.media || []).filter(m => m.src || m.gen);
   const start = Math.max(0, Math.min(initialIndex, Math.max(0, media.length - 1)));
@@ -165,6 +168,12 @@ export default function MediaPage({ postId, initialIndex }: MediaPageProps) {
             <Comments postId={postId} mediaIndex={commentsIndex} onClose={() => setCommentsIndex(null)} />
           )}
         </>
+      ) : remote === 'loading' ? (
+        <p className="media-page-empty">Loading…</p>
+      ) : remote === 'error' ? (
+        <p className="media-page-empty">
+          Could not load this media. <button type="button" className="ghost-btn" onClick={pull}>{t('retry')}</button>
+        </p>
       ) : (
         <p className="media-page-empty">This media is not available.</p>
       )}

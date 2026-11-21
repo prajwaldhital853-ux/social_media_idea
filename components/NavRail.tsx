@@ -49,7 +49,7 @@ export default function NavRail() {
       </button>
 
       <div className="rail-bottom">
-        {me ? (
+        {me && (
           <div className="rail-user">
             <Link href={`/u/${me.username}`} className="rail-user-link">
               <Avatar user={me} size={40} />
@@ -61,11 +61,6 @@ export default function NavRail() {
             <button type="button" className="icon-btn" onClick={logout} aria-label={t('logout')} title={t('logout')}>
               {IC.logout}
             </button>
-          </div>
-        ) : (
-          <div className="rail-auth">
-            <Link href="/login" className="rail-signin">{t('signIn')}</Link>
-            <Link href="/signup" className="rail-signup">{t('signUp')}</Link>
           </div>
         )}
       </div>

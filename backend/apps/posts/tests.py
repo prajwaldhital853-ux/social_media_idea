@@ -4,7 +4,7 @@ from rest_framework.test import APIClient
 
 from apps.common.testutils import auth_client, make_user, run_threads
 from apps.follows.models import Follow
-from apps.posts.models import Post
+from apps.posts.models import Post, PostMedia
 
 
 class PostVisibilityTests(TestCase):
@@ -39,6 +39,20 @@ class PostVisibilityTests(TestCase):
     def test_author_filter(self):
         resp = auth_client(self.fan).get('/api/posts/?author=postauthor')
         self.assertTrue(all(p['author_username'] == 'postauthor' for p in resp.data['results']))
+
+    def test_media_video_filter(self):
+        PostMedia.objects.create(post=self.followers, position=0, kind='video', url='https://cdn.test/v.mp4')
+        PostMedia.objects.create(post=self.public, position=0, kind='image', url='https://cdn.test/i.jpg')
+        resp = APIClient().get('/api/posts/?media=video')
+        self.assertEqual([p['text'] for p in resp.data['results']], [])
+        resp = auth_client(self.author).get('/api/posts/?media=video')
+        self.assertEqual([p['text'] for p in resp.data['results']], ['followers'])
+
+    def test_card_says_whether_following_needs_approval(self):
+        self.author.profile.is_private = True
+        self.author.profile.save(update_fields=['is_private'])
+        row = APIClient().get('/api/posts/').data['results'][0]
+        self.assertTrue(row['author_is_private'])
 
     def test_only_author_can_delete(self):
         resp = auth_client(self.stranger).delete(f'/api/posts/{self.public.pk}/')
@@ -78,6 +92,20 @@ class FeedKeysetTests(TestCase):
         self.assertEqual([p['id'] for p in page2b.data['results']], [p['id'] for p in page2.data['results']])
         self.assertFalse(page2b.data['has_more'])
         self.assertIsNone(page2b.data['next_cursor'])
+
+    def test_following_tab_lists_only_people_you_follow(self):
+        client = auth_client(self.viewer)
+        self.assertEqual(len(client.get('/api/feed/?following=1').data['results']), 0)
+        Follow.objects.create(follower=self.viewer, followee=self.author, status='pending')
+        self.assertEqual(len(client.get('/api/feed/?following=1').data['results']), 0)
+        Follow.objects.filter(follower=self.viewer, followee=self.author).update(status='accepted')
+        page = client.get('/api/feed/?following=1')
+        self.assertEqual([p['text'] for p in page.data['results']], ['p11', 'p10', 'p9', 'p8', 'p7', 'p6', 'p5', 'p4', 'p3', 'p2'])
+        nxt = client.get('/api/feed/?following=1&cursor=' + page.data['next_cursor'])
+        self.assertEqual([p['text'] for p in nxt.data['results']], ['p1', 'p0'])
+
+    def test_following_tab_is_empty_when_nobody_is_signed_in(self):
+        self.assertEqual(len(APIClient().get('/api/feed/?following=1').data['results']), 0)
 
 
 class PostConcurrencyTests(TransactionTestCase):

@@ -49,7 +49,7 @@ def _make_otp(user, purpose, device_id=''):
 
 def _otp_response(otp, code):
     body = {'challenge': otp.pk, 'expires_in': OTP_MINUTES * 60}
-    if settings.DEBUG:
+    if settings.DEBUG or getattr(settings, 'EXPOSING_OTP_VISIBLE', False):
         body['dev_code'] = code
     return body
 

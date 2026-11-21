@@ -2,6 +2,7 @@ from django.core.cache import cache
 from django.test import TestCase
 
 from apps.common.testutils import auth_client, make_user
+from apps.messages.models import Conversation, Message
 from apps.notifications.models import Notification
 from apps.notifications.services import notify
 
@@ -33,6 +34,16 @@ class NotificationTests(TestCase):
         resp = self.ca.post('/api/notifications/read/', {'all': True}, format='json')
         self.assertEqual(resp.data['read'], 2)
         self.assertEqual(self.ca.get('/api/notifications/unread/').data['unread'], 0)
+
+    def test_badge_endpoint_counts_both_inboxes(self):
+        notify(self.a, self.b, 'like', 'for a')
+        pair = Conversation.objects.create()
+        pair.participants.set([self.a, self.b])
+        Message.objects.create(conversation=pair, sender=self.b, text='unread for a')
+        Message.objects.create(conversation=pair, sender=self.a, text='sent by a, never a badge')
+        row = self.ca.get('/api/notifications/unread/').data
+        self.assertEqual(row['unread'], 1)
+        self.assertEqual(row['messages'], 1)
 
     def test_unread_filter_and_isolation(self):
         notify(self.a, self.b, 'like', 'for a')

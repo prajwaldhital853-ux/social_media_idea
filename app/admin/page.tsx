@@ -27,19 +27,21 @@ const FEATURE_LABELS: { key: keyof FeatureFlags; label: string }[] = [
 
 export default function AdminPage() {
   const router = useRouter();
-  const { db, me, t, isStaff, setDb, showToast, logAudit } = useApp();
+  const { db, me, t, isStaff, setDb, showToast, logAudit, ready } = useApp();
   const lang = db.lang;
   const [tab, setTab] = useState<AdminTab>('overview');
   const [draft, setDraft] = useState<Settings>(() => JSON.parse(JSON.stringify(db.settings)));
   const [newCat, setNewCat] = useState('');
 
+  // While the session is still arriving, neither "sign in" nor "not staff" is a
+  // fact about the visitor yet — saying either would flash at a real moderator.
   if (!me) {
     return <AppShell>
-      <div className="empty-state">
+      {ready && <div className="empty-state">
         <span className="empty-state-icon">{IC.shield}</span>
         <h2>{t('needLogin')}</h2>
         <button type="button" className="empty-state-cta" onClick={() => router.push('/login')}>{t('signIn')}</button>
-      </div>
+      </div>}
     </AppShell>;
   }
 

@@ -1,12 +1,13 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import AppShell from '@/components/AppShell';
 import Avatar from '@/components/Avatar';
 import ThemeToggle from '@/components/ThemeToggle';
 import ListingForm from '@/components/ListingForm';
 import { useApp } from '@/lib/AppContext';
+import { listingsFragment, useList } from '@/lib/lists';
 import { useWindowed } from '@/lib/useWindowed';
 import { closeLayerWithoutBack } from '@/lib/useBackClose';
 import { IC } from '@/lib/icons';
@@ -15,19 +16,48 @@ import { Listing } from '@/lib/types';
 
 export default function MarketplacePage() {
   const router = useRouter();
-  const { db, me, t, feature, activePromo, promoEligible } = useApp();
+  const { db, me, t, feature, activePromo, promoEligible, serverMode } = useApp();
   const lang = db.lang;
   const [tab, setTab] = useState<'browse' | 'mine'>('browse');
   const [q, setQ] = useState('');
+  const [query, setQuery] = useState('');
   const [cat, setCat] = useState('all');
   const [min, setMin] = useState('');
   const [max, setMax] = useState('');
   const [creating, setCreating] = useState(false);
 
+  // Typing is immediate; the server is asked a beat later, so a whole word
+  // costs one query instead of one per keystroke.
+  useEffect(() => {
+    const id = setTimeout(() => setQuery(q.trim()), 350);
+    return () => clearTimeout(id);
+  }, [q]);
+
+  const market = useList(
+    'market',
+    { path: '/marketplace/', frag: listingsFragment },
+    {
+      mine: tab === 'mine' ? 1 : undefined,
+      q: query || undefined,
+      category: cat !== 'all' ? cat : undefined,
+      min: min === '' ? undefined : min,
+      max: max === '' ? undefined : max,
+    },
+    serverMode && feature('marketplace'),
+  );
+
   const listings = useMemo(() => {
     const needle = q.trim().toLowerCase();
     const lo = min === '' ? null : Number(min);
     const hi = max === '' ? null : Number(max);
+    if (serverMode) {
+      // Filters were applied where the rows are: the server already chose them,
+      // newest first, and the cursor is the only thing that decides the order.
+      const index = new Map(db.listings.map(l => [l.id, l] as [string, Listing]));
+      return market.ids
+        .map(id => index.get(id))
+        .filter((l): l is Listing => !!l && (tab === 'mine' ? l.status !== 'removed' : l.status === 'active' || l.status === 'sold'));
+    }
     const visible = db.listings.filter(l => {
       if (tab === 'mine') {
         if (l.uid !== me?.id || l.status === 'removed') return false;
@@ -45,11 +75,15 @@ export default function MarketplacePage() {
       return p && promoEligible(p) ? 1 : 0;
     };
     return visible.sort((a, b) => boosted(b) - boosted(a) || b.ts - a.ts);
-  }, [db.listings, tab, me?.id, q, cat, min, max, activePromo, promoEligible]);
+  }, [db.listings, market.ids, serverMode, tab, q, cat, min, max, me?.id, activePromo, promoEligible]);
 
   const filtersOn = q !== '' || cat !== 'all' || min !== '' || max !== '';
   const clearFilters = () => { setQ(''); setCat('all'); setMin(''); setMax(''); };
-  const { limit, pending, sentinel, hasMore } = useWindowed(listings.length, 10, `${tab}|${q}|${cat}|${min}|${max}`);
+  const { limit, pending, sentinel, hasMore } = useWindowed(listings.length, 10, `${tab}|${query}|${cat}|${min}|${max}`,
+    serverMode ? {
+      hasMore: market.hasMore, loading: market.loading, load: market.loadMore,
+      loaded: market.loaded, error: market.error, retry: market.reload,
+    } : undefined);
 
   if (!feature('marketplace')) {
     return <AppShell>
@@ -112,7 +146,21 @@ export default function MarketplacePage() {
         )}
       </div>
 
-      {listings.length === 0 ? (
+      {listings.length === 0 && serverMode && market.error ? (
+        <div className="empty-state">
+          <h2>{t('listFailed')}</h2>
+          <button type="button" className="empty-state-cta" onClick={() => void market.reload()}>{t('retry')}</button>
+        </div>
+      ) : listings.length === 0 && serverMode && !market.loaded ? (
+        <div className="market-grid" aria-hidden="true">
+          {[0, 1, 2, 3, 4, 5].map(i => (
+            <div className="market-card skeleton" key={i}>
+              <span className="market-card-media sk-block" />
+              <span className="market-card-body"><span className="sk-lines wide"><i /><i /></span></span>
+            </div>
+          ))}
+        </div>
+      ) : listings.length === 0 ? (
         <div className="empty-state">
           <span className="empty-state-icon">{IC.store}</span>
           <h2>{t('noListings')}</h2>

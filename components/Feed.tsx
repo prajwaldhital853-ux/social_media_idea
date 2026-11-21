@@ -1,20 +1,41 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import PostCard from '@/components/PostCard';
 import { useApp } from '@/lib/AppContext';
+import { postsFragment, useList } from '@/lib/lists';
 import { useWindowed } from '@/lib/useWindowed';
 import { canSeePost } from '@/lib/utils';
+import { Post } from '@/lib/types';
 
 export default function Feed() {
-  const { db, me, t, isStaff } = useApp();
+  const { db, me, t, isStaff, serverMode } = useApp();
   const [tab, setTab] = useState<'foryou' | 'following'>('foryou');
+  const feed = useList(
+    'feed',
+    { path: '/feed/', frag: postsFragment(me?.id || null) },
+    { following: tab === 'following' ? 1 : undefined },
+  );
+
   const followingIds = new Set(db.follows.filter(f => f.follower === me?.id && f.status !== 'pending').map(f => f.following));
-  const visiblePosts = db.posts
+  const cached = useMemo(() => {
+    const index = new Map(db.posts.map(p => [p.id, p] as [string, Post]));
+    return feed.ids.map(id => index.get(id)).filter((p): p is Post => !!p);
+  }, [db.posts, feed.ids]);
+
+  // The server has already chosen the rows; this pass only keeps staff/self
+  // visibility honest for rows that were cached before something changed.
+  const serverPosts = cached.filter(p =>
+    (p.status === 'live' || me?.id === p.uid || isStaff()) && canSeePost(p, me?.id ?? null, db.follows));
+  const localPosts = db.posts
     .filter(p => (p.status === 'live' || me?.id === p.uid || isStaff()) && canSeePost(p, me?.id ?? null, db.follows) && (tab !== 'following' || followingIds.has(p.uid)))
     .sort((a, b) => b.ts - a.ts);
-  const { limit, pending, sentinel, hasMore } = useWindowed(visiblePosts.length, 10, tab);
+  const posts = serverMode ? serverPosts : localPosts;
+
+  const { limit, pending, sentinel, hasMore } = useWindowed(posts.length, 10, tab,
+    serverMode ? { hasMore: feed.hasMore, loading: feed.loading, load: feed.loadMore } : undefined);
+  const filling = serverMode && feed.loading && posts.length === 0;
 
   return (
     <>
@@ -25,10 +46,21 @@ export default function Feed() {
         </div>
       </header>
       {tab === 'following' && !me ? (
-        <div className="feed-empty"><p>Sign in to see posts from people you follow.</p><Link href="/login">{t('signIn')}</Link></div>
-      ) : visiblePosts.length === 0 ? (
-        <div className="feed-empty"><p>{t('followingEmpty')}</p><Link href="/explore">Find people</Link></div>
-      ) : visiblePosts.slice(0, limit).map(post => {
+        <div className="feed-empty"><p>{t('followingSignIn')}</p><Link href="/login">{t('signIn')}</Link></div>
+      ) : feed.error ? (
+        <div className="feed-empty">
+          <p>{feed.error}</p>
+          <button type="button" className="ghost-btn" onClick={() => feed.reload()}>{t('retry')}</button>
+        </div>
+      ) : filling ? (
+        <div className="feed-skeleton" aria-hidden="true">
+          <div className="feed-skeleton-head"><span className="sk-avatar" /><span className="sk-lines"><i /><i /></span></div>
+          <div className="sk-block" />
+          <div className="sk-lines wide"><i /><i /></div>
+        </div>
+      ) : posts.length === 0 ? (
+        <div className="feed-empty"><p>{t('followingEmpty')}</p><Link href="/explore">{t('findPeople')}</Link></div>
+      ) : posts.slice(0, limit).map(post => {
         const author = db.users.find(u => u.id === post.uid);
         return author ? <PostCard key={post.id} post={post} author={author} /> : null;
       })}

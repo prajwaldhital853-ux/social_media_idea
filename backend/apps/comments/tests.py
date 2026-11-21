@@ -52,6 +52,13 @@ class CommentTests(TestCase):
         resp = self.cc.get(f'/api/comments/?post={self.post.pk}&media_index=1')
         self.assertEqual([c['text'] for c in resp.data['results']], ['on media'])
 
+    def test_top_level_stream_excludes_replies(self):
+        root = Comment.objects.create(post=self.post, author=self.commenter, text='root')
+        Comment.objects.create(post=self.post, author=self.author, text='reply', parent=root)
+        Comment.objects.create(post=self.post, author=self.author, text='second')
+        resp = self.cc.get(f'/api/comments/?post={self.post.pk}&top=1')
+        self.assertEqual([c['text'] for c in resp.data['results']], ['second', 'root'])
+
 
 class CommentConcurrencyTests(TransactionTestCase):
     def setUp(self):

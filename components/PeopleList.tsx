@@ -5,15 +5,33 @@ import { useRouter } from 'next/navigation';
 import Avatar from '@/components/Avatar';
 import VerifiedBadge from '@/components/VerifiedBadge';
 import { useApp } from '@/lib/AppContext';
-import { useWindowed } from '@/lib/useWindowed';
+import { ServerPaging, useWindowed } from '@/lib/useWindowed';
 import { User } from '@/lib/types';
 
-export default function PeopleList({ people, empty }: { people: User[]; empty: string }) {
+export default function PeopleList({ people, empty, server }: { people: User[]; empty: string; server?: ServerPaging }) {
   const router = useRouter();
   const { db, me, t, followState, toggleFollow } = useApp();
-  const { limit, pending, sentinel, hasMore } = useWindowed(people.length, 10, people.length);
+  // Keyed on the first row so a freshly loaded page appends instead of restarting the window.
+  const { limit, pending, sentinel, hasMore } = useWindowed(people.length, 10, people[0]?.id || 'empty', server);
 
-  if (people.length === 0) return <p className="feed-empty people-empty">{empty}</p>;
+  if (people.length === 0 && server?.error) {
+    return (
+      <div className="feed-empty people-empty">
+        <p>{server.error}</p>
+        {server.retry && <button type="button" className="ghost-btn" onClick={() => void server.retry!()}>{t('retry')}</button>}
+      </div>
+    );
+  }
+  if (people.length === 0) {
+    if (server && !server.loaded) {
+      return (
+        <div className="people-skeleton" aria-hidden="true">
+          <span className="sk-avatar" /><span className="sk-lines"><i /><i /></span>
+        </div>
+      );
+    }
+    return <p className="feed-empty people-empty">{empty}</p>;
+  }
 
   return (
     <div className="people-page-list">

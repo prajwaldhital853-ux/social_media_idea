@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, useRef, ReactNode, Dispatch, SetStateAction } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback, ReactNode, Dispatch, SetStateAction } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { Database, Follow, User, Post, Comment, ThemeMode, ReactionKind, NotificationKind, FeatureFlags, Promotion } from './types';
 import { getDb, save, emptyDb } from './storage';
@@ -13,7 +13,7 @@ import {
   idOf, at, mapComment, mapFollow, mapMe, mapMessage, mapPerson, mapPost, mapPromotion,
   mapReport, mapSettings, mediaPayload, profilePatch, reactionsOfPost, toPostPayload, toProfilePayload,
 } from './dto';
-import { bindListCache, forgetLists } from './lists';
+import { bindListCache, forgetLists, listingsFragment, postsFragment } from './lists';
 
 type Target = 'post' | 'comment' | 'media';
 
@@ -46,7 +46,9 @@ interface AppContextType {
   isListingSaved: (lid: string) => boolean;
   notify: (uid: string, kind: NotificationKind, text: string, href?: string, actor?: string) => void;
   markAllRead: () => Promise<void>;
+  markRead: (id: string) => Promise<void>;
   sendMessage: (to: string, text: string) => Promise<void>;
+  markThreadRead: (username: string) => Promise<void>;
   addReport: (type: 'post' | 'comment' | 'listing' | 'profile', targetId: string, reason: string, note: string) => Promise<void>;
   logAudit: (action: string, target: string, reason: string) => void;
   requestPromotion: (targetType: 'post' | 'listing', targetId: string, cfg: PromoConfig) => Promise<boolean>;
@@ -86,6 +88,16 @@ interface AppContextType {
   confirmUnlock: (challenge: string | number, code: string) => Promise<AuthResult>;
   googleSignIn: (token: { id_token?: string; demo?: { email: string; name: string; sub: string } }) => Promise<AuthResult>;
   updateProfile: (patch: Record<string, any>) => Promise<void>;
+  loadPerson: (username: string) => Promise<PersonRead | null>;
+  /** Pull one post or listing by id so a detail page opened cold still renders. */
+  loadEntity: (kind: 'post' | 'listing', id: string) => Promise<'ok' | 'missing' | 'error'>;
+}
+
+/** What one `/api/profiles/<username>/` read answers: the person plus their totals. */
+export interface PersonRead {
+  person: User;
+  stats: { posts: number; followers: number; following: number };
+  locked: boolean;
 }
 
 export interface PromoConfig {
@@ -138,10 +150,17 @@ export interface CodeResult {
   error?: string;
 }
 
+/**
+ * The inline script in layout.tsx already picked a theme before first paint;
+ * this has to agree with it or hydration would flip the page back to light.
+ * Desktop starts dark because that is the product's viewing mode, and a stored
+ * choice always beats the default.
+ */
 function readTheme(): ThemeMode {
   if (typeof window === 'undefined') return 'light';
   const saved = localStorage.getItem(THEME_KEY);
-  return saved === 'light' || saved === 'dark' ? saved : 'light';
+  if (saved === 'light' || saved === 'dark') return saved;
+  return window.matchMedia('(min-width: 1024px)').matches ? 'dark' : 'light';
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -163,7 +182,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const dbRef = useRef(db);
   dbRef.current = db;
 
-  const merge = (frag: Fragment) => setDb(cur => applyFragment(cur, frag));
+  /** Stable identity: screens list it in an effect's deps to fetch once per subject. */
+  const merge = useCallback((frag: Fragment) => setDb(cur => applyFragment(cur, frag)), []);
 
   useEffect(() => bindListCache(frag => setDb(cur => applyFragment(cur, frag))), []);
 
@@ -267,6 +287,34 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!API_ENABLED) return;
     await pullSession();
   };
+
+  /**
+   * Badges are the one thing that has to age in place: both counters are
+   * re-pulled when the tab wakes and when the reader moves, not only at boot.
+   */
+  const pullBadges = useCallback(async () => {
+    if (!API_ENABLED || !dbRef.current.meId) return;
+    try {
+      const row = await api.get<any>('/api/notifications/unread/');
+      setDb(prev => (prev.meId ? {
+        ...prev,
+        unread: { notifications: Number(row.unread) || 0, messages: Number(row.messages) || 0 },
+      } : prev));
+    } catch { /* a badge a beat behind is not worth interrupting anyone for */ }
+  }, []);
+
+  const selfId = db.meId;
+  useEffect(() => {
+    if (!serverMode || !selfId) return;
+    void pullBadges();
+    const timer = setInterval(() => void pullBadges(), 30000);
+    const wake = () => { if (typeof document !== 'undefined' && document.visibilityState === 'visible') void pullBadges(); };
+    document.addEventListener('visibilitychange', wake);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', wake);
+    };
+  }, [serverMode, selfId, pathname, pullBadges]);
 
   async function bootstrap() {
     try {
@@ -414,6 +462,49 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const data = await api.patch<any>(`/api/profiles/${self.username}/`, toProfilePayload(patch));
     merge({ users: [{ ...self, ...profilePatch(data) }] });
   };
+
+  /**
+   * One profile read gives a screen both the person and their real totals —
+   * the counts live on the profile row, so no list has to be paged to count it.
+   * A 404 (or any failure) reads as "no such person" and the screen says so.
+   */
+  const loadPerson = useCallback(async (username: string): Promise<PersonRead | null> => {
+    if (!API_ENABLED || !username) return null;
+    try {
+      const row = await api.get<any>(`/api/profiles/${username}/`);
+      const person = mapPerson(row);
+      merge({ users: [person] });
+      return {
+        person,
+        stats: {
+          posts: Number(row.posts) || 0,
+          followers: Number(row.followers) || 0,
+          following: Number(row.following) || 0,
+        },
+        locked: !!row.locked,
+      };
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 404) return null;
+      throw err;
+    }
+  }, [merge]);
+
+  /**
+   * One row by primary key, for a screen opened straight from a link. A 404 or
+   * a 403 is the server saying this row is not for this viewer's eyes; anything
+   * else is the network, and the screen offers a retry rather than a false "gone".
+   */
+  const loadEntity = useCallback(async (kind: 'post' | 'listing', id: string): Promise<'ok' | 'missing' | 'error'> => {
+    if (!API_ENABLED || !id) return 'error';
+    try {
+      const row = await api.get<any>(kind === 'post' ? `/api/posts/${id}/` : `/api/marketplace/${id}/`);
+      merge(kind === 'post' ? postsFragment(currentMe()?.id || null)([row]) : listingsFragment([row]));
+      return 'ok';
+    } catch (err) {
+      if (err instanceof ApiError && (err.status === 404 || err.status === 403 || err.status === 401)) return 'missing';
+      return 'error';
+    }
+  }, [merge]);
 
   /** Server aggregates move by hand so the UI answers instantly; pages re-read them anyway. */
   const bumpCount = (targetType: Target, targetId: string, delta: number) => {
@@ -762,6 +853,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  /**
+   * Opening one activity is a read receipt the server has to remember; marking
+   * only the local copy would bring the dot back on the next load.
+   */
+  const markRead = async (id: string) => {
+    const self = currentMe();
+    if (!self) return;
+    setDb(prev => ({
+      ...prev,
+      notifications: prev.notifications.map(n => (n.id === id && n.uid === self.id ? { ...n, read: true } : n))
+    }));
+    if (!API_ENABLED) return;
+    try {
+      await api.post('/api/notifications/read/', { ids: [id] });
+      void pullBadges();
+    } catch { /* the worst case is a dot that returns on reload */ }
+  };
+
   const sendMessage = async (to: string, text: string) => {
     const self = currentMe();
     const body = text.trim();
@@ -790,6 +899,36 @@ export function AppProvider({ children }: { children: ReactNode }) {
       showToast(errText(err, 'Message not sent.'));
     }
   };
+
+  /**
+   * Opening a thread reads all of it — including the messages above the page
+   * this screen happened to load. So the server is asked in server mode, and the
+   * badge is re-pulled rather than decremented by whatever rows were cached.
+   * Receipts are cosmetic: a failed mark still reads locally and never
+   * interrupts the conversation.
+   */
+  // Stable identity: a thread screen calls this on open, and a fresh function
+  // per render would turn that one call into a request per render.
+  const markThreadRead = useCallback(async (username: string) => {
+    const self = currentMe();
+    const other = dbRef.current.users.find(u => u.username === username);
+    if (!self || !other) return;
+    const unread = dbRef.current.messages.filter(m => m.from === other.id && m.to === self.id && !m.read);
+    // Nothing cached reads, but the badge says something does: the row is
+    // simply above the pages this thread has walked. Ask the server anyway.
+    if (!unread.length && !dbRef.current.unread?.messages) return;
+    setDb(prev => ({
+      ...prev,
+      messages: prev.messages.map(m => (m.from === other.id && m.to === self.id && !m.read ? { ...m, read: true } : m)),
+      unread: prev.unread ? { ...prev.unread, messages: Math.max(0, (prev.unread.messages || 0) - unread.length) } : prev.unread,
+    }));
+    if (!API_ENABLED) return;
+    try {
+      await api.post(`/api/messages/${username}/read/`, {});
+      forgetLists('inbox');
+    } catch {}
+    void pullBadges();
+  }, [pullBadges]);
 
   const addReport = async (type: 'post' | 'comment' | 'listing' | 'profile', targetId: string, reason: string, note: string) => {
     const self = currentMe();
@@ -928,7 +1067,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         addPost, updatePost, deletePost, addComment, deleteComment,
         toggleFollow, isFollowing, followState, incomingRequests, acceptRequest, declineRequest, mutualIds,
         react, myReaction, reactionCount, toggleSave, isSaved, toggleListingSave, isListingSaved,
-        notify, markAllRead, sendMessage, addReport, logAudit,
+        notify, markAllRead, markRead, sendMessage, markThreadRead, addReport, logAudit,
         requestPromotion, cancelPromotion, activePromo, promoEligible,
         updateLang, login, logout, isAuthenticated,
         theme, toggleTheme,
@@ -942,7 +1081,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         toast, showToast,
         ready, serverMode, resync, merge,
         signin, signupAccount, verifyCode, resendCode, requestUnlock, confirmUnlock, googleSignIn,
-        updateProfile,
+        updateProfile, loadPerson, loadEntity,
       }}
     >
       {children}

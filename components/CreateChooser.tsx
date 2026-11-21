@@ -16,18 +16,20 @@ export default function CreateChooser() {
   const { createChooserOpen, closeCreateChooser, me, showToast } = useApp();
   const router = useRouter();
   const [busy, setBusy] = useState(false);
+  const [pct, setPct] = useState(0);
   const fileRef = useRef<HTMLInputElement>(null);
   useBackClose(createChooserOpen, closeCreateChooser);
 
   const pick = async (files: FileList | null) => {
     if (!files?.length) return;
     setBusy(true);
+    setPct(0);
     const next: Media[] = [];
     try {
       for (const file of Array.from(files)) {
         if (!file.type.startsWith('video/')) throw new Error('Reels need a video — choose a video file.');
         if (next.length >= MAX_VIDEOS) throw new Error(`Up to ${MAX_VIDEOS} videos per reel — pick fewer clips.`);
-        next.push(await mediaFromFile(file));
+        next.push(await mediaFromFile(file, (sent, total) => setPct(total > 0 ? Math.min(99, Math.round((sent / total) * 100)) : 0)));
       }
       setCreateDraft({ media: next, kind: 'reel' });
       closeLayerWithoutBack();
@@ -61,7 +63,7 @@ export default function CreateChooser() {
             <span className="chooser-plus" aria-hidden="true">{IC.plus}</span>
           </button>
         </div>
-        {busy && <p className="chooser-busy" role="status">Preparing your clip…</p>}
+        {busy && <p className="chooser-busy" role="status">{pct ? `Uploading your clip… ${pct}%` : 'Reading your clip…'}</p>}
         <button type="button" className="chooser-cancel" onClick={closeCreateChooser}>Cancel</button>
       </div>
       <input

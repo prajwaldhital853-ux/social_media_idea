@@ -1,0 +1,30 @@
+PASS  desktop: opens in dark mode by default  — {"theme":"dark","stored":null,"bodyBg":"rgb(16, 17, 20)"}
+PASS  desktop: the page field is the soft canvas color  — rgb(16, 17, 20)
+PASS  desktop: the left rail is compact  — rail 212px
+PASS  desktop: the gap between rail and feed is wide  — 40px
+PASS  desktop: no hairline between rail, feed and top bar  — rail 0px / topbar 0px
+PASS  desktop: the rail sits on the canvas, not on its own sheet  — rgba(0, 0, 0, 0)
+PASS  desktop: no sign in / sign up block inside the rail
+PASS  desktop: the theme switch lives on the right of the top bar  — {"themeInRight":true,"toggleLeft":false}
+PASS  desktop: suggestions are an inline list, not a card  — {"card":false,"rail":true,"bg":"rgba(0, 0, 0, 0)"}
+PASS  desktop: the bell in the top bar is a button, not a link  — {"display":"flex"}
+FAIL  desktop: the bell opens an activity box over the canvas  — {"rows":0,"groups":[],"tabs":["All","Unread"],"foot":"See all notifications","right":1380,"top":60,"w":380,"bg":"rgb(24, 26, 30)"}
+PASS  desktop: the Unread tab filters the popover to unread rows  — {"active":"active","allUnread":true}
+PASS  desktop: a click outside closes the popover
+FAIL  desktop: a popover row navigates and closes the popover  — {"path":"/","panel":false}
+PASS  desktop: the message icon opens a thread list at the top of the page  — {"rows":1,"search":true,"expand":true,"foot":"See all messages","right":1332,"top":60}
+PASS  desktop: the full-screen messenger is inbox column plus thread pane  — {"path":"/messages","side":{"w":344,"left":212},"main":{"w":884,"left":556,"right":1440},"calmShown":false,"rows":1,"empty":true,"search":true,"newChat":true}
+PASS  desktop: the messenger owns the width (suggestions column steps aside)  — {"calmShown":false,"mainRight":1440}
+PASS  desktop: picking a thread opens it beside the inbox, not over it  — {"path":"/messages/maya","chat":true,"bubbles":10,"compose":true,"backHidden":true,"stillListed":1,"activeRow":true}
+PASS  desktop: the thread hides the mobile back button on desktop  — {"backHidden":true}
+PASS  desktop: sending from the messenger pane appends the bubble  — {"before":10,"after":11,"last":"Qoder phase 9 check"}
+PASS  desktop: browser back steps out of the thread to the inbox  — {"path":"/messages","empty":true}
+PASS  mobile: keeps the stored light theme on a narrow viewport  — {"theme":"light","vw":390}
+FAIL  mobile: the inbox stays a single column with no thread pane  — {"rows":0,"mainHidden":true,"topbarHidden":true,"search":false,"head":false}
+FAIL  mobile: a thread is still full width with its back button  — {"path":"/messages","chatW":0,"sideHidden":false,"backShown":false,"compose":false}
+FAIL  mobile: the feed keeps its own sheet and loads posts  — {"bg":"rgb(255, 255, 255)","posts":0}
+PASS  desktop: a guest signs in from the top bar, never the rail  — {"railAuth":false,"signup":true,"signin":true,"railUser":false}
+PASS  desktop: the popover tells a guest to sign in instead of failing  — {"panel":true,"cta":"Sign in"}
+FAIL  no console or HTTP errors during the run  — console: Failed to load resource: net::ERR_NAME_NOT_RESOLVED @ https://cdn.example.com/clips/phewa.mp4 | console: Failed to load resource: net::ERR_NAME_NOT_RESOLVED @ https://cdn.example.com/clips/phewa.mp4 | console: Failed to load resource: net::ERR_NAME_NOT_RESOLVED @ https://cdn.example.com/clips/phewa.mp4 | console: Failed to load resource: net::ERR_NAME_NOT_RESOLVED @ https://cdn.example.com/clips/phewa.mp4
+
+22/28 checks passed

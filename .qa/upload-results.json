@@ -1,0 +1,127 @@
+{
+  "results": [
+    {
+      "name": "a picked photo is stored on the server, not in the page",
+      "pass": true,
+      "detail": "http://localhost:3000/media/uploads/6bf6f83370387f278eae4ba3.png"
+    },
+    {
+      "name": "the create page reports the photo upload by name",
+      "pass": true,
+      "detail": "{\"strips\":1,\"names\":[\"test.png\"],\"maxPct\":99,\"present\":false}"
+    },
+    {
+      "name": "publishing posts the upload to /api/posts/ and the API accepts it",
+      "pass": true,
+      "detail": "status 201"
+    },
+    {
+      "name": "the payload carries an absolute stored URL for the attachment",
+      "pass": true,
+      "detail": "http://localhost:3000/media/uploads/6bf6f83370387f278eae4ba3.png"
+    },
+    {
+      "name": "the stored file is served back from /media/",
+      "pass": true,
+      "detail": "{\"status\":200,\"type\":\"image/png\"}"
+    },
+    {
+      "name": "the feed renders the uploaded photo",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "the bar is on screen and climbing while the bytes are still moving",
+      "pass": true,
+      "detail": "0% → 33%"
+    },
+    {
+      "name": "a clip of a megabyte moves the bar with the bytes actually sent",
+      "pass": true,
+      "detail": "{\"strips\":1,\"names\":[\"clip.mp4\"],\"maxPct\":99,\"present\":false}"
+    },
+    {
+      "name": "the clip preview plays the stored file",
+      "pass": true,
+      "detail": "http://localhost:3000/media/uploads/4b3a706c7bb79dd401e04abf.mp4"
+    },
+    {
+      "name": "an uploaded clip unlocks publishing as a reel",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "the reel is created with a video attachment",
+      "pass": true,
+      "detail": "status 201"
+    },
+    {
+      "name": "the reel payload carries the stored clip URL",
+      "pass": true,
+      "detail": "http://localhost:3000/media/uploads/4b3a706c7bb79dd401e04abf.mp4"
+    },
+    {
+      "name": "the video tab streams the uploaded clip",
+      "pass": true,
+      "detail": "4b3a706c7bb79dd401e04abf.mp4"
+    },
+    {
+      "name": "a file that is not a photo or video is refused with real copy",
+      "pass": true,
+      "detail": "Choose a JPEG, PNG or WebP photo, or a video."
+    },
+    {
+      "name": "the avatar preview comes from the stored file",
+      "pass": true,
+      "detail": "http://localhost:3000/media/uploads/e87be312dfda4de2b062eb19.png"
+    },
+    {
+      "name": "the profile patch is accepted, empty birthday and all",
+      "pass": true,
+      "detail": "status 200 {\"id\":1,\"username\":\"sita\",\"name\":\"Sita Karki\",\"bio\":\"bio via upload qa mwq75o1p\",\"avatar_url\":\"http://localhost:3000/media/uploads/e87be312dfda4de2b062eb19.png\",\"cover_url\":\"\",\"location\":\"Kathmandu\",\"province\":\"\",\"website\":\"\",\"verified\":true,\"is_private\":false,\"two_step\":true,\"dob\":null,\"country\":\"Nepal\",\"city\":\"Kathmandu\"}"
+    },
+    {
+      "name": "the server keeps the uploaded avatar URL",
+      "pass": true,
+      "detail": "http://localhost:3000/media/uploads/e87be312dfda4de2b062eb19.png"
+    },
+    {
+      "name": "a saved profile closes the sheet without an error",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "the uploaded avatar survives a reload",
+      "pass": true,
+      "detail": "http://localhost:3000/media/uploads/e87be312dfda4de2b062eb19.png"
+    },
+    {
+      "name": "the edited bio survives a reload",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "the profile row on the server holds the uploaded URL",
+      "pass": true,
+      "detail": "http://localhost:3000/media/uploads/e87be312dfda4de2b062eb19.png / bio via upload qa mwq75o1p"
+    },
+    {
+      "name": "mobile: a picked photo uploads from a phone",
+      "pass": true,
+      "detail": "{\"strips\":1,\"names\":[\"test.png\"],\"maxPct\":99,\"present\":false}"
+    },
+    {
+      "name": "mobile: the phone post is accepted with its attachment",
+      "pass": true,
+      "detail": "status 201"
+    },
+    {
+      "name": "mobile: the phone sees its own uploaded photo in the feed",
+      "pass": true,
+      "detail": ""
+    }
+  ],
+  "errors": [
+    "console: Failed to load resource: net::ERR_NAME_NOT_RESOLVED @ https://cdn.example.com/clips/phewa.mp4"
+  ]
+}

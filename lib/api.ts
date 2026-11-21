@@ -129,12 +129,44 @@ export const api = {
       body: body === undefined ? undefined : JSON.stringify(body),
     }),
 
-  /** Multipart upload to /api/uploads/ — returns { url, kind, bytes }. */
-  upload: (file: File | Blob) => {
-    const form = new FormData();
-    form.append('file', file, (file as File).name || 'upload');
-    return send('/api/uploads/', { method: 'POST', headers: headers(), body: form });
-  },
+  /**
+   * Multipart upload to /api/uploads/ — returns { url, kind, bytes }.
+   *
+   * XHR rather than fetch: fetch reports no upload progress at all, and a clip
+   * of several megabytes deserves a bar that moves with the bytes actually sent.
+   */
+  upload: (file: File | Blob, onProgress?: (sent: number, total: number) => void): Promise<any> =>
+    new Promise((resolve, reject) => {
+      const attempt = (retry: boolean) => {
+        const form = new FormData();
+        form.append('file', file, (file as File).name || 'upload');
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', '/api/uploads/', true);
+        xhr.withCredentials = true;
+        Object.entries(headers()).forEach(([key, value]) => xhr.setRequestHeader(key, value));
+        xhr.upload.onprogress = e => {
+          if (onProgress && e.lengthComputable) onProgress(e.loaded, e.total);
+        };
+        const fail = (status: number, data: any) => reject(new ApiError(status, data));
+        xhr.onload = () => {
+          let data: any = null;
+          try { data = JSON.parse(xhr.responseText); } catch { data = xhr.responseText ? { detail: xhr.responseText } : null; }
+          if (xhr.status >= 400) {
+            if (retry && xhr.status === 401) {
+              void refreshSession().then(ok => (ok ? attempt(false) : fail(xhr.status, data)));
+              return;
+            }
+            fail(xhr.status, data);
+            return;
+          }
+          resolve(data);
+        };
+        xhr.onerror = () => fail(0, { detail: 'The upload could not reach the server.' });
+        xhr.onabort = () => fail(0, { detail: 'Upload cancelled.' });
+        xhr.send(form);
+      };
+      attempt(true);
+    }),
 
   deviceId,
 };

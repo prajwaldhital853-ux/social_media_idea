@@ -3,8 +3,8 @@
 import { useEffect, useRef, useSyncExternalStore } from 'react';
 import { api } from './api';
 import {
-  mapComment, mapListing, mapNotification, mapPerson, mapPost, mapPromotion,
-  reactionsOfComment, reactionsOfPost, idOf, mediaUrl,
+  mapComment, mapListing, mapMessage, mapNotification, mapPerson, mapPost, mapPromotion,
+  reactionsOfComment, reactionsOfPost, idOf,
 } from './dto';
 import { Fragment } from './store';
 import { User } from './types';
@@ -56,9 +56,11 @@ function set(key: string, patch: Partial<ListState>): void {
 
 function stateKey(key: string, query?: Query): string {
   const params = new URLSearchParams();
-  Object.entries(query || {}).forEach(([k, v]) => {
-    if (v !== undefined && v !== null && v !== '') params.set(k, String(v));
-  });
+  // Sorted, so the same filter written in any order names the same list.
+  Object.entries(query || {})
+    .filter(([, v]) => v !== undefined && v !== null && v !== '')
+    .sort(([a], [b]) => a.localeCompare(b))
+    .forEach(([k, v]) => params.set(k, String(v)));
   const qs = params.toString();
   return qs ? `${key}?${qs}` : key;
 }
@@ -74,12 +76,22 @@ export function forgetLists(prefix?: string): void {
   emit();
 }
 
+/**
+ * List defs are written as endpoint paths (`/feed/`); the HTTP client speaks
+ * full `/api/*` paths, so every page request is normalised here rather than at
+ * the dozen call sites that would otherwise have to remember the prefix.
+ */
+function apiPath(path: string): string {
+  if (path.startsWith('/api/')) return path;
+  return `/api${path.startsWith('/') ? path : `/${path}`}`;
+}
+
 async function fetchPage(key: string, def: ListDef, query: Query | undefined, cursor: string | null): Promise<void> {
   if (snapshot(key).loading) return;
   set(key, { loading: true, error: null });
   try {
     const page = await api.get<{ results: any[]; next_cursor: string | null; has_more: boolean }>(
-      def.path,
+      apiPath(def.path),
       { ...(query || {}), cursor: cursor || undefined },
     );
     const rows = page.results || [];
@@ -98,26 +110,54 @@ async function fetchPage(key: string, def: ListDef, query: Query | undefined, cu
   }
 }
 
-export function loadList(key: string, def: ListDef, query?: Query): Promise<void> {
-  const sk = stateKey(key, query);
+/**
+ * The three entry points below take a caller-facing list name and its filters;
+ * the `*At` variants behind them take the already-composed state key, which is
+ * what the hook holds. Composing twice would name a state nobody reads.
+ */
+function loadAt(sk: string, def: ListDef, query: Query | undefined): Promise<void> {
   return fetchPage(sk, def, query, null);
 }
 
-/** Reload from the first page, dropping the cursor but keeping cached entities. */
-export function refreshList(key: string, def: ListDef, query?: Query): Promise<void> {
-  const sk = stateKey(key, query);
+function refreshAt(sk: string, def: ListDef, query: Query | undefined): Promise<void> {
   set(sk, { loaded: false, done: false, cursor: null, ids: [] });
   return fetchPage(sk, def, query, null);
 }
 
-export function loadMoreList(key: string, def: ListDef, query?: Query): Promise<void> {
-  const sk = stateKey(key, query);
+function loadMoreAt(sk: string, def: ListDef, query: Query | undefined): Promise<void> {
   const state = snapshot(sk);
   if (!state.loaded || state.loading || state.done || !state.cursor) return Promise.resolve();
   return fetchPage(sk, def, query, state.cursor);
 }
 
-export function useList(key: string, def: ListDef, query?: Query) {
+export function loadList(key: string, def: ListDef, query?: Query): Promise<void> {
+  return loadAt(stateKey(key, query), def, query);
+}
+
+/** Reload from the first page, dropping the cursor but keeping cached entities. */
+export function refreshList(key: string, def: ListDef, query?: Query): Promise<void> {
+  return refreshAt(stateKey(key, query), def, query);
+}
+
+export function loadMoreList(key: string, def: ListDef, query?: Query): Promise<void> {
+  return loadMoreAt(stateKey(key, query), def, query);
+}
+
+/**
+ * A row the server just created belongs in the list it came from: at the head
+ * of a newest-first page, at the end of an oldest-first one. Without this the
+ * comment you wrote would sit in the cache but never reach the screen.
+ */
+export function pushListRow(key: string, query: Query | undefined, id: string): void {
+  if (!id) return;
+  const sk = stateKey(key, query);
+  const state = snapshot(sk);
+  if (!state.loaded || state.ids.includes(id)) return;
+  const oldest = query?.order === 'oldest';
+  set(sk, { ids: oldest ? [...state.ids, id] : [id, ...state.ids] });
+}
+
+export function useList(key: string, def: ListDef, query?: Query, enabled = true) {
   const sk = stateKey(key, query);
   const defRef = useRef(def);
   defRef.current = def;
@@ -126,35 +166,41 @@ export function useList(key: string, def: ListDef, query?: Query) {
 
   const state = useSyncExternalStore(
     cb => { listeners.add(cb); return () => listeners.delete(cb); },
-    () => snapshot(sk),
+    () => (enabled ? snapshot(sk) : IDLE),
     () => IDLE,
   );
 
   useEffect(() => {
-    if (!snapshot(sk).loaded) void loadList(sk, defRef.current, queryRef.current);
-  }, [sk]);
+    if (enabled && !snapshot(sk).loaded) void loadAt(sk, defRef.current, queryRef.current);
+  }, [sk, enabled]);
 
   return {
     ids: state.ids,
     loading: state.loading,
     loaded: state.loaded,
-    hasMore: !state.done,
+    hasMore: enabled && !state.done,
     error: state.error,
-    loadMore: () => loadMoreList(sk, defRef.current, queryRef.current),
-    reload: () => refreshList(sk, defRef.current, queryRef.current),
+    loadMore: () => (enabled ? loadMoreAt(sk, defRef.current, queryRef.current) : Promise.resolve()),
+    reload: () => (enabled ? refreshAt(sk, defRef.current, queryRef.current) : Promise.resolve()),
   };
 }
 
 /** Row → fragment builders. Each mirrors what one screen needs in one round-trip. */
 
+/**
+ * The author embedded in a post, comment or listing row. Everything the row
+ * leaves unanswered stays unanswered — mapPerson then decides what a card may
+ * overwrite in a record the cache already knows in full.
+ */
 function authorCard(row: any): User {
-  return {
-    id: idOf(row.author ?? row.id),
+  return mapPerson({
+    id: row.author ?? row.id,
     username: row.author_username ?? row.username,
     name: row.author_name ?? row.name,
-    avatar: mediaUrl(row.author_avatar_url ?? row.avatar_url),
-    verified: !!(row.author_verified ?? row.verified),
-  } as unknown as User;
+    avatar_url: row.author_avatar_url ?? row.avatar_url,
+    verified: row.author_verified ?? row.verified,
+    is_private: row.author_is_private ?? row.is_private,
+  });
 }
 
 export function postsFragment(meId: string | null): (rows: any[]) => Fragment {
@@ -178,15 +224,34 @@ export function usersFragment(rows: any[]): Fragment {
   return { users: rows.map(mapPerson) };
 }
 
+/**
+ * One page of a conversation. The two participants are already known, so the
+ * rows carry no person cards — a username-only card would overwrite a real
+ * display name with a handle.
+ */
+export function threadFragment(meId: string, otherId: string): (rows: any[]) => Fragment {
+  return rows => ({ messages: rows.map(row => mapMessage(row, meId, otherId)) });
+}
+
+/**
+ * The inbox answers one row per conversation, and its unread count describes the
+ * conversation — so the count rides along on that row's last message.
+ */
+export function inboxFragment(meId: string): (rows: any[]) => Fragment {
+  return rows => ({
+    messages: rows.filter(row => row.last_message && row.user).map(row => ({
+      ...mapMessage(row.last_message, meId, idOf(row.user.id)),
+      unread: Number(row.unread) || 0,
+    })),
+    users: rows.filter(row => row.user).map(mapPerson),
+  });
+}
+
 export function listingsFragment(rows: any[]): Fragment {
   return {
     listings: rows.map(mapListing),
     // Only the keys the row answers for: a thin card must not reset a real profile.
-    users: rows.map(row => ({
-      id: idOf(row.seller),
-      username: row.seller_username,
-      name: row.seller_name,
-    }) as unknown as User),
+    users: rows.map(row => mapPerson({ id: row.seller, username: row.seller_username, name: row.seller_name })),
   };
 }
 

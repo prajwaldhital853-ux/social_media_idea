@@ -27,11 +27,13 @@ const MOODS = [
 const CHAR_LIMIT = 3000;
 const MAX_PHOTOS = 10;
 const MAX_VIDEOS = 3;
-const PROGRESS_STEPS = [2, 5, 20, 45, 70, 90, 100];
+/** The ring only ever reports a stage the app is really in: sent, or confirmed. */
+const PUBLISHING = 12;
+const PUBLISHED = 100;
 
 export default function CreatePostPage() {
   const router = useRouter();
-  const { me, addPost, showToast } = useApp();
+  const { me, addPost, showToast, ready } = useApp();
   const [text, setText] = useState('');
   const [media, setMedia] = useState<Media[]>([]);
   const [mood, setMood] = useState('');
@@ -44,15 +46,17 @@ export default function CreatePostPage() {
   const [chooserOpen, setChooserOpen] = useState(false);
   const [publishKind, setPublishKind] = useState<'post' | 'reel'>('post');
   const [progress, setProgress] = useState<number | null>(null);
+  const [upload, setUpload] = useState<{ name: string; pct: number } | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
-  const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
 
+  // Only after the session is known: a cold load of this URL restores the sign-in
+  // a beat later, and redirecting before that throws away a signed-in user's draft.
   useEffect(() => {
-    if (!me) router.replace('/login');
-  }, [me, router]);
+    if (ready && !me) router.replace('/login');
+  }, [ready, me, router]);
 
   useEffect(() => {
     const draft = takeCreateDraft();
@@ -60,9 +64,6 @@ export default function CreatePostPage() {
       setMedia(draft.media);
       setKind(draft.kind);
     }
-    return () => {
-      timers.current.forEach(clearTimeout);
-    };
   }, []);
 
   useEffect(() => {
@@ -100,13 +101,17 @@ export default function CreatePostPage() {
         const video = file.type.startsWith('video/');
         if (video && next.filter(m => m.type === 'video').length >= MAX_VIDEOS) throw new Error(`Up to ${MAX_VIDEOS} videos per post — remove a clip first.`);
         if (!video && next.filter(m => m.type === 'image').length >= MAX_PHOTOS) throw new Error(`You can attach up to ${MAX_PHOTOS} photos.`);
-        next.push(await mediaFromFile(file));
+        setUpload({ name: file.name, pct: 0 });
+        next.push(await mediaFromFile(file, (sent, total) => {
+          setUpload({ name: file.name, pct: total > 0 ? Math.min(99, Math.round((sent / total) * 100)) : 0 });
+        }));
       }
       setMedia(next);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'This file could not be opened. Try another one.');
     } finally {
       setBusy(false);
+      setUpload(null);
     }
   };
 
@@ -114,16 +119,14 @@ export default function CreatePostPage() {
 
   const canPost = !busy && progress === null && (text.trim().length > 0 || media.length > 0);
 
-  const publish = (kind: 'post' | 'reel') => {
+  const publish = async (kind: 'post' | 'reel') => {
     if (!me || !canPost) return;
     setChooserOpen(false);
     setPublishKind(kind);
-    setProgress(PROGRESS_STEPS[0]);
-    PROGRESS_STEPS.slice(1).forEach((step, i) => {
-      timers.current.push(setTimeout(() => setProgress(step), 230 * (i + 1)));
-    });
-    timers.current.push(setTimeout(() => {
-      addPost({
+    setError('');
+    setProgress(PUBLISHING);
+    try {
+      await addPost({
         id: uid(),
         uid: me.id,
         kind,
@@ -135,9 +138,14 @@ export default function CreatePostPage() {
         mood: mood || undefined,
         place: place || undefined
       });
+      setProgress(PUBLISHED);
       showToast(kind === 'reel' ? 'Reel published.' : 'Post published.');
       router.push('/');
-    }, 230 * PROGRESS_STEPS.length + 260));
+    } catch (err) {
+      // A post the server refused keeps its text and attachments on the screen.
+      setProgress(null);
+      setError(err instanceof Error ? err.message : 'Your post could not be published.');
+    }
   };
 
   if (!me) return null;
@@ -238,6 +246,13 @@ export default function CreatePostPage() {
                 <span>Photo/video</span>
               </button>
             )}
+            {upload && (
+              <div className="create-upload" role="status">
+                <span className="create-upload-name">{upload.name}</span>
+                <span className="create-upload-track"><i style={{ width: `${upload.pct}%` }} /></span>
+                <b className="create-upload-pct">{upload.pct}%</b>
+              </div>
+            )}
           </div>
 
           <div className="create-addons">
@@ -330,7 +345,7 @@ export default function CreatePostPage() {
             </div>
           </div>
 
-          {busy && <p className="create-feedback" role="status">Preparing your attachment…</p>}
+          {busy && !upload && <p className="create-feedback" role="status">Preparing your attachment…</p>}
           {error && <p className="create-feedback error" role="alert">{error}</p>}
         </div>
 
@@ -382,7 +397,7 @@ export default function CreatePostPage() {
                 <span className="publish-pct">{progress}%</span>
               </div>
               <b>Publishing your {publishKind === 'reel' ? 'reel' : 'post'}…</b>
-              <small>{progress < 45 ? 'Preparing media' : progress < 90 ? 'Uploading to your feed' : 'Almost there'}</small>
+              <small>{progress < 100 ? 'Sending to your feed' : 'Published'}</small>
             </div>
           </div>,
           document.body

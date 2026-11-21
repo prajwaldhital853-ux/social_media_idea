@@ -7,6 +7,7 @@ import { useApp } from '@/lib/AppContext';
 import { canSeePost, compact } from '@/lib/utils';
 import { IC } from '@/lib/icons';
 import { Post, User, Media } from '@/lib/types';
+import { postsFragment, useList } from '@/lib/lists';
 import AutoVideo from './AutoVideo';
 import Comments from './Comments';
 import Avatar from './Avatar';
@@ -28,7 +29,7 @@ interface ReelSlide {
 
 export default function ReelsFeed({ initialKey }: { initialKey?: string }) {
   const router = useRouter();
-  const { db, me, feature, toggleSave, isSaved, toggleFollow, isFollowing } = useApp();
+  const { db, me, feature, toggleSave, isSaved, toggleFollow, isFollowing, serverMode } = useApp();
   const [index, setIndex] = useState(0);
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
@@ -40,9 +41,21 @@ export default function ReelsFeed({ initialKey }: { initialKey?: string }) {
 
   useEffect(() => setMounted(true), []);
 
-  const slides: ReelSlide[] = db.posts
-    .filter(p => p.status === 'live' && canSeePost(p, me?.id ?? null, db.follows))
-    .sort((a, b) => b.ts - a.ts)
+  // The reels shelf is its own keyset stream: video-bearing posts, newest first,
+  // pulled a page ahead of wherever the reader has scrolled to.
+  const stream = useList(
+    'reels',
+    { path: '/posts/', frag: postsFragment(me?.id || null) },
+    { media: 'video' },
+    serverMode && feature('video'),
+  );
+
+  const byId = new Map(db.posts.map(p => [p.id, p]));
+  const reels = serverMode
+    ? stream.ids.map(id => byId.get(id)).filter((p): p is Post => !!p)
+    : db.posts.filter(p => p.status === 'live' && canSeePost(p, me?.id ?? null, db.follows)).sort((a, b) => b.ts - a.ts);
+
+  const slides: ReelSlide[] = reels
     .flatMap(post => {
       const author = db.users.find(u => u.id === post.uid);
       if (!author) return [];
@@ -126,6 +139,9 @@ export default function ReelsFeed({ initialKey }: { initialKey?: string }) {
       setIndex(i);
       setCommentsOpen(false);
     }
+    // Two slides of runway: the next page is already in flight before the
+    // reader reaches the end of the one on screen.
+    if (serverMode && slides.length - i <= 2) void stream.loadMore();
   };
 
   if (!mounted) return <div className="reels-page" />;
@@ -223,8 +239,17 @@ export default function ReelsFeed({ initialKey }: { initialKey?: string }) {
               );
             })}
           </div>
+        ) : serverMode && !stream.loaded && !stream.error ? (
+          <div className="feed-skeleton reel-skeleton" aria-hidden="true">
+            <div className="feed-skeleton-head"><span className="sk-avatar" /><span className="sk-lines"><i /><i /></span></div>
+            <div className="sk-block" />
+          </div>
         ) : (
-          <p className="reels-empty">{feature('video') ? 'No reels yet. Publish a video to see it here.' : 'Video is currently unavailable.'}</p>
+          <p className="reels-empty">
+            {serverMode && stream.error
+              ? <>{stream.error} <button type="button" className="ghost-btn" onClick={() => void stream.reload()}>Try again</button></>
+              : feature('video') ? 'No reels yet. Publish a video to see it here.' : 'Video is currently unavailable.'}
+          </p>
         )}
         {commentsOpen && current && <Comments postId={current.post.id} onClose={() => setCommentsOpen(false)} />}
       </div>

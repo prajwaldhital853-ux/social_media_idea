@@ -7,7 +7,7 @@ import { Media, Post } from '@/lib/types';
 import { useApp, PromoConfig } from '@/lib/AppContext';
 import { uid, videoDuration } from '@/lib/utils';
 import { imageFromFile } from '@/lib/mediaFile';
-import { uploadFile } from '@/lib/upload';
+import { uploadFile, Progress } from '@/lib/upload';
 import { API_ENABLED } from '@/lib/api';
 import { IC } from '@/lib/icons';
 import Avatar from './Avatar';
@@ -20,6 +20,7 @@ function Composer({ original }: { original?: Post }) {
   const [media, setMedia] = useState<Media[]>(original?.media || []);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [sending, setSending] = useState<{ name: string; pct: number } | null>(null);
   const [promote, setPromote] = useState(false);
   const [promoConfig, setPromoConfig] = useState<PromoConfig | null>(null);
   const [closing, setClosing] = useState(false);
@@ -62,6 +63,10 @@ function Composer({ original }: { original?: Post }) {
     setBusy(true);
     setError('');
     const next = [...media];
+    // The bar stops at 99 until the server answers with the URL it stored.
+    const send = (file: File): Progress => (sent, total) => {
+      if (alive.current) setSending({ name: file.name, pct: total > 0 ? Math.min(99, Math.round((sent / total) * 100)) : 0 });
+    };
     try {
       for (const file of Array.from(files)) {
         const video = file.type.startsWith('video/');
@@ -74,9 +79,9 @@ function Composer({ original }: { original?: Post }) {
           urls.current.push(src);
           const dur = await videoDuration(src);
           if (!Number.isFinite(dur) || dur > 60) throw new Error('Choose a video up to 60 seconds long.');
-          next.push(API_ENABLED ? { type: 'video', src: (await uploadFile(file)).url, dur } : { type: 'video', src, dur });
+          next.push(API_ENABLED ? { type: 'video', src: (await uploadFile(file, undefined, send(file))).url, dur } : { type: 'video', src, dur });
         } else {
-          next.push(await imageFromFile(file));
+          next.push(await imageFromFile(file, send(file)));
         }
       }
       if (alive.current) {
@@ -86,7 +91,10 @@ function Composer({ original }: { original?: Post }) {
     } catch (err) {
       if (alive.current) setError(err instanceof Error ? err.message : 'This file could not be opened. Try another file.');
     } finally {
-      if (alive.current) setBusy(false);
+      if (alive.current) {
+        setBusy(false);
+        setSending(null);
+      }
     }
   };
 
@@ -147,6 +155,13 @@ function Composer({ original }: { original?: Post }) {
                   <button type="button" aria-label={`Remove attachment ${i + 1}`} onClick={() => setMedia(current => current.filter((_, j) => i !== j))}>{IC.x}</button>
                 </div>)}
               </div>}
+              {sending && (
+                <div className="create-upload" role="status">
+                  <span className="create-upload-name">{sending.name}</span>
+                  <span className="create-upload-track"><i style={{ width: `${sending.pct}%` }} /></span>
+                  <b className="create-upload-pct">{sending.pct}%</b>
+                </div>
+              )}
               <button type="button" className="cp-attach" disabled={busy} onClick={() => fileRef.current?.click()}>{IC.img} Add photos or video</button>
               {feature('promotion') && !original && <label className="cp-promote-toggle"><span>{t('promoteSection')}<small>Optional · paid with Coins</small></span><input type="checkbox" checked={promote} onChange={e => setPromote(e.target.checked)} /></label>}
               {promote && <PromoteForm targetType="post" confirmLabel="Use this promotion" onConfirm={cfg => setPromoConfig(cfg)} />}
@@ -154,7 +169,7 @@ function Composer({ original }: { original?: Post }) {
             </div>
             <div className="cp-foot"><span className="cp-count">{text.length}/500</span><button type="button" className="cp-publish" disabled={!canPost} onClick={publish}>{original ? 'Save changes' : stage === 'reel' ? 'Post reel' : 'Post'}</button></div>
           </>}
-          {busy && <p className="cp-feedback" role="status">Preparing your attachment…</p>}
+          {busy && !sending && <p className="cp-feedback" role="status">Preparing your attachment…</p>}
           {error && <p className="cp-feedback cp-error" role="alert">{error}</p>}
         </>}
       </div>

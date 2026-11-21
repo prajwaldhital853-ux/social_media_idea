@@ -13,6 +13,9 @@ from .models import Profile
 
 
 class ProfileSerializer(serializers.ModelSerializer):
+    # Every other person payload carries the account id; without it the client
+    # cannot tell this row is the same person a feed card already holds.
+    id = serializers.IntegerField(source='user_id', read_only=True)
     username = serializers.CharField(source='user.username', read_only=True)
     name = serializers.CharField(source='display_name', required=False, allow_blank=True)
     dob = serializers.DateField(source='user.date_of_birth', required=False, allow_null=True)
@@ -22,10 +25,10 @@ class ProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = Profile
         fields = [
-            'username', 'name', 'bio', 'avatar_url', 'cover_url', 'location', 'province',
+            'id', 'username', 'name', 'bio', 'avatar_url', 'cover_url', 'location', 'province',
             'website', 'verified', 'is_private', 'two_step', 'dob', 'country', 'city',
         ]
-        read_only_fields = ['username', 'verified']
+        read_only_fields = ['id', 'username', 'verified']
 
     def update(self, instance, validated_data):
         user_data = validated_data.pop('user', {})

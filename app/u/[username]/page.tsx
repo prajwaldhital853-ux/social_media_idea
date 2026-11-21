@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import AppShell from '@/components/AppShell';
@@ -9,10 +9,11 @@ import Avatar from '@/components/Avatar';
 import VerifiedBadge from '@/components/VerifiedBadge';
 import EditProfileModal from '@/components/EditProfileModal';
 import { useApp } from '@/lib/AppContext';
+import { listingsFragment, postsFragment, useList } from '@/lib/lists';
 import { useWindowed } from '@/lib/useWindowed';
 import { canSeePost, hash, compact, ago } from '@/lib/utils';
 import { IC } from '@/lib/icons';
-import { User } from '@/lib/types';
+import { Listing, Post, User } from '@/lib/types';
 
 const COVER_PALETTES = [
   ['#B63740', '#FDA041'],
@@ -26,22 +27,59 @@ const COVER_PALETTES = [
 export default function UserProfilePage() {
   const params = useParams();
   const router = useRouter();
-  const { db, me, t, isFollowing, followState, toggleFollow, showToast, openComposer } = useApp();
+  const { db, me, t, isFollowing, followState, toggleFollow, showToast, openComposer, serverMode, loadPerson } = useApp();
   const username = String(params.username || '');
   const user = db.users.find(u => u.username.toLowerCase() === username.toLowerCase());
   const [tab, setTab] = useState<'posts' | 'media' | 'about' | 'listings'>('posts');
   const [editing, setEditing] = useState(false);
+  // Only the profile row knows the true totals; a paginated list holds no more
+  // than the rows the visitor has already scrolled past.
+  const [stats, setStats] = useState<{ posts: number; followers: number; following: number } | null>(null);
+  const [personRead, setPersonRead] = useState(!serverMode);
 
   const own = me?.id === user?.id;
   const locked = !!user?.private && !own && !isFollowing(user.id);
 
+  const authorPosts = useList(
+    'profile-posts',
+    { path: '/posts/', frag: postsFragment(me?.id || null) },
+    { author: username },
+    serverMode && !!username,
+  );
+  const authorListings = useList(
+    'profile-listings',
+    { path: '/marketplace/', frag: listingsFragment },
+    { seller: username },
+    serverMode && !!username && !locked,
+  );
+
+  useEffect(() => {
+    if (!serverMode || !username) return;
+    let live = true;
+    setPersonRead(false);
+    loadPerson(username)
+      .then(read => { if (live && read) setStats(read.stats); })
+      .catch(() => {})
+      .finally(() => { if (live) setPersonRead(true); });
+    return () => { live = false; };
+  }, [serverMode, username, loadPerson]);
+
+  const cachedPosts = useMemo(() => {
+    const index = new Map(db.posts.map(p => [p.id, p] as [string, Post]));
+    return authorPosts.ids.map(id => index.get(id)).filter((p): p is Post => !!p);
+  }, [db.posts, authorPosts.ids]);
+
   const posts = useMemo(() => {
     if (!user || locked) return [];
+    if (serverMode) return cachedPosts;
     return db.posts
       .filter(p => p.uid === user.id && p.status === 'live' && canSeePost(p, me?.id ?? null, db.follows))
       .sort((a, b) => b.ts - a.ts);
-  }, [db.posts, db.follows, user, me?.id, locked]);
-  const { limit: postLimit, pending: postsPending, sentinel: postsSentinel, hasMore: morePosts } = useWindowed(posts.length, 10, user?.id);
+  }, [cachedPosts, db.posts, db.follows, user, me?.id, locked, serverMode]);
+  const { limit: postLimit, pending: postsPending, sentinel: postsSentinel, hasMore: morePosts } = useWindowed(
+    posts.length, 10, user?.id,
+    serverMode ? { hasMore: authorPosts.hasMore, loading: authorPosts.loading, load: authorPosts.loadMore } : undefined,
+  );
 
   if (!user) {
     return (
@@ -51,10 +89,17 @@ export default function UserProfilePage() {
           <h1>{t('profile')}</h1>
           <span className="detail-header-spacer" />
         </header>
-        <div className="feed-empty profile-missing">
-          <p>{t('noUser')}</p>
-          <Link href="/explore">{t('search')}</Link>
-        </div>
+        {!personRead ? (
+          <div className="feed-skeleton profile-skeleton" aria-hidden="true">
+            <div className="feed-skeleton-head"><span className="sk-avatar" /><span className="sk-lines"><i /><i /></span></div>
+            <div className="sk-lines wide"><i /><i /></div>
+          </div>
+        ) : (
+          <div className="feed-empty profile-missing">
+            <p>{t('noUser')}</p>
+            <Link href="/explore">{t('search')}</Link>
+          </div>
+        )}
       </AppShell>
     );
   }
@@ -70,9 +115,16 @@ export default function UserProfilePage() {
   const joinedLabel = new Date(user.joined).toLocaleDateString(db.lang === 'ne' ? 'ne-NP' : 'en-GB', { month: 'long', year: 'numeric' });
   const location = [user.city, user.province, user.country].filter(Boolean).join(', ');
   const mediaItems = posts.flatMap(p => p.media.map((m, index) => ({ m, index, post: p })));
-  const userListings = db.listings
-    .filter(l => l.uid === user.id && (own ? l.status !== 'removed' : l.status === 'active' || l.status === 'sold'))
-    .sort((a, b) => b.ts - a.ts);
+  const userListings = serverMode
+    ? authorListings.ids
+        .map(id => db.listings.find(l => l.id === id))
+        .filter((l): l is Listing => !!l)
+    : db.listings
+        .filter(l => l.uid === user.id && (own ? l.status !== 'removed' : l.status === 'active' || l.status === 'sold'))
+        .sort((a, b) => b.ts - a.ts);
+  const countPosts = stats ? stats.posts : posts.length;
+  const countFollowers = stats ? stats.followers : followers.length;
+  const countFollowing = stats ? stats.following : followingList.length;
   const tabKeys: ('posts' | 'media' | 'about' | 'listings')[] = userListings.length > 0 ? ['posts', 'media', 'listings', 'about'] : ['posts', 'media', 'about'];
 
   const openMedia = (postId: string, index: number, singleVideo: boolean) => {
@@ -115,7 +167,7 @@ export default function UserProfilePage() {
                 >
                   {fState === 'following' ? t('unfollow') : fState === 'pending' ? t('requested') : user.private ? t('requestFollow') : followsMe ? t('followBack') : t('follow')}
                 </button>
-                <button type="button" className="ghost-btn" onClick={() => me ? router.push(`/messages/${user.id}`) : router.push('/login')}>
+                <button type="button" className="ghost-btn" onClick={() => me ? router.push(`/messages/${user.username}`) : router.push('/login')}>
                   {IC.msg}<span>{t('message')}</span>
                 </button>
               </>
@@ -139,9 +191,9 @@ export default function UserProfilePage() {
           {suspended && <p className="profile-susp">{IC.flag}{t('suspNotice')} {user.susp?.reason}</p>}
 
           <div className="profile-stats">
-            <span className="profile-stat"><b>{compact(posts.length)}</b> {t('postsCount')}</span>
-            <Link href={`/u/${user.username}/followers`} className="profile-stat"><b>{compact(followers.length)}</b> {t('followers')}</Link>
-            <Link href={`/u/${user.username}/following`} className="profile-stat"><b>{compact(followingList.length)}</b> {t('followingCount')}</Link>
+            <span className="profile-stat"><b>{compact(countPosts)}</b> {t('postsCount')}</span>
+            <Link href={`/u/${user.username}/followers`} className="profile-stat"><b>{compact(countFollowers)}</b> {t('followers')}</Link>
+            <Link href={`/u/${user.username}/following`} className="profile-stat"><b>{compact(countFollowing)}</b> {t('followingCount')}</Link>
           </div>
         </div>
 
@@ -241,8 +293,8 @@ export default function UserProfilePage() {
                 <div><dt>{IC.calendar}{t('joined')}</dt><dd>{joinedLabel}</dd></div>
                 {user.dob && <div><dt>{IC.calendar}{t('dob')}</dt><dd>{new Date(user.dob).toLocaleDateString(db.lang === 'ne' ? 'ne-NP' : 'en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}</dd></div>}
                 <div><dt>{IC.img}{t('postsCount')}</dt><dd>{posts.length}</dd></div>
-                <div><dt>{IC.users}{t('followers')}</dt><dd>{followers.length}</dd></div>
-                <div><dt>{IC.users}{t('followingCount')}</dt><dd>{followingList.length}</dd></div>
+                <div><dt>{IC.users}{t('followers')}</dt><dd>{countFollowers}</dd></div>
+                <div><dt>{IC.users}{t('followingCount')}</dt><dd>{countFollowing}</dd></div>
               </dl>
             </div>
             {followingList.length > 0 && (

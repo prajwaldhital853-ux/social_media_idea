@@ -10,6 +10,7 @@ import ListingForm from '@/components/ListingForm';
 import PromoteModal from '@/components/PromoteModal';
 import ReportModal from '@/components/ReportModal';
 import { useApp } from '@/lib/AppContext';
+import { useRemoteRow } from '@/lib/useRemoteRow';
 import { IC } from '@/lib/icons';
 import { ago } from '@/lib/utils';
 
@@ -24,8 +25,20 @@ export default function ListingPage() {
   const [report, setReport] = useState(false);
 
   const listing = db.listings.find(l => l.id === String(params.id || ''));
+  // A listing opened from a link is not necessarily in any page of the market.
+  const { remote, pull } = useRemoteRow('listing', String(params.id || ''), !!listing);
 
   if (!listing || listing.status === 'removed') {
+    if (remote === 'loading') {
+      return (
+        <AppShell>
+          <div className="feed-skeleton" aria-hidden="true">
+            <div className="feed-skeleton-head"><span className="sk-avatar" /><span className="sk-lines"><i /><i /></span></div>
+            <div className="sk-block" />
+          </div>
+        </AppShell>
+      );
+    }
     return (
       <AppShell>
         <header className="detail-header">
@@ -35,8 +48,14 @@ export default function ListingPage() {
         </header>
         <div className="empty-state">
           <span className="empty-state-icon">{IC.store}</span>
-          <h2>{t('noListings')}</h2>
-          <button type="button" className="empty-state-cta" onClick={() => router.push('/marketplace')}>{t('backFeed')}</button>
+          <h2>{remote === 'error' ? 'Could not load this listing.' : t('noListings')}</h2>
+          <button
+            type="button"
+            className="empty-state-cta"
+            onClick={remote === 'error' ? pull : () => router.push('/marketplace')}
+          >
+            {remote === 'error' ? t('retry') : t('backFeed')}
+          </button>
         </div>
       </AppShell>
     );
@@ -62,7 +81,7 @@ export default function ListingPage() {
 
   const contact = () => {
     if (!me) { router.push('/login'); return; }
-    router.push(`/messages/${listing.uid}`);
+    router.push(`/messages/${seller?.username || listing.uid}`);
   };
 
   const share = async () => {

@@ -74,27 +74,37 @@ export function mapMe(p: any): User {
 
 /** A person card as returned by feeds, search, followers and the admin roster. */
 export function mapPerson(c: any): User {
-  return {
+  const person: Record<string, any> = {
     id: idOf(c.id ?? c.username),
     email: c.email || '',
     username: c.username,
     name: c.name || c.username,
     role: c.role || 'user',
     verified: !!c.verified,
-    emailVerified: c.email_verified === undefined ? true : !!c.email_verified,
+    emailVerified: c.email_verified === undefined ? undefined : !!c.email_verified,
     susp: c.suspended_until ? { until: at(c.suspended_until), reason: c.suspend_reason || '' } : null,
     provider: c.provider || 'email',
     dob: c.dob || '',
     country: c.country || '',
+    province: c.province || '',
     city: c.city || '',
     bio: c.bio || '',
     avatar: mediaUrl(c.avatar_url || c.avatar),
     cover: mediaUrl(c.cover_url || c.cover),
     private: !!c.is_private,
-    twoStep: true,
+    twoStep: c.two_step === undefined ? undefined : !!c.two_step,
     joined: at(c.joined ?? c.created_at),
     coins: Math.round(amount(c.coins)),
   };
+  // A thin card that never answered these would demote a staff account, un-verify
+  // a badge or date a member from the epoch, so unanswered keys are dropped
+  // rather than defaulted onto a richer record already in the cache.
+  if (c.verified === undefined) delete person.verified;
+  if (!c.role) delete person.role;
+  if (!c.provider) delete person.provider;
+  if (c.joined === undefined && c.created_at === undefined) delete person.joined;
+  if (c.is_private === undefined) delete person.private;
+  return person as unknown as User;
 }
 
 export function mapMedia(m: any): Media {
@@ -390,7 +400,9 @@ export function toProfilePayload(patch: Record<string, any>): Record<string, any
     ['dob', 'dob'], ['country', 'country'], ['city', 'city'], ['website', 'website'],
   ];
   for (const [from, to] of keys) {
-    if (patch[from] !== undefined) out[to] = patch[from];
+    if (patch[from] === undefined) continue;
+    // An unset birthday is "no date", not an empty string: DRF's DateField refuses ''.
+    out[to] = from === 'dob' && !patch[from] ? null : patch[from];
   }
   if (patch.location !== undefined) out.location = patch.location;
   return out;

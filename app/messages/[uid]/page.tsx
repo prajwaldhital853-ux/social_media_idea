@@ -1,153 +1,72 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import AppShell from '@/components/AppShell';
-import Avatar from '@/components/Avatar';
-import VerifiedBadge from '@/components/VerifiedBadge';
+import ChatThread from '@/components/ChatThread';
+import ConversationList from '@/components/ConversationList';
 import { useApp } from '@/lib/AppContext';
 import { IC } from '@/lib/icons';
-import { ago } from '@/lib/utils';
-import { Message } from '@/lib/types';
-
-function dayStart(ts: number) {
-  const d = new Date(ts);
-  d.setHours(0, 0, 0, 0);
-  return d.getTime();
-}
+import { User } from '@/lib/types';
 
 export default function ConversationPage() {
   const params = useParams();
   const router = useRouter();
-  const { db, me, t, setDb, sendMessage } = useApp();
-  const lang = db.lang;
-  const [text, setText] = useState('');
-  const threadRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const { db, me, t, serverMode, loadPerson, ready } = useApp();
+  const [missing, setMissing] = useState(false);
 
-  const other = db.users.find(u => u.id === params.uid);
-  const otherId = other?.id;
-  const meId = me?.id;
-
-  const thread = useMemo<Message[]>(() => {
-    if (!meId || !otherId) return [];
-    return db.messages
-      .filter(m => (m.from === meId && m.to === otherId) || (m.from === otherId && m.to === meId))
-      .sort((a, b) => a.ts - b.ts);
-  }, [db.messages, meId, otherId]);
+  // A thread is addressed by handle; older links and the demo data used ids.
+  const handle = String(params.uid ?? '');
+  const other = useMemo<User | undefined>(
+    () => db.users.find(u => u.username === handle || u.id === handle),
+    [db.users, handle],
+  );
 
   useEffect(() => {
-    if (!meId || !otherId) return;
-    const hasUnread = db.messages.some(m => m.from === otherId && m.to === meId && !m.read);
-    if (!hasUnread) return;
-    setDb(prev => ({
-      ...prev,
-      messages: prev.messages.map(m => m.from === otherId && m.to === meId && !m.read ? { ...m, read: true } : m)
-    }));
-  }, [db.messages, meId, otherId, setDb]);
+    if (!serverMode || !handle || other) return;
+    let live = true;
+    loadPerson(handle)
+      .then(read => { if (live && !read) setMissing(true); })
+      .catch(() => {});
+    return () => { live = false; };
+  }, [serverMode, handle, other, loadPerson]);
 
-  useEffect(() => {
-    const el = threadRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [thread.length, otherId]);
-
-  const submit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!other || !text.trim()) return;
-    sendMessage(other.id, text);
-    setText('');
-    inputRef.current?.focus();
-  };
-
+  // `ready` gates the sign-in copy: on a cold load the session restores a beat
+  // after this screen mounts, and a signed-in reader is not "signed out".
   if (!me) {
     return <AppShell>
-      <div className="empty-state">
+      {ready && <div className="empty-state">
         <span className="empty-state-icon">{IC.msg}</span>
         <h2>{t('needLogin')}</h2>
         <button type="button" className="empty-state-cta" onClick={() => router.push('/login')}>{t('signIn')}</button>
+      </div>}
+    </AppShell>;
+  }
+
+  const side = (
+    <div className="messenger-side">
+      <ConversationList head={<h1 className="messenger-side-title">{t('messages')}</h1>} activeId={other?.id} />
+    </div>
+  );
+
+  const main = !other
+    ? serverMode && !missing ? (
+      <div className="chat-skeleton" aria-hidden="true">
+        <span className="sk-lines"><i /><i /></span>
+        <span className="sk-lines right"><i /></span>
       </div>
-    </AppShell>;
-  }
-
-  if (!other) {
-    return <AppShell>
-      <header className="detail-header">
-        <button type="button" className="icon-btn" aria-label={t('back')} onClick={() => router.push('/messages')}>{IC.back}</button>
-        <h1>{t('messages')}</h1>
-        <span className="detail-header-spacer"/>
-      </header>
-      <p className="feed-empty">{t('noUser')}</p>
-    </AppShell>;
-  }
-
-  const todayStart = dayStart(Date.now());
-  let lastDay = 0;
+    ) : (
+      <div className="empty-state">
+        <h2>{t('noUser')}</h2>
+        <button type="button" className="empty-state-cta" onClick={() => router.push('/messages')}>{t('seeAllMessages')}</button>
+      </div>
+    )
+    : <ChatThread other={other} />;
 
   return <AppShell>
-    <div className="chat-view">
-      <header className="detail-header chat-header">
-        <button type="button" className="icon-btn" aria-label={t('back')} onClick={() => router.push('/messages')}>{IC.back}</button>
-        <button type="button" className="chat-header-id" onClick={() => router.push(`/u/${other.username}`)}>
-          <Avatar user={other} size={38}/>
-          <span className="chat-header-copy">
-            <b>{other.name}{other.verified && <VerifiedBadge/>}</b>
-            <span>@{other.username}</span>
-          </span>
-        </button>
-        <span className="detail-header-spacer"/>
-      </header>
-
-      <div className="chat-thread" ref={threadRef}>
-        {thread.length === 0 ? (
-          <div className="chat-intro">
-            <Avatar user={other} size={76}/>
-            <b>{other.name}{other.verified && <VerifiedBadge/>}</b>
-            <span>@{other.username}</span>
-            <button type="button" className="chat-wave" onClick={() => sendMessage(other.id, '👋')}>
-              <span aria-hidden>👋</span>{t('sayHi')}
-            </button>
-          </div>
-        ) : thread.map(m => {
-          const day = dayStart(m.ts);
-          const separator = day !== lastDay;
-          lastDay = day;
-          const mine = m.from === me.id;
-          return (
-            <div key={m.id} className="chat-turn">
-              {separator && (
-                <div className="chat-day">
-                  {day === todayStart
-                    ? t('today')
-                    : new Date(day).toLocaleDateString(lang === 'ne' ? 'ne-NP' : 'en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
-                </div>
-              )}
-              <div className={`chat-bubble-row ${mine ? 'mine' : 'theirs'}`}>
-                {!mine && <Avatar user={other} size={28}/>}
-                <div className={`chat-bubble ${mine ? 'mine' : 'theirs'}`}>
-                  <p>{m.text}</p>
-                  <span className="chat-meta">
-                    {ago(m.ts, lang)}
-                    {mine && <span className={`chat-receipt ${m.read ? 'read' : ''}`}>{m.read ? '✓✓' : '✓'}</span>}
-                  </span>
-                </div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      <form className="chat-compose" onSubmit={submit}>
-        <input
-          ref={inputRef}
-          value={text}
-          onChange={e => setText(e.target.value)}
-          placeholder={t('typeMessage')}
-          aria-label={t('typeMessage')}
-          maxLength={2000}
-          autoComplete="off"
-        />
-        <button type="submit" className="chat-send" disabled={!text.trim()} aria-label={t('send')}>{IC.send}</button>
-      </form>
+    <div className="inbox-view messenger">
+      {side}
+      <div className="messenger-main">{main}</div>
     </div>
   </AppShell>;
 }

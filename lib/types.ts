@@ -9,7 +9,9 @@ export interface User {
   name: string;
   role: Role;
   verified: boolean;
-  emailVerified: boolean;
+  // Only the session knows these two; a card for somebody else must stay silent
+  // so merging it over a profile cannot invent account settings.
+  emailVerified?: boolean;
   susp: Suspension | null;
   provider: SignupProvider;
   dob: string;
@@ -20,7 +22,7 @@ export interface User {
   avatar?: string;
   cover?: string;
   private?: boolean;
-  twoStep: boolean;
+  twoStep?: boolean;
   joined: number;
   coins: number;
   warning?: string | null;
@@ -126,6 +128,8 @@ export interface Message {
   text: string;
   ts: number;
   read: boolean;
+  /** Only the inbox answers this: how many messages are still unread in the thread. */
+  unread?: number;
 }
 
 export interface Listing {

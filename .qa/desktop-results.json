@@ -1,0 +1,152 @@
+{
+  "passed": 22,
+  "failed": 6,
+  "results": [
+    {
+      "name": "desktop: opens in dark mode by default",
+      "pass": true,
+      "detail": "{\"theme\":\"dark\",\"stored\":null,\"bodyBg\":\"rgb(16, 17, 20)\"}"
+    },
+    {
+      "name": "desktop: the page field is the soft canvas color",
+      "pass": true,
+      "detail": "rgb(16, 17, 20)"
+    },
+    {
+      "name": "desktop: the left rail is compact",
+      "pass": true,
+      "detail": "rail 212px"
+    },
+    {
+      "name": "desktop: the gap between rail and feed is wide",
+      "pass": true,
+      "detail": "40px"
+    },
+    {
+      "name": "desktop: no hairline between rail, feed and top bar",
+      "pass": true,
+      "detail": "rail 0px / topbar 0px"
+    },
+    {
+      "name": "desktop: the rail sits on the canvas, not on its own sheet",
+      "pass": true,
+      "detail": "rgba(0, 0, 0, 0)"
+    },
+    {
+      "name": "desktop: no sign in / sign up block inside the rail",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop: the theme switch lives on the right of the top bar",
+      "pass": true,
+      "detail": "{\"themeInRight\":true,\"toggleLeft\":false}"
+    },
+    {
+      "name": "desktop: suggestions are an inline list, not a card",
+      "pass": true,
+      "detail": "{\"card\":false,\"rail\":true,\"bg\":\"rgba(0, 0, 0, 0)\"}"
+    },
+    {
+      "name": "desktop: the bell in the top bar is a button, not a link",
+      "pass": true,
+      "detail": "{\"display\":\"flex\"}"
+    },
+    {
+      "name": "desktop: the bell opens an activity box over the canvas",
+      "pass": false,
+      "detail": "{\"rows\":0,\"groups\":[],\"tabs\":[\"All\",\"Unread\"],\"foot\":\"See all notifications\",\"right\":1380,\"top\":60,\"w\":380,\"bg\":\"rgb(24, 26, 30)\"}"
+    },
+    {
+      "name": "desktop: the Unread tab filters the popover to unread rows",
+      "pass": true,
+      "detail": "{\"active\":\"active\",\"allUnread\":true}"
+    },
+    {
+      "name": "desktop: a click outside closes the popover",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop: a popover row navigates and closes the popover",
+      "pass": false,
+      "detail": "{\"path\":\"/\",\"panel\":false}"
+    },
+    {
+      "name": "desktop: the message icon opens a thread list at the top of the page",
+      "pass": true,
+      "detail": "{\"rows\":1,\"search\":true,\"expand\":true,\"foot\":\"See all messages\",\"right\":1332,\"top\":60}"
+    },
+    {
+      "name": "desktop: the full-screen messenger is inbox column plus thread pane",
+      "pass": true,
+      "detail": "{\"path\":\"/messages\",\"side\":{\"w\":344,\"left\":212},\"main\":{\"w\":884,\"left\":556,\"right\":1440},\"calmShown\":false,\"rows\":1,\"empty\":true,\"search\":true,\"newChat\":true}"
+    },
+    {
+      "name": "desktop: the messenger owns the width (suggestions column steps aside)",
+      "pass": true,
+      "detail": "{\"calmShown\":false,\"mainRight\":1440}"
+    },
+    {
+      "name": "desktop: picking a thread opens it beside the inbox, not over it",
+      "pass": true,
+      "detail": "{\"path\":\"/messages/maya\",\"chat\":true,\"bubbles\":10,\"compose\":true,\"backHidden\":true,\"stillListed\":1,\"activeRow\":true}"
+    },
+    {
+      "name": "desktop: the thread hides the mobile back button on desktop",
+      "pass": true,
+      "detail": "{\"backHidden\":true}"
+    },
+    {
+      "name": "desktop: sending from the messenger pane appends the bubble",
+      "pass": true,
+      "detail": "{\"before\":10,\"after\":11,\"last\":\"Qoder phase 9 check\"}"
+    },
+    {
+      "name": "desktop: browser back steps out of the thread to the inbox",
+      "pass": true,
+      "detail": "{\"path\":\"/messages\",\"empty\":true}"
+    },
+    {
+      "name": "mobile: keeps the stored light theme on a narrow viewport",
+      "pass": true,
+      "detail": "{\"theme\":\"light\",\"vw\":390}"
+    },
+    {
+      "name": "mobile: the inbox stays a single column with no thread pane",
+      "pass": false,
+      "detail": "{\"rows\":0,\"mainHidden\":true,\"topbarHidden\":true,\"search\":false,\"head\":false}"
+    },
+    {
+      "name": "mobile: a thread is still full width with its back button",
+      "pass": false,
+      "detail": "{\"path\":\"/messages\",\"chatW\":0,\"sideHidden\":false,\"backShown\":false,\"compose\":false}"
+    },
+    {
+      "name": "mobile: the feed keeps its own sheet and loads posts",
+      "pass": false,
+      "detail": "{\"bg\":\"rgb(255, 255, 255)\",\"posts\":0}"
+    },
+    {
+      "name": "desktop: a guest signs in from the top bar, never the rail",
+      "pass": true,
+      "detail": "{\"railAuth\":false,\"signup\":true,\"signin\":true,\"railUser\":false}"
+    },
+    {
+      "name": "desktop: the popover tells a guest to sign in instead of failing",
+      "pass": true,
+      "detail": "{\"panel\":true,\"cta\":\"Sign in\"}"
+    },
+    {
+      "name": "no console or HTTP errors during the run",
+      "pass": false,
+      "detail": "console: Failed to load resource: net::ERR_NAME_NOT_RESOLVED @ https://cdn.example.com/clips/phewa.mp4 | console: Failed to load resource: net::ERR_NAME_NOT_RESOLVED @ https://cdn.example.com/clips/phewa.mp4 | console: Failed to load resource: net::ERR_NAME_NOT_RESOLVED @ https://cdn.example.com/clips/phewa.mp4 | console: Failed to load resource: net::ERR_NAME_NOT_RESOLVED @ https://cdn.example.com/clips/phewa.mp4"
+    }
+  ],
+  "errors": [
+    "console: Failed to load resource: net::ERR_NAME_NOT_RESOLVED @ https://cdn.example.com/clips/phewa.mp4",
+    "console: Failed to load resource: net::ERR_NAME_NOT_RESOLVED @ https://cdn.example.com/clips/phewa.mp4",
+    "console: Failed to load resource: net::ERR_NAME_NOT_RESOLVED @ https://cdn.example.com/clips/phewa.mp4",
+    "console: Failed to load resource: net::ERR_NAME_NOT_RESOLVED @ https://cdn.example.com/clips/phewa.mp4"
+  ]
+}

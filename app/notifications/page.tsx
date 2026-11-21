@@ -1,26 +1,14 @@
 'use client';
 
-import { useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import AppShell from '@/components/AppShell';
-import Avatar from '@/components/Avatar';
-import VerifiedBadge from '@/components/VerifiedBadge';
+import NotificationRow from '@/components/NotificationRow';
 import ThemeToggle from '@/components/ThemeToggle';
 import { useApp } from '@/lib/AppContext';
+import { useNotifications } from '@/lib/useNotifications';
+import { useWindowed } from '@/lib/useWindowed';
 import { IC } from '@/lib/icons';
-import { ago } from '@/lib/utils';
-import { Notification, NotificationKind, User } from '@/lib/types';
-
-const KIND_ICON: Record<NotificationKind, JSX.Element> = {
-  follow: IC.users,
-  reaction: IC.heart,
-  comment: IC.comment,
-  message: IC.msg,
-  coins: IC.coin,
-  promotion: IC.chart,
-  warning: IC.flag,
-  system: IC.shield
-};
+import { Notification } from '@/lib/types';
 
 function dayStart(ts: number) {
   const d = new Date(ts);
@@ -30,30 +18,31 @@ function dayStart(ts: number) {
 
 export default function NotificationsPage() {
   const router = useRouter();
-  const { db, me, t, setDb, markAllRead } = useApp();
-  const lang = db.lang;
+  const { me, t, markAllRead, markRead, serverMode, ready } = useApp();
 
-  const mine = useMemo(
-    () => db.notifications.filter(n => n.uid === me?.id).sort((a, b) => b.ts - a.ts),
-    [db.notifications, me?.id]
-  );
-  const unread = mine.filter(n => !n.read).length;
+  const { rows: all, unread, feed } = useNotifications();
+
   const todayStart = dayStart(Date.now());
+  const today = all.filter(n => n.ts >= todayStart);
+  const earlier = all.filter(n => n.ts < todayStart);
+  const shown = today.length + earlier.length;
+  const { limit, pending, sentinel, hasMore } = useWindowed(shown, 20, 'notifications',
+    serverMode ? {
+      hasMore: feed.hasMore, loading: feed.loading, load: feed.loadMore,
+      loaded: feed.loaded, error: feed.error, retry: feed.reload,
+    } : undefined);
+  // One window over two day-groups: the newest day fills first, so a page break
+  // never splits "Earlier" above something still waiting under "Today".
+  const visibleToday = today.slice(0, limit);
+  const visibleEarlier = earlier.slice(0, Math.max(0, limit - visibleToday.length));
   const groups: { label: string; items: Notification[] }[] = [];
-  const today = mine.filter(n => n.ts >= todayStart);
-  const earlier = mine.filter(n => n.ts < todayStart);
-  if (today.length) groups.push({ label: t('today'), items: today });
-  if (earlier.length) groups.push({ label: t('earlier'), items: earlier });
+  if (visibleToday.length) groups.push({ label: t('today'), items: visibleToday });
+  if (visibleEarlier.length) groups.push({ label: t('earlier'), items: visibleEarlier });
 
   const open = (n: Notification) => {
-    if (!n.read) {
-      setDb(prev => ({ ...prev, notifications: prev.notifications.map(x => x.id === n.id ? { ...x, read: true } : x) }));
-    }
+    if (!n.read) void markRead(n.id);
     if (n.href) router.push(n.href);
   };
-
-  const actorOf = (n: Notification): User | undefined =>
-    n.actor ? db.users.find(u => u.id === n.actor) : undefined;
 
   return <AppShell>
     <div className="notif-view">
@@ -74,13 +63,26 @@ export default function NotificationsPage() {
         </div>
       </header>
 
-      {!me ? (
+      {!me ? (ready ? (
         <div className="empty-state">
           <span className="empty-state-icon">{IC.bell}</span>
           <h2>{t('needLogin')}</h2>
           <button type="button" className="empty-state-cta" onClick={() => router.push('/login')}>{t('signIn')}</button>
         </div>
-      ) : mine.length === 0 ? (
+      ) : null) : shown === 0 && feed.error ? (
+        <div className="empty-state">
+          <h2>{t('listFailed')}</h2>
+          <button type="button" className="empty-state-cta" onClick={() => void feed.reload()}>{t('retry')}</button>
+        </div>
+      ) : shown === 0 && serverMode && !feed.loaded ? (
+        <div className="notif-list" aria-hidden="true">
+          {[0, 1, 2].map(i => (
+            <div className="people-skeleton" key={i}>
+              <span className="sk-avatar" /><span className="sk-lines"><i /><i /></span>
+            </div>
+          ))}
+        </div>
+      ) : shown === 0 ? (
         <div className="empty-state">
           <span className="empty-state-icon">{IC.bell}</span>
           <h2>{t('noNotifications')}</h2>
@@ -91,32 +93,17 @@ export default function NotificationsPage() {
           {groups.map(g => (
             <section key={g.label} className="notif-group">
               <h2 className="notif-group-label">{g.label}</h2>
-              {g.items.map(n => {
-                const actor = actorOf(n);
-                return (
-                  <button
-                    type="button"
-                    key={n.id}
-                    className={`notif-row ${n.read ? '' : 'unread'}`}
-                    onClick={() => open(n)}
-                  >
-                    <span className={`notif-icon kind-${n.kind}`}>
-                      {actor ? <Avatar user={actor} size={44}/> : KIND_ICON[n.kind]}
-                      {actor && <span className="notif-icon-badge">{KIND_ICON[n.kind]}</span>}
-                    </span>
-                    <span className="notif-main">
-                      <span className="notif-text">
-                        {actor && <b>{actor.name}{actor.verified && <VerifiedBadge/>}</b>}
-                        {actor ? ' ' : ''}{n.text}
-                      </span>
-                      <span className={`notif-time ${n.read ? '' : 'fresh'}`}>{ago(n.ts, lang)}</span>
-                    </span>
-                    {!n.read && <span className="notif-dot" aria-label={t('unread')}/>}
-                  </button>
-                );
-              })}
+              {g.items.map(n => (
+                <NotificationRow key={n.id} n={n} onOpen={open} />
+              ))}
             </section>
           ))}
+          {pending && hasMore && (
+            <div className="people-skeleton" aria-hidden="true">
+              <span className="sk-avatar" /><span className="sk-lines"><i /><i /></span>
+            </div>
+          )}
+          {hasMore && <div ref={sentinel} className="feed-sentinel" aria-hidden="true" />}
         </div>
       )}
     </div>

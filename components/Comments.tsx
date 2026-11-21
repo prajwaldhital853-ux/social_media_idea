@@ -7,6 +7,7 @@ import { useApp } from '@/lib/AppContext';
 import { ago, uid, REACTIONS, reactionMeta } from '@/lib/utils';
 import { Comment, ReactionKind } from '@/lib/types';
 import { IC } from '@/lib/icons';
+import { commentsFragment, loadList, loadMoreList, pushListRow, useList } from '@/lib/lists';
 import { useBackClose, closeLayerWithoutBack } from '@/lib/useBackClose';
 import { useWindowed } from '@/lib/useWindowed';
 import Avatar from './Avatar';
@@ -33,8 +34,9 @@ function CommentText({ text, replyToName }: { text: string; replyToName?: string
 }
 
 export default function Comments({ postId, onClose, mediaIndex }: { postId: string; onClose?: () => void; mediaIndex?: number }) {
-  const { db, me, addComment, deleteComment, react, myReaction, t } = useApp();
+  const { db, me, addComment, deleteComment, react, myReaction, reactionCount, t, serverMode, showToast } = useApp();
   const [text, setText] = useState('');
+  const [sending, setSending] = useState(false);
   const [sort, setSort] = useState('newest');
   const [replyingTo, setReplyingTo] = useState<{ id: string; name: string } | null>(null);
   const [openThreads, setOpenThreads] = useState<Record<string, boolean>>({});
@@ -52,11 +54,42 @@ export default function Comments({ postId, onClose, mediaIndex }: { postId: stri
   const targetType = isMedia ? 'media' as const : 'post' as const;
   const targetId = isMedia ? `${postId}#m${mediaIndex}` : postId;
 
-  const allComments = db.comments.filter(c => c.pid === postId && c.status === 'live' && (isMedia ? c.mediaIndex === mediaIndex : c.mediaIndex === undefined));
-  const topLevelComments = allComments.filter(c => !c.parentId).sort((a, b) => sort === 'newest' ? b.ts - a.ts : a.ts - b.ts);
-  const { limit: commentLimit, pending: commentsPending, sentinel: commentsSentinel, hasMore: moreComments } = useWindowed(topLevelComments.length, 10, `${postId}|${mediaIndex}|${sort}`);
+  // Top-level comments are a keyset page of their own; replies live under their
+  // parent so one long thread cannot push the rest of the stream off the screen.
+  const streamQuery = {
+    post: postId,
+    top: 1,
+    media_index: isMedia ? mediaIndex : undefined,
+    order: sort === 'oldest' ? 'oldest' : undefined,
+  };
+  const stream = useList(
+    `comments:${targetId}`,
+    { path: '/comments/', frag: commentsFragment(me?.id || null) },
+    streamQuery,
+    serverMode && !!postId,
+  );
+  const replyDef = { path: '/comments/', frag: commentsFragment(me?.id || null) };
 
-  const postReactions = db.reactions.filter(r => r.targetType === targetType && r.targetId === targetId);
+  const allComments = db.comments.filter(c => c.pid === postId && c.status === 'live' && (isMedia ? c.mediaIndex === mediaIndex : c.mediaIndex === undefined));
+  const byId = new Map(allComments.map(c => [c.id, c] as [string, Comment]));
+  // The server's rows in the server's order; replies join them from the cache
+  // once their own thread has been opened.
+  const fromServer = stream.ids.map(id => byId.get(id)).filter((c): c is Comment => !!c);
+  const topLevelComments = serverMode
+    ? fromServer
+    : allComments.filter(c => !c.parentId).sort((a, b) => sort === 'newest' ? b.ts - a.ts : a.ts - b.ts);
+  const { limit: commentLimit, pending: commentsPending, sentinel: commentsSentinel, hasMore: moreComments } = useWindowed(
+    topLevelComments.length, 10, `${postId}|${mediaIndex}|${sort}`,
+    serverMode ? {
+      hasMore: stream.hasMore, loading: stream.loading, load: stream.loadMore,
+      loaded: stream.loaded, error: stream.error, retry: stream.reload,
+    } : undefined,
+  );
+
+  const postReactions = serverMode
+    ? []
+    : db.reactions.filter(r => r.targetType === targetType && r.targetId === targetId);
+  const reactionsShown = serverMode ? reactionCount(targetType, targetId) : postReactions.length;
   const postKinds = REACTIONS.map(r => r.kind).filter(k => postReactions.some(r => r.kind === k));
   const quickKinds = postKinds.length ? postKinds : REACTIONS.map(r => r.kind);
   const myPostReaction = myReaction(targetType, targetId);
@@ -98,20 +131,34 @@ export default function Comments({ postId, onClose, mediaIndex }: { postId: stri
     requestAnimationFrame(() => { el.focus(); const pos = start + emoji.length; el.setSelectionRange(pos, pos); });
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!text.trim() || !me) return;
+    if (!text.trim() || !me || sending) return;
     const parentId = replyingTo?.id;
-    addComment({
-      id: uid(),
-      pid: postId,
-      uid: me.id,
-      text: text.trim(),
-      ts: Date.now(),
-      status: 'live',
-      parentId,
-      mediaIndex
-    });
+    setSending(true);
+    let saved: Comment;
+    try {
+      saved = await addComment({
+        id: uid(),
+        pid: postId,
+        uid: me.id,
+        text: text.trim(),
+        ts: Date.now(),
+        status: 'live',
+        parentId,
+        mediaIndex
+      });
+    } catch (err: any) {
+      // Keep the draft in the box; a rejected comment must not silently vanish.
+      showToast(err?.message || 'Could not send your comment.');
+      setSending(false);
+      return;
+    }
+    setSending(false);
+    if (serverMode) {
+      if (parentId) pushListRow(`replies:${parentId}`, { parent: parentId }, saved.id);
+      else pushListRow(`comments:${targetId}`, streamQuery, saved.id);
+    }
     if (parentId) {
       setOpenThreads(prev => ({ ...prev, [parentId]: true }));
       setThreadLimit(prev => ({ ...prev, [parentId]: Math.max(prev[parentId] || PAGE, PAGE) }));
@@ -143,12 +190,33 @@ export default function Comments({ postId, onClose, mediaIndex }: { postId: stri
   const getReplies = (commentId: string) =>
     allComments.filter(c => c.parentId === commentId).sort((a, b) => a.ts - b.ts);
 
+  /** How many replies the server says a comment has — cached rows are only some of them. */
+  const replyTotal = (comment: Comment) =>
+    serverMode ? Math.max(comment.replies ?? 0, getReplies(comment.id).length) : getReplies(comment.id).length;
+
+  const showThread = (commentId: string, open: boolean) => {
+    setOpenThreads(prev => ({ ...prev, [commentId]: open }));
+    if (!open) return;
+    setThreadLimit(prev => ({ ...prev, [commentId]: prev[commentId] || PAGE }));
+    if (serverMode) void loadList(`replies:${commentId}`, replyDef, { parent: commentId });
+  };
+
+  const moreThread = (commentId: string) => {
+    if (serverMode) {
+      void loadMoreList(`replies:${commentId}`, replyDef, { parent: commentId });
+      setThreadLimit(prev => ({ ...prev, [commentId]: (prev[commentId] || PAGE) + PAGE }));
+      return;
+    }
+    setThreadLimit(prev => ({ ...prev, [commentId]: (prev[commentId] || PAGE) + PAGE }));
+  };
+
   const renderComment = (comment: Comment, isReply = false) => {
     const author = db.users.find(u => u.id === comment.uid);
     if (!author) return null;
     const commentReactions = db.reactions.filter(r => r.targetType === 'comment' && r.targetId === comment.id);
     const kinds = REACTIONS.map(r => r.kind).filter(k => commentReactions.some(r => r.kind === k));
     const replies = isReply ? [] : getReplies(comment.id);
+    const replyCount = isReply ? 0 : replyTotal(comment);
     const threadOpen = !!openThreads[comment.id];
     const limit = threadLimit[comment.id] || PAGE;
     const shownReplies = replies.slice(0, limit);
@@ -181,28 +249,25 @@ export default function Comments({ postId, onClose, mediaIndex }: { postId: stri
               </button>
             )}
           </div>
-          {replies.length > 0 && (
+          {replyCount > 0 && (
             <>
               <button
                 type="button"
                 className={`view-replies ${threadOpen ? 'open' : ''}`}
                 aria-expanded={threadOpen}
                 onPointerDown={e => e.preventDefault()}
-                onClick={() => {
-                  setOpenThreads(prev => ({ ...prev, [comment.id]: !threadOpen }));
-                  if (!threadOpen) setThreadLimit(prev => ({ ...prev, [comment.id]: prev[comment.id] || PAGE }));
-                }}
+                onClick={() => showThread(comment.id, !threadOpen)}
               >
                 <span className="view-replies-line" />
-                {threadOpen ? 'Hide replies' : `View ${replies.length} ${replies.length === 1 ? 'reply' : 'replies'}`}
+                {threadOpen ? 'Hide replies' : `View ${replyCount} ${replyCount === 1 ? 'reply' : 'replies'}`}
                 <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg>
               </button>
               {threadOpen && (
                 <div className="comment-replies">
                   {shownReplies.map(reply => renderComment(reply, true))}
-                  {replies.length > limit && (
-                    <button type="button" className="view-more-replies" onPointerDown={e => e.preventDefault()} onClick={() => setThreadLimit(prev => ({ ...prev, [comment.id]: limit + PAGE }))}>
-                      View more replies ({replies.length - limit})
+                  {replyCount > shownReplies.length && (
+                    <button type="button" className="view-more-replies" onPointerDown={e => e.preventDefault()} onClick={() => moreThread(comment.id)}>
+                      View more replies ({Math.max(0, replyCount - shownReplies.length)})
                     </button>
                   )}
                 </div>
@@ -260,7 +325,7 @@ export default function Comments({ postId, onClose, mediaIndex }: { postId: stri
               ))}
             </span>
           )}
-          <span className="reactions-count">{postReactions.length > 0 ? postReactions.length : ''}</span>
+          <span className="reactions-count">{reactionsShown > 0 ? reactionsShown : ''}</span>
         </div>
         {sheet && <button type="button" className="icon-btn" aria-label="Close comments" onClick={requestClose}>{IC.x}</button>}
       </div>
@@ -271,10 +336,25 @@ export default function Comments({ postId, onClose, mediaIndex }: { postId: stri
             <option value="oldest">Oldest</option>
           </select>
         </label>
-        <span>{allComments.length}</span>
+        <span>{serverMode && !isMedia ? (db.posts.find(p => p.id === postId)?.comments ?? allComments.length) : allComments.length}</span>
       </div>
       <div className="comments-list" ref={list}>
-        {!topLevelComments.length && <div className="comments-empty">{IC.msg}<h2>No comments yet</h2><p>Be the first to comment.</p></div>}
+        {serverMode && stream.error ? (
+          <div className="comments-empty">
+            <h2>{t('listFailed')}</h2>
+            <button type="button" className="ghost-btn" onClick={() => void stream.reload()}>{t('retry')}</button>
+          </div>
+        ) : !topLevelComments.length && serverMode && !stream.loaded ? (
+          <div aria-hidden="true">
+            {[0, 1, 2].map(i => (
+              <div className="comment-skeleton" key={i}>
+                <span className="sk-avatar" /><span className="sk-lines"><i /><i /></span>
+              </div>
+            ))}
+          </div>
+        ) : (!topLevelComments.length && (!serverMode || stream.loaded)) ? (
+          <div className="comments-empty">{IC.msg}<h2>No comments yet</h2><p>Be the first to comment.</p></div>
+        ) : null}
         {topLevelComments.slice(0, commentLimit).map(c => renderComment(c))}
         {commentsPending && moreComments && (
           <div className="comment-skeleton" aria-hidden="true">
@@ -328,7 +408,7 @@ export default function Comments({ postId, onClose, mediaIndex }: { postId: stri
               onChange={e => setText(e.target.value)}
             />
             <button type="button" className="emoji-btn" aria-label="Emoji" aria-expanded={emojiOpen} onPointerDown={e => e.preventDefault()} onClick={() => { setEmojiOpen(v => !v); inputRef.current?.focus(); }}>{IC.smile}</button>
-            <button type="submit" aria-label="Send comment" disabled={!text.trim()} onPointerDown={e => e.preventDefault()}>
+            <button type="submit" aria-label="Send comment" disabled={!text.trim() || sending} onPointerDown={e => e.preventDefault()}>
               {IC.send}
             </button>
           </div>

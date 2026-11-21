@@ -1,6 +1,7 @@
 'use client';
 
 import { api } from './api';
+import { mediaUrl } from './dto';
 
 /**
  * Media storage for the API build.
@@ -15,16 +16,20 @@ export interface UploadResult {
   bytes: number;
 }
 
-export async function uploadFile(source: File | Blob, name?: string): Promise<UploadResult> {
+export type Progress = (sent: number, total: number) => void;
+
+export async function uploadFile(source: File | Blob, name?: string, onProgress?: Progress): Promise<UploadResult> {
   const file = source instanceof File ? source : toFile(source, name || guessName(source.type));
-  const res = await api.upload(file);
-  return { url: res.url, kind: res.kind === 'video' ? 'video' : 'image', bytes: Number(res.bytes) || file.size };
+  const res = await api.upload(file, onProgress);
+  // Django builds the URL from its own host; the app serves the same files under
+  // /media/, and reading through that keeps uploads on the page's origin.
+  return { url: mediaUrl(res.url), kind: res.kind === 'video' ? 'video' : 'image', bytes: Number(res.bytes) || file.size };
 }
 
 /** Canvas output arrives as a data URL; the API wants the bytes behind it. */
-export async function uploadDataUrl(dataUrl: string, name = 'photo.jpg'): Promise<string> {
+export async function uploadDataUrl(dataUrl: string, name = 'photo.jpg', onProgress?: Progress): Promise<string> {
   const blob = await (await fetch(dataUrl)).blob();
-  return (await uploadFile(blob, name)).url;
+  return (await uploadFile(blob, name, onProgress)).url;
 }
 
 function toFile(blob: Blob, name: string): File {

@@ -27,6 +27,7 @@ export default function ListingForm({ onClose, onSaved, listingId }: ListingForm
   const [url, setUrl] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [sending, setSending] = useState<{ name: string; pct: number } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   useBackClose(true, onClose);
 
@@ -42,12 +43,19 @@ export default function ListingForm({ onClose, onSaved, listingId }: ListingForm
     setBusy(true);
     setError('');
     try {
-      const added = await Promise.all(images.map(f => mediaFromFile(f)));
+      const added: Media[] = [];
+      // One at a time: the bar then describes the file actually in flight.
+      for (const file of images) {
+        added.push(await mediaFromFile(file, (sent, total) => {
+          setSending({ name: file.name, pct: total > 0 ? Math.min(99, Math.round(sent / total * 100)) : 0 });
+        }));
+      }
       setMedia(prev => [...prev, ...added].slice(0, 4));
     } catch (e) {
       setError(e instanceof Error ? e.message : t('e_photos4'));
     } finally {
       setBusy(false);
+      setSending(null);
       if (fileRef.current) fileRef.current.value = '';
     }
   };
@@ -149,13 +157,21 @@ export default function ListingForm({ onClose, onSaved, listingId }: ListingForm
               ))}
               {media.length < 4 && (
                 <button type="button" className="listing-form-add" disabled={busy} onClick={() => fileRef.current?.click()}>
-                  {IC.camera}<span>{busy ? '…' : t('addPhotos')}</span>
+                  {IC.camera}<span>{sending ? `${sending.pct}%` : busy ? '…' : t('addPhotos')}</span>
                 </button>
               )}
             </div>
             <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" multiple hidden onChange={e => addFiles(e.target.files)}/>
             <span className="field-count">{media.length}/4</span>
           </div>
+
+          {sending && (
+            <div className="create-upload" role="status">
+              <span className="create-upload-name">{sending.name}</span>
+              <span className="create-upload-track"><i style={{ width: `${sending.pct}%` }} /></span>
+              <b className="create-upload-pct">{sending.pct}%</b>
+            </div>
+          )}
 
           {media.length < 4 && (
             <div className="listing-url-row">

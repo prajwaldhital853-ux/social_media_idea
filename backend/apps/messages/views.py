@@ -8,6 +8,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from apps.accounts.models import User
+from apps.common.api import person
 from apps.common.pagination import KeysetPagination, decode_cursor
 from apps.follows.models import Follow
 from apps.notifications.services import notify
@@ -49,7 +50,9 @@ def _get_or_create_conversation(user, other):
 @permission_classes([IsAuthenticated])
 def inbox(request):
     qs = Conversation.objects.filter(participants=request.user).exclude(last_message_at__isnull=True)
-    paginator = KeysetPagination()
+    # An inbox walks by the last message, not by when the thread was opened:
+    # the conversation you typed in a second ago belongs at the top.
+    paginator = KeysetPagination('last_message_at')
     rows = paginator.paginate_queryset(qs.prefetch_related('participants__profile'), request)
     results = []
     for conversation in rows:
@@ -58,7 +61,7 @@ def inbox(request):
         unread = conversation.messages.filter(sender=other, read_at__isnull=True).count() if other else 0
         results.append({
             'conversation': conversation.pk,
-            'user': {'id': other.pk, 'username': other.username, 'name': other.profile.display_name, 'avatar_url': other.profile.avatar_url} if other else None,
+            'user': person(other) if other else None,
             'last_message': MessageSerializer(last).data if last else None,
             'unread': unread,
             'mutual': False,
@@ -73,10 +76,7 @@ def inbox(request):
             if other:
                 talked.add(other.pk)
         mutual_users = User.objects.filter(pk__in=(mine & theirs) - talked).select_related('profile')
-        response.data['mutuals'] = [
-            {'user': {'id': u.pk, 'username': u.username, 'name': u.profile.display_name, 'avatar_url': u.profile.avatar_url}, 'mutual': True}
-            for u in mutual_users
-        ]
+        response.data['mutuals'] = [{'user': person(u), 'mutual': True} for u in mutual_users]
     return response
 
 

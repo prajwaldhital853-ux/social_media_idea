@@ -1,0 +1,172 @@
+{
+  "results": [
+    {
+      "name": "desktop: the demo account signs in against /api/auth/",
+      "pass": true,
+      "detail": "/"
+    },
+    {
+      "name": "desktop: the session is the account that signed in",
+      "pass": true,
+      "detail": "\"sita\""
+    },
+    {
+      "name": "desktop: the feed renders a keyset page of real posts",
+      "pass": true,
+      "detail": "screen 10, page 11"
+    },
+    {
+      "name": "desktop: scrolling the feed walks cursors, not windows of the cache",
+      "pass": true,
+      "detail": "11 -> 88"
+    },
+    {
+      "name": "desktop: reels come from the video keyset stream",
+      "pass": true,
+      "detail": "screen 5 slides / 5 videos, api 5 posts"
+    },
+    {
+      "name": "desktop: the reel counter reads the server page",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop: the oldest-first cursor walks the feed backwards",
+      "pass": true,
+      "detail": "oldest head 2026-11-20T14:35:13.538932Z vs newest page tail 2026-11-21T05:16:58.375088Z, ascending true"
+    },
+    {
+      "name": "desktop: a deep-linked post hydrates by id",
+      "pass": true,
+      "detail": "Sita Karki@sita18h agoWeekend in Pokhara: a little clip from"
+    },
+    {
+      "name": "desktop: a comment is written to /api/comments/ and rendered from it",
+      "pass": true,
+      "detail": "{\"id\":\"32\",\"text\":true}"
+    },
+    {
+      "name": "desktop: the comment survives a server-side read back",
+      "pass": true,
+      "detail": "10 top-level rows"
+    },
+    {
+      "name": "desktop: the comment is still there after a reload",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop: sorting by oldest reads the ascending page",
+      "pass": true,
+      "detail": "screen MGMaya GurungThat water color is unreal. vs That water color is unreal."
+    },
+    {
+      "name": "desktop: the marketplace grid renders the page the server chose",
+      "pass": true,
+      "detail": "screen 9, api 9, has_more false"
+    },
+    {
+      "name": "desktop: a deep-linked listing hydrates by id",
+      "pass": true,
+      "detail": "Trekking pole pair, barely used vs Trekking pole pair, barely used"
+    },
+    {
+      "name": "desktop: the listing page knows its seller",
+      "pass": true,
+      "detail": "ATArjun Thapa@arjun1 Listings"
+    },
+    {
+      "name": "desktop: profile totals come from the profile row",
+      "pass": true,
+      "detail": "10 Posts | 2 Followers | 1 Following vs followers=2"
+    },
+    {
+      "name": "desktop: the followers list is a keyset page of people",
+      "pass": true,
+      "detail": "screen 2, api 2"
+    },
+    {
+      "name": "desktop: people search hits /api/users/",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop: the searched person is the account itself",
+      "pass": true,
+      "detail": "Sita Karki@sita"
+    },
+    {
+      "name": "desktop: the top bar badges match the unread counters",
+      "pass": true,
+      "detail": "screen [\"2\"] vs api [2]"
+    },
+    {
+      "name": "desktop: a chat partner exists for the thread test",
+      "pass": true,
+      "detail": "maya"
+    },
+    {
+      "name": "desktop: twelve messages land on the thread endpoint",
+      "pass": true,
+      "detail": "{\"sent\":12,\"status\":200}"
+    },
+    {
+      "name": "desktop: the inbox leads with the conversation just written",
+      "pass": true,
+      "detail": "MGMaya GurungYou follow each other — say hi."
+    },
+    {
+      "name": "desktop: the thread opens on the newest keyset page",
+      "pass": true,
+      "detail": "10 bubbles, load-more 1"
+    },
+    {
+      "name": "desktop: \"load more\" prepends an older page of the thread",
+      "pass": true,
+      "detail": "10 -> 20"
+    },
+    {
+      "name": "desktop: loading older rows keeps the reader where they were",
+      "pass": true,
+      "detail": "721 -> 721"
+    },
+    {
+      "name": "desktop: opening a thread marks it read on the server",
+      "pass": true,
+      "detail": "unread messages 0 -> 0"
+    },
+    {
+      "name": "desktop: notifications render the server page",
+      "pass": true,
+      "detail": "2 vs 2"
+    },
+    {
+      "name": "desktop: saved posts come from /api/saved/posts/",
+      "pass": true,
+      "detail": "1 vs 1"
+    },
+    {
+      "name": "mobile: the feed pages with cursors on a phone",
+      "pass": true,
+      "detail": "10 -> 88"
+    },
+    {
+      "name": "mobile: the thread loads older messages on a phone",
+      "pass": true,
+      "detail": "10 -> 20"
+    },
+    {
+      "name": "mobile: a comment sent from a phone reaches the server",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile: reels stream on a phone",
+      "pass": true,
+      "detail": "5"
+    }
+  ],
+  "errors": [
+    "console: Failed to load resource: net::ERR_NAME_NOT_RESOLVED @ https://cdn.example.com/clips/phewa.mp4"
+  ]
+}

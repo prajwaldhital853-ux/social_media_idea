@@ -4,12 +4,14 @@ import { useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useApp } from '@/lib/AppContext';
 import { useBackClose } from '@/lib/useBackClose';
-import { COUNTRIES, resizeImage } from '@/lib/utils';
+import { COUNTRIES } from '@/lib/utils';
+import { profileImage } from '@/lib/mediaFile';
+import { API_ENABLED } from '@/lib/api';
 import Avatar from './Avatar';
 import { IC } from '@/lib/icons';
 
 export default function EditProfileModal({ onClose }: { onClose: () => void }) {
-  const { me, setDb, t, showToast } = useApp();
+  const { me, setDb, t, showToast, updateProfile } = useApp();
   const [name, setName] = useState(me?.name || '');
   const [bio, setBio] = useState(me?.bio || '');
   const [country, setCountry] = useState(me?.country || 'Nepal');
@@ -20,6 +22,8 @@ export default function EditProfileModal({ onClose }: { onClose: () => void }) {
   const [dob, setDob] = useState(me?.dob || '');
   const [isPrivate, setIsPrivate] = useState(!!me?.private);
   const [busy, setBusy] = useState(false);
+  const [uploading, setUploading] = useState(0);
+  const [error, setError] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
   const coverRef = useRef<HTMLInputElement>(null);
 
@@ -27,38 +31,48 @@ export default function EditProfileModal({ onClose }: { onClose: () => void }) {
 
   if (!me) return null;
 
-  const pickAvatar = async (file: File | undefined) => {
+  const pickImage = async (file: File | undefined, max: number, apply: (src: string) => void) => {
     if (!file) return;
     setBusy(true);
+    setUploading(0);
+    setError('');
     try {
-      setAvatar(await resizeImage(file));
-    } catch {
-      showToast(t('e_type'));
+      apply(await profileImage(file, max, (sent, total) => setUploading(total > 0 ? Math.min(99, Math.round(sent / total * 100)) : 0)));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'That image could not be read. Try another one.');
     } finally {
       setBusy(false);
+      setUploading(0);
     }
   };
 
-  const pickCover = async (file: File | undefined) => {
-    if (!file) return;
-    setBusy(true);
-    try {
-      setCover(await resizeImage(file, 1600));
-    } catch {
-      showToast(t('e_type'));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setDb(prev => ({
-      ...prev,
-      users: prev.users.map(u => u.id === me.id ? { ...u, name: name.trim() || u.username, bio: bio.trim(), country, province: province.trim(), city: city.trim(), avatar: avatar || undefined, cover: cover || undefined, dob, private: isPrivate } : u)
-    }));
-    showToast(t('profileUpdated'));
-    onClose();
+    if (!name.trim()) {
+      setError('A display name is needed before saving.');
+      return;
+    }
+    const patch = {
+      name: name.trim(), bio: bio.trim(), country, province: province.trim(), city: city.trim(),
+      avatar: avatar || '', cover: cover || '', dob, private: isPrivate,
+    };
+    // Demo builds have no server to call, so the cache is the source of truth.
+    if (!API_ENABLED) {
+      setDb(prev => ({ ...prev, users: prev.users.map(u => u.id === me.id ? { ...u, ...patch } : u) }));
+      showToast(t('profileUpdated'));
+      onClose();
+      return;
+    }
+    setBusy(true);
+    setError('');
+    try {
+      await updateProfile(patch);
+      showToast(t('profileUpdated'));
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Your profile could not be saved.');
+      setBusy(false);
+    }
   };
 
   return createPortal(
@@ -73,9 +87,9 @@ export default function EditProfileModal({ onClose }: { onClose: () => void }) {
             <Avatar user={{ ...me, avatar: avatar || undefined }} size={72} />
             <button type="button" className="edit-avatar-btn" disabled={busy} onClick={() => fileRef.current?.click()}>
               {IC.camera}
-              <span>{busy ? '…' : t('changePhoto')}</span>
+              <span>{uploading ? `Uploading ${uploading}%` : busy ? '…' : t('changePhoto')}</span>
             </button>
-            <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={e => { void pickAvatar(e.target.files?.[0]); e.target.value = ''; }} />
+            <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={e => { void pickImage(e.target.files?.[0], 320, setAvatar); e.target.value = ''; }} />
           </div>
           <div className="edit-cover-row">
             <div className="edit-cover-preview" style={cover ? { backgroundImage: `url(${cover})` } : undefined}>
@@ -83,10 +97,10 @@ export default function EditProfileModal({ onClose }: { onClose: () => void }) {
             </div>
             <button type="button" className="edit-avatar-btn" disabled={busy} onClick={() => coverRef.current?.click()}>
               {IC.camera}
-              <span>{busy ? '…' : t('changeCover')}</span>
+              <span>{uploading ? `Uploading ${uploading}%` : busy ? '…' : t('changeCover')}</span>
             </button>
             {cover && <button type="button" className="edit-cover-clear" onClick={() => setCover('')} aria-label={t('close')}>{IC.x}</button>}
-            <input ref={coverRef} type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={e => { void pickCover(e.target.files?.[0]); e.target.value = ''; }} />
+            <input ref={coverRef} type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={e => { void pickImage(e.target.files?.[0], 1600, setCover); e.target.value = ''; }} />
           </div>
           <label className="field">
             <span>{t('fullName')}</span>
@@ -124,7 +138,8 @@ export default function EditProfileModal({ onClose }: { onClose: () => void }) {
             </span>
             <input type="checkbox" checked={isPrivate} onChange={e => setIsPrivate(e.target.checked)} />
           </label>
-          <button type="submit" className="promote-submit" disabled={busy}>{t('save')}</button>
+          {error && <p className="form-error" role="alert">{error}</p>}
+          <button type="submit" className="promote-submit" disabled={busy}>{busy && !uploading ? 'Saving…' : t('save')}</button>
         </form>
       </div>
     </div>,

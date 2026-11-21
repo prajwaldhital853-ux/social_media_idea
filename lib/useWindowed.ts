@@ -6,6 +6,10 @@ export interface ServerPaging {
   hasMore: boolean;
   loading: boolean;
   load: () => void | Promise<void>;
+  /** Set once the first page has answered, so an empty list can look different from an unsent one. */
+  loaded?: boolean;
+  error?: string | null;
+  retry?: () => void | Promise<void>;
 }
 
 /**

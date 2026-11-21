@@ -50,7 +50,7 @@ function StatusChip({ status }: { status: string }) {
 }
 
 export default function WalletPage() {
-  const { db, me, t, setDb, showToast, cancelPromotion } = useApp();
+  const { db, me, t, setDb, showToast, cancelPromotion, ready } = useApp();
   const [coins, setCoins] = useState(100);
   const [method, setMethod] = useState<'bank' | 'qr'>('bank');
   const [reference, setReference] = useState('');
@@ -69,7 +69,9 @@ export default function WalletPage() {
             <div className="header-actions"><ThemeToggle compact /></div>
           </div>
         </header>
-        <div className="feed-empty"><p>{t('needLogin')}</p><Link href="/login">{t('signIn')}</Link></div>
+        <div className="feed-empty">
+          {ready && <><p>{t('needLogin')}</p><Link href="/login">{t('signIn')}</Link></>}
+        </div>
       </AppShell>
     );
   }

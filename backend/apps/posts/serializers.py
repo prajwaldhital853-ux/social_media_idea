@@ -25,6 +25,9 @@ class PostSerializer(serializers.ModelSerializer):
     author_name = serializers.CharField(source='author.profile.display_name', read_only=True)
     author_avatar_url = serializers.CharField(source='author.profile.avatar_url', read_only=True)
     author_verified = serializers.BooleanField(source='author.profile.verified', read_only=True)
+    # A card for an author the viewer has never met still has to say whether
+    # following them is a follow or a request.
+    author_is_private = serializers.BooleanField(source='author.profile.is_private', read_only=True)
     media = PostMediaSerializer(many=True, required=False)
     my_reaction = serializers.SerializerMethodField()
     my_media_reactions = serializers.SerializerMethodField()
@@ -33,7 +36,7 @@ class PostSerializer(serializers.ModelSerializer):
         model = Post
         fields = [
             'id', 'author', 'author_username', 'author_name', 'author_avatar_url', 'author_verified',
-            'text', 'audience', 'status',
+            'author_is_private', 'text', 'audience', 'status',
             'mood', 'place', 'category', 'like_count', 'comment_count',
             'edited', 'created_at', 'updated_at', 'media',
             'my_reaction', 'my_media_reactions',

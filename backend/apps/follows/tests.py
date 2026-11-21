@@ -1,5 +1,6 @@
 from django.core.cache import cache
 from django.test import TestCase, TransactionTestCase
+from rest_framework.test import APIClient
 
 from apps.accounts.models import User
 from apps.common.testutils import auth_client, make_user, run_threads
@@ -79,6 +80,23 @@ class FollowTests(TestCase):
         state = self.ca.get('/api/follows/state/followb/')
         self.assertEqual(state.data['state'], 'accepted')
         self.assertTrue(state.data['follows_me'])
+
+    def test_public_circles_are_readable_without_signing_in(self):
+        Follow.objects.create(follower=self.b, followee=self.a, status='accepted')
+        resp = APIClient().get('/api/users/followa/followers/')
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual([u['username'] for u in resp.data['results']], ['followb'])
+
+    def test_private_account_hides_its_circles_from_strangers(self):
+        Follow.objects.create(follower=self.b, followee=self.a, status='accepted')
+        self.a.profile.is_private = True
+        self.a.profile.save(update_fields=['is_private'])
+        stranger = make_user('followstranger')
+        self.assertEqual(APIClient().get('/api/users/followa/followers/').data['results'], [])
+        self.assertEqual(auth_client(stranger).get('/api/users/followa/followers/').data['results'], [])
+        self.assertEqual(len(auth_client(self.a).get('/api/users/followa/followers/').data['results']), 1)
+        Follow.objects.create(follower=stranger, followee=self.a, status='accepted')
+        self.assertEqual(len(auth_client(stranger).get('/api/users/followa/followers/').data['results']), 2)
 
     def test_unfollow_removes_edge(self):
         self.ca.post('/api/follows/', {'username': 'followb'}, format='json')

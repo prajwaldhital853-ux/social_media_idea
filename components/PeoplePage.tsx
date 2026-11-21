@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import AppShell from '@/components/AppShell';
@@ -8,18 +8,48 @@ import Avatar from '@/components/Avatar';
 import VerifiedBadge from '@/components/VerifiedBadge';
 import PeopleList from '@/components/PeopleList';
 import { useApp } from '@/lib/AppContext';
+import { usersFragment, useList } from '@/lib/lists';
 import { IC } from '@/lib/icons';
 import { User } from '@/lib/types';
 
 export default function PeoplePage({ kind }: { kind: 'followers' | 'following' }) {
   const params = useParams();
   const router = useRouter();
-  const { db, me, t, incomingRequests, acceptRequest, declineRequest } = useApp();
+  const { db, me, t, incomingRequests, acceptRequest, declineRequest, serverMode, loadPerson } = useApp();
   const username = String(params.username || '');
   const user = db.users.find(u => u.username.toLowerCase() === username.toLowerCase());
+  const [profile, setProfile] = useState<{ followers: number; following: number; locked: boolean } | null>(null);
+  const [personRead, setPersonRead] = useState(!serverMode);
+
+  // The circle is the server's page, in the server's order: newest edge first,
+  // ten at a time, cursor and all — nothing here re-sorts it.
+  const circle = useList(
+    `circle:${username.toLowerCase()}:${kind}`,
+    { path: `/users/${username}/${kind}/`, frag: usersFragment },
+    undefined,
+    serverMode && !!username,
+  );
+
+  useEffect(() => {
+    if (!serverMode || !username) return;
+    let live = true;
+    setPersonRead(false);
+    loadPerson(username)
+      .then(read => {
+        if (!live || !read) return;
+        setProfile({ followers: read.stats.followers, following: read.stats.following, locked: read.locked });
+      })
+      .catch(() => {})
+      .finally(() => { if (live) setPersonRead(true); });
+    return () => { live = false; };
+  }, [serverMode, username, loadPerson]);
 
   const people = useMemo<User[]>(() => {
     if (!user) return [];
+    if (serverMode) {
+      const index = new Map(db.users.map(u => [u.id, u] as [string, User]));
+      return circle.ids.map(id => index.get(id)).filter((u): u is User => !!u);
+    }
     const edges = db.follows.filter(f =>
       (kind === 'followers' ? f.following === user.id : f.follower === user.id) && f.status !== 'pending'
     );
@@ -27,7 +57,7 @@ export default function PeoplePage({ kind }: { kind: 'followers' | 'following' }
       .map(f => db.users.find(u => u.id === (kind === 'followers' ? f.follower : f.following)))
       .filter((u): u is User => !!u)
       .sort((a, b) => a.name.localeCompare(b.name));
-  }, [db.follows, db.users, user, kind]);
+  }, [circle.ids, db.follows, db.users, serverMode, user, kind]);
 
   if (!user) {
     return (
@@ -37,10 +67,17 @@ export default function PeoplePage({ kind }: { kind: 'followers' | 'following' }
           <h1>{kind === 'followers' ? t('followers') : t('followingCount')}</h1>
           <span className="detail-header-spacer" />
         </header>
-        <div className="feed-empty profile-missing">
-          <p>{t('noUser')}</p>
-          <Link href="/explore">{t('search')}</Link>
-        </div>
+        {!personRead ? (
+          <div className="feed-skeleton profile-skeleton" aria-hidden="true">
+            <div className="feed-skeleton-head"><span className="sk-avatar" /><span className="sk-lines"><i /><i /></span></div>
+            <div className="sk-lines wide"><i /><i /></div>
+          </div>
+        ) : (
+          <div className="feed-empty profile-missing">
+            <p>{t('noUser')}</p>
+            <Link href="/explore">{t('search')}</Link>
+          </div>
+        )}
       </AppShell>
     );
   }
@@ -48,6 +85,11 @@ export default function PeoplePage({ kind }: { kind: 'followers' | 'following' }
   const own = me?.id === user.id;
   const requests = own ? incomingRequests() : [];
   const title = kind === 'followers' ? t('followersOf', { name: user.name || user.username }) : t('followingOf', { name: user.name || user.username });
+  const total = profile ? (kind === 'followers' ? profile.followers : profile.following) : people.length;
+  // A private account answers an empty circle to strangers, so say whose it is
+  // instead of claiming nobody is there.
+  const hidden = !!profile?.locked;
+  const emptyText = hidden ? t('privateNotice') : (kind === 'followers' ? t('noFollowers') : t('noFollowing'));
 
   return (
     <AppShell>
@@ -62,7 +104,7 @@ export default function PeoplePage({ kind }: { kind: 'followers' | 'following' }
           <Avatar user={user} size={40} />
           <span>
             <b>{user.name || user.username}{user.verified && <VerifiedBadge size={14} />}</b>
-            <small>@{user.username} · {people.length} {kind === 'followers' ? t('followers') : t('followingCount')}</small>
+            <small>@{user.username} · {total} {kind === 'followers' ? t('followers') : t('followingCount')}</small>
           </span>
         </Link>
 
@@ -95,7 +137,18 @@ export default function PeoplePage({ kind }: { kind: 'followers' | 'following' }
           </section>
         )}
 
-        <PeopleList people={people} empty={kind === 'followers' ? t('noFollowers') : t('noFollowing')} />
+        <PeopleList
+          people={people}
+          empty={emptyText}
+          server={serverMode ? {
+            hasMore: circle.hasMore,
+            loading: circle.loading,
+            load: circle.loadMore,
+            loaded: circle.loaded,
+            error: circle.error,
+            retry: circle.reload,
+          } : undefined}
+        />
       </div>
     </AppShell>
   );

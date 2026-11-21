@@ -2,7 +2,7 @@ import { Media } from './types';
 import { resizeImage, uid, videoDuration } from './utils';
 import { putVideo } from './videoStore';
 import { API_ENABLED } from './api';
-import { uploadDataUrl, uploadFile } from './upload';
+import { uploadDataUrl, uploadFile, Progress } from './upload';
 
 export const MAX_VIDEO_MB = 150;
 export const MAX_PHOTO_MB = 10;
@@ -10,21 +10,39 @@ export const MAX_PHOTO_MB = 10;
 const mb = (bytes: number) => Math.max(1, Math.round(bytes / (1024 * 1024)));
 
 /** One photo, downscaled and stored where this build keeps media: the API or the device. */
-export async function imageFromFile(file: File): Promise<Media> {
+export async function imageFromFile(file: File, onProgress?: Progress): Promise<Media> {
   const dataUrl = await resizeImageSafe(file);
   if (!API_ENABLED) return { type: 'image', src: dataUrl };
-  return { type: 'image', src: await uploadDataUrl(dataUrl) };
+  return { type: 'image', src: await uploadDataUrl(dataUrl, file.name || 'photo.jpg', onProgress) };
 }
 
-async function resizeImageSafe(file: File): Promise<string> {
+/**
+ * Profile pictures and covers, downscaled to the frame that shows them. In API mode
+ * the bytes go to /api/uploads/ and only the returned URL is kept: the database
+ * validates these columns as URLs, so a data URL would be refused at write time.
+ */
+export async function profileImage(file: File, max: number, onProgress?: Progress): Promise<string> {
+  if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+    throw new Error('Choose a JPEG, PNG or WebP image.');
+  }
+  if (!file.size) throw new Error('That file is empty — choose another one.');
+  if (file.size > MAX_PHOTO_MB * 1024 * 1024) {
+    throw new Error(`Photo must be under ${MAX_PHOTO_MB} MB — this one is ${mb(file.size)} MB.`);
+  }
+  const dataUrl = await resizeImageSafe(file, max);
+  if (!API_ENABLED) return dataUrl;
+  return uploadDataUrl(dataUrl, file.name || 'photo.jpg', onProgress);
+}
+
+async function resizeImageSafe(file: File, max = 1280): Promise<string> {
   try {
-    return await resizeImage(file);
+    return await resizeImage(file, max);
   } catch {
     throw new Error('This photo could not be read. Try another one.');
   }
 }
 
-export async function mediaFromFile(file: File): Promise<Media> {
+export async function mediaFromFile(file: File, onProgress?: Progress): Promise<Media> {
   const video = file.type.startsWith('video/');
   if (!video && !['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
     throw new Error('Choose a JPEG, PNG or WebP photo, or a video.');
@@ -36,7 +54,7 @@ export async function mediaFromFile(file: File): Promise<Media> {
   if (!video && file.size > MAX_PHOTO_MB * 1024 * 1024) {
     throw new Error(`Photo must be under ${MAX_PHOTO_MB} MB — this one is ${mb(file.size)} MB.`);
   }
-  if (!video) return imageFromFile(file);
+  if (!video) return imageFromFile(file, onProgress);
   const src = URL.createObjectURL(file);
   let dur = 0;
   try {
@@ -47,7 +65,7 @@ export async function mediaFromFile(file: File): Promise<Media> {
   } finally {
     URL.revokeObjectURL(src);
   }
-  if (API_ENABLED) return { type: 'video', src: (await uploadFile(file)).url, dur };
+  if (API_ENABLED) return { type: 'video', src: (await uploadFile(file, undefined, onProgress)).url, dur };
   const blobId = uid();
   try {
     await putVideo(blobId, file);

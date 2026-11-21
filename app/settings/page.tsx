@@ -12,7 +12,7 @@ import { KEY } from '@/lib/utils';
 import { IC } from '@/lib/icons';
 
 export default function SettingsPage() {
-  const { db, me, t, theme, toggleTheme, updateLang, setDb, showToast, logout, updateProfile, serverMode } = useApp();
+  const { db, me, t, theme, toggleTheme, updateLang, setDb, showToast, logout, updateProfile, serverMode, ready } = useApp();
   const [editing, setEditing] = useState(false);
 
   if (!me) {
@@ -26,7 +26,11 @@ export default function SettingsPage() {
             <div className="header-actions"><ThemeToggle compact /></div>
           </div>
         </header>
-        <div className="feed-empty"><p>{t('needLogin')}</p><Link href="/login">{t('signIn')}</Link></div>
+        {/* The session is still arriving on a cold load; a signed-in visitor
+            should not be told to sign in while that happens. */}
+        <div className="feed-empty">
+          {ready && <><p>{t('needLogin')}</p><Link href="/login">{t('signIn')}</Link></>}
+        </div>
       </AppShell>
     );
   }

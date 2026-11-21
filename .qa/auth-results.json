@@ -47,7 +47,7 @@
   {
     "name": "desktop: the DEBUG mailer exposes the code as a one-tap chip",
     "pass": true,
-    "detail": "Demo mailer code: 115899"
+    "detail": "Demo mailer code: 592739"
   },
   {
     "name": "desktop: a wrong code is rejected with code-scoped tries left",
@@ -62,7 +62,7 @@
   {
     "name": "desktop: resend rotates the challenge and restarts the clock",
     "pass": true,
-    "detail": "{\"meta\":\"Code expires in 10:00\",\"dev\":\"Demo mailer code: 742931\",\"code\":\"\"}"
+    "detail": "{\"meta\":\"Code expires in 10:00\",\"dev\":\"Demo mailer code: 092126\",\"code\":\"\"}"
   },
   {
     "name": "desktop: the confirmed code signs in and greets by name",
@@ -112,12 +112,12 @@
   {
     "name": "desktop: signup creates the account and asks to confirm the email",
     "pass": true,
-    "detail": "{\"title\":\"Confirm it is you\",\"detail\":\"We emailed a 6-digit code to qa1ml08@demo.test. Enter it to activate the account.\",\"hint\":\"Sent to qa1ml08@demo.test\",\"meta\":\"Code expires in"
+    "detail": "{\"title\":\"Confirm it is you\",\"detail\":\"We emailed a 6-digit code to qa6usl3@demo.test. Enter it to activate the account.\",\"hint\":\"Sent to qa6usl3@demo.test\",\"meta\":\"Code expires in"
   },
   {
     "name": "desktop: the verified code completes signup and opens the session",
     "pass": true,
-    "detail": "{\"id\":88,\"username\":\"qa1ml08\",\"email\":\"qa1ml08@demo.test\",\"name\":\"QA Tester\",\"first_name\":\"QA\",\"last_name\":\"Tester\",\"bio\":\"\",\"avatar\":\"\",\"cover\":\"\",\"location\":\"\",\"province\":\"\",\"website\":\"\",\"role\":\"user\",\"is_staff\":false,\"is_superuser\":false,\"verified\":false,\"emailVerified\":true,\"provider\":\"email\",\"dob\":\"1996-04-02\",\"country\":\"Nepal\",\"city\":\"\",\"private\":false,\"twoStep\":true,\"joined\":\"2026-11-21T06:45:17.723371Z\",\"coins\":0,\"susp\":null,\"lockedUntil\":null}"
+    "detail": "{\"id\":90,\"username\":\"qa6usl3\",\"email\":\"qa6usl3@demo.test\",\"name\":\"QA Tester\",\"first_name\":\"QA\",\"last_name\":\"Tester\",\"bio\":\"\",\"avatar\":\"\",\"cover\":\"\",\"location\":\"\",\"province\":\"\",\"website\":\"\",\"role\":\"user\",\"is_staff\":false,\"is_superuser\":false,\"verified\":false,\"emailVerified\":true,\"provider\":\"email\",\"dob\":\"1996-04-02\",\"country\":\"Nepal\",\"city\":\"\",\"private\":false,\"twoStep\":true,\"joined\":\"2026-11-21T09:11:37.081580Z\",\"coins\":0,\"susp\":null,\"lockedUntil\":null}"
   },
   {
     "name": "desktop: one wrong password reports the plural attempts left",
@@ -137,7 +137,7 @@
   {
     "name": "desktop: the third wrong password locks the account and hands over an unlock code",
     "pass": true,
-    "detail": "{\"title\":\"Account locked\",\"detail\":\"We emailed a 6-digit code to finish signing in on this device.\",\"hint\":\"\",\"meta\":\"Code expires in 10:00\",\"dev\":\"Demo mailer code: 242191\",\"links"
+    "detail": "{\"title\":\"Account locked\",\"detail\":\"We emailed a 6-digit code to finish signing in on this device.\",\"hint\":\"\",\"meta\":\"Code expires in 10:00\",\"dev\":\"Demo mailer code: 297530\",\"links"
   },
   {
     "name": "desktop: the lock screen explains the unlock path and accepts either handle",
@@ -177,7 +177,7 @@
   {
     "name": "desktop: after a refresh the browser still passes CSRF on writes",
     "pass": true,
-    "detail": "{\"status\":201,\"id\":170}"
+    "detail": "{\"status\":201,\"id\":181}"
   },
   {
     "name": "desktop: the language choice survives navigation",

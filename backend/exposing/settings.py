@@ -2,12 +2,51 @@
 
 import os
 from pathlib import Path
+from urllib.parse import unquote, urlparse
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+
+def _env_list(name, default=''):
+    raw = os.environ.get(name, default)
+    return [item.strip() for item in raw.split(',') if item.strip()]
+
+
+def _database():
+    """Either a Render/Heroku style DATABASE_URL or the local POSTGRES_* pieces.
+
+    The URL wins because hosted platforms hand out one connection string and
+    rotate its password for you; splitting it into five variables would only
+    invite a stale credential.
+    """
+    url = os.environ.get('DATABASE_URL', '').strip()
+    if url:
+        parsed = urlparse(url.replace('postgres://', 'postgresql://', 1))
+        return {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': unquote(parsed.path.lstrip('/')),
+            'USER': unquote(parsed.username or ''),
+            'PASSWORD': unquote(parsed.password or ''),
+            'HOST': parsed.hostname or '',
+            'PORT': str(parsed.port or 5432),
+            # Render proxies Postgres through pgbouncer, which rejects the
+            # server-side cursors Django would otherwise open.
+            'OPTIONS': {'connect_timeout': 10},
+            'DISABLE_SERVER_SIDE_CURSORS': True,
+        }
+    return {
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': os.environ.get('POSTGRES_DB', 'exposing'),
+        'USER': os.environ.get('POSTGRES_USER', 'postgres'),
+        'PASSWORD': os.environ.get('POSTGRES_PASSWORD', ''),
+        'HOST': os.environ.get('POSTGRES_HOST', '127.0.0.1'),
+        'PORT': os.environ.get('POSTGRES_PORT', '5434'),
+    }
+
+
 SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'django-insecure-dev-only-change-me')
 DEBUG = os.environ.get('DJANGO_DEBUG', '1') == '1'
-ALLOWED_HOSTS = os.environ.get('DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
+ALLOWED_HOSTS = _env_list('DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1')
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -37,6 +76,9 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     'apps.common.middleware.ApiSlashMiddleware',
     'django.middleware.security.SecurityMiddleware',
+    # Hosted platforms give the app one port and no web server, so Django has to
+    # serve its own admin statics.
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'apps.common.security.SecurityHeadersMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
@@ -66,16 +108,7 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'exposing.wsgi.application'
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': os.environ.get('POSTGRES_DB', 'exposing'),
-        'USER': os.environ.get('POSTGRES_USER', 'postgres'),
-        'PASSWORD': os.environ.get('POSTGRES_PASSWORD', ''),
-        'HOST': os.environ.get('POSTGRES_HOST', '127.0.0.1'),
-        'PORT': os.environ.get('POSTGRES_PORT', '5434'),
-    }
-}
+DATABASES = {'default': _database()}
 
 AUTH_USER_MODEL = 'accounts.User'
 
@@ -152,19 +185,24 @@ SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = 'Lax'
 CSRF_COOKIE_SAMESITE = 'Lax'
 if not DEBUG:
+    # Render and Vercel both terminate TLS at their proxy, so the app only sees
+    # http:// unless the forwarded protocol is trusted.
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
     SECURE_SSL_REDIRECT = True
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
     SECURE_HSTS_SECONDS = 31536000
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
 
-CORS_ALLOWED_ORIGINS = os.environ.get(
-    'CORS_ALLOWED_ORIGINS', 'http://localhost:3000,http://127.0.0.1:3000'
-).split(',')
+CORS_ALLOWED_ORIGINS = _env_list('CORS_ALLOWED_ORIGINS', 'http://localhost:3000,http://127.0.0.1:3000')
 CORS_ALLOW_CREDENTIALS = True
+CSRF_TRUSTED_ORIGINS = _env_list('DJANGO_CSRF_TRUSTED_ORIGINS')
 
 EXPOSING_REPORT_THRESHOLD = int(os.environ.get('EXPOSING_REPORT_THRESHOLD', '3'))
 EXPOSING_RATE_LIMITS = os.environ.get('EXPOSING_RATE_LIMITS', '1') == '1'
+# Demo escape hatch: shows the one-time login code in the UI when no mail
+# provider is configured. Off by default; never enable for a real launch.
+EXPOSING_OTP_VISIBLE = os.environ.get('EXPOSING_OTP_VISIBLE', '0') == '1'
 
 LANGUAGE_CODE = 'en-us'
 TIME_ZONE = 'UTC'
@@ -172,8 +210,15 @@ USE_I18N = True
 USE_TZ = True
 
 STATIC_URL = 'static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+STORAGES = {
+    'default': {'BACKEND': 'django.core.files.storage.FileSystemStorage'},
+    'staticfiles': {'BACKEND': 'whitenoise.storage.CompressedStaticFilesStorage'},
+}
 MEDIA_URL = 'media/'
-MEDIA_ROOT = BASE_DIR / 'media'
+# A hosted filesystem is disposable; a mounted disk keeps what people upload
+# between deploys. Point MEDIA_DISK at a Render disk mount path when you have one.
+MEDIA_ROOT = Path(os.environ.get('MEDIA_DISK') or '') if os.environ.get('MEDIA_DISK') else BASE_DIR / 'media'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 import sys

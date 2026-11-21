@@ -8,10 +8,11 @@ import PostCard from '@/components/PostCard';
 import Avatar from '@/components/Avatar';
 import { useApp } from '@/lib/AppContext';
 import { canSeePost } from '@/lib/utils';
+import { postsFragment, useList, usersFragment } from '@/lib/lists';
 import { IC } from '@/lib/icons';
 
 function SearchResults() {
-  const { db, me } = useApp();
+  const { db, me, serverMode, t } = useApp();
   const params = useSearchParams();
   const router = useRouter();
   const query = params.get('q') || '';
@@ -32,8 +33,32 @@ function SearchResults() {
     try { localStorage.setItem(key, JSON.stringify(recent)); } catch {}
   }, [query, key]);
   const normalized = query.trim().toLocaleLowerCase();
-  const users = normalized ? db.users.filter(u => `${u.name} ${u.username}`.toLocaleLowerCase().includes(normalized.replace(/^@/, ''))) : [];
-  const posts = normalized ? db.posts.filter(p => p.status === 'live' && canSeePost(p, me?.id ?? null, db.follows) && p.text.toLocaleLowerCase().includes(normalized)).sort((a, b) => b.ts - a.ts) : [];
+  // Searching the whole site is the server's job: the cache only ever holds the
+  // pages this session has walked through.
+  const searching = normalized ? query.trim().slice(0, 128) : '';
+  const peopleRows = useList('search-people', { path: '/users/', frag: usersFragment }, { q: searching }, serverMode && !!normalized);
+  const postRows = useList('search-posts', { path: '/posts/', frag: postsFragment(me?.id || null) }, { q: searching }, serverMode && !!normalized);
+  const peopleOf = (id: string) => db.users.find(u => u.id === id);
+  const postOf = (id: string) => db.posts.find(p => p.id === id);
+  const users = normalized
+    ? (serverMode
+      ? peopleRows.ids.map(peopleOf).filter((u): u is NonNullable<ReturnType<typeof peopleOf>> => !!u)
+      : db.users.filter(u => `${u.name} ${u.username}`.toLocaleLowerCase().includes(normalized.replace(/^@/, ''))))
+    : [];
+  const posts = normalized
+    ? (serverMode
+      ? postRows.ids.map(postOf).filter((p): p is NonNullable<ReturnType<typeof postOf>> => !!p)
+      : db.posts.filter(p => p.status === 'live' && canSeePost(p, me?.id ?? null, db.follows) && p.text.toLocaleLowerCase().includes(normalized)).sort((a, b) => b.ts - a.ts))
+    : [];
+  const loading = serverMode && !!normalized && (!peopleRows.loaded || !postRows.loaded);
+  const failed = serverMode && !!normalized && !!(peopleRows.error || postRows.error);
+  const more = serverMode && (peopleRows.hasMore || postRows.hasMore);
+  const loadMore = () => {
+    if (peopleRows.error) void peopleRows.reload();
+    if (postRows.error) void postRows.reload();
+    void peopleRows.loadMore();
+    void postRows.loadMore();
+  };
   const search = (value: string) => router.replace(`/explore${value.trim() ? `?q=${encodeURIComponent(value.trim())}` : ''}`);
   return <div className="search-view">
     <header className="detail-header search-detail-header">
@@ -57,9 +82,13 @@ function SearchResults() {
       </div>) : <p className="search-empty">No recent searches. Find people, posts and hashtags here.</p>}
     </section> : <>
       <h1 className="search-results-title">Results for “{query}”</h1>
-      {users.map(user => <Link className="search-person" key={user.id} href={`/u/${user.username}`}><Avatar user={user} size={36}/><span><b>{user.name}</b><small>@{user.username}</small></span></Link>)}
-      {posts.map(post => { const author = db.users.find(u => u.id === post.uid); return author ? <PostCard key={post.id} post={post} author={author}/> : null; })}
-      {!users.length && !posts.length && <p className="feed-empty">No results for “{query}”. Try another search.</p>}
+      {!loading && users.map(user => <Link className="search-person" key={user.id} href={`/u/${user.username}`}><Avatar user={user} size={36}/><span><b>{user.name}</b><small>@{user.username}</small></span></Link>)}
+      {loading && <div className="people-skeleton" aria-hidden="true"><span className="sk-avatar"/><span className="sk-lines"><i/><i/></span></div>}
+      {!loading && posts.map(post => { const author = db.users.find(u => u.id === post.uid); return author ? <PostCard key={post.id} post={post} author={author}/> : null; })}
+      {failed
+        ? <p className="feed-empty">Search could not finish. <button type="button" className="ghost-btn" onClick={loadMore}>{t('retry')}</button></p>
+        : more && <div className="chat-older"><button type="button" className="chat-older-btn" disabled={peopleRows.loading || postRows.loading} onClick={loadMore}>{t('loadMore')}</button></div>}
+      {!loading && !failed && !users.length && !posts.length && <p className="feed-empty">No results for “{query}”. Try another search.</p>}
     </>}
   </div>;
 }

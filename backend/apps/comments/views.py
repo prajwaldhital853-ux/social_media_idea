@@ -38,6 +38,10 @@ class CommentViewSet(viewsets.ModelViewSet):
         media_index = self.request.query_params.get('media_index')
         if media_index is not None and media_index != '':
             qs = qs.filter(media_index=media_index)
+        # The comment stream pages over top-level comments only; replies are a
+        # separate keyset under their parent so one long thread cannot hide the rest.
+        if self.request.query_params.get('top'):
+            qs = qs.filter(parent__isnull=True)
         return qs
 
     def perform_create(self, serializer):

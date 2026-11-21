@@ -2,7 +2,7 @@ from django.db import IntegrityError, transaction
 from django.shortcuts import get_object_or_404
 from rest_framework import serializers, status
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
 from apps.accounts.models import User
@@ -84,10 +84,30 @@ def request_action(request, pk, action):
     return Response({'status': 'declined'})
 
 
+def _circle_is_public(request, target):
+    """A public account shows who follows it. A private one shows that circle only
+    to itself, to staff, and to followers it has already accepted."""
+    private = Profile.objects.filter(user=target).values_list('is_private', flat=True).first()
+    if not private:
+        return True
+    user = request.user
+    if not user.is_authenticated:
+        return False
+    if user.pk == target.pk or user.is_staff:
+        return True
+    return Follow.objects.filter(follower=user, followee=target, status=Follow.Status.ACCEPTED).exists()
+
+
+def _empty_page():
+    return Response({'results': [], 'next_cursor': None, 'has_more': False})
+
+
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([AllowAny])
 def followers(request, username):
     target = get_object_or_404(User, username=username)
+    if not _circle_is_public(request, target):
+        return _empty_page()
     qs = Follow.objects.filter(followee=target, status=Follow.Status.ACCEPTED)
     paginator = KeysetPagination()
     rows = paginator.paginate_queryset(qs.select_related('follower__profile'), request)
@@ -95,9 +115,11 @@ def followers(request, username):
 
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([AllowAny])
 def following(request, username):
     target = get_object_or_404(User, username=username)
+    if not _circle_is_public(request, target):
+        return _empty_page()
     qs = Follow.objects.filter(follower=target, status=Follow.Status.ACCEPTED)
     paginator = KeysetPagination()
     rows = paginator.paginate_queryset(qs.select_related('followee__profile'), request)
