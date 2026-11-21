@@ -8,6 +8,7 @@ import { ago, uid, REACTIONS, reactionMeta } from '@/lib/utils';
 import { Comment, ReactionKind } from '@/lib/types';
 import { IC } from '@/lib/icons';
 import { useBackClose, closeLayerWithoutBack } from '@/lib/useBackClose';
+import { useWindowed } from '@/lib/useWindowed';
 import Avatar from './Avatar';
 import VerifiedBadge from './VerifiedBadge';
 import ReactionButton from './ReactionButton';
@@ -53,6 +54,7 @@ export default function Comments({ postId, onClose, mediaIndex }: { postId: stri
 
   const allComments = db.comments.filter(c => c.pid === postId && c.status === 'live' && (isMedia ? c.mediaIndex === mediaIndex : c.mediaIndex === undefined));
   const topLevelComments = allComments.filter(c => !c.parentId).sort((a, b) => sort === 'newest' ? b.ts - a.ts : a.ts - b.ts);
+  const { limit: commentLimit, pending: commentsPending, sentinel: commentsSentinel, hasMore: moreComments } = useWindowed(topLevelComments.length, 10, `${postId}|${mediaIndex}|${sort}`);
 
   const postReactions = db.reactions.filter(r => r.targetType === targetType && r.targetId === targetId);
   const postKinds = REACTIONS.map(r => r.kind).filter(k => postReactions.some(r => r.kind === k));
@@ -273,7 +275,13 @@ export default function Comments({ postId, onClose, mediaIndex }: { postId: stri
       </div>
       <div className="comments-list" ref={list}>
         {!topLevelComments.length && <div className="comments-empty">{IC.msg}<h2>No comments yet</h2><p>Be the first to comment.</p></div>}
-        {topLevelComments.map(c => renderComment(c))}
+        {topLevelComments.slice(0, commentLimit).map(c => renderComment(c))}
+        {commentsPending && moreComments && (
+          <div className="comment-skeleton" aria-hidden="true">
+            <span className="sk-avatar" /><span className="sk-lines"><i /><i /></span>
+          </div>
+        )}
+        {moreComments && <div ref={commentsSentinel} className="feed-sentinel" aria-hidden="true" />}
       </div>
       {me ? (
         <form className="comments-compose" autoComplete="off" onSubmit={handleSubmit}>

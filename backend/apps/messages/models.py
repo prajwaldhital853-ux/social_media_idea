@@ -4,7 +4,11 @@ from django.db import models
 
 class Conversation(models.Model):
     participants = models.ManyToManyField(settings.AUTH_USER_MODEL, related_name='conversations')
+    last_message_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [models.Index(fields=['-last_message_at'], name='conversation_recent')]
 
     def __str__(self):
         return f'Conversation {self.pk}'

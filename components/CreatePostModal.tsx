@@ -5,7 +5,10 @@ import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { Media, Post } from '@/lib/types';
 import { useApp, PromoConfig } from '@/lib/AppContext';
-import { resizeImage, uid, videoDuration } from '@/lib/utils';
+import { uid, videoDuration } from '@/lib/utils';
+import { imageFromFile } from '@/lib/mediaFile';
+import { uploadFile } from '@/lib/upload';
+import { API_ENABLED } from '@/lib/api';
 import { IC } from '@/lib/icons';
 import Avatar from './Avatar';
 import PromoteForm from './PromoteForm';
@@ -71,9 +74,9 @@ function Composer({ original }: { original?: Post }) {
           urls.current.push(src);
           const dur = await videoDuration(src);
           if (!Number.isFinite(dur) || dur > 60) throw new Error('Choose a video up to 60 seconds long.');
-          next.push({ type: 'video', src, dur });
+          next.push(API_ENABLED ? { type: 'video', src: (await uploadFile(file)).url, dur } : { type: 'video', src, dur });
         } else {
-          next.push({ type: 'image', src: await resizeImage(file) });
+          next.push(await imageFromFile(file));
         }
       }
       if (alive.current) {
@@ -88,19 +91,29 @@ function Composer({ original }: { original?: Post }) {
   };
 
   const canPost = !busy && (text.trim().length > 0 || media.length > 0) && (stage !== 'reel' || media.length > 0) && (!promote || !!promoConfig);
-  const publish = () => {
+  const publish = async () => {
     if (!me || !canPost) return;
     if (!me.emailVerified || (me.susp && (!me.susp.until || me.susp.until > Date.now()))) {
       setError('A verified, active account is needed to post.');
       return;
     }
-    const id = original?.id || uid();
-    if (original) updatePost(id, { text: text.trim(), media, edited: true });
-    else addPost({ id, uid: me.id, kind: stage === 'reel' ? 'reel' : 'post', text: text.trim(), media, ts: Date.now(), status: 'live' });
-    if (promote && promoConfig) requestPromotion('post', id, promoConfig);
-    published.current = true;
-    showToast(original ? 'Post updated.' : stage === 'reel' ? 'Reel posted.' : 'Post published.');
-    requestClose();
+    setBusy(true);
+    try {
+      let id = original?.id || '';
+      if (original) {
+        await updatePost(id, { text: text.trim(), media, edited: true });
+      } else {
+        id = (await addPost({ id: uid(), uid: me.id, kind: stage === 'reel' ? 'reel' : 'post', text: text.trim(), media, ts: Date.now(), status: 'live' })).id;
+      }
+      if (promote && promoConfig && id) await requestPromotion('post', id, promoConfig);
+      published.current = true;
+      showToast(original ? 'Post updated.' : stage === 'reel' ? 'Reel posted.' : 'Post published.');
+      requestClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'This post could not be published. Try again.');
+    } finally {
+      setBusy(false);
+    }
   };
 
   return createPortal(

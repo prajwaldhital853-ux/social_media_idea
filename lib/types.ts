@@ -18,6 +18,8 @@ export interface User {
   city?: string;
   bio?: string;
   avatar?: string;
+  cover?: string;
+  private?: boolean;
   twoStep: boolean;
   joined: number;
   coins: number;
@@ -43,6 +45,11 @@ export interface Post {
   mood?: string;
   place?: string;
   audience?: 'public' | 'followers';
+  category?: string;
+  /** Server-side aggregates: present in API mode, derived from `reactions` in demo mode. */
+  likes?: number;
+  comments?: number;
+  promoted?: boolean;
 }
 
 export interface Media {
@@ -51,6 +58,7 @@ export interface Media {
   gen?: string;
   dur?: number;
   blobId?: string;
+  likes?: number;
 }
 
 export interface Comment {
@@ -62,12 +70,17 @@ export interface Comment {
   text: string;
   ts: number;
   status: 'live' | 'removed';
+  likes?: number;
+  replies?: number;
 }
 
 export interface Follow {
   follower: string;
   following: string;
   ts: number;
+  status?: 'pending' | 'accepted';
+  /** Server id of a pending follow request; needed to accept or decline it. */
+  rid?: string;
 }
 
 export interface Reaction {
@@ -82,6 +95,12 @@ export interface Reaction {
 export interface Save {
   uid: string;
   pid: string;
+  ts: number;
+}
+
+export interface ListingSave {
+  uid: string;
+  lid: string;
   ts: number;
 }
 
@@ -120,6 +139,9 @@ export interface Listing {
   media: Media[];
   ts: number;
   status: 'active' | 'sold' | 'hidden' | 'removed';
+  condition?: string;
+  sellerName?: string;
+  sellerUsername?: string;
 }
 
 export interface CoinRequest {
@@ -180,6 +202,7 @@ export interface Report {
   note: string;
   ts: number;
   status: 'open' | 'dismissed' | 'actioned';
+  reporterUsername?: string;
 }
 
 export interface Audit {
@@ -196,6 +219,8 @@ export interface FeatureFlags {
   marketplace: boolean;
   promotion: boolean;
   googleLogin: boolean;
+  /** A DEBUG server offers an explicitly labelled demo Google identity. */
+  googleDemo: boolean;
   facebookLogin: boolean;
   appleLogin: boolean;
 }
@@ -210,6 +235,9 @@ export interface Settings {
   features: FeatureFlags;
   packages: PromoPackage[];
   categories: string[];
+  /** Set when the server has a real Google OAuth app; the SPA then loads GIS. */
+  googleClientId?: string;
+  demoGoogle?: { email: string; name: string; sub: string } | null;
 }
 
 export interface Database {
@@ -219,6 +247,7 @@ export interface Database {
   follows: Follow[];
   reactions: Reaction[];
   saves: Save[];
+  listingSaves?: ListingSave[];
   notifications: Notification[];
   messages: Message[];
   listings: Listing[];
@@ -231,6 +260,10 @@ export interface Database {
   meId: string | null;
   lang: 'en' | 'ne';
   seedVersion?: number;
+  /** Server unread counters — the only badge source that is not windowed into the cache. */
+  unread?: { notifications: number; messages: number };
+  /** Server clock, used to price promotion windows and expiring locks. */
+  serverTime?: number;
 }
 
 export type ThemeMode = 'light' | 'dark';

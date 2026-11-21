@@ -9,8 +9,8 @@ import Avatar from '@/components/Avatar';
 import VerifiedBadge from '@/components/VerifiedBadge';
 import EditProfileModal from '@/components/EditProfileModal';
 import { useApp } from '@/lib/AppContext';
-import { useBackClose, closeLayerWithoutBack } from '@/lib/useBackClose';
-import { canSeePost, hash, compact } from '@/lib/utils';
+import { useWindowed } from '@/lib/useWindowed';
+import { canSeePost, hash, compact, ago } from '@/lib/utils';
 import { IC } from '@/lib/icons';
 import { User } from '@/lib/types';
 
@@ -23,61 +23,25 @@ const COVER_PALETTES = [
   ['#2B3F47', '#B63740']
 ];
 
-function PeopleModal({ title, people, onClose }: { title: string; people: User[]; onClose: () => void }) {
-  const { me, t, isFollowing, toggleFollow } = useApp();
-  const router = useRouter();
-  useBackClose(true, onClose);
-  return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content people-modal" onClick={e => e.stopPropagation()} role="dialog" aria-label={title}>
-        <div className="modal-header">
-          <b>{title}</b>
-          <button type="button" className="modal-close" onClick={onClose} aria-label={t('close')}>{IC.x}</button>
-        </div>
-        <div className="people-list">
-          {people.length === 0 && <p className="feed-empty">{title === t('followers') ? t('noFollowers') : t('noFollowing')}</p>}
-          {people.map(u => (
-            <div className="people-row" key={u.id}>
-              <Link href={`/u/${u.username}`} className="people-id" onClick={() => { closeLayerWithoutBack(); onClose(); }}>
-                <Avatar user={u} size={44} />
-                <span className="people-meta">
-                  <b>{u.name || u.username}{u.verified && <VerifiedBadge size={14} />}</b>
-                  <small>@{u.username}</small>
-                </span>
-              </Link>
-              {me && u.id !== me.id && (
-                <button
-                  type="button"
-                  className={`follow-btn small ${isFollowing(u.id) ? 'on' : ''}`}
-                  onClick={() => toggleFollow(u.id)}
-                >
-                  {isFollowing(u.id) ? t('unfollow') : t('follow')}
-                </button>
-              )}
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export default function UserProfilePage() {
   const params = useParams();
   const router = useRouter();
-  const { db, me, t, isFollowing, toggleFollow, showToast } = useApp();
+  const { db, me, t, isFollowing, followState, toggleFollow, showToast, openComposer } = useApp();
   const username = String(params.username || '');
   const user = db.users.find(u => u.username.toLowerCase() === username.toLowerCase());
-  const [tab, setTab] = useState<'posts' | 'media' | 'about'>('posts');
+  const [tab, setTab] = useState<'posts' | 'media' | 'about' | 'listings'>('posts');
   const [editing, setEditing] = useState(false);
-  const [people, setPeople] = useState<'followers' | 'following' | null>(null);
+
+  const own = me?.id === user?.id;
+  const locked = !!user?.private && !own && !isFollowing(user.id);
 
   const posts = useMemo(() => {
-    if (!user) return [];
+    if (!user || locked) return [];
     return db.posts
       .filter(p => p.uid === user.id && p.status === 'live' && canSeePost(p, me?.id ?? null, db.follows))
       .sort((a, b) => b.ts - a.ts);
-  }, [db.posts, db.follows, user, me?.id]);
+  }, [db.posts, db.follows, user, me?.id, locked]);
+  const { limit: postLimit, pending: postsPending, sentinel: postsSentinel, hasMore: morePosts } = useWindowed(posts.length, 10, user?.id);
 
   if (!user) {
     return (
@@ -95,16 +59,21 @@ export default function UserProfilePage() {
     );
   }
 
-  const own = me?.id === user.id;
   const following = isFollowing(user.id);
+  const fState = followState(user.id);
+  const followsMe = !!me && db.follows.some(f => f.follower === user.id && f.following === me.id && f.status !== 'pending');
   const suspended = !!user.susp && (user.susp.until === null || user.susp.until > Date.now());
-  const followers = db.follows.filter(f => f.following === user.id).map(f => db.users.find(u => u.id === f.follower)).filter((u): u is User => !!u);
-  const followingList = db.follows.filter(f => f.follower === user.id).map(f => db.users.find(u => u.id === f.following)).filter((u): u is User => !!u);
-  const coverMedia = posts.flatMap(p => p.media.filter(m => m.type === 'image' && (m.src || m.gen)))[0];
+  const followers = db.follows.filter(f => f.following === user.id && f.status !== 'pending').map(f => db.users.find(u => u.id === f.follower)).filter((u): u is User => !!u);
+  const followingList = db.follows.filter(f => f.follower === user.id && f.status !== 'pending').map(f => db.users.find(u => u.id === f.following)).filter((u): u is User => !!u);
+  const coverSrc = user.cover || (posts.flatMap(p => p.media.filter(m => m.type === 'image' && (m.src || m.gen)))[0]?.src || posts.flatMap(p => p.media.filter(m => m.type === 'image' && (m.src || m.gen)))[0]?.gen);
   const [ca, cb] = COVER_PALETTES[hash(user.id) % COVER_PALETTES.length];
   const joinedLabel = new Date(user.joined).toLocaleDateString(db.lang === 'ne' ? 'ne-NP' : 'en-GB', { month: 'long', year: 'numeric' });
   const location = [user.city, user.province, user.country].filter(Boolean).join(', ');
   const mediaItems = posts.flatMap(p => p.media.map((m, index) => ({ m, index, post: p })));
+  const userListings = db.listings
+    .filter(l => l.uid === user.id && (own ? l.status !== 'removed' : l.status === 'active' || l.status === 'sold'))
+    .sort((a, b) => b.ts - a.ts);
+  const tabKeys: ('posts' | 'media' | 'about' | 'listings')[] = userListings.length > 0 ? ['posts', 'media', 'listings', 'about'] : ['posts', 'media', 'about'];
 
   const openMedia = (postId: string, index: number, singleVideo: boolean) => {
     router.push(singleVideo ? `/video/${postId}-${index}` : `/post/${postId}/media/${index}`);
@@ -123,8 +92,8 @@ export default function UserProfilePage() {
   return (
     <AppShell>
       <div className="profile-view">
-        <div className="profile-cover" style={!coverMedia ? { background: `linear-gradient(120deg, ${ca}, ${cb})` } : undefined}>
-          {coverMedia && <img src={coverMedia.src || coverMedia.gen} alt="" decoding="async" />}
+        <div className="profile-cover" style={!coverSrc ? { background: `linear-gradient(120deg, ${ca}, ${cb})` } : undefined}>
+          {coverSrc && <img src={coverSrc} alt="" decoding="async" />}
           <div className="profile-cover-shade" />
           <button type="button" className="icon-btn profile-back" aria-label="Back" onClick={() => window.history.length > 1 ? router.back() : router.push('/')}>{IC.back}</button>
         </div>
@@ -133,15 +102,18 @@ export default function UserProfilePage() {
           <div className="profile-avatar"><Avatar user={user} size={112} /></div>
           <div className="profile-actions">
             {own ? (
-              <button type="button" className="follow-btn" onClick={() => setEditing(true)}>{IC.user}<span>{t('editProfile')}</span></button>
+              <>
+                <button type="button" className="follow-btn" onClick={() => setEditing(true)}>{IC.user}<span>{t('editProfile')}</span></button>
+                <button type="button" className="ghost-btn" onClick={() => openComposer(null)}>{IC.plus}<span>{t('post')}</span></button>
+              </>
             ) : (
               <>
                 <button
                   type="button"
-                  className={`follow-btn ${following ? 'on' : ''}`}
+                  className={`follow-btn ${following ? 'on' : ''} ${fState === 'pending' ? 'pending' : ''}`}
                   onClick={() => me ? toggleFollow(user.id) : router.push('/login')}
                 >
-                  {following ? t('unfollow') : t('follow')}
+                  {fState === 'following' ? t('unfollow') : fState === 'pending' ? t('requested') : user.private ? t('requestFollow') : followsMe ? t('followBack') : t('follow')}
                 </button>
                 <button type="button" className="ghost-btn" onClick={() => me ? router.push(`/messages/${user.id}`) : router.push('/login')}>
                   {IC.msg}<span>{t('message')}</span>
@@ -155,7 +127,10 @@ export default function UserProfilePage() {
             {user.name || user.username}
             {user.verified && <VerifiedBadge size={20} />}
           </h1>
-          <div className="profile-handle">@{user.username}</div>
+          <div className="profile-handle">
+            @{user.username}
+            {user.private && <span className="profile-private">{IC.lock}{t('privateAccount')}</span>}
+          </div>
           {user.bio && <p className="profile-bio">{user.bio}</p>}
           <div className="profile-meta">
             {location && <span className="profile-meta-chip">{IC.globe}{location}</span>}
@@ -165,29 +140,65 @@ export default function UserProfilePage() {
 
           <div className="profile-stats">
             <span className="profile-stat"><b>{compact(posts.length)}</b> {t('postsCount')}</span>
-            <button type="button" className="profile-stat" onClick={() => setPeople('followers')}><b>{compact(followers.length)}</b> {t('followers')}</button>
-            <button type="button" className="profile-stat" onClick={() => setPeople('following')}><b>{compact(followingList.length)}</b> {t('followingCount')}</button>
+            <Link href={`/u/${user.username}/followers`} className="profile-stat"><b>{compact(followers.length)}</b> {t('followers')}</Link>
+            <Link href={`/u/${user.username}/following`} className="profile-stat"><b>{compact(followingList.length)}</b> {t('followingCount')}</Link>
           </div>
         </div>
 
         <div className="tabs" role="tablist" aria-label={t('profile')}>
-          {(['posts', 'media', 'about'] as const).map(key => (
+          {tabKeys.map(key => (
             <button key={key} type="button" role="tab" aria-selected={tab === key} className={`tab ${tab === key ? 'active' : ''}`} onClick={() => setTab(key)}>
-              {key === 'posts' ? t('postsCount') : key === 'media' ? t('media') : t('about')}
+              {key === 'posts' ? t('postsCount') : key === 'media' ? t('media') : key === 'listings' ? t('listings') : t('about')}
             </button>
           ))}
         </div>
 
         {tab === 'posts' && (
           <div className="profile-posts">
-            {suspended && !own ? (
+            {locked ? (
+              <div className="feed-empty profile-locked">{IC.lock}<p>{t('privateNotice')}</p></div>
+            ) : suspended && !own ? (
               <p className="feed-empty">{t('suspNotice')}</p>
             ) : posts.length === 0 ? (
               <p className="feed-empty">{t('noPosts')}</p>
             ) : (
-              posts.map(post => <PostCard key={post.id} post={post} author={user} />)
+              <>
+                {posts.slice(0, postLimit).map(post => <PostCard key={post.id} post={post} author={user} />)}
+                {postsPending && morePosts && (
+                  <div className="feed-skeleton" aria-hidden="true">
+                    <div className="feed-skeleton-head"><span className="sk-avatar" /><span className="sk-lines"><i /><i /></span></div>
+                    <div className="sk-block" />
+                  </div>
+                )}
+                {morePosts && <div ref={postsSentinel} className="feed-sentinel" aria-hidden="true" />}
+              </>
             )}
           </div>
+        )}
+
+        {tab === 'listings' && (
+          userListings.length === 0 ? (
+            <p className="feed-empty">{t('noListings')}</p>
+          ) : (
+            <div className="market-grid profile-listings">
+              {userListings.map(l => {
+                const img = l.media.find(m => m.type === 'image' && m.src);
+                return (
+                  <Link href={`/marketplace/${l.id}`} key={l.id} className="market-card">
+                    <span className="market-card-media">
+                      {img ? <img src={img.src} alt={l.title} loading="lazy" /> : <span className="market-card-noimg">{IC.store}</span>}
+                      {l.status === 'sold' && <span className="market-sold">{t('sold')}</span>}
+                    </span>
+                    <span className="market-card-body">
+                      <b className="market-card-price">NPR {l.price.toLocaleString('en-US')}</b>
+                      <span className="market-card-title">{l.title}</span>
+                      <span className="market-card-loc">{IC.globe}{l.location} · {ago(l.ts, db.lang)}</span>
+                    </span>
+                  </Link>
+                );
+              })}
+            </div>
+          )
         )}
 
         {tab === 'media' && (
@@ -219,32 +230,41 @@ export default function UserProfilePage() {
 
         {tab === 'about' && (
           <div className="profile-about">
-            <div className="about-card">
-              <h2>{t('bio')}</h2>
-              <p>{user.bio || '—'}</p>
+            <div className="about-card about-bio">
+              <h2>{IC.smile}{t('bio')}</h2>
+              <p>{user.bio || t('noBio')}</p>
             </div>
             <div className="about-card">
-              <h2>{t('about')}</h2>
+              <h2>{IC.globe}{t('about')}</h2>
               <dl className="about-list">
-                {location && <div><dt>{t('city')}</dt><dd>{location}</dd></div>}
-                <div><dt>{t('joined')}</dt><dd>{joinedLabel}</dd></div>
-                <div><dt>{t('postsCount')}</dt><dd>{posts.length}</dd></div>
-                <div><dt>{t('followers')}</dt><dd>{followers.length}</dd></div>
-                <div><dt>{t('followingCount')}</dt><dd>{followingList.length}</dd></div>
+                {location && <div><dt>{IC.globe}{t('city')}</dt><dd>{location}</dd></div>}
+                <div><dt>{IC.calendar}{t('joined')}</dt><dd>{joinedLabel}</dd></div>
+                {user.dob && <div><dt>{IC.calendar}{t('dob')}</dt><dd>{new Date(user.dob).toLocaleDateString(db.lang === 'ne' ? 'ne-NP' : 'en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}</dd></div>}
+                <div><dt>{IC.img}{t('postsCount')}</dt><dd>{posts.length}</dd></div>
+                <div><dt>{IC.users}{t('followers')}</dt><dd>{followers.length}</dd></div>
+                <div><dt>{IC.users}{t('followingCount')}</dt><dd>{followingList.length}</dd></div>
               </dl>
             </div>
+            {followingList.length > 0 && (
+              <div className="about-card">
+                <h2>{IC.users}{t('followsPeople')}</h2>
+                <div className="about-follows">
+                  {followingList.slice(0, 5).map(u => (
+                    <Link key={u.id} href={`/u/${u.username}`} className="about-follow">
+                      <Avatar user={u} size={44} />
+                      <b>{u.name || u.username}</b>
+                      <span>@{u.username}</span>
+                    </Link>
+                  ))}
+                </div>
+                <Link href={`/u/${user.username}/following`} className="about-more">{t('seeAllFollowing')}</Link>
+              </div>
+            )}
           </div>
         )}
       </div>
 
       {editing && own && <EditProfileModal onClose={() => setEditing(false)} />}
-      {people && (
-        <PeopleModal
-          title={people === 'followers' ? t('followers') : t('followingCount')}
-          people={people === 'followers' ? followers : followingList}
-          onClose={() => setPeople(null)}
-        />
-      )}
     </AppShell>
   );
 }

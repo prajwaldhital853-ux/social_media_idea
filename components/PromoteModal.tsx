@@ -31,8 +31,8 @@ export default function PromoteModal({ targetType, targetId, defaultCategory, on
             targetType={targetType}
             defaultCategory={defaultCategory}
             confirmLabel={t('promote')}
-            onConfirm={cfg => {
-              if (requestPromotion(targetType, targetId, cfg)) onClose();
+            onConfirm={async cfg => {
+              if (await requestPromotion(targetType, targetId, cfg)) onClose();
             }}
           />
         </div>

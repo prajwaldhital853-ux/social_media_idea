@@ -1,12 +1,21 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, ReactNode, Dispatch, SetStateAction } from 'react';
-import { usePathname } from 'next/navigation';
-import { Database, User, Post, Comment, ThemeMode, ReactionKind, NotificationKind, FeatureFlags, Promotion } from './types';
-import { getDb, save } from './storage';
+import React, { createContext, useContext, useState, useEffect, useRef, ReactNode, Dispatch, SetStateAction } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
+import { Database, Follow, User, Post, Comment, ThemeMode, ReactionKind, NotificationKind, FeatureFlags, Promotion } from './types';
+import { getDb, save, emptyDb } from './storage';
 import { hydrateVideoSrcs } from './videoStore';
-import { THEME_KEY, uid, ageFromDob, DAY } from './utils';
+import { THEME_KEY, LANG_KEY, uid, ageFromDob, DAY } from './utils';
 import { I18N, TranslationKey } from './i18n';
+import { api, API_ENABLED, ApiError } from './api';
+import { merge as applyFragment, Fragment } from './store';
+import {
+  idOf, at, mapComment, mapFollow, mapMe, mapMessage, mapPerson, mapPost, mapPromotion,
+  mapReport, mapSettings, mediaPayload, profilePatch, reactionsOfPost, toPostPayload, toProfilePayload,
+} from './dto';
+import { bindListCache, forgetLists } from './lists';
+
+type Target = 'post' | 'comment' | 'media';
 
 interface AppContextType {
   db: Database;
@@ -16,29 +25,37 @@ interface AppContextType {
   isStaff: () => boolean;
   t: (key: TranslationKey, vars?: Record<string, string | number>) => string;
   feature: (key: keyof FeatureFlags) => boolean;
-  addPost: (post: Post) => void;
-  updatePost: (id: string, updates: Partial<Post>) => void;
-  deletePost: (id: string) => void;
-  addComment: (comment: Comment) => void;
-  deleteComment: (id: string) => void;
-  toggleFollow: (targetId: string) => void;
+  addPost: (post: Post) => Promise<Post>;
+  updatePost: (id: string, updates: Partial<Post>) => Promise<void>;
+  deletePost: (id: string) => Promise<void>;
+  addComment: (comment: Comment) => Promise<Comment>;
+  deleteComment: (id: string) => Promise<void>;
+  toggleFollow: (targetId: string) => Promise<void>;
   isFollowing: (targetId: string) => boolean;
-  react: (targetType: 'post' | 'comment' | 'media', targetId: string, kind: ReactionKind) => void;
-  myReaction: (targetType: 'post' | 'comment' | 'media', targetId: string) => ReactionKind | null;
-  toggleSave: (pid: string) => void;
+  followState: (targetId: string) => 'none' | 'pending' | 'following';
+  incomingRequests: () => Follow[];
+  acceptRequest: (followerId: string) => Promise<void>;
+  declineRequest: (followerId: string) => Promise<void>;
+  mutualIds: () => string[];
+  react: (targetType: Target, targetId: string, kind: ReactionKind) => Promise<void>;
+  myReaction: (targetType: Target, targetId: string) => ReactionKind | null;
+  reactionCount: (targetType: Target, targetId: string) => number;
+  toggleSave: (pid: string) => Promise<void>;
   isSaved: (pid: string) => boolean;
+  toggleListingSave: (lid: string) => Promise<void>;
+  isListingSaved: (lid: string) => boolean;
   notify: (uid: string, kind: NotificationKind, text: string, href?: string, actor?: string) => void;
-  markAllRead: () => void;
-  sendMessage: (to: string, text: string) => void;
-  addReport: (type: 'post' | 'comment' | 'listing' | 'profile', targetId: string, reason: string, note: string) => void;
+  markAllRead: () => Promise<void>;
+  sendMessage: (to: string, text: string) => Promise<void>;
+  addReport: (type: 'post' | 'comment' | 'listing' | 'profile', targetId: string, reason: string, note: string) => Promise<void>;
   logAudit: (action: string, target: string, reason: string) => void;
-  requestPromotion: (targetType: 'post' | 'listing', targetId: string, cfg: PromoConfig) => boolean;
-  cancelPromotion: (id: string) => void;
+  requestPromotion: (targetType: 'post' | 'listing', targetId: string, cfg: PromoConfig) => Promise<boolean>;
+  cancelPromotion: (id: string) => Promise<void>;
   activePromo: (targetType: 'post' | 'listing', targetId: string) => Promotion | undefined;
   promoEligible: (promo: Promotion) => boolean;
   updateLang: (lang: 'en' | 'ne') => void;
   login: (userId: string) => void;
-  logout: () => void;
+  logout: () => Promise<void>;
   isAuthenticated: boolean;
   theme: ThemeMode;
   toggleTheme: () => void;
@@ -53,6 +70,22 @@ interface AppContextType {
   closeCreateChooser: () => void;
   toast: string | null;
   showToast: (msg: string) => void;
+  /** Session bootstrap has finished (signed in or anonymous). */
+  ready: boolean;
+  /** True while the live Django API drives the cache. */
+  serverMode: boolean;
+  /** Re-pull /api/sync/: session, graph edges, saves, wallet and unread counters. */
+  resync: () => Promise<void>;
+  /** Apply a server fragment onto the cache without a round-trip. */
+  merge: (frag: Fragment) => void;
+  signin: (identifier: string, password: string) => Promise<AuthResult>;
+  signupAccount: (payload: SignupPayload) => Promise<AuthResult>;
+  verifyCode: (challenge: string | number, code: string, purpose?: 'login' | 'verify' | 'unlock') => Promise<AuthResult>;
+  resendCode: (challenge: string | number) => Promise<CodeResult>;
+  requestUnlock: (email: string) => Promise<CodeResult>;
+  confirmUnlock: (challenge: string | number, code: string) => Promise<AuthResult>;
+  googleSignIn: (token: { id_token?: string; demo?: { email: string; name: string; sub: string } }) => Promise<AuthResult>;
+  updateProfile: (patch: Record<string, any>) => Promise<void>;
 }
 
 export interface PromoConfig {
@@ -64,26 +97,76 @@ export interface PromoConfig {
   city: string;
 }
 
+export interface SignupPayload {
+  username: string;
+  email: string;
+  password: string;
+  name: string;
+  dob: string;
+  country: string;
+  province?: string;
+  city?: string;
+  google?: { sub: string; email: string; name: string };
+}
+
+export interface AuthResult {
+  ok: boolean;
+  status: number;
+  user?: User;
+  /** An email code must be confirmed before the session is usable. */
+  challenge?: string;
+  devCode?: string;
+  /** Seconds the challenge stays valid, so the UI can count it down. */
+  expiresIn?: number;
+  emailHint?: string;
+  newDevice?: boolean;
+  needsVerify?: boolean;
+  needsSignup?: boolean;
+  prefill?: { email: string; name: string; google_sub: string };
+  locked?: boolean;
+  lockedUntil?: number;
+  attemptsLeft?: number;
+  detail?: string;
+  errors?: Record<string, string[]>;
+}
+
+export interface CodeResult {
+  challenge?: string;
+  devCode?: string;
+  expiresIn?: number;
+  detail?: string;
+  error?: string;
+}
+
 function readTheme(): ThemeMode {
   if (typeof window === 'undefined') return 'light';
   const saved = localStorage.getItem(THEME_KEY);
-  if (saved === 'light' || saved === 'dark') return saved;
-  return 'light';
+  return saved === 'light' || saved === 'dark' ? saved : 'light';
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const [db, setDb] = useState<Database>(getDb());
+  const router = useRouter();
+  const [db, setDb] = useState<Database>(() => (API_ENABLED ? emptyDb() : getDb()));
   const [mounted, setMounted] = useState(false);
+  const [ready, setReady] = useState(!API_ENABLED);
+  const [serverMode, setServerMode] = useState(API_ENABLED);
   const [theme, setTheme] = useState<ThemeMode>('light');
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [composerPostId, setComposerPostId] = useState<string | null | undefined>(undefined);
   const [createChooserOpen, setCreateChooserOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
-  // Close drawer when navigation occurs
+  /** Async continuations read the cache through this ref, never a captured render. */
+  const dbRef = useRef(db);
+  dbRef.current = db;
+
+  const merge = (frag: Fragment) => setDb(cur => applyFragment(cur, frag));
+
+  useEffect(() => bindListCache(frag => setDb(cur => applyFragment(cur, frag))), []);
+
   useEffect(() => {
     setDrawerOpen(false);
   }, [pathname]);
@@ -93,6 +176,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const next = readTheme();
     setTheme(next);
     document.documentElement.setAttribute('data-theme', next);
+    const storedLang = localStorage.getItem(LANG_KEY);
+    if (storedLang === 'en' || storedLang === 'ne') setDb(prev => (prev.lang === storedLang ? prev : { ...prev, lang: storedLang }));
+    if (API_ENABLED) {
+      void bootstrap();
+      return;
+    }
     hydrateVideoSrcs(db).then(srcs => {
       if (!srcs.size) return;
       setDb(cur => ({
@@ -106,6 +195,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
+    if (API_ENABLED) return;
     if (mounted && !save(db)) setToast('Device storage is full — the latest change may not persist.');
   }, [db, mounted]);
 
@@ -132,179 +222,695 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const showToast = (msg: string) => setToast(msg);
 
-  const addPost = (post: Post) => setDb(prev => ({ ...prev, posts: [post, ...prev.posts] }));
+  /** Fresh signed-in user record, read at the moment an async continuation needs it. */
+  const currentMe = (): User | null => {
+    const id = dbRef.current.meId;
+    return id ? dbRef.current.users.find(u => u.id === id) || null : null;
+  };
 
-  const updatePost = (id: string, updates: Partial<Post>) =>
-    setDb(prev => ({ ...prev, posts: prev.posts.map(p => p.id === id ? { ...p, ...updates } : p) }));
+  const usernameOf = (userId: string) => dbRef.current.users.find(u => u.id === userId)?.username;
 
-  const deletePost = (id: string) => setDb(prev => ({
-    ...prev,
-    posts: prev.posts.filter(p => p.id !== id),
-    comments: prev.comments.filter(c => c.pid !== id),
-    reactions: prev.reactions.filter(r => !(r.targetType === 'post' && r.targetId === id)),
-    saves: prev.saves.filter(s => s.pid !== id),
-    reports: prev.reports.filter(r => !(r.type === 'post' && r.targetId === id))
-  }));
+  const errText = (err: unknown, fallback: string) => (err instanceof ApiError ? err.message : fallback);
 
-  const addComment = (comment: Comment) => setDb(prev => ({ ...prev, comments: [...prev.comments, comment] }));
-
-  const deleteComment = (id: string) => setDb(prev => ({
-    ...prev,
-    comments: prev.comments.filter(c => c.id !== id),
-    reactions: prev.reactions.filter(r => !(r.targetType === 'comment' && r.targetId === id)),
-    reports: prev.reports.filter(r => !(r.type === 'comment' && r.targetId === id))
-  }));
-
-  const isFollowing = (targetId: string) =>
-    !!me && db.follows.some(f => f.follower === me.id && f.following === targetId);
-
-  const toggleFollow = (targetId: string) => {
-    if (!me || me.id === targetId) return;
-    const following = isFollowing(targetId);
+  /** Write the one round-trip that hydrates session, graph, saves, promotions and counters. */
+  const pullSession = async (): Promise<User | null> => {
+    let payload: any;
+    try {
+      payload = await api.get<any>('/api/sync/');
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        setDb(prev => ({ ...prev, meId: null, unread: undefined }));
+      }
+      return null;
+    }
+    const self = mapMe(payload.me);
+    const serverNow = at(payload.server_time);
     setDb(prev => ({
-      ...prev,
-      follows: following
-        ? prev.follows.filter(f => !(f.follower === me.id && f.following === targetId))
-        : [...prev.follows, { follower: me.id, following: targetId, ts: Date.now() }],
-      notifications: following ? prev.notifications : [
-        { id: uid(), uid: targetId, kind: 'follow', actor: me.id, text: 'started following you', href: `/u/${me.username}`, ts: Date.now(), read: false },
-        ...prev.notifications
-      ]
+      ...applyFragment(prev, {
+        // Self goes last: a thin person card invents account flags (twoStep,
+        // emailVerified) that must never overwrite what the session really says.
+        users: [...(payload.people || []).map(mapPerson), ...(payload.suggestions || []).map(mapPerson), self],
+        follows: (payload.follows || []).map(mapFollow),
+        saves: (payload.saves?.posts || []).map((pid: number) => ({ uid: self.id, pid: idOf(pid), ts: serverNow })),
+        listingSaves: (payload.saves?.listings || []).map((lid: number) => ({ uid: self.id, lid: idOf(lid), ts: serverNow })),
+        promotions: (payload.promotions || []).map(mapPromotion),
+      }),
+      meId: self.id,
+      settings: mapSettings(payload.config || prev.settings),
+      unread: payload.unread,
+      serverTime: serverNow,
     }));
+    return self;
   };
 
-  const myReaction = (targetType: 'post' | 'comment' | 'media', targetId: string) => {
-    if (!me) return null;
-    return db.reactions.find(r => r.targetType === targetType && r.targetId === targetId && r.uid === me.id)?.kind || null;
+  const resync = async () => {
+    if (!API_ENABLED) return;
+    await pullSession();
   };
 
-  const react = (targetType: 'post' | 'comment' | 'media', targetId: string, kind: ReactionKind) => {
-    if (!me) return;
-    const existing = myReaction(targetType, targetId);
+  async function bootstrap() {
+    try {
+      const meta = await api.get<any>('/api/meta/');
+      setDb(cur => ({ ...cur, settings: mapSettings(meta) }));
+    } catch { /* keep the shipped defaults */ }
+    try {
+      const session = await api.get<any>('/api/auth/me/');
+      setDb(cur => ({ ...cur, meId: idOf(session.id) }));
+      await pullSession();
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) setDb(cur => ({ ...cur, meId: null }));
+    } finally {
+      setReady(true);
+    }
+  }
+
+  const authResult = (err: unknown): AuthResult => {
+    if (err instanceof ApiError) {
+      return {
+        ok: false,
+        status: err.status,
+        detail: err.message,
+        errors: err.fieldErrors,
+        challenge: err.data?.challenge ? idOf(err.data.challenge) : undefined,
+        devCode: err.data?.dev_code,
+        expiresIn: err.data?.expires_in ? Number(err.data.expires_in) : undefined,
+        emailHint: err.data?.email_hint,
+        newDevice: !!err.data?.new_device,
+        locked: !!err.data?.locked,
+        lockedUntil: at(err.data?.locked_until),
+        attemptsLeft: err.data?.attempts_left,
+      };
+    }
+    return { ok: false, status: 0, detail: 'Cannot reach the server. Check your connection.' };
+  };
+
+  /**
+   * A 200/201 with a `user` block means cookies are set and the session is live;
+   * a 202 carries only a challenge, so the cache must not be touched yet.
+   */
+  const finishAuth = async (data: any): Promise<AuthResult> => {
+    setServerMode(true);
+    const challenge = data?.challenge ? idOf(data.challenge) : undefined;
+    const expiresIn = data?.expires_in ? Number(data.expires_in) : undefined;
+    if (!data?.user) {
+      return { ok: true, status: 200, challenge, expiresIn, devCode: data?.dev_code, emailHint: data?.email_hint, newDevice: !!data?.new_device };
+    }
+    const user = await pullSession();
+    setReady(true);
+    return {
+      ok: true,
+      status: 200,
+      user: user || undefined,
+      challenge,
+      expiresIn,
+      devCode: data.dev_code,
+      emailHint: data.email_hint,
+      newDevice: !!data.new_device,
+      needsVerify: !!challenge,
+    };
+  };
+
+  const codeResult = (data: any, err?: unknown): CodeResult => {
+    if (err) return { error: errText(err, 'That request failed. Try again.') };
+    return {
+      challenge: data?.challenge ? idOf(data.challenge) : undefined,
+      devCode: data?.dev_code,
+      expiresIn: data?.expires_in ? Number(data.expires_in) : undefined,
+      detail: data?.detail,
+    };
+  };
+
+  const signin = async (identifier: string, password: string): Promise<AuthResult> => {
+    try {
+      return await finishAuth(await api.post('/api/auth/login/', { username: identifier, password, device_id: api.deviceId() }));
+    } catch (err) {
+      return authResult(err);
+    }
+  };
+
+  const signupAccount = async (payload: SignupPayload): Promise<AuthResult> => {
+    try {
+      return await finishAuth(await api.post('/api/auth/signup/', { ...payload, device_id: api.deviceId() }));
+    } catch (err) {
+      return authResult(err);
+    }
+  };
+
+  const verifyCode = async (challenge: string | number, code: string, purpose: 'login' | 'verify' | 'unlock' = 'login'): Promise<AuthResult> => {
+    const path = purpose === 'unlock' ? '/api/auth/unlock/confirm/' : '/api/auth/otp/';
+    try {
+      const data = await api.post(path, { challenge, code, device_id: api.deviceId() });
+      if (purpose === 'unlock') return { ok: true, status: 200, detail: data?.detail };
+      return await finishAuth(data);
+    } catch (err) {
+      return authResult(err);
+    }
+  };
+
+  const resendCode = async (challenge: string | number) => {
+    try {
+      return codeResult(await api.post('/api/auth/otp/resend/', { challenge, device_id: api.deviceId() }));
+    } catch (err) {
+      return codeResult(null, err);
+    }
+  };
+
+  const requestUnlock = async (email: string) => {
+    try {
+      return codeResult(await api.post('/api/auth/unlock/', { email }));
+    } catch (err) {
+      return codeResult(null, err);
+    }
+  };
+
+  const confirmUnlock = (challenge: string | number, code: string) => verifyCode(challenge, code, 'unlock');
+
+  const googleSignIn = async (token: { id_token?: string; demo?: { email: string; name: string; sub: string } }): Promise<AuthResult> => {
+    try {
+      const data = await api.post('/api/auth/google/', { ...token, device_id: api.deviceId() });
+      if (data?.needs_signup) {
+        return { ok: false, status: 200, needsSignup: true, prefill: data.prefill, detail: data.detail };
+      }
+      return await finishAuth(data);
+    } catch (err) {
+      return authResult(err);
+    }
+  };
+
+  const logout = async () => {
+    setDb(prev => ({ ...prev, meId: null, unread: undefined }));
+    setDrawerOpen(false);
+    forgetLists();
+    if (!API_ENABLED) return;
+    try {
+      await api.post('/api/auth/logout/', {});
+    } catch { /* the cookie is already cleared */ }
+    router.push('/login');
+  };
+
+  const updateProfile = async (patch: Record<string, any>) => {
+    const self = currentMe();
+    if (!API_ENABLED || !self) return;
+    const data = await api.patch<any>(`/api/profiles/${self.username}/`, toProfilePayload(patch));
+    merge({ users: [{ ...self, ...profilePatch(data) }] });
+  };
+
+  /** Server aggregates move by hand so the UI answers instantly; pages re-read them anyway. */
+  const bumpCount = (targetType: Target, targetId: string, delta: number) => {
+    if (!delta) return;
     setDb(prev => {
-      const rest = prev.reactions.filter(r => !(r.targetType === targetType && r.targetId === targetId && r.uid === me.id));
-      if (existing === kind) return { ...prev, reactions: rest };
-      const ownerId = targetType === 'post'
-        ? prev.posts.find(p => p.id === targetId)?.uid
-        : targetType === 'media'
-          ? prev.posts.find(p => p.id === targetId.split('#m')[0])?.uid
-          : prev.comments.find(c => c.id === targetId)?.uid;
-      const notifications = ownerId && ownerId !== me.id
-        ? [{ id: uid(), uid: ownerId, kind: 'reaction' as const, actor: me.id, text: `reacted ${kind} to your ${targetType === 'media' ? 'photo' : targetType}`, href: targetType === 'comment' ? undefined : `/post/${targetType === 'media' ? targetId.split('#m')[0] : targetId}`, ts: Date.now(), read: false }, ...prev.notifications]
-        : prev.notifications;
-      return { ...prev, reactions: [...rest, { id: uid(), targetType, targetId, uid: me.id, kind, ts: Date.now() }], notifications };
+      if (targetType === 'comment') {
+        return { ...prev, comments: prev.comments.map(c => (c.id === targetId ? { ...c, likes: (c.likes ?? 0) + delta } : c)) };
+      }
+      if (targetType === 'media') {
+        const [postId, position] = targetId.split('#m');
+        return {
+          ...prev,
+          posts: prev.posts.map(p => (p.id === postId
+            ? { ...p, media: p.media.map((m, i) => (i === Number(position) ? { ...m, likes: (m.likes ?? 0) + delta } : m)) }
+            : p))
+        };
+      }
+      return { ...prev, posts: prev.posts.map(p => (p.id === targetId ? { ...p, likes: (p.likes ?? 0) + delta } : p)) };
     });
   };
 
-  const isSaved = (pid: string) => !!me && db.saves.some(s => s.uid === me.id && s.pid === pid);
+  const addPost = async (post: Post): Promise<Post> => {
+    if (!API_ENABLED) {
+      setDb(prev => ({ ...prev, posts: [post, ...prev.posts] }));
+      return post;
+    }
+    const self = currentMe();
+    const row = await api.post<any>('/api/posts/', toPostPayload(post));
+    const saved = mapPost(row);
+    merge({
+      posts: [saved],
+      reactions: reactionsOfPost(row, self ? self.id : saved.uid),
+    });
+    return { ...saved, kind: post.kind };
+  };
 
-  const toggleSave = (pid: string) => {
-    if (!me) return;
-    const saved = isSaved(pid);
+  const updatePost = async (id: string, updates: Partial<Post>) => {
+    const before = dbRef.current.posts.find(p => p.id === id);
+    setDb(prev => ({ ...prev, posts: prev.posts.map(p => (p.id === id ? { ...p, ...updates } : p)) }));
+    if (!API_ENABLED) return;
+    try {
+      const payload: Record<string, any> = {};
+      if (updates.text !== undefined) {
+        payload.text = updates.text;
+        payload.category = updates.category !== undefined ? updates.category : (before?.category || '');
+      }
+      if (updates.mood !== undefined) payload.mood = updates.mood || '';
+      if (updates.place !== undefined) payload.place = updates.place || '';
+      if (updates.audience !== undefined) payload.audience = updates.audience;
+      if (updates.media !== undefined) payload.media = mediaPayload(updates.media);
+      merge({ posts: [mapPost(await api.patch<any>(`/api/posts/${id}/`, payload))] });
+    } catch (err) {
+      if (before) setDb(prev => ({ ...prev, posts: prev.posts.map(p => (p.id === id ? before : p)) }));
+      showToast(errText(err, 'That change could not be saved.'));
+    }
+  };
+
+  const deletePost = async (id: string) => {
+    const snapshot = dbRef.current;
     setDb(prev => ({
       ...prev,
-      saves: saved
-        ? prev.saves.filter(s => !(s.uid === me.id && s.pid === pid))
-        : [...prev.saves, { uid: me.id, pid, ts: Date.now() }]
+      posts: prev.posts.filter(p => p.id !== id),
+      comments: prev.comments.filter(c => c.pid !== id),
+      reactions: prev.reactions.filter(r => !(r.targetId === id || r.targetId.startsWith(`${id}#m`))),
+      saves: prev.saves.filter(s => s.pid !== id),
+      reports: prev.reports.filter(r => !(r.type === 'post' && r.targetId === id))
     }));
+    if (!API_ENABLED) return;
+    try {
+      await api.del(`/api/posts/${id}/`);
+    } catch (err) {
+      setDb(snapshot);
+      showToast(errText(err, 'The post is still up.'));
+    }
+  };
+
+  const addComment = async (comment: Comment): Promise<Comment> => {
+    if (!API_ENABLED) {
+      setDb(prev => ({ ...prev, comments: [...prev.comments, comment] }));
+      return comment;
+    }
+    const row = await api.post<any>('/api/comments/', {
+      post: comment.pid,
+      parent: comment.parentId || null,
+      media_index: comment.mediaIndex === undefined ? null : comment.mediaIndex,
+      text: comment.text,
+    });
+    const saved = mapComment(row);
+    merge({ comments: [saved] });
+    setDb(prev => ({ ...prev, posts: prev.posts.map(p => (p.id === saved.pid ? { ...p, comments: (p.comments ?? 0) + 1 } : p)) }));
+    return saved;
+  };
+
+  const deleteComment = async (id: string) => {
+    const snapshot = dbRef.current;
+    setDb(prev => ({
+      ...prev,
+      comments: prev.comments.filter(c => c.id !== id && c.parentId !== id),
+      reactions: prev.reactions.filter(r => !(r.targetType === 'comment' && r.targetId === id)),
+      reports: prev.reports.filter(r => !(r.type === 'comment' && r.targetId === id))
+    }));
+    if (!API_ENABLED) return;
+    try {
+      await api.del(`/api/comments/${id}/`);
+    } catch (err) {
+      setDb(snapshot);
+      showToast(errText(err, 'The comment is still up.'));
+    }
+  };
+
+  const isFollowing = (targetId: string) => {
+    const self = currentMe();
+    const edge = self ? db.follows.find(f => f.follower === self.id && f.following === targetId) : undefined;
+    return !!edge && edge.status !== 'pending';
+  };
+
+  const followState = (targetId: string): 'none' | 'pending' | 'following' => {
+    const self = currentMe();
+    const edge = self ? db.follows.find(f => f.follower === self.id && f.following === targetId) : undefined;
+    if (!edge) return 'none';
+    return edge.status === 'pending' ? 'pending' : 'following';
+  };
+
+  const incomingRequests = () => {
+    const self = currentMe();
+    return self ? db.follows.filter(f => f.following === self.id && f.status === 'pending') : [];
+  };
+
+  const mutualIds = () => {
+    const self = currentMe();
+    if (!self) return [] as string[];
+    const mine = new Set(db.follows.filter(f => f.follower === self.id && f.status !== 'pending').map(f => f.following));
+    return db.follows.filter(f => f.following === self.id && f.status !== 'pending' && mine.has(f.follower)).map(f => f.follower);
+  };
+
+  const edgeOf = (followerId: string, followingId: string) =>
+    dbRef.current.follows.find(f => f.follower === followerId && f.following === followingId);
+
+  const putEdge = (edge: Follow) => setDb(prev => ({
+    ...prev,
+    follows: [...prev.follows.filter(f => !(f.follower === edge.follower && f.following === edge.following)), edge]
+  }));
+
+  const dropEdge = (followerId: string, followingId: string) => setDb(prev => ({
+    ...prev,
+    follows: prev.follows.filter(f => !(f.follower === followerId && f.following === followingId))
+  }));
+
+  const toggleFollow = async (targetId: string) => {
+    const self = currentMe();
+    if (!self || self.id === targetId) return;
+    const username = usernameOf(targetId);
+    if (API_ENABLED && !username) return;
+    const existing = edgeOf(self.id, targetId);
+    if (existing) {
+      dropEdge(self.id, targetId);
+      if (API_ENABLED) {
+        try {
+          await api.del(`/api/follows/${username}/`);
+        } catch (err) {
+          putEdge(existing);
+          showToast(errText(err, 'Could not update follow.'));
+          return;
+        }
+      }
+      if (existing.status === 'pending') showToast('Follow request cancelled.');
+      return;
+    }
+    const target = dbRef.current.users.find(u => u.id === targetId);
+    const pending = !!target?.private;
+    putEdge({ follower: self.id, following: targetId, ts: Date.now(), status: pending ? 'pending' : 'accepted' });
+    notify(targetId, 'follow', pending ? 'requested to follow you' : 'started following you', pending ? `/u/${self.username}/followers` : `/u/${self.username}`, self.username);
+    if (API_ENABLED) {
+      try {
+        const data = await api.post<any>('/api/follows/', { username });
+        putEdge({ follower: self.id, following: targetId, ts: at(data?.created_at) || Date.now(), status: data?.status === 'pending' ? 'pending' : 'accepted' });
+      } catch (err) {
+        dropEdge(self.id, targetId);
+        showToast(errText(err, 'Could not follow.'));
+        return;
+      }
+    }
+    if (pending) showToast('Follow request sent.');
+  };
+
+  const requestEdge = (followerId: string) => {
+    const self = currentMe();
+    return self ? edgeOf(followerId, self.id) : undefined;
+  };
+
+  const moderateRequest = async (followerId: string, accept: boolean) => {
+    const self = currentMe();
+    if (!self) return;
+    const edge = requestEdge(followerId);
+    if (!edge) return;
+    if (accept) putEdge({ ...edge, status: 'accepted' });
+    else dropEdge(followerId, self.id);
+    if (API_ENABLED) {
+      if (!edge.rid) {
+        if (accept) putEdge(edge); else putEdge({ ...edge, status: 'pending' });
+        showToast('Re-syncing the request list…');
+        await resync();
+        return;
+      }
+      try {
+        await api.post(`/api/follows/requests/${edge.rid}/${accept ? 'accept' : 'decline'}/`, {});
+      } catch (err) {
+        if (accept) putEdge(edge); else putEdge({ ...edge, status: 'pending' });
+        showToast(errText(err, 'That request could not be updated.'));
+        return;
+      }
+    }
+    if (accept) notify(followerId, 'follow', 'accepted your follow request', `/u/${self.username}`, self.username);
+    showToast(accept ? 'Follow request accepted.' : 'Follow request declined.');
+  };
+
+  const acceptRequest = (followerId: string) => moderateRequest(followerId, true);
+  const declineRequest = (followerId: string) => moderateRequest(followerId, false);
+
+  const myReaction = (targetType: Target, targetId: string) => {
+    const self = currentMe();
+    if (!self) return null;
+    return db.reactions.find(r => r.targetType === targetType && r.targetId === targetId && r.uid === self.id)?.kind || null;
+  };
+
+  /** Server aggregates in API mode; the demo cache counts its own reaction rows. */
+  const reactionCount = (targetType: Target, targetId: string): number => {
+    if (targetType === 'post') {
+      const post = db.posts.find(p => p.id === targetId);
+      if (post?.likes !== undefined) return post.likes;
+    }
+    if (targetType === 'comment') {
+      const comment = db.comments.find(c => c.id === targetId);
+      if (comment?.likes !== undefined) return comment.likes;
+    }
+    if (targetType === 'media') {
+      const [postId, position] = targetId.split('#m');
+      const media = db.posts.find(p => p.id === postId)?.media?.[Number(position)];
+      if (media?.likes !== undefined) return media.likes;
+    }
+    return db.reactions.filter(r => r.targetType === targetType && r.targetId === targetId).length;
+  };
+
+  const react = async (targetType: Target, targetId: string, kind: ReactionKind) => {
+    const self = currentMe();
+    if (!self) return;
+    const mine = (prev: Database) => prev.reactions.filter(r => !(r.targetType === targetType && r.targetId === targetId && r.uid === self.id));
+    const existing = myReaction(targetType, targetId);
+    const off = existing === kind;
+    const nextKind: ReactionKind | null = off ? null : kind;
+    setDb(prev => ({
+      ...prev,
+      reactions: nextKind ? [...mine(prev), { id: uid(), targetType, targetId, uid: self.id, kind: nextKind, ts: Date.now() }] : mine(prev)
+    }));
+    if (!API_ENABLED) return;
+    bumpCount(targetType, targetId, (nextKind ? 1 : 0) - (existing ? 1 : 0));
+    try {
+      if (off) await api.del('/api/reactions/toggle/', { target_type: targetType, target_id: targetId });
+      else await api.post('/api/reactions/', { target_type: targetType, target_id: targetId, kind });
+    } catch (err) {
+      setDb(prev => ({
+        ...prev,
+        reactions: existing
+          ? [...mine(prev), { id: uid(), targetType, targetId, uid: self.id, kind: existing, ts: Date.now() }]
+          : mine(prev)
+      }));
+      bumpCount(targetType, targetId, (existing ? 1 : 0) - (nextKind ? 1 : 0));
+      showToast(errText(err, 'Sign in to react.'));
+    }
+  };
+
+  const isSaved = (pid: string) => {
+    const self = currentMe();
+    return !!self && db.saves.some(s => s.uid === self.id && s.pid === pid);
+  };
+
+  const toggleSave = async (pid: string) => {
+    const self = currentMe();
+    if (!self) return;
+    const saved = isSaved(pid);
+    const mine = (prev: Database) => prev.saves.filter(s => !(s.uid === self.id && s.pid === pid));
+    setDb(prev => ({ ...prev, saves: saved ? mine(prev) : [...mine(prev), { uid: self.id, pid, ts: Date.now() }] }));
+    if (API_ENABLED) {
+      try {
+        if (saved) await api.del(`/api/saved/posts/${pid}/`);
+        else await api.post('/api/saved/posts/', { post: pid });
+      } catch (err) {
+        setDb(prev => ({ ...prev, saves: saved ? [...mine(prev), { uid: self.id, pid, ts: Date.now() }] : mine(prev) }));
+        showToast(errText(err, 'Could not save.'));
+        return;
+      }
+    }
     showToast(saved ? t('unsave') : t('saved'));
   };
 
-  const notify = (targetUid: string, kind: NotificationKind, text: string, href?: string, actor?: string) =>
+  const isListingSaved = (lid: string) => {
+    const self = currentMe();
+    return !!self && (db.listingSaves || []).some(s => s.uid === self.id && s.lid === lid);
+  };
+
+  const toggleListingSave = async (lid: string) => {
+    const self = currentMe();
+    if (!self) return;
+    const saved = isListingSaved(lid);
+    const mine = (prev: Database) => (prev.listingSaves || []).filter(s => !(s.uid === self.id && s.lid === lid));
+    setDb(prev => ({ ...prev, listingSaves: saved ? mine(prev) : [...mine(prev), { uid: self.id, lid, ts: Date.now() }] }));
+    if (API_ENABLED) {
+      try {
+        if (saved) await api.del(`/api/saved/listings/${lid}/`);
+        else await api.post('/api/saved/listings/', { listing: lid });
+      } catch (err) {
+        setDb(prev => ({ ...prev, listingSaves: saved ? [...mine(prev), { uid: self.id, lid, ts: Date.now() }] : mine(prev) }));
+        showToast(errText(err, 'Could not save.'));
+        return;
+      }
+    }
+    showToast(saved ? t('unsave') : t('saved'));
+  };
+
+  /**
+   * Demo mode writes notification rows into the local feed. With the API the
+   * server owns them, so this only nudges the badge and the caller re-syncs.
+   */
+  const notify = (targetUid: string, kind: NotificationKind, text: string, href?: string, actor?: string) => {
+    if (API_ENABLED) return;
     setDb(prev => ({
       ...prev,
       notifications: [{ id: uid(), uid: targetUid, kind, text, href, actor, ts: Date.now(), read: false }, ...prev.notifications]
     }));
-
-  const markAllRead = () => {
-    if (!me) return;
-    setDb(prev => ({ ...prev, notifications: prev.notifications.map(n => n.uid === me.id ? { ...n, read: true } : n) }));
   };
 
-  const sendMessage = (to: string, text: string) => {
-    if (!me || !text.trim()) return;
+  const markAllRead = async () => {
+    const self = currentMe();
+    if (!self) return;
     setDb(prev => ({
       ...prev,
-      messages: [...prev.messages, { id: uid(), from: me.id, to, text: text.trim(), ts: Date.now(), read: false }],
-      notifications: [{ id: uid(), uid: to, kind: 'message', actor: me.id, text: 'sent you a message', href: `/messages/${me.id}`, ts: Date.now(), read: false }, ...prev.notifications]
+      notifications: prev.notifications.map(n => (n.uid === self.id ? { ...n, read: true } : n)),
+      unread: { notifications: 0, messages: prev.unread?.messages || 0 }
     }));
+    if (!API_ENABLED) return;
+    try {
+      await api.post('/api/notifications/read/', {});
+    } catch (err) {
+      showToast(errText(err, 'Notifications are still unread.'));
+      await resync();
+    }
   };
 
-  const addReport = (type: 'post' | 'comment' | 'listing' | 'profile', targetId: string, reason: string, note: string) => {
-    if (!me) return;
-    setDb(prev => {
-      const reports = [...prev.reports, { id: uid(), type, targetId, by: me.id, reason, note, ts: Date.now(), status: 'open' as const }];
-      let posts = prev.posts;
-      if (type === 'post') {
-        const distinct = new Set(reports.filter(r => r.type === 'post' && r.targetId === targetId && r.status === 'open').map(r => r.by)).size;
-        if (distinct >= prev.settings.threshold) {
-          posts = prev.posts.map(p => p.id === targetId && p.status === 'live' ? { ...p, status: 'hidden' as const } : p);
+  const sendMessage = async (to: string, text: string) => {
+    const self = currentMe();
+    const body = text.trim();
+    if (!self || !body) return;
+    if (!API_ENABLED) {
+      setDb(prev => ({
+        ...prev,
+        messages: [...prev.messages, { id: uid(), from: self.id, to, text: body, ts: Date.now(), read: false }],
+        notifications: [{ id: uid(), uid: to, kind: 'message', actor: self.id, text: 'sent you a message', href: `/messages/${self.username}`, ts: Date.now(), read: false }, ...prev.notifications]
+      }));
+      return;
+    }
+    const username = usernameOf(to);
+    if (!username) return;
+    const optimistic = { id: uid(), from: self.id, to, text: body, ts: Date.now(), read: false };
+    setDb(prev => ({ ...prev, messages: [...prev.messages, optimistic] }));
+    try {
+      const row = await api.post<any>(`/api/messages/${username}/`, { text: body });
+      const real = mapMessage(row, self.id, to);
+      setDb(prev => ({
+        ...prev,
+        messages: prev.messages.map(m => (m.id === optimistic.id ? real : m))
+      }));
+    } catch (err) {
+      setDb(prev => ({ ...prev, messages: prev.messages.filter(m => m.id !== optimistic.id) }));
+      showToast(errText(err, 'Message not sent.'));
+    }
+  };
+
+  const addReport = async (type: 'post' | 'comment' | 'listing' | 'profile', targetId: string, reason: string, note: string) => {
+    const self = currentMe();
+    if (!self) return;
+    if (!API_ENABLED) {
+      setDb(prev => {
+        const reports = [...prev.reports, { id: uid(), type, targetId, by: self.id, reason, note, ts: Date.now(), status: 'open' as const }];
+        let posts = prev.posts;
+        if (type === 'post') {
+          const distinct = new Set(reports.filter(r => r.type === 'post' && r.targetId === targetId && r.status === 'open').map(r => r.by)).size;
+          if (distinct >= prev.settings.threshold) {
+            posts = prev.posts.map(p => (p.id === targetId && p.status === 'live' ? { ...p, status: 'hidden' as const } : p));
+          }
         }
+        return { ...prev, reports, posts };
+      });
+      showToast(t('reported'));
+      return;
+    }
+    try {
+      const row = mapReport(await api.post<any>('/api/moderation/reports/', { target_type: type, target_id: targetId, reason, details: note }));
+      merge({ reports: [row] });
+      if (type === 'post') {
+        // Enough open reports and the server hides the post — the row says which.
+        try {
+          merge({ posts: [mapPost(await api.get<any>(`/api/posts/${targetId}/`))] });
+        } catch { /* the author may no longer be allowed to read it */ }
       }
-      return { ...prev, reports, posts };
-    });
-    showToast(t('reported'));
+      showToast(t('reported'));
+    } catch (err) {
+      showToast(errText(err, 'Report not sent.'));
+    }
   };
 
   const logAudit = (action: string, target: string, reason: string) => {
-    if (!me) return;
-    setDb(prev => ({ ...prev, audit: [{ id: uid(), ts: Date.now(), actor: me.id, action, target, reason }, ...prev.audit] }));
+    if (API_ENABLED) return;
+    const self = currentMe();
+    if (!self) return;
+    setDb(prev => ({ ...prev, audit: [{ id: uid(), ts: Date.now(), actor: self.id, action, target, reason }, ...prev.audit] }));
   };
 
   const activePromo = (targetType: 'post' | 'listing', targetId: string) =>
     db.promotions.find(p => p.targetType === targetType && p.targetId === targetId && p.status === 'active' && p.ends > Date.now());
 
   const promoEligible = (promo: Promotion) => {
-    if (!me) return true;
-    if (promo.country && me.country !== promo.country) return false;
-    if (promo.city && (me.city || '') !== promo.city) return false;
-    const age = ageFromDob(me.dob);
+    const self = currentMe();
+    if (!self) return true;
+    if (promo.country && self.country !== promo.country) return false;
+    if (promo.city && (self.city || '') !== promo.city) return false;
+    const age = ageFromDob(self.dob);
     return age >= promo.ageMin && age <= promo.ageMax;
   };
 
-  const requestPromotion = (targetType: 'post' | 'listing', targetId: string, cfg: PromoConfig) => {
-    if (!me) return false;
-    const pk = db.settings.packages.find(p => p.id === cfg.packageId);
-    if (!pk || me.coins < pk.coins) return false;
-    const now = Date.now();
-    const promo: Promotion = {
-      id: uid(), uid: me.id, targetType, targetId,
-      packageId: pk.id, category: cfg.category,
-      ageMin: cfg.ageMin, ageMax: cfg.ageMax, country: cfg.country, city: cfg.city,
-      coins: pk.coins, ts: now, ends: now + pk.days * DAY,
-      status: 'pending', impressions: 0, clicks: 0
-    };
-    setDb(prev => ({
-      ...prev,
-      users: prev.users.map(u => u.id === me.id ? { ...u, coins: u.coins - pk.coins } : u),
-      ledger: [{ id: uid(), uid: me.id, delta: -pk.coins, kind: 'spend', note: `Reserved: ${pk.name} promotion`, ts: now }, ...prev.ledger],
-      promotions: [promo, ...prev.promotions],
-      notifications: [{ id: uid(), uid: 'u_admin', kind: 'promotion', text: `New promotion request from @${me.username}`, href: '/admin', ts: now, read: false }, ...prev.notifications]
-    }));
-    showToast(t('promoRequested'));
-    return true;
+  const requestPromotion = async (targetType: 'post' | 'listing', targetId: string, cfg: PromoConfig): Promise<boolean> => {
+    const self = currentMe();
+    if (!self) return false;
+    const pack = db.settings.packages.find(p => p.id === cfg.packageId);
+    if (!pack || self.coins < pack.coins) return false;
+    if (!API_ENABLED) {
+      const now = Date.now();
+      const promo: Promotion = {
+        id: uid(), uid: self.id, targetType, targetId,
+        packageId: pack.id, category: cfg.category,
+        ageMin: cfg.ageMin, ageMax: cfg.ageMax, country: cfg.country, city: cfg.city,
+        coins: pack.coins, ts: now, ends: now + pack.days * DAY,
+        status: 'pending', impressions: 0, clicks: 0
+      };
+      setDb(prev => ({
+        ...prev,
+        users: prev.users.map(u => (u.id === self.id ? { ...u, coins: u.coins - pack.coins } : u)),
+        ledger: [{ id: uid(), uid: self.id, delta: -pack.coins, kind: 'spend', note: `Reserved: ${pack.name} promotion`, ts: now }, ...prev.ledger],
+        promotions: [promo, ...prev.promotions],
+        notifications: [{ id: uid(), uid: 'u_admin', kind: 'promotion', text: `New promotion request from @${self.username}`, href: '/admin', ts: now, read: false }, ...prev.notifications]
+      }));
+      showToast(t('promoRequested'));
+      return true;
+    }
+    try {
+      const row = await api.post<any>('/api/promotions/', {
+        target_type: targetType, target_id: targetId, category: cfg.category,
+        age_min: cfg.ageMin, age_max: cfg.ageMax, country: cfg.country, city: cfg.city, package: cfg.packageId,
+      });
+      merge({ promotions: [mapPromotion(row)] });
+      await resync();
+      showToast(t('promoRequested'));
+      return true;
+    } catch (err) {
+      showToast(errText(err, 'Promotion could not start.'));
+      return false;
+    }
   };
 
-  const cancelPromotion = (id: string) => {
+  const cancelPromotion = async (id: string) => {
     const promo = db.promotions.find(p => p.id === id);
-    if (!promo || promo.status !== 'pending') return;
-    setDb(prev => ({
-      ...prev,
-      promotions: prev.promotions.filter(p => p.id !== id),
-      users: prev.users.map(u => u.id === promo.uid ? { ...u, coins: u.coins + promo.coins } : u),
-      ledger: [{ id: uid(), uid: promo.uid, delta: promo.coins, kind: 'refund', note: 'Promotion request cancelled', ts: Date.now() }, ...prev.ledger]
-    }));
-    showToast(t('promoCancelled'));
+    if (!promo) return;
+    if (!API_ENABLED) {
+      if (promo.status !== 'pending') return;
+      setDb(prev => ({
+        ...prev,
+        promotions: prev.promotions.filter(p => p.id !== id),
+        users: prev.users.map(u => (u.id === promo.uid ? { ...u, coins: u.coins + promo.coins } : u)),
+        ledger: [{ id: uid(), uid: promo.uid, delta: promo.coins, kind: 'refund', note: 'Promotion request cancelled', ts: Date.now() }, ...prev.ledger]
+      }));
+      showToast(t('promoCancelled'));
+      return;
+    }
+    try {
+      merge({ promotions: [mapPromotion(await api.post<any>(`/api/promotions/${id}/end/`, {}))] });
+      await resync();
+      showToast(t('promoCancelled'));
+    } catch (err) {
+      showToast(errText(err, 'Could not end the promotion.'));
+    }
   };
 
-  const updateLang = (lang: 'en' | 'ne') => setDb(prev => ({ ...prev, lang }));
+  const updateLang = (lang: 'en' | 'ne') => {
+    setDb(prev => ({ ...prev, lang }));
+    if (typeof window !== 'undefined') localStorage.setItem(LANG_KEY, lang);
+  };
 
   const login = (userId: string) => setDb(prev => ({ ...prev, meId: userId }));
-
-  const logout = () => {
-    setDb(prev => ({ ...prev, meId: null }));
-    setDrawerOpen(false);
-  };
 
   const toggleTheme = () => {
     const next: ThemeMode = theme === 'dark' ? 'light' : 'dark';
@@ -320,7 +926,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       value={{
         db, setDb, me, isAdmin, isStaff, t, feature,
         addPost, updatePost, deletePost, addComment, deleteComment,
-        toggleFollow, isFollowing, react, myReaction, toggleSave, isSaved,
+        toggleFollow, isFollowing, followState, incomingRequests, acceptRequest, declineRequest, mutualIds,
+        react, myReaction, reactionCount, toggleSave, isSaved, toggleListingSave, isListingSaved,
         notify, markAllRead, sendMessage, addReport, logAudit,
         requestPromotion, cancelPromotion, activePromo, promoEligible,
         updateLang, login, logout, isAuthenticated,
@@ -332,7 +939,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         createChooserOpen,
         openCreateChooser: () => setCreateChooserOpen(true),
         closeCreateChooser: () => setCreateChooserOpen(false),
-        toast, showToast
+        toast, showToast,
+        ready, serverMode, resync, merge,
+        signin, signupAccount, verifyCode, resendCode, requestUnlock, confirmUnlock, googleSignIn,
+        updateProfile,
       }}
     >
       {children}

@@ -45,19 +45,24 @@ export default function CreateChooser() {
   return createPortal(
     <div className="chooser-overlay" onClick={closeCreateChooser}>
       <div className="chooser-card compact" role="dialog" aria-modal="true" aria-label="Choose what to create" onClick={e => e.stopPropagation()}>
+        <div className="chooser-head">
+          <b>Create</b>
+          <button type="button" className="icon-btn chooser-x" onClick={closeCreateChooser} aria-label="Close">{IC.x}</button>
+        </div>
         <div className="chooser-options">
           <button type="button" disabled={busy} onClick={() => { closeLayerWithoutBack(); closeCreateChooser(); router.push('/create'); }}>
             <span className="chooser-icon post">{IC.img}</span>
-            <b>Post</b>
+            <span className="chooser-copy"><b>Post</b><small>Share a thought or a photo</small></span>
+            <span className="chooser-plus" aria-hidden="true">{IC.plus}</span>
           </button>
           <button type="button" disabled={busy} onClick={() => fileRef.current?.click()}>
             <span className="chooser-icon reel">{IC.video}</span>
-            <b>Reels</b>
+            <span className="chooser-copy"><b>Reel</b><small>Choose a video or photo</small></span>
+            <span className="chooser-plus" aria-hidden="true">{IC.plus}</span>
           </button>
         </div>
-        {busy ? <p className="chooser-busy" role="status">Preparing your clip…</p> : (
-          <button type="button" className="chooser-cancel" onClick={closeCreateChooser}>Cancel</button>
-        )}
+        {busy && <p className="chooser-busy" role="status">Preparing your clip…</p>}
+        <button type="button" className="chooser-cancel" onClick={closeCreateChooser}>Cancel</button>
       </div>
       <input
         ref={fileRef}

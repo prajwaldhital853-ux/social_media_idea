@@ -12,7 +12,7 @@ import { KEY } from '@/lib/utils';
 import { IC } from '@/lib/icons';
 
 export default function SettingsPage() {
-  const { db, me, t, theme, toggleTheme, updateLang, setDb, showToast, logout } = useApp();
+  const { db, me, t, theme, toggleTheme, updateLang, setDb, showToast, logout, updateProfile, serverMode } = useApp();
   const [editing, setEditing] = useState(false);
 
   if (!me) {
@@ -31,13 +31,21 @@ export default function SettingsPage() {
     );
   }
 
-  const setTwoStep = (on: boolean) => {
-    setDb(prev => ({ ...prev, users: prev.users.map(u => u.id === me.id ? { ...u, twoStep: on } : u) }));
-    showToast(t('savedOk'));
+  const setTwoStep = async (on: boolean) => {
+    const flip = (value: boolean) => setDb(prev => ({ ...prev, users: prev.users.map(u => (u.id === me.id ? { ...u, twoStep: value } : u)) }));
+    flip(on);
+    if (!serverMode) return showToast(t('savedOk'));
+    try {
+      await updateProfile({ twoStep: on });
+      showToast(t('savedOk'));
+    } catch (err: any) {
+      flip(!on);
+      showToast(err?.message || 'Could not change two-step verification.');
+    }
   };
 
   const verifyEmail = () => {
-    setDb(prev => ({ ...prev, users: prev.users.map(u => u.id === me.id ? { ...u, emailVerified: true } : u) }));
+    setDb(prev => ({ ...prev, users: prev.users.map(u => (u.id === me.id ? { ...u, emailVerified: true } : u)) }));
     showToast(t('verified'));
   };
 
@@ -114,6 +122,8 @@ export default function SettingsPage() {
             </span>
             {me.emailVerified ? (
               <span className="status-chip approved">{IC.check}{t('verified')}</span>
+            ) : serverMode ? (
+              <span className="status-chip pending">{t('notVerified')}</span>
             ) : (
               <button type="button" className="ghost-btn" onClick={verifyEmail}>{t('verifyNow')}</button>
             )}
@@ -130,11 +140,13 @@ export default function SettingsPage() {
           </nav>
         </section>
 
-        <section className="settings-card">
-          <h2>{t('resetDemo')}</h2>
-          <p className="settings-hint">{t('resetDemoHint')}</p>
-          <button type="button" className="ghost-btn" onClick={resetDemo}>{t('resetDemo')}</button>
-        </section>
+        {!serverMode && (
+          <section className="settings-card">
+            <h2>{t('resetDemo')}</h2>
+            <p className="settings-hint">{t('resetDemoHint')}</p>
+            <button type="button" className="ghost-btn" onClick={resetDemo}>{t('resetDemo')}</button>
+          </section>
+        )}
 
         <button type="button" className="settings-logout" onClick={logout}>
           {IC.logout}<span>{t('logout')}</span>

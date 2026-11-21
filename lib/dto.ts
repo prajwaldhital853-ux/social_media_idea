@@ -1,0 +1,397 @@
+import {
+  Audit, CoinRequest, Comment, Follow, LedgerEntry, Listing, Media, Message,
+  Notification, NotificationKind, Post, Promotion, Reaction, ReactionKind, Report,
+  Settings, User,
+} from './types';
+
+/**
+ * Translators between the Django API and the client view-model.
+ *
+ * The API returns ids as integers and money as decimal strings; the app works
+ * with string ids and numbers throughout, so every mapping funnels through the
+ * two coercions below.
+ */
+
+export const idOf = (value: number | string | null | undefined): string => (value === null || value === undefined ? '' : String(value));
+export const at = (value: number | string | null | undefined): number => {
+  if (value === null || value === undefined) return 0;
+  if (typeof value === 'number') return value;
+  const parsed = Date.parse(value);
+  return Number.isNaN(parsed) ? 0 : parsed;
+};
+const amount = (value: number | string | null | undefined): number => {
+  if (value === null || value === undefined) return 0;
+  const n = typeof value === 'number' ? value : parseFloat(value);
+  return Number.isNaN(n) ? 0 : n;
+};
+
+const KINDS: ReactionKind[] = ['like', 'love', 'haha', 'wow', 'sad'];
+const reactionKind = (kind: string): ReactionKind => (KINDS.includes(kind as ReactionKind) ? (kind as ReactionKind) : 'like');
+
+/**
+ * Files live behind `/media/`, which next.config.js proxies to the API. Rebuilding
+ * the URL on the current origin keeps every asset first-party no matter which host
+ * the API happened to be listening on when it was uploaded.
+ */
+const ORIGIN = typeof window === 'undefined' ? '' : window.location.origin;
+export function mediaUrl(value: string | undefined | null): string {
+  if (!value || !ORIGIN) return value || '';
+  const cut = value.indexOf('/media/');
+  return cut < 0 ? value : ORIGIN + value.slice(cut);
+}
+
+const NOTE_KIND: Record<string, NotificationKind> = {
+  follow: 'follow', follow_request: 'follow', follow_accept: 'follow',
+  reaction: 'reaction', comment: 'comment', reply: 'comment',
+  message: 'message', system: 'system', promotion: 'promotion',
+  coins: 'coins', warning: 'warning',
+};
+
+export function mapMe(p: any): User {
+  return {
+    id: idOf(p.id),
+    email: p.email || '',
+    username: p.username,
+    name: p.name || p.username,
+    role: p.role || 'user',
+    verified: !!p.verified,
+    emailVerified: !!p.emailVerified,
+    susp: p.susp ? { until: p.susp.until ? at(p.susp.until) : null, reason: p.susp.reason || '' } : null,
+    provider: p.provider || 'email',
+    dob: p.dob || '',
+    country: p.country || '',
+    province: p.province || '',
+    city: p.city || '',
+    bio: p.bio || '',
+    avatar: mediaUrl(p.avatar),
+    cover: mediaUrl(p.cover),
+    private: !!p.private,
+    twoStep: p.twoStep !== false,
+    joined: at(p.joined),
+    coins: Math.round(amount(p.coins)),
+  };
+}
+
+/** A person card as returned by feeds, search, followers and the admin roster. */
+export function mapPerson(c: any): User {
+  return {
+    id: idOf(c.id ?? c.username),
+    email: c.email || '',
+    username: c.username,
+    name: c.name || c.username,
+    role: c.role || 'user',
+    verified: !!c.verified,
+    emailVerified: c.email_verified === undefined ? true : !!c.email_verified,
+    susp: c.suspended_until ? { until: at(c.suspended_until), reason: c.suspend_reason || '' } : null,
+    provider: c.provider || 'email',
+    dob: c.dob || '',
+    country: c.country || '',
+    city: c.city || '',
+    bio: c.bio || '',
+    avatar: mediaUrl(c.avatar_url || c.avatar),
+    cover: mediaUrl(c.cover_url || c.cover),
+    private: !!c.is_private,
+    twoStep: true,
+    joined: at(c.joined ?? c.created_at),
+    coins: Math.round(amount(c.coins)),
+  };
+}
+
+export function mapMedia(m: any): Media {
+  return {
+    type: m.kind === 'video' ? 'video' : 'image',
+    src: mediaUrl(m.url || m.file),
+    dur: m.duration ? Number(m.duration) : undefined,
+    likes: amount(m.like_count),
+  };
+}
+
+export function mapPost(row: any): Post {
+  return {
+    id: idOf(row.id),
+    uid: idOf(row.author),
+    text: row.text || '',
+    media: (row.media || []).map(mapMedia),
+    ts: at(row.created_at),
+    status: row.status === 'hidden' || row.status === 'removed' ? row.status : 'live',
+    edited: !!row.edited,
+    mood: row.mood || undefined,
+    place: row.place || undefined,
+    audience: row.audience === 'followers' ? 'followers' : 'public',
+    likes: amount(row.like_count),
+    comments: amount(row.comment_count),
+    category: row.category || undefined,
+    promoted: !!row.promoted,
+  };
+}
+
+export function mapComment(row: any): Comment {
+  return {
+    id: idOf(row.id),
+    pid: idOf(row.post),
+    parentId: row.parent ? idOf(row.parent) : undefined,
+    mediaIndex: row.media_index === null || row.media_index === undefined ? undefined : Number(row.media_index),
+    uid: idOf(row.author),
+    text: row.text || '',
+    ts: at(row.created_at),
+    status: row.status === 'removed' ? 'removed' : 'live',
+    likes: amount(row.like_count),
+    replies: amount(row.reply_count),
+  };
+}
+
+export function mapListing(row: any): Listing {
+  const images = (row.images || []).map((i: any) => ({ type: 'image' as const, src: mediaUrl(i.url) }));
+  return {
+    id: idOf(row.id),
+    uid: idOf(row.seller),
+    title: row.title || '',
+    desc: row.description || '',
+    price: amount(row.price),
+    category: row.category || 'Other',
+    location: row.location || '',
+    media: images.length ? images : row.image_url ? [{ type: 'image' as const, src: mediaUrl(row.image_url) }] : [],
+    ts: at(row.created_at),
+    status: row.status || 'active',
+    condition: row.condition || '',
+    sellerName: row.seller_name || undefined,
+    sellerUsername: row.seller_username || undefined,
+  };
+}
+
+export function hrefOf(kind: string, targetType: string, targetId: string, actorUsername?: string): string | undefined {
+  if (targetType === 'post') return `/post/${targetId}`;
+  if (targetType === 'listing') return `/marketplace/${targetId}`;
+  if (targetType === 'user') return actorUsername ? `/u/${actorUsername}` : '/messages';
+  if (targetType === 'wallet') return '/wallet';
+  if (kind === 'message') return actorUsername ? `/messages/${actorUsername}` : '/messages';
+  return undefined;
+}
+
+export function mapNotification(row: any): Notification {
+  const kind = NOTE_KIND[row.kind] || 'system';
+  return {
+    id: idOf(row.id),
+    uid: idOf(row.recipient),
+    kind,
+    actor: row.actor ? idOf(row.actor) : undefined,
+    text: row.text || '',
+    href: hrefOf(kind, row.target_type, idOf(row.target_id), row.actor_username),
+    ts: at(row.created_at),
+    read: !!row.read_at,
+  };
+}
+
+export function mapMessage(row: any, meId: string, otherId: string): Message {
+  const sender = idOf(row.sender);
+  return {
+    id: idOf(row.id),
+    from: sender,
+    to: sender === meId ? otherId : meId,
+    text: row.text || '',
+    ts: at(row.created_at),
+    read: !!row.read_at,
+  };
+}
+
+export function mapPromotion(row: any): Promotion {
+  return {
+    id: idOf(row.id),
+    uid: idOf(row.owner),
+    targetType: row.target_type === 'listing' ? 'listing' : 'post',
+    targetId: idOf(row.target_id),
+    packageId: row.package || '',
+    category: row.category || '',
+    ageMin: Number(row.age_min ?? 13),
+    ageMax: Number(row.age_max ?? 65),
+    country: row.country || '',
+    city: row.city || '',
+    coins: amount(row.budget),
+    ts: at(row.created_at),
+    ends: at(row.ends_at),
+    status: row.status || 'pending',
+    impressions: amount(row.impressions),
+    clicks: amount(row.clicks),
+  };
+}
+
+export function mapReport(row: any): Report {
+  return {
+    id: idOf(row.id),
+    type: (row.target_type === 'listing' || row.target_type === 'comment' || row.target_type === 'profile') ? row.target_type : 'post',
+    targetId: idOf(row.target_id),
+    by: idOf(row.reporter),
+    reason: row.reason || '',
+    note: row.details || '',
+    ts: at(row.created_at),
+    status: row.status === 'open' || row.status === 'reviewing' ? 'open' : row.status === 'dismissed' ? 'dismissed' : 'actioned',
+    reporterUsername: row.reporter_username || '',
+  };
+}
+
+export function mapAudit(row: any): Audit {
+  return {
+    id: idOf(row.id),
+    ts: at(row.created_at),
+    actor: row.actor ? `@${row.actor}` : 'system',
+    action: row.action || '',
+    target: row.target || '',
+    reason: row.detail || '',
+  };
+}
+
+export function mapLedger(row: any, uid: string): LedgerEntry {
+  const value = amount(row.amount);
+  return {
+    id: idOf(row.id),
+    uid,
+    delta: row.kind === 'debit' ? -Math.abs(value) : Math.abs(value),
+    kind: row.kind === 'debit' ? 'spend' : 'purchase',
+    note: row.note || '',
+    ts: at(row.created_at),
+  };
+}
+
+export function mapCoinRequest(row: any): CoinRequest {
+  return {
+    id: idOf(row.id),
+    uid: idOf(row.user),
+    coins: Number(row.coins ?? 0),
+    amount: amount(row.amount),
+    method: row.method === 'bank' ? 'bank' : 'qr',
+    reference: row.reference || '',
+    screenshot: mediaUrl(row.screenshot_url) || undefined,
+    ts: at(row.created_at),
+    status: row.status || 'pending',
+  };
+}
+
+export function mapFollow(edge: any): Follow {
+  return {
+    follower: idOf(edge.follower),
+    following: idOf(edge.following),
+    ts: at(edge.ts ?? edge.created_at),
+    status: edge.status === 'pending' ? 'pending' : 'accepted',
+    rid: edge.id ?? edge.request_id ? idOf(edge.id ?? edge.request_id) : undefined,
+  };
+}
+
+export function mapSettings(config: any): Settings {
+  return {
+    threshold: Number(config.threshold ?? 3),
+    coinPrice: Number(config.coinPrice ?? 10),
+    bankName: config.bank?.name ?? '',
+    bankAccount: config.bank?.account ?? '',
+    bankHolder: config.bank?.holder ?? '',
+    qrImage: config.bank?.qr || undefined,
+    features: {
+      video: config.features?.video !== false,
+      marketplace: config.features?.marketplace !== false,
+      promotion: config.features?.promotion !== false,
+      googleLogin: !!config.features?.googleLogin,
+      googleDemo: !!config.features?.googleDemo,
+      facebookLogin: !!config.features?.facebookLogin,
+      appleLogin: !!config.features?.appleLogin,
+    },
+    packages: (config.packages || []).map((p: any) => ({
+      id: p.id, name: p.name, coins: Number(p.coins), days: Number(p.days), reach: p.reach || '',
+    })),
+    categories: config.categories || [],
+    googleClientId: config.googleClientId || undefined,
+    demoGoogle: config.demoGoogle || null,
+  };
+}
+
+/** The current user's reactions implied by a page of posts — one row per target. */
+export function reactionsOfPost(row: any, uid: string): Reaction[] {
+  const rows: Reaction[] = [];
+  const postId = idOf(row.id);
+  if (row.my_reaction) {
+    rows.push({ id: `rx_post_${postId}`, targetType: 'post', targetId: postId, uid, kind: reactionKind(row.my_reaction), ts: at(row.created_at) });
+  }
+  for (const [position, kind] of Object.entries(row.my_media_reactions || {})) {
+    if (!kind) continue;
+    rows.push({ id: `rx_media_${postId}_${position}`, targetType: 'media', targetId: `${postId}#m${position}`, uid, kind: reactionKind(kind as string), ts: at(row.created_at) });
+  }
+  return rows;
+}
+
+export function reactionsOfComment(row: any, uid: string): Reaction[] {
+  if (!row.my_reaction) return [];
+  return [{
+    id: `rx_comment_${idOf(row.id)}`, targetType: 'comment', targetId: idOf(row.id),
+    uid, kind: reactionKind(row.my_reaction), ts: at(row.created_at),
+  }];
+}
+
+/**
+ * A post row carries a slim author card; omitting the keys the row does not
+ * answer (email, private, coins) keeps `merge` from overwriting a fuller record.
+ */
+export function personFromRow(row: any, prefix: string): User {
+  return {
+    id: idOf(row[prefix] ?? row.id),
+    username: row[`${prefix}_username`],
+    name: row[`${prefix}_name`],
+    avatar: mediaUrl(row[`${prefix}_avatar_url`]),
+    cover: mediaUrl(row[`${prefix}_cover_url`]) || undefined,
+    bio: row[`${prefix}_bio`] || undefined,
+    verified: !!row[`${prefix}_verified`],
+  } as unknown as User;
+}
+
+/** Client post → the write payload the API accepts (never a position or a counter). */
+export function toPostPayload(post: Post & { category?: string }): Record<string, any> {
+  return {
+    text: post.text || '',
+    audience: post.audience === 'followers' ? 'followers' : 'public',
+    mood: post.mood || '',
+    place: post.place || '',
+    category: post.category || hashtagOf(post.text),
+    media: mediaPayload(post.media),
+  };
+}
+
+/** Attachments the API can store: the database only accepts absolute http(s) URLs. */
+export function mediaPayload(items: Media[]): Array<{ kind: 'image' | 'video'; url: string; duration: number }> {
+  return (items || [])
+    .filter(m => m.src && /^https?:/i.test(m.src))
+    .map(m => ({ kind: m.type === 'video' ? 'video' : 'image', url: m.src as string, duration: m.dur || 0 }));
+}
+
+/** The first hashtag becomes the interest category the promotion matcher ranks on. */
+export function hashtagOf(text: string): string {
+  const match = /#([^\s,.!?;:"'()[\]#]+)/.exec(text || '');
+  return match ? match[1] : '';
+}
+
+export function profilePatch(data: any): Partial<User> {
+  const patch: Record<string, any> = {};
+  if (data.name !== undefined) patch.name = data.name;
+  if (data.bio !== undefined) patch.bio = data.bio;
+  if (data.avatar_url !== undefined) patch.avatar = data.avatar_url;
+  if (data.cover_url !== undefined) patch.cover = data.cover_url;
+  if (data.location !== undefined) patch.city = data.location;
+  if (data.province !== undefined) patch.province = data.province;
+  if (data.is_private !== undefined) patch.private = data.is_private;
+  if (data.two_step !== undefined) patch.twoStep = data.two_step;
+  if (data.dob !== undefined) patch.dob = data.dob || '';
+  if (data.country !== undefined) patch.country = data.country || '';
+  if (data.city !== undefined) patch.city = data.city || patch.city;
+  return patch as Partial<User>;
+}
+
+/** Client profile fields → ProfileSerializer write payload. */
+export function toProfilePayload(patch: Record<string, any>): Record<string, any> {
+  const out: Record<string, any> = {};
+  const keys: Array<[string, string]> = [
+    ['name', 'name'], ['bio', 'bio'], ['avatar', 'avatar_url'], ['cover', 'cover_url'],
+    ['province', 'province'], ['private', 'is_private'], ['twoStep', 'two_step'],
+    ['dob', 'dob'], ['country', 'country'], ['city', 'city'], ['website', 'website'],
+  ];
+  for (const [from, to] of keys) {
+    if (patch[from] !== undefined) out[to] = patch[from];
+  }
+  if (patch.location !== undefined) out.location = patch.location;
+  return out;
+}

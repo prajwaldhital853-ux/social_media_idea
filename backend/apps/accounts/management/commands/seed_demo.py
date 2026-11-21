@@ -22,16 +22,26 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         people = {}
-        for username, name, city in [
-            ('sita', 'Sita Karki', 'Kathmandu'),
-            ('maya', 'Maya Gurung', 'Pokhara'),
-            ('arjun', 'Arjun Thapa', 'Lalitpur'),
-            ('priya', 'Priya Sharma', 'Biratnagar'),
+        for username, name, city, email in [
+            ('sita', 'Sita Karki', 'Kathmandu', 'sita@demo.test'),
+            ('maya', 'Maya Gurung', 'Pokhara', 'maya@demo.test'),
+            ('arjun', 'Arjun Thapa', 'Lalitpur', 'arjun@demo.test'),
+            ('priya', 'Priya Sharma', 'Biratnagar', 'priya@demo.test'),
         ]:
-            user, created = User.objects.get_or_create(username=username, defaults={'first_name': name.split()[0], 'last_name': name.split()[-1], 'city': city, 'country': 'Nepal'})
+            user, created = User.objects.get_or_create(
+                username=username,
+                defaults={'first_name': name.split()[0], 'last_name': name.split()[-1],
+                          'city': city, 'country': 'Nepal', 'email': email, 'email_verified': True},
+            )
             if created:
                 user.set_password('exposing-demo-1')
                 user.save()
+            elif not user.email:
+                # Older seeds left emails blank, which made email codes and Google
+                # sign-in unaddressable; fill them in rather than re-seeding.
+                user.email = email
+                user.email_verified = True
+                user.save(update_fields=['email', 'email_verified'])
             people[username] = user
             Profile.objects.get_or_create(user=user, defaults={'display_name': name, 'bio': f'{name} on Exposing.', 'location': city, 'verified': username == 'sita'})
         sita = people['sita']
@@ -85,8 +95,10 @@ class Command(BaseCommand):
         Notification.objects.get_or_create(recipient=sita, actor=people['arjun'], kind='follow', defaults={'text': 'Arjun Thapa started following you.'})
         Notification.objects.get_or_create(recipient=people['maya'], actor=sita, kind='comment', target_type='post', target_id=str(posts['sunset'].id), defaults={'text': 'Sita Karki commented on your post.'})
 
-        conversation, _ = Conversation.objects.get_or_create(pk=1)
-        conversation.participants.set([sita, people['maya']])
+        conversation = Conversation.objects.filter(participants=sita).filter(participants=people['maya']).first()
+        if conversation is None:
+            conversation = Conversation.objects.create()
+            conversation.participants.set([sita, people['maya']])
         Message.objects.get_or_create(conversation=conversation, sender=people['maya'], text='Are we still on for the ridge hike?')
         Message.objects.get_or_create(conversation=conversation, sender=sita, text='Yes — six sharp, bring the good camera.')
 

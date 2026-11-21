@@ -1,4 +1,4 @@
-import { Database, Reaction, ReactionKind, User } from './types';
+import { Database, Follow, Reaction, ReactionKind, Settings, User } from './types';
 import { DAY, hash } from './utils';
 
 const KINDS: ReactionKind[] = ['like', 'like', 'like', 'love', 'haha', 'wow', 'sad'];
@@ -29,13 +29,13 @@ export function seed(): Database {
     mk('u1', 'sita@demo.test', 'sita_k', 'Sita Karki', { verified: true, dob: '1994-02-08', city: 'Pokhara', province: 'Gandaki', coins: 260, bio: 'Lakeside walks, film rolls, and slow mornings.' }),
     mk('u2', 'bikash@demo.test', 'bikash_s', 'Bikash Shrestha', { dob: '1990-11-23', coins: 40, bio: 'Keyboard shortcuts and keyboard coffee.' }),
     mk('u3', 'anju@demo.test', 'anju_t', 'Anju Tamang', { verified: true, dob: '1998-07-30', city: 'Patan', bio: 'Heritage corners and morning tea.' }),
-    mk('u4', 'rojan@demo.test', 'rojan_b', 'Rojan B', { dob: '2001-01-17', coins: 0, bio: 'Hungry, always.' }),
+    mk('u4', 'rojan@demo.test', 'rojan_b', 'Rojan B', { dob: '2001-01-17', coins: 0, bio: 'Hungry, always.', private: true }),
     mk('u5', 'maya@demo.test', 'maya_g', 'Maya Gurung', { verified: true, dob: '1993-09-02', city: 'Pokhara', province: 'Gandaki', coins: 120, bio: 'Weekends on the water.' }),
     mk('u6', 'elon@demo.test', 'elon_musk', 'Elon Musk', { verified: true, provider: 'google', dob: '1971-06-28', country: 'United States', province: 'Texas', city: 'Austin', coins: 0 }),
     mk('u7', 'tech@demo.test', 'tech_news', 'Tech News', { verified: true, provider: 'facebook', dob: '1985-03-15', country: 'United Kingdom', city: 'London', coins: 0 }),
     mk('u8', 'kathmandu@demo.test', 'ktm_daily', 'Kathmandu Daily', { verified: true, dob: '1988-12-01', coins: 300, bio: 'The city, daily.' }),
     mk('u9', 'chef@demo.test', 'nima_kitchen', 'Nima Kitchen', { verified: true, dob: '1992-05-21', coins: 90, bio: 'Newari feast, seconds mandatory.' }),
-    mk('u10', 'lens@demo.test', 'himal_lens', 'Himal Lens', { verified: true, dob: '1989-08-14', coins: 500, bio: 'Golden hour, no filter.' }),
+    mk('u10', 'lens@demo.test', 'himal_lens', 'Himal Lens', { verified: true, dob: '1989-08-14', coins: 500, bio: 'Golden hour, no filter.', cover: 'https://images.unsplash.com/photo-1544735716-392fe2489ffa?w=1600&q=80' }),
     mk('u11', 'goal@demo.test', 'goalnepal', 'Goal Nepal', { dob: '1997-10-09', coins: 0, bio: 'Grassroots football.' })
   ];
 
@@ -200,7 +200,8 @@ export function seed(): Database {
     ['u11', 'u8'], ['u11', 'u4'],
     ['u_admin', 'u1'], ['u_admin', 'u10']
   ];
-  const follows = followPairs.map(([a, b], i) => ({ follower: a, following: b, ts: now - (30 - i) * DAY }));
+  const follows: Follow[] = followPairs.map(([a, b], i) => ({ follower: a, following: b, ts: now - (30 - i) * DAY, status: 'accepted' as const }));
+  follows.push({ follower: 'u6', following: 'u1', ts: now - 2 * M, status: 'pending' as const });
 
   const reactions: Reaction[] = posts.flatMap((p, pi) =>
     users
@@ -353,22 +354,27 @@ export function seed(): Database {
       { id: 'a1', ts: now - 2 * DAY, actor: 'u_admin', action: 'approve_coin_request', target: 'cr2', reason: 'Bank reference matched' },
       { id: 'a2', ts: now - 3 * DAY, actor: 'u_admin', action: 'reject_coin_request', target: 'cr3', reason: 'Reference not found' }
     ],
-    settings: {
-      threshold: 3,
-      coinPrice: 10,
-      bankName: 'Nepal Bank Ltd',
-      bankAccount: '0120-4455-8891',
-      bankHolder: 'Exposing Pvt Ltd',
-      features: { video: true, marketplace: true, promotion: true, googleLogin: true, facebookLogin: true, appleLogin: false },
-      packages: [
-        { id: 'pk_starter', name: 'Starter', coins: 100, days: 3, reach: 'Up to 3,000 people' },
-        { id: 'pk_growth', name: 'Growth', coins: 300, days: 7, reach: 'Up to 12,000 people' },
-        { id: 'pk_prime', name: 'Prime', coins: 800, days: 14, reach: 'Up to 40,000 people' }
-      ],
-      categories: ['Electronics', 'Vehicles', 'Property', 'Fashion', 'Home & Garden', 'Jobs', 'Services', 'Other']
-    },
+    settings: defaultSettings(),
     meId: 'u1',
     lang,
-    seedVersion: 2
+    seedVersion: 3
+  };
+}
+
+/** Settings the client renders with before /api/meta/ arrives. */
+export function defaultSettings(): Settings {
+  return {
+    threshold: 3,
+    coinPrice: 10,
+    bankName: 'Nepal Bank Ltd',
+    bankAccount: '0120-4455-8891',
+    bankHolder: 'Exposing Pvt Ltd',
+    features: { video: true, marketplace: true, promotion: true, googleLogin: true, googleDemo: false, facebookLogin: true, appleLogin: false },
+    packages: [
+      { id: 'pk_starter', name: 'Starter', coins: 100, days: 3, reach: 'Up to 3,000 people' },
+      { id: 'pk_growth', name: 'Growth', coins: 300, days: 7, reach: 'Up to 12,000 people' },
+      { id: 'pk_prime', name: 'Prime', coins: 800, days: 14, reach: 'Up to 40,000 people' }
+    ],
+    categories: ['Electronics', 'Vehicles', 'Property', 'Fashion', 'Home & Garden', 'Jobs', 'Services', 'Other']
   };
 }

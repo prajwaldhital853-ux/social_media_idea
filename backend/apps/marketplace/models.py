@@ -22,7 +22,20 @@ class Listing(models.Model):
 
     class Meta:
         ordering = ['-created_at']
-        indexes = [models.Index(fields=['-created_at'], name='listing_newest_first')]
+        indexes = [
+            models.Index(fields=['-created_at'], name='listing_newest_first'),
+            models.Index(fields=['status', 'category', '-created_at'], name='listing_status_category'),
+            models.Index(fields=['seller', '-created_at'], name='listing_seller_newest'),
+        ]
 
     def __str__(self):
         return self.title
+
+
+class ListingImage(models.Model):
+    listing = models.ForeignKey(Listing, on_delete=models.CASCADE, related_name='images')
+    url = models.URLField()
+    position = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        ordering = ['position']

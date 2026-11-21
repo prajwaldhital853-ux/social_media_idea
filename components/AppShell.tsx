@@ -3,6 +3,8 @@
 import { ReactNode, useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import NavRail from './NavRail';
+import TopBar from './TopBar';
+import SuggestCard from './SuggestCard';
 import Drawer from './Drawer';
 import MobileNav from './MobileNav';
 import SiteFooter from './SiteFooter';
@@ -20,6 +22,8 @@ export default function AppShell({ children }: AppShellProps) {
   const pathname = usePathname();
   const router = useRouter();
   const focusedPage = pathname.startsWith('/post/') || pathname === '/explore' || pathname === '/create';
+  const inChat = /^\/messages\/[^/]+/.test(pathname);
+  const profilePage = pathname.startsWith('/u/');
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
@@ -36,15 +40,18 @@ export default function AppShell({ children }: AppShellProps) {
   if (!mounted) return null;
 
   return (
-    <div className={`shell ${focusedPage ? 'focused-page' : ''}`}>
+    <div className={`shell ${focusedPage ? 'focused-page' : ''} ${inChat ? 'chat-page' : ''}`}>
+      {!focusedPage && <TopBar />}
       <NavRail />
       <main className="main">
         <div className="page-enter" key={pathname}>
           {children}
-          {!focusedPage && <SiteFooter />}
+          {!focusedPage && profilePage && <SiteFooter />}
         </div>
       </main>
-      <aside className="side-calm" aria-hidden="true" />
+      <aside className="side-calm">
+        <SuggestCard />
+      </aside>
       <Drawer />
       <MobileNav />
       <CreatePostModal />

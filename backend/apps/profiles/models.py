@@ -9,8 +9,11 @@ class Profile(models.Model):
     avatar_url = models.URLField(blank=True)
     cover_url = models.URLField(blank=True)
     location = models.CharField(max_length=120, blank=True)
+    province = models.CharField(max_length=80, blank=True)
     website = models.URLField(blank=True)
     verified = models.BooleanField(default=False)
+    is_private = models.BooleanField(default=False)
+    two_step = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):

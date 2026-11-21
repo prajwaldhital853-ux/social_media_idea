@@ -1,0 +1,44 @@
+Creating test database for alias 'default'...
+Unauthorized: /api/auth/login/
+Unauthorized: /api/auth/login/
+Locked: /api/auth/login/
+.Unauthorized: /api/auth/login/
+Unauthorized: /api/auth/login/
+Locked: /api/auth/login/
+Locked: /api/auth/login/
+Locked: /api/auth/login/
+Too Many Requests: /api/auth/login/
+..Forbidden: /api/auth/login/
+.Unauthorized: /api/auth/login/
+Unauthorized: /api/auth/login/
+Locked: /api/auth/login/
+Locked: /api/auth/login/
+.......Unauthorized: /api/auth/me/
+Unauthorized: /api/auth/refresh/
+.Unauthorized: /api/auth/refresh/
+.Bad Request: /api/auth/otp/
+Bad Request: /api/auth/otp/
+Bad Request: /api/auth/otp/
+Bad Request: /api/auth/otp/
+Bad Request: /api/auth/otp/
+Bad Request: /api/auth/otp/
+Bad Request: /api/auth/otp/
+.Too Many Requests: /api/auth/otp/resend/
+..Too Many Requests: /api/auth/signup/
+.Bad Request: /api/auth/signup/
+Bad Request: /api/auth/signup/
+Bad Request: /api/auth/signup/
+Bad Request: /api/auth/signup/
+Bad Request: /api/auth/signup/
+Bad Request: /api/auth/signup/
+Bad Request: /api/auth/signup/
+Bad Request: /api/auth/signup/
+.Bad Request: /api/auth/otp/
+.............................................................................
+----------------------------------------------------------------------
+Ran 95 tests in 29.629s
+
+OK
+Destroying test database for alias 'default'...
+Found 95 test(s).
+System check identified no issues (0 silenced).

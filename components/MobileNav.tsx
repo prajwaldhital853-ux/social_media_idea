@@ -15,7 +15,7 @@ export default function MobileNav({ barOnly = false }: { barOnly?: boolean }) {
   const focusedPage = pathname.startsWith('/post/') || pathname === '/explore' || pathname === '/create';
   const inChat = /^\/messages\/[^/]+/.test(pathname);
   const [compactPost, setCompactPost] = useState(false);
-  const unread = me ? db.notifications.filter(n => n.uid === me.id && !n.read).length : 0;
+  const unread = db.unread ? db.unread.notifications : (me ? db.notifications.filter(n => n.uid === me.id && !n.read).length : 0);
 
   useEffect(() => {
     let lastY = Math.max(0, window.scrollY);
@@ -38,7 +38,7 @@ export default function MobileNav({ barOnly = false }: { barOnly?: boolean }) {
     { href: '/profile', label: t('profile'), icon: IC.user }
   ];
 
-  if (focusedPage) return null;
+  if (focusedPage || inChat) return null;
 
   if (barOnly) {
     return (
@@ -66,7 +66,7 @@ export default function MobileNav({ barOnly = false }: { barOnly?: boolean }) {
         <ThemeToggle compact />
       </header>
 
-      {!inChat && <button
+      {pathname === '/' && <button
         type="button"
         className={`post-fab ${compactPost ? 'is-compact' : ''}`}
         onClick={() => me ? openCreateChooser() : router.push('/login')}

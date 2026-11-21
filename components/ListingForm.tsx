@@ -11,17 +11,20 @@ import { Media } from '@/lib/types';
 
 interface ListingFormProps {
   onClose: () => void;
-  onCreated: (id: string) => void;
+  onSaved: (id: string) => void;
+  listingId?: string;
 }
 
-export default function ListingForm({ onClose, onCreated }: ListingFormProps) {
+export default function ListingForm({ onClose, onSaved, listingId }: ListingFormProps) {
   const { db, me, t, setDb, showToast } = useApp();
-  const [title, setTitle] = useState('');
-  const [desc, setDesc] = useState('');
-  const [price, setPrice] = useState('');
-  const [category, setCategory] = useState(db.settings.categories[0] || '');
-  const [location, setLocation] = useState(me?.city || '');
-  const [media, setMedia] = useState<Media[]>([]);
+  const existing = listingId ? db.listings.find(l => l.id === listingId) : undefined;
+  const [title, setTitle] = useState(existing?.title || '');
+  const [desc, setDesc] = useState(existing?.desc || '');
+  const [price, setPrice] = useState(existing ? String(existing.price) : '');
+  const [category, setCategory] = useState(existing?.category || db.settings.categories[0] || '');
+  const [location, setLocation] = useState(existing?.location || me?.city || '');
+  const [media, setMedia] = useState<Media[]>(existing?.media || []);
+  const [url, setUrl] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -49,12 +52,39 @@ export default function ListingForm({ onClose, onCreated }: ListingFormProps) {
     }
   };
 
+  const addUrl = () => {
+    const value = url.trim();
+    if (!/^https?:\/\/\S+/i.test(value)) { setError(t('e_url')); return; }
+    if (media.length >= 4) { setError(t('e_photos4')); return; }
+    setMedia(prev => [...prev, { type: 'image' as const, src: value }]);
+    setUrl('');
+    setError('');
+  };
+
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) { setError(t('e_title')); return; }
     const amount = Number(price);
     if (!Number.isFinite(amount) || amount < 1) { setError(t('e_price')); return; }
     if (!location.trim()) { setError(t('e_location')); return; }
+    if (existing) {
+      setDb(prev => ({
+        ...prev,
+        listings: prev.listings.map(l => l.id === existing.id ? {
+          ...l,
+          title: title.trim(),
+          desc: desc.trim(),
+          price: Math.round(amount),
+          category,
+          location: location.trim(),
+          media
+        } : l)
+      }));
+      showToast(t('listingUpdated'));
+      onSaved(existing.id);
+      onClose();
+      return;
+    }
     const id = uid();
     setDb(prev => ({
       ...prev,
@@ -72,15 +102,15 @@ export default function ListingForm({ onClose, onCreated }: ListingFormProps) {
       }, ...prev.listings]
     }));
     showToast(t('listingCreated'));
-    onCreated(id);
+    onSaved(id);
     onClose();
   };
 
   return createPortal(
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content listing-form-modal" onClick={e => e.stopPropagation()} role="dialog" aria-label={t('createListing')}>
+      <div className="modal-content listing-form-modal" onClick={e => e.stopPropagation()} role="dialog" aria-label={existing ? t('editListing') : t('createListing')}>
         <div className="modal-header">
-          <b>{t('createListing')}</b>
+          <b>{existing ? t('editListing') : t('createListing')}</b>
           <button type="button" className="modal-close" onClick={onClose} aria-label={t('close')}>{IC.x}</button>
         </div>
         <form className="listing-form" onSubmit={submit}>
@@ -127,8 +157,22 @@ export default function ListingForm({ onClose, onCreated }: ListingFormProps) {
             <span className="field-count">{media.length}/4</span>
           </div>
 
+          {media.length < 4 && (
+            <div className="listing-url-row">
+              <input
+                type="url"
+                value={url}
+                onChange={e => setUrl(e.target.value)}
+                placeholder="https://…jpg"
+                aria-label={t('addImageUrl')}
+                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addUrl(); } }}
+              />
+              <button type="button" className="ghost-btn small" onClick={addUrl} disabled={!url.trim()}>{IC.plus}<span>{t('addImageUrl')}</span></button>
+            </div>
+          )}
+
           {error && <p className="form-error" role="alert">{error}</p>}
-          <button type="submit" className="promote-submit" disabled={busy}>{IC.store}{t('createListing')}</button>
+          <button type="submit" className="promote-submit" disabled={busy}>{IC.store}{existing ? t('save') : t('createListing')}</button>
         </form>
       </div>
     </div>,

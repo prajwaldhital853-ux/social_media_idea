@@ -1,7 +1,7 @@
 import { Follow, Post, ReactionKind } from './types';
 
 export const canSeePost = (post: Post, meId: string | null, follows: Follow[]): boolean =>
-  post.audience !== 'followers' || post.uid === meId || (!!meId && follows.some(f => f.follower === meId && f.following === post.uid));
+  post.audience !== 'followers' || post.uid === meId || (!!meId && follows.some(f => f.follower === meId && f.following === post.uid && f.status !== 'pending'));
 
 export const esc = (s: string): string => {
   return String(s).replace(/[&<>"']/g, (c) => ({
@@ -19,6 +19,7 @@ export const uid = (): string => {
 
 export const KEY = 'exposing-demo-v1';
 export const THEME_KEY = 'exposing-theme';
+export const LANG_KEY = 'exposing-lang';
 export const DAY = 86400000;
 
 export const hash = (s: string): number => {
@@ -102,12 +103,11 @@ export const REACTIONS: { kind: ReactionKind; emoji: string; label: string }[] =
 export const reactionMeta = (kind: ReactionKind) =>
   REACTIONS.find(r => r.kind === kind) || REACTIONS[0];
 
-export const resizeImage = (file: File): Promise<string> => {
+export const resizeImage = (file: File, max = 1280): Promise<string> => {
   return new Promise((res, rej) => {
     const url = URL.createObjectURL(file);
     const img = new Image();
     img.onload = () => {
-      const max = 1280;
       const w = img.width;
       const h = img.height;
       const s = Math.min(1, max / Math.max(w, h));

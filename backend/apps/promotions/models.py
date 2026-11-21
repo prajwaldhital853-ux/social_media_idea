@@ -22,11 +22,18 @@ class Promotion(models.Model):
     country = models.CharField(max_length=80, blank=True)
     city = models.CharField(max_length=80, blank=True)
     budget = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    package = models.CharField(max_length=20, blank=True)
     status = models.CharField(max_length=10, choices=Status.choices, default=Status.DRAFT)
+    impressions = models.PositiveIntegerField(default=0)
+    clicks = models.PositiveIntegerField(default=0)
+    ends_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['status', '-ends_at'], name='promo_running'),
+        ]
 
     def __str__(self):
         return f'Promo {self.target_type}:{self.target_id} ({self.status})'

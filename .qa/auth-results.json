@@ -1,0 +1,217 @@
+[
+  {
+    "name": "desktop: sign-in card shows identifier + password with real autofill hints",
+    "pass": true,
+    "detail": "{\"title\":\"Sign in to Exposing\",\"inputs\":[{\"type\":\"text\",\"placeholder\":\"Email, phone or username\",\"autocomplete\":\"username\"},{\"type\":\"password\",\"placeholder\":\"Password\",\"autocomplete\":\"current-password\"}]}"
+  },
+  {
+    "name": "desktop: only a Google button this server can finish is offered",
+    "pass": true,
+    "detail": "Continue with a demo Google account"
+  },
+  {
+    "name": "desktop: sign-in keeps the legal nav and an unlock escape hatch",
+    "pass": true,
+    "detail": "{\"title\":\"Sign in to Exposing\",\"inputs\":[{\"type\":\"text\",\"placeholder\":\"Email, phone or username\",\"autocomplete\":\"username\"},{\"type\":\"password\",\"placeholder\":\"Password\",\"autocomplete\":\"current-password"
+  },
+  {
+    "name": "desktop: submit starts disabled and the card fits without sideways scroll",
+    "pass": true,
+    "detail": "{\"disabled\":true,\"overflow\":false}"
+  },
+  {
+    "name": "desktop: the button waits for both fields instead of firing an empty request",
+    "pass": true,
+    "detail": "{\"disabled\":true,\"errors\":0,\"requests\":0}"
+  },
+  {
+    "name": "desktop: an unknown account gets the server detail, not a fake success",
+    "pass": true,
+    "detail": "No account matches those credentials."
+  },
+  {
+    "name": "desktop: a new device gets the code step instead of a session",
+    "pass": true,
+    "detail": "{\"title\":\"Confirm it is you\",\"detail\":\"We emailed a 6-digit code to finish signing in on this device.\",\"hint\":\"Sent to sita@demo.test\",\"meta\":\"Code expires in 10:00\",\"dev\":\"Demo ma"
+  },
+  {
+    "name": "desktop: the code step names the address the mail went to",
+    "pass": true,
+    "detail": "Sent to sita@demo.test"
+  },
+  {
+    "name": "desktop: the code step counts down and offers resend + back",
+    "pass": true,
+    "detail": "{\"meta\":\"Code expires in 10:00\",\"links\":[\"Resend code\",\"Back to sign in\"]}"
+  },
+  {
+    "name": "desktop: the DEBUG mailer exposes the code as a one-tap chip",
+    "pass": true,
+    "detail": "Demo mailer code: 115899"
+  },
+  {
+    "name": "desktop: a wrong code is rejected with code-scoped tries left",
+    "pass": true,
+    "detail": "Wrong code. 4 tries left before this code stops working."
+  },
+  {
+    "name": "desktop: a rejected code leaves the visitor signed out",
+    "pass": true,
+    "detail": ""
+  },
+  {
+    "name": "desktop: resend rotates the challenge and restarts the clock",
+    "pass": true,
+    "detail": "{\"meta\":\"Code expires in 10:00\",\"dev\":\"Demo mailer code: 742931\",\"code\":\"\"}"
+  },
+  {
+    "name": "desktop: the confirmed code signs in and greets by name",
+    "pass": true,
+    "detail": "Welcome, Sita Karki."
+  },
+  {
+    "name": "desktop: the HttpOnly cookie carries the session /api/auth/me/ reads",
+    "pass": true,
+    "detail": "{\"status\":200,\"u\":\"sita\"}"
+  },
+  {
+    "name": "desktop: a reload restores the signed-in app instead of the login wall",
+    "pass": true,
+    "detail": "/"
+  },
+  {
+    "name": "desktop: settings shows the server-owned account, verified and two-step on",
+    "pass": true,
+    "detail": "{\"handle\":true,\"email\":true,\"verified\":true,\"twoStep\":true,\"resetDemo\":false}"
+  },
+  {
+    "name": "desktop: the demo-data reset is hidden while the API owns the data",
+    "pass": true,
+    "detail": "{\"resetDemo\":false}"
+  },
+  {
+    "name": "desktop: turning two-step off is written to the server and survives a reload",
+    "pass": true,
+    "detail": "{\"afterFlip\":\"false\",\"afterReload\":\"false\"}"
+  },
+  {
+    "name": "desktop: two-step goes back on for the demo account",
+    "pass": true,
+    "detail": "true"
+  },
+  {
+    "name": "desktop: log out clears the cookies and lands on the sign-in card",
+    "pass": true,
+    "detail": "{\"landed\":true,\"me\":401}"
+  },
+  {
+    "name": "desktop: the hydration endpoint stays closed after logout",
+    "pass": true,
+    "detail": "401"
+  },
+  {
+    "name": "desktop: signup creates the account and asks to confirm the email",
+    "pass": true,
+    "detail": "{\"title\":\"Confirm it is you\",\"detail\":\"We emailed a 6-digit code to qa1ml08@demo.test. Enter it to activate the account.\",\"hint\":\"Sent to qa1ml08@demo.test\",\"meta\":\"Code expires in"
+  },
+  {
+    "name": "desktop: the verified code completes signup and opens the session",
+    "pass": true,
+    "detail": "{\"id\":88,\"username\":\"qa1ml08\",\"email\":\"qa1ml08@demo.test\",\"name\":\"QA Tester\",\"first_name\":\"QA\",\"last_name\":\"Tester\",\"bio\":\"\",\"avatar\":\"\",\"cover\":\"\",\"location\":\"\",\"province\":\"\",\"website\":\"\",\"role\":\"user\",\"is_staff\":false,\"is_superuser\":false,\"verified\":false,\"emailVerified\":true,\"provider\":\"email\",\"dob\":\"1996-04-02\",\"country\":\"Nepal\",\"city\":\"\",\"private\":false,\"twoStep\":true,\"joined\":\"2026-11-21T06:45:17.723371Z\",\"coins\":0,\"susp\":null,\"lockedUntil\":null}"
+  },
+  {
+    "name": "desktop: one wrong password reports the plural attempts left",
+    "pass": true,
+    "detail": "Wrong password. 2 attempts left before the account locks."
+  },
+  {
+    "name": "desktop: a failed password never opens a session",
+    "pass": true,
+    "detail": ""
+  },
+  {
+    "name": "desktop: the last try before lock reads in the singular",
+    "pass": true,
+    "detail": "Wrong password. 1 attempt left before the account locks."
+  },
+  {
+    "name": "desktop: the third wrong password locks the account and hands over an unlock code",
+    "pass": true,
+    "detail": "{\"title\":\"Account locked\",\"detail\":\"We emailed a 6-digit code to finish signing in on this device.\",\"hint\":\"\",\"meta\":\"Code expires in 10:00\",\"dev\":\"Demo mailer code: 242191\",\"links"
+  },
+  {
+    "name": "desktop: the lock screen explains the unlock path and accepts either handle",
+    "pass": true,
+    "detail": "{\"title\":\"Account locked\",\"detail\":\"Too many wrong passwords. Ask for an unlock code, then sign in again.\",\"placeholder\":\"Email or username\"}"
+  },
+  {
+    "name": "desktop: an unlock code is issued for a username as well as an email",
+    "pass": true,
+    "detail": "{\"title\":\"Account locked\",\"detail\":\"We emailed a 6-digit code to finish signing in on this device.\",\"hint\":\"\",\"meta\":\"Code expires in 10:00\",\"dev\":\"Demo mailer "
+  },
+  {
+    "name": "desktop: the unlock code returns to the form with the server status line",
+    "pass": true,
+    "detail": "Account unlocked. Sign in with your password."
+  },
+  {
+    "name": "desktop: an unlocked account signs in with its real password",
+    "pass": true,
+    "detail": "{\"path\":\"/\",\"me\":200}"
+  },
+  {
+    "name": "desktop: a known Google identity on a new device gets the code step, not a session",
+    "pass": true,
+    "detail": "{\"title\":\"Confirm it is you\",\"detail\":\"We emailed a 6-digit code to finish signing in on this device.\",\"hint\":\"Sent to guest@demo.test\",\"meta\":\"Code expires in "
+  },
+  {
+    "name": "desktop: the confirmed Google code opens the session for the demo identity",
+    "pass": true,
+    "detail": "{\"path\":\"/\",\"me\":200,\"email\":\"guest@demo.test\"}"
+  },
+  {
+    "name": "desktop: refresh rotates the session and the cookie still authenticates",
+    "pass": true,
+    "detail": "{\"refresh\":200,\"me\":200}"
+  },
+  {
+    "name": "desktop: after a refresh the browser still passes CSRF on writes",
+    "pass": true,
+    "detail": "{\"status\":201,\"id\":170}"
+  },
+  {
+    "name": "desktop: the language choice survives navigation",
+    "pass": true,
+    "detail": "{\"title\":\"Exposing मा साइन इन\",\"placeholder\":\"इमेल वा प्रयोगकर्ता नाम\",\"unlock\":\"धेरै पटक गलत पासवर्ड भयो। अनलक कोड माग्नुहोस्, अनि फेरि साइन इन गर्नुहोस्।\"}"
+  },
+  {
+    "name": "desktop: the lockout copy is translated too",
+    "pass": true,
+    "detail": "{\"title\":\"Exposing मा साइन इन\",\"placeholder\":\"इमेल वा प्रयोगकर्ता नाम\",\"unlock\":\"धेरै पटक गलत पासवर्ड भयो। अनलक कोड माग्नुहोस्, अनि फेरि साइन इन गर्नुहोस्।\"}"
+  },
+  {
+    "name": "mobile: sign-in fits 390px with tap targets a thumb can hit",
+    "pass": true,
+    "detail": "{\"overflow\":false,\"submitH\":51,\"inputH\":47,\"googleH\":67,\"unlockH\":28}"
+  },
+  {
+    "name": "mobile: the code step renders with a visible countdown and no overflow",
+    "pass": true,
+    "detail": "{\"title\":\"Confirm it is you\",\"meta\":\"Code expires in 10:00\",\"overflow\":false}"
+  },
+  {
+    "name": "mobile: the code completes and the app opens signed in",
+    "pass": true,
+    "detail": "{\"path\":\"/\"}"
+  },
+  {
+    "name": "mobile: signing out from settings returns to the sign-in card",
+    "pass": true,
+    "detail": "landed: true"
+  },
+  {
+    "name": "integration: the auth pass produced no unexpected console, page or HTTP errors",
+    "pass": true,
+    "detail": ""
+  }
+]

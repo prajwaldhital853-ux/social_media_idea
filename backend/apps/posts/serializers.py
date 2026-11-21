@@ -1,26 +1,60 @@
 from rest_framework import serializers
 
+from apps.common.api import post_page_reactions
+
 from .models import Post, PostMedia
 
 
 class PostMediaSerializer(serializers.ModelSerializer):
     class Meta:
         model = PostMedia
-        fields = ['id', 'kind', 'url', 'file', 'duration', 'position']
-        read_only_fields = ['id']
+        fields = ['id', 'kind', 'url', 'file', 'duration', 'position', 'like_count']
+        # position is assigned from the order the client sends, never from the payload.
+        read_only_fields = ['id', 'like_count', 'position']
+
+
+class PostListSerializer(serializers.ListSerializer):
+    def to_representation(self, data):
+        posts = list(data.all() if hasattr(data, 'all') else data)
+        self.context['_reactions'] = post_page_reactions(self.context.get('request'), posts)
+        return [self.child.to_representation(post) for post in posts]
 
 
 class PostSerializer(serializers.ModelSerializer):
     author_username = serializers.CharField(source='author.username', read_only=True)
+    author_name = serializers.CharField(source='author.profile.display_name', read_only=True)
+    author_avatar_url = serializers.CharField(source='author.profile.avatar_url', read_only=True)
+    author_verified = serializers.BooleanField(source='author.profile.verified', read_only=True)
     media = PostMediaSerializer(many=True, required=False)
+    my_reaction = serializers.SerializerMethodField()
+    my_media_reactions = serializers.SerializerMethodField()
 
     class Meta:
         model = Post
         fields = [
-            'id', 'author', 'author_username', 'text', 'audience', 'status',
-            'mood', 'place', 'edited', 'created_at', 'updated_at', 'media',
+            'id', 'author', 'author_username', 'author_name', 'author_avatar_url', 'author_verified',
+            'text', 'audience', 'status',
+            'mood', 'place', 'category', 'like_count', 'comment_count',
+            'edited', 'created_at', 'updated_at', 'media',
+            'my_reaction', 'my_media_reactions',
         ]
-        read_only_fields = ['id', 'author', 'status', 'edited', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'author', 'status', 'like_count', 'comment_count', 'edited', 'created_at', 'updated_at']
+        list_serializer_class = PostListSerializer
+
+    def _reactions(self):
+        """The page serializer pre-fills this; a single-object call loads its own row."""
+        if '_reactions' not in self.context:
+            self.context['_reactions'] = post_page_reactions(
+                self.context.get('request'), [self.instance] if self.instance else []
+            )
+        return self.context['_reactions']
+
+    def get_my_reaction(self, obj):
+        return self._reactions()['post'].get(str(obj.pk))
+
+    def get_my_media_reactions(self, obj):
+        media_map = self._reactions()['media']
+        return {str(m.position): media_map.get(f'{obj.pk}#m{m.position}') for m in obj.media.all()}
 
     def create(self, validated_data):
         media_data = validated_data.pop('media', [])

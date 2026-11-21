@@ -1,5 +1,8 @@
+from decimal import Decimal
+
 from django.conf import settings
-from django.db import models
+from django.db import models, transaction
+from django.db.models import F
 
 
 class Wallet(models.Model):
@@ -13,6 +16,8 @@ class Wallet(models.Model):
 
 
 class Transaction(models.Model):
+    """Append-only ledger: rows are never updated or deleted."""
+
     class Kind(models.TextChoices):
         CREDIT = 'credit', 'Credit'
         DEBIT = 'debit', 'Debit'
@@ -25,6 +30,49 @@ class Transaction(models.Model):
 
     class Meta:
         ordering = ['-created_at']
+        indexes = [models.Index(fields=['wallet', '-created_at'], name='ledger_wallet_recent')]
+
+    def save(self, *args, **kwargs):
+        if self.pk is not None:
+            raise ValueError('Ledger entries are append-only.')
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise ValueError('Ledger entries are append-only.')
 
     def __str__(self):
         return f'{self.kind} {self.amount} ({self.wallet_id})'
+
+
+class CoinRequest(models.Model):
+    class Status(models.TextChoices):
+        PENDING = 'pending', 'Pending'
+        APPROVED = 'approved', 'Approved'
+        REJECTED = 'rejected', 'Rejected'
+
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='coin_requests')
+    coins = models.PositiveIntegerField()
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    method = models.CharField(max_length=20, default='qr')
+    reference = models.CharField(max_length=80, blank=True)
+    screenshot_url = models.URLField(blank=True)
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.PENDING)
+    created_at = models.DateTimeField(auto_now_add=True)
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+
+def apply(wallet_id, kind, amount, note=''):
+    """Atomic balance change + ledger row. Raises ValueError on overdraft."""
+    amount = Decimal(amount)
+    if amount <= 0:
+        raise ValueError('Amount must be positive.')
+    with transaction.atomic():
+        wallet = Wallet.objects.select_for_update().get(pk=wallet_id)
+        delta = amount if kind == Transaction.Kind.CREDIT else -amount
+        if wallet.balance + delta < 0:
+            raise ValueError('Insufficient balance.')
+        Wallet.objects.filter(pk=wallet.pk).update(balance=F('balance') + delta)
+        return Transaction.objects.create(wallet=wallet, kind=kind, amount=amount, note=note[:200])

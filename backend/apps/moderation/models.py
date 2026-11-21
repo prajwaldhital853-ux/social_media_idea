@@ -26,6 +26,18 @@ class Report(models.Model):
 
     class Meta:
         ordering = ['-created_at']
+        indexes = [models.Index(fields=['status', '-created_at'], name='report_queue')]
 
     def __str__(self):
         return f'{self.target_type}:{self.target_id} ({self.status})'
+
+
+class AuditLog(models.Model):
+    actor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name='audit_entries')
+    action = models.CharField(max_length=60)
+    target = models.CharField(max_length=80, blank=True)
+    detail = models.CharField(max_length=240, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']

@@ -16,8 +16,12 @@ export default function EditProfileModal({ onClose }: { onClose: () => void }) {
   const [province, setProvince] = useState(me?.province || '');
   const [city, setCity] = useState(me?.city || '');
   const [avatar, setAvatar] = useState(me?.avatar || '');
+  const [cover, setCover] = useState(me?.cover || '');
+  const [dob, setDob] = useState(me?.dob || '');
+  const [isPrivate, setIsPrivate] = useState(!!me?.private);
   const [busy, setBusy] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const coverRef = useRef<HTMLInputElement>(null);
 
   useBackClose(true, onClose);
 
@@ -35,11 +39,23 @@ export default function EditProfileModal({ onClose }: { onClose: () => void }) {
     }
   };
 
+  const pickCover = async (file: File | undefined) => {
+    if (!file) return;
+    setBusy(true);
+    try {
+      setCover(await resizeImage(file, 1600));
+    } catch {
+      showToast(t('e_type'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     setDb(prev => ({
       ...prev,
-      users: prev.users.map(u => u.id === me.id ? { ...u, name: name.trim() || u.username, bio: bio.trim(), country, province: province.trim(), city: city.trim(), avatar: avatar || undefined } : u)
+      users: prev.users.map(u => u.id === me.id ? { ...u, name: name.trim() || u.username, bio: bio.trim(), country, province: province.trim(), city: city.trim(), avatar: avatar || undefined, cover: cover || undefined, dob, private: isPrivate } : u)
     }));
     showToast(t('profileUpdated'));
     onClose();
@@ -61,6 +77,17 @@ export default function EditProfileModal({ onClose }: { onClose: () => void }) {
             </button>
             <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={e => { void pickAvatar(e.target.files?.[0]); e.target.value = ''; }} />
           </div>
+          <div className="edit-cover-row">
+            <div className="edit-cover-preview" style={cover ? { backgroundImage: `url(${cover})` } : undefined}>
+              {!cover && <span>{IC.img}</span>}
+            </div>
+            <button type="button" className="edit-avatar-btn" disabled={busy} onClick={() => coverRef.current?.click()}>
+              {IC.camera}
+              <span>{busy ? '…' : t('changeCover')}</span>
+            </button>
+            {cover && <button type="button" className="edit-cover-clear" onClick={() => setCover('')} aria-label={t('close')}>{IC.x}</button>}
+            <input ref={coverRef} type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={e => { void pickCover(e.target.files?.[0]); e.target.value = ''; }} />
+          </div>
           <label className="field">
             <span>{t('fullName')}</span>
             <input type="text" value={name} maxLength={60} onChange={e => setName(e.target.value)} autoComplete="off" />
@@ -69,6 +96,10 @@ export default function EditProfileModal({ onClose }: { onClose: () => void }) {
             <span>{t('bio')}</span>
             <textarea value={bio} maxLength={160} rows={3} onChange={e => setBio(e.target.value)} placeholder={t('bio')} />
             <small className="field-count">{bio.length}/160</small>
+          </label>
+          <label className="field">
+            <span>{t('dob')}</span>
+            <input type="date" value={dob} onChange={e => setDob(e.target.value)} />
           </label>
           <div className="field-row">
             <label className="field">
@@ -85,6 +116,13 @@ export default function EditProfileModal({ onClose }: { onClose: () => void }) {
           <label className="field">
             <span>{t('city')}</span>
             <input type="text" value={city} maxLength={40} onChange={e => setCity(e.target.value)} autoComplete="off" />
+          </label>
+          <label className="edit-private-row">
+            <span className="edit-private-copy">
+              <b>{t('privateToggle')}</b>
+              <small>{t('privateToggleSub')}</small>
+            </span>
+            <input type="checkbox" checked={isPrivate} onChange={e => setIsPrivate(e.target.checked)} />
           </label>
           <button type="submit" className="promote-submit" disabled={busy}>{t('save')}</button>
         </form>

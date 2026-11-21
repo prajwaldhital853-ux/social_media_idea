@@ -5,9 +5,10 @@ import { useRouter } from 'next/navigation';
 import AppShell from '@/components/AppShell';
 import Avatar from '@/components/Avatar';
 import ThemeToggle from '@/components/ThemeToggle';
-import ListingDetail from '@/components/ListingDetail';
 import ListingForm from '@/components/ListingForm';
 import { useApp } from '@/lib/AppContext';
+import { useWindowed } from '@/lib/useWindowed';
+import { closeLayerWithoutBack } from '@/lib/useBackClose';
 import { IC } from '@/lib/icons';
 import { ago } from '@/lib/utils';
 import { Listing } from '@/lib/types';
@@ -21,7 +22,6 @@ export default function MarketplacePage() {
   const [cat, setCat] = useState('all');
   const [min, setMin] = useState('');
   const [max, setMax] = useState('');
-  const [detailId, setDetailId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
 
   const listings = useMemo(() => {
@@ -49,6 +49,7 @@ export default function MarketplacePage() {
 
   const filtersOn = q !== '' || cat !== 'all' || min !== '' || max !== '';
   const clearFilters = () => { setQ(''); setCat('all'); setMin(''); setMax(''); };
+  const { limit, pending, sentinel, hasMore } = useWindowed(listings.length, 10, `${tab}|${q}|${cat}|${min}|${max}`);
 
   if (!feature('marketplace')) {
     return <AppShell>
@@ -125,13 +126,13 @@ export default function MarketplacePage() {
         </div>
       ) : (
         <div className="market-grid">
-          {listings.map(l => {
+          {listings.slice(0, limit).map(l => {
             const seller = db.users.find(u => u.id === l.uid);
             const img = l.media.find(m => m.type === 'image' && m.src);
             const promo = activePromo('listing', l.id);
             const boosted = promo && promoEligible(promo);
             return (
-              <button type="button" key={l.id} className="market-card" onClick={() => setDetailId(l.id)}>
+              <button type="button" key={l.id} className="market-card" onClick={() => router.push(`/marketplace/${l.id}`)}>
                 <span className="market-card-media">
                   {img ? <img src={img.src} alt={l.title} loading="lazy"/> : <span className="market-card-noimg">{IC.store}</span>}
                   {l.status === 'sold' && <span className="market-sold">{t('sold')}</span>}
@@ -152,14 +153,20 @@ export default function MarketplacePage() {
               </button>
             );
           })}
+          {pending && hasMore && (
+            <div className="market-card skeleton" aria-hidden="true">
+              <span className="market-card-media sk-block" />
+              <span className="market-card-body"><span className="sk-lines wide"><i /><i /></span></span>
+            </div>
+          )}
         </div>
       )}
+      {hasMore && listings.length > 0 && <div ref={sentinel} className="feed-sentinel" aria-hidden="true" />}
 
-      {detailId && <ListingDetail listingId={detailId} onClose={() => setDetailId(null)}/>}
       {creating && me && (
         <ListingForm
           onClose={() => setCreating(false)}
-          onCreated={id => { setTab('mine'); setDetailId(id); }}
+          onSaved={id => { closeLayerWithoutBack(); setTab('mine'); router.push(`/marketplace/${id}`); }}
         />
       )}
     </div>

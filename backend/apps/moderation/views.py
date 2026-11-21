@@ -1,3 +1,219 @@
-from django.shortcuts import render
+from datetime import timedelta
 
-# Create your views here.
+from django.conf import settings as django_settings
+from django.db.models import Count, F, Q
+from django.shortcuts import get_object_or_404
+from django.utils import timezone
+from rest_framework import serializers, status
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAdminUser, IsAuthenticated
+from rest_framework.response import Response
+
+from apps.accounts.models import User
+from apps.comments.models import Comment
+from apps.common.pagination import KeysetPagination
+from apps.marketplace.models import Listing
+from apps.notifications.services import notify
+from apps.posts.models import Post
+from apps.wallet.models import Wallet
+
+from .models import AuditLog, Report
+
+
+class ReportSerializer(serializers.ModelSerializer):
+    reporter_username = serializers.CharField(source='reporter.username', read_only=True)
+
+    class Meta:
+        model = Report
+        fields = ['id', 'reporter', 'reporter_username', 'target_type', 'target_id', 'reason', 'details', 'status', 'created_at', 'resolved_at']
+        read_only_fields = ['id', 'reporter', 'status', 'created_at', 'resolved_at']
+
+
+def audit(actor, action, target='', detail=''):
+    AuditLog.objects.create(actor=actor, action=action, target=str(target)[:80], detail=detail[:240])
+
+
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
+def reports(request):
+    if request.method == 'POST':
+        serializer = ReportSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        obj = serializer.save(reporter=request.user)
+        _auto_hide_if_piled_on(obj)
+        return Response(ReportSerializer(obj).data, status=status.HTTP_201_CREATED)
+    if not request.user.is_staff:
+        return Response({'detail': 'Staff only.'}, status=403)
+    qs = Report.objects.select_related('reporter')
+    if request.query_params.get('status'):
+        qs = qs.filter(status=request.query_params['status'])
+    paginator = KeysetPagination()
+    rows = paginator.paginate_queryset(qs, request)
+    return paginator.get_paginated_response(ReportSerializer(rows, many=True).data)
+
+
+def _auto_hide_if_piled_on(report):
+    """Enough distinct reporters on one post and it leaves the feed pending review."""
+    if report.target_type != Report.Target.POST or not report.target_id.isdigit():
+        return
+    threshold = int(getattr(django_settings, 'EXPOSING_REPORT_THRESHOLD', 3))
+    distinct = Report.objects.filter(
+        target_type=Report.Target.POST, target_id=report.target_id, status=Report.Status.OPEN,
+    ).values('reporter').distinct().count()
+    if distinct < threshold:
+        return
+    post = Post.objects.filter(pk=int(report.target_id), status=Post.Status.LIVE).first()
+    if not post:
+        return
+    post.status = Post.Status.HIDDEN
+    post.save(update_fields=['status'])
+    notify(post.author, None, 'warning',
+           f'Your post is hidden from the feed: {distinct} people reported it ({report.reason}).',
+           'post', post.pk)
+    audit(None, 'auto_hide_post', f'post:{post.pk}', f'{distinct} open reports')
+
+
+def _remove_target(report, actor):
+    kind, tid = report.target_type, report.target_id
+    owner = None
+    if kind == 'post' and tid.isdigit():
+        post = Post.objects.filter(pk=int(tid)).first()
+        if post:
+            post.status = Post.Status.REMOVED
+            post.save(update_fields=['status'])
+            owner = post.author
+    elif kind == 'comment' and tid.isdigit():
+        comment = Comment.objects.filter(pk=int(tid)).first()
+        if comment:
+            comment.status = Comment.Status.REMOVED
+            comment.save(update_fields=['status'])
+            owner = comment.author
+    elif kind == 'listing' and tid.isdigit():
+        listing = Listing.objects.filter(pk=int(tid)).first()
+        if listing:
+            listing.status = Listing.Status.REMOVED
+            listing.save(update_fields=['status'])
+            owner = listing.seller
+    if owner:
+        notify(owner, actor, 'warning', f'Your {kind} was removed by moderation: {report.reason}.', kind, tid)
+
+
+@api_view(['POST'])
+@permission_classes([IsAdminUser])
+def report_action(request, pk, action):
+    report = get_object_or_404(Report, pk=pk)
+    if report.status not in (Report.Status.OPEN, Report.Status.REVIEWING):
+        return Response({'detail': 'Report already closed.'}, status=400)
+    if action == 'dismiss':
+        report.status = Report.Status.DISMISSED
+    elif action == 'resolve':
+        report.status = Report.Status.RESOLVED
+    elif action == 'remove':
+        _remove_target(report, request.user)
+        report.status = Report.Status.RESOLVED
+    else:
+        return Response({'detail': 'Unknown action.'}, status=400)
+    report.resolved_at = timezone.now()
+    report.save(update_fields=['status', 'resolved_at'])
+    audit(request.user, f'{action}_report', f'{report.target_type}:{report.target_id}', report.reason)
+    return Response(ReportSerializer(report).data)
+
+
+@api_view(['POST'])
+@permission_classes([IsAdminUser])
+def suspend(request, username):
+    user = get_object_or_404(User, username=username)
+    days = int(request.data.get('days', 7))
+    reason = (request.data.get('reason') or 'Community policy violation.')[:200]
+    user.suspended_until = timezone.now() + timedelta(days=days)
+    user.suspend_reason = reason
+    user.save(update_fields=['suspended_until', 'suspend_reason'])
+    notify(user, request.user, 'warning', f'Your account is suspended for {days} days: {reason}')
+    audit(request.user, 'suspend_user', username, f'{days} days: {reason}')
+    return Response({'suspended_until': user.suspended_until})
+
+
+@api_view(['POST'])
+@permission_classes([IsAdminUser])
+def reinstate(request, username):
+    user = get_object_or_404(User, username=username)
+    user.suspended_until = None
+    user.suspend_reason = ''
+    user.save(update_fields=['suspended_until', 'suspend_reason'])
+    notify(user, request.user, 'warning', 'Your account suspension was lifted.')
+    audit(request.user, 'reinstate_user', username)
+    return Response({'suspended_until': None})
+
+
+@api_view(['GET'])
+@permission_classes([IsAdminUser])
+def audit_log(request):
+    paginator = KeysetPagination()
+    rows = paginator.paginate_queryset(AuditLog.objects.select_related('actor'), request)
+    data = [
+        {'id': r.pk, 'actor': r.actor.username if r.actor else None, 'action': r.action, 'target': r.target, 'detail': r.detail, 'created_at': r.created_at}
+        for r in rows
+    ]
+    return paginator.get_paginated_response(data)
+
+
+@api_view(['GET'])
+@permission_classes([IsAdminUser])
+def user_directory(request):
+    """The roster the admin console works on: accounts, balances and moderation state."""
+    qs = (
+        User.objects.select_related('profile')
+        .annotate(
+            created_at=F('date_joined'),
+            posts_count=Count('posts', distinct=True),
+            followers_count=Count('followers', distinct=True),
+        )
+    )
+    query = (request.query_params.get('q') or '').strip()
+    if query:
+        qs = qs.filter(
+            Q(username__icontains=query) | Q(email__icontains=query)
+            | Q(first_name__icontains=query) | Q(last_name__icontains=query)
+        )
+    state = request.query_params.get('status')
+    now = timezone.now()
+    if state == 'suspended':
+        qs = qs.filter(suspended_until__gt=now)
+    elif state == 'locked':
+        qs = qs.filter(locked_until__gt=now)
+    elif state == 'active':
+        qs = qs.filter(suspended_until__isnull=True, locked_until__isnull=True)
+    paginator = KeysetPagination()
+    rows = paginator.paginate_queryset(qs, request)
+    balances = {
+        wallet.user_id: wallet.balance
+        for wallet in Wallet.objects.filter(user__in=[row.pk for row in rows])
+    }
+    data = []
+    for row in rows:
+        profile = row.profile
+        data.append({
+            'id': row.pk,
+            'username': row.username,
+            'name': profile.display_name or row.get_full_name() or row.username,
+            'email': row.email,
+            'bio': profile.bio,
+            'avatar_url': profile.avatar_url,
+            'verified': profile.verified,
+            'is_private': profile.is_private,
+            'role': 'superadmin' if row.is_superuser else 'admin' if row.is_staff else 'user',
+            'provider': row.provider,
+            'email_verified': row.email_verified,
+            'country': row.country,
+            'city': row.city,
+            'dob': row.date_of_birth,
+            'joined': row.date_joined,
+            'coins': int(balances.get(row.pk, 0)),
+            'posts': row.posts_count,
+            'followers': row.followers_count,
+            'suspended_until': row.suspended_until,
+            'suspend_reason': row.suspend_reason,
+            'locked_until': row.locked_until,
+            'is_active': row.is_active,
+        })
+    return paginator.get_paginated_response(data)

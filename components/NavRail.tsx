@@ -4,12 +4,10 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useApp } from '@/lib/AppContext';
 import Avatar from './Avatar';
-import BrandLogo from './BrandLogo';
-import ThemeToggle from './ThemeToggle';
 import { IC } from '@/lib/icons';
 
 export default function NavRail() {
-  const { me, isAdmin, logout, openDrawer, t, feature, openCreateChooser } = useApp();
+  const { me, logout, openDrawer, t, feature, openCreateChooser } = useApp();
   const pathname = usePathname();
   const router = useRouter();
 
@@ -23,8 +21,6 @@ export default function NavRail() {
 
   return (
     <aside className="rail">
-      <BrandLogo height={46} className="rail-brand" />
-
       <nav className="rail-nav" aria-label="Primary">
         {navItems.map(item => (
           <Link
@@ -53,7 +49,6 @@ export default function NavRail() {
       </button>
 
       <div className="rail-bottom">
-        <ThemeToggle compact />
         {me ? (
           <div className="rail-user">
             <Link href={`/u/${me.username}`} className="rail-user-link">
@@ -72,12 +67,6 @@ export default function NavRail() {
             <Link href="/login" className="rail-signin">{t('signIn')}</Link>
             <Link href="/signup" className="rail-signup">{t('signUp')}</Link>
           </div>
-        )}
-        {isAdmin() && (
-          <Link href="/admin" className={`nav-item rail-admin ${pathname === '/admin' ? 'active' : ''}`}>
-            {IC.shield}
-            <span>{t('admin')}</span>
-          </Link>
         )}
       </div>
     </aside>

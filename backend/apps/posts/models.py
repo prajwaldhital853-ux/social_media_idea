@@ -18,13 +18,20 @@ class Post(models.Model):
     status = models.CharField(max_length=10, choices=Status.choices, default=Status.LIVE)
     mood = models.CharField(max_length=80, blank=True)
     place = models.CharField(max_length=120, blank=True)
+    category = models.CharField(max_length=80, blank=True)
+    like_count = models.PositiveIntegerField(default=0)
+    comment_count = models.PositiveIntegerField(default=0)
     edited = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ['-created_at']
-        indexes = [models.Index(fields=['-created_at'], name='post_newest_first')]
+        indexes = [
+            models.Index(fields=['-created_at'], name='post_newest_first'),
+            models.Index(fields=['status', 'audience', '-created_at'], name='post_visible_newest'),
+            models.Index(fields=['author', '-created_at'], name='post_author_newest'),
+        ]
 
     def __str__(self):
         return f'{self.author.username}: {self.text[:40]}'
@@ -41,6 +48,7 @@ class PostMedia(models.Model):
     file = models.FileField(upload_to='posts/', blank=True)
     duration = models.FloatField(null=True, blank=True)
     position = models.PositiveSmallIntegerField(default=0)
+    like_count = models.PositiveIntegerField(default=0)
 
     class Meta:
         ordering = ['position']

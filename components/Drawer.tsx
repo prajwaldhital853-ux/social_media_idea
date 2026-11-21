@@ -10,7 +10,7 @@ import ThemeToggle from './ThemeToggle';
 import { IC } from '@/lib/icons';
 
 export default function Drawer() {
-  const { me, isAdmin, logout, drawerOpen, closeDrawer, db, updateLang, t, feature } = useApp();
+  const { me, logout, drawerOpen, closeDrawer, db, updateLang, t, feature } = useApp();
 
   useBackClose(drawerOpen, closeDrawer);
   const navigateClose = () => { closeLayerWithoutBack(); closeDrawer(); };
@@ -29,10 +29,6 @@ export default function Drawer() {
     ...(feature('marketplace') ? [{ href: '/marketplace', label: t('marketplace'), icon: IC.store }] : []),
     { href: '/settings', label: t('settings'), icon: IC.gear }
   ];
-
-  if (isAdmin()) {
-    links.push({ href: '/admin', label: t('admin'), icon: IC.shield });
-  }
 
   return (
     <>

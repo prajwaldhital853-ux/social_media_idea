@@ -1,34 +1,34 @@
 {
   "results": [
     {
-      "name": "desktop: left menu + comfortable feed + calm blank right column",
+      "name": "desktop: left menu + comfortable feed + right suggestions column",
       "pass": true,
-      "detail": "{\"cols\":[264,680,336],\"mainW\":680,\"calmW\":336,\"calmBg\":\"rgb(243, 239, 233)\",\"calmEmpty\":true,\"calmRight\":true,\"rail\":true}"
+      "detail": "{\"cols\":[264,680,336],\"mainW\":680,\"calmW\":336,\"calmBg\":\"rgb(243, 239, 233)\",\"hasSuggest\":true,\"calmRight\":true,\"rail\":true}"
     },
     {
       "name": "desktop: feed paginates first paint and loads more on scroll",
       "pass": true,
-      "detail": "{\"firstPage\":6,\"fullPage\":15}"
+      "detail": "{\"firstPage\":10,\"fullPage\":15}"
     },
     {
       "name": "desktop: Search opens fast (prefetched)",
       "pass": true,
-      "detail": "76ms"
+      "detail": "42ms"
     },
     {
       "name": "desktop: Reels opens fast (prefetched)",
       "pass": true,
-      "detail": "281ms"
+      "detail": "98ms"
     },
     {
       "name": "desktop: post opens fast (prefetched on hover)",
       "pass": true,
-      "detail": "154ms"
+      "detail": "148ms"
     },
     {
       "name": "desktop: author profile opens fast (prefetched on hover)",
       "pass": true,
-      "detail": "167ms"
+      "detail": "153ms"
     },
     {
       "name": "desktop: feed renders",
@@ -163,7 +163,7 @@
     {
       "name": "desktop: picture snaps to center immediately (<300ms)",
       "pass": true,
-      "detail": "{\"ms\":50,\"left\":3840,\"w\":1280}"
+      "detail": "{\"ms\":55,\"left\":3840,\"w\":1280}"
     },
     {
       "name": "desktop: horizontal scroll reaches 4/4",
@@ -311,9 +311,9 @@
       "detail": "{\"fv\":true,\"outline\":\"none\",\"w\":\"3px\",\"bg\":\"rgba(0, 0, 0, 0)\"}"
     },
     {
-      "name": "desktop: + button opens compact Post/Reels card",
+      "name": "desktop: + button opens SS4 Create popup (Post/Reel rows)",
       "pass": true,
-      "detail": "{\"labels\":[\"Post\",\"Reels\"],\"h\":146,\"w\":308,\"sideBySide\":true,\"noLongCopy\":true,\"icons\":true}"
+      "detail": "{\"labels\":[\"Post\",\"Reel\"],\"h\":222,\"w\":400,\"stacked\":true,\"hasCreateHead\":true,\"copyVisible\":true,\"icons\":true}"
     },
     {
       "name": "desktop: Reels picker rejects a photo with a clear toast",
@@ -353,12 +353,12 @@
     {
       "name": "desktop: reel clip stored on device, not in localStorage",
       "pass": true,
-      "detail": "{\"kind\":\"reel\",\"blobId\":\"w6e2071o\",\"src\":null}"
+      "detail": "{\"kind\":\"reel\",\"blobId\":\"5lag989i\",\"src\":null}"
     },
     {
       "name": "desktop: published reel survives reload and plays",
       "pass": true,
-      "detail": "{\"src\":\"blob:http://localhost:3000/81ec1cde-3f14-4c30-81a3-3f698cb328a8\",\"playing\":true,\"ready\":4,\"count\":\"1 / 4\"}"
+      "detail": "{\"src\":\"blob:http://localhost:3000/ccbd41cd-a28e-4411-bc84-96113b29817a\",\"playing\":true,\"ready\":4,\"count\":\"1 / 4\"}"
     },
     {
       "name": "desktop: textarea capped at 320px",
@@ -408,7 +408,7 @@
     {
       "name": "desktop: followers-only post published with badge, visible to owner",
       "pass": true,
-      "detail": "{\"id\":\"p1syru8u\",\"audience\":\"followers\",\"badge\":true,\"visibleToOwner\":true}"
+      "detail": "{\"id\":\"oaywcad8\",\"audience\":\"followers\",\"badge\":true,\"visibleToOwner\":true}"
     },
     {
       "name": "desktop: followers-only post hidden from non-follower (feed + detail)",
@@ -448,12 +448,12 @@
     {
       "name": "desktop: double-tap right seeks +10s with badge",
       "pass": true,
-      "detail": "{\"t0\":1.807069,\"t\":0.276146,\"dur\":5.055,\"badge\":true,\"note\":\"short clip clamps to end / loops\"}"
+      "detail": "{\"t0\":1.807439,\"t\":0.253361,\"dur\":5.055,\"badge\":true,\"note\":\"short clip clamps to end / loops\"}"
     },
     {
       "name": "desktop: double-tap left seeks -10s with badge",
       "pass": true,
-      "detail": "{\"t1\":1.253018,\"t\":0.308724,\"badge\":true}"
+      "detail": "{\"t1\":1.233005,\"t\":0.295468,\"badge\":true}"
     },
     {
       "name": "desktop: single tap pauses reel",
@@ -473,7 +473,7 @@
     {
       "name": "desktop: tray pick stores the chosen reel reaction",
       "pass": true,
-      "detail": "{\"newestId\":\"1vqri45a\",\"newestKind\":\"reel\",\"mine\":[\"love\"],\"trayGone\":true,\"reacted\":true,\"art\":true,\"count\":\"1\",\"path\":\"/video\"}"
+      "detail": "{\"newestId\":\"k5ufg8v3\",\"newestKind\":\"reel\",\"mine\":[\"love\"],\"trayGone\":true,\"reacted\":true,\"art\":true,\"count\":\"1\",\"path\":\"/video\"}"
     },
     {
       "name": "desktop: reel rail save toggles saved post",
@@ -493,7 +493,7 @@
     {
       "name": "desktop: wheel snaps cleanly to next reel, fully settled",
       "pass": true,
-      "detail": "{\"ms\":582,\"scrollTop\":899,\"clientHeight\":900,\"count\":\"2 / 4\"}"
+      "detail": "{\"ms\":576,\"scrollTop\":899,\"clientHeight\":900,\"count\":\"2 / 4\"}"
     },
     {
       "name": "desktop: reels nav rail navigates to Marketplace",
@@ -541,19 +541,19 @@
       "detail": ""
     },
     {
-      "name": "desktop: profile about tab shows cards",
+      "name": "desktop: profile about tab shows bio + details + people they follow",
       "pass": true,
-      "detail": ""
+      "detail": "{\"cards\":3,\"bio\":true,\"follows\":3,\"more\":true}"
     },
     {
-      "name": "desktop: followers list opens people modal",
+      "name": "desktop: followers open on their own page with rows",
       "pass": true,
-      "detail": ""
+      "detail": "{\"path\":\"/u/maya_g/followers\",\"rows\":3,\"owner\":true,\"back\":true}"
     },
     {
-      "name": "desktop: Escape closes people modal",
+      "name": "desktop: followers page back returns to profile",
       "pass": true,
-      "detail": ""
+      "detail": "/u/maya_g"
     },
     {
       "name": "desktop: edit profile saves bio",
@@ -633,7 +633,7 @@
     {
       "name": "desktop: inbox lists conversations",
       "pass": true,
-      "detail": "{\"rows\":2,\"unread\":2}"
+      "detail": "{\"rows\":5,\"unread\":2}"
     },
     {
       "name": "desktop: conversation opens and marks incoming read",
@@ -666,9 +666,14 @@
       "detail": "expected 1"
     },
     {
-      "name": "desktop: create listing stores + opens detail on My listings",
+      "name": "desktop: create listing stores + opens its own page",
       "pass": true,
-      "detail": "{\"uid\":\"u1\",\"price\":1234,\"media\":1,\"status\":\"active\",\"mineTab\":true,\"shown\":\"QA test listing\"}"
+      "detail": "{\"id\":\"v18v38aa\",\"uid\":\"u1\",\"price\":1234,\"media\":1,\"status\":\"active\",\"path\":\"/marketplace/v18v38aa\",\"shown\":\"QA test listing\",\"sellerCard\":true}"
+    },
+    {
+      "name": "desktop: listing page shows image left, details right",
+      "pass": true,
+      "detail": "{\"sideBySide\":true,\"actions\":4}"
     },
     {
       "name": "desktop: mark sold updates listing + flag",
@@ -681,12 +686,142 @@
       "detail": ""
     },
     {
-      "name": "desktop: Escape closes listing detail",
+      "name": "desktop: edit listing updates price + URL image with thumbnails",
+      "pass": true,
+      "detail": "{\"price\":4321,\"media\":2,\"urlImg\":true,\"thumbs\":2,\"modalGone\":true}"
+    },
+    {
+      "name": "desktop: listing thumbnail switches main photo",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop: Save button stores listing save",
+      "pass": true,
+      "detail": "{\"saved\":true,\"on\":true}"
+    },
+    {
+      "name": "desktop: Share copies listing link (toast)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop: seller card opens seller profile with Listings tab",
+      "pass": true,
+      "detail": "{\"path\":\"/u/maya_g\",\"listingsTab\":true}"
+    },
+    {
+      "name": "desktop: seller profile lists their listings",
       "pass": true,
       "detail": ""
     },
     {
       "name": "desktop: contact seller opens chat with seller",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop: top bar has logo/search/theme left + reels/messages/notifications right",
+      "pass": true,
+      "detail": "{\"fixed\":true,\"h\":56,\"logo\":true,\"search\":true,\"theme\":true,\"rightLinks\":[\"/video\",\"/messages\",\"/notifications\"],\"leftFirst\":true,\"rightLast\":true,\"railAdmin\":false,\"composeBox\":false}"
+    },
+    {
+      "name": "desktop: Admin removed from left menu, old compose box gone",
+      "pass": true,
+      "detail": "{\"railAdmin\":false,\"composeBox\":false}"
+    },
+    {
+      "name": "desktop: drawer has no Admin entry",
+      "pass": true,
+      "detail": "{\"open\":true,\"admin\":false}"
+    },
+    {
+      "name": "desktop: feed renders first 10 posts only",
+      "pass": true,
+      "detail": "{\"rendered\":10,\"total\":18,\"skeleton\":false}"
+    },
+    {
+      "name": "desktop: feed prefetches next batch before the end (no skeleton at normal scroll)",
+      "pass": true,
+      "detail": "{\"rendered\":18,\"skeleton\":false}"
+    },
+    {
+      "name": "desktop: feed reaches all posts without lingering skeleton",
+      "pass": true,
+      "detail": "{\"rendered\":18,\"skeleton\":false,\"sentinel\":false}"
+    },
+    {
+      "name": "desktop: mutual follows auto-listed in inbox with say-hi hint",
+      "pass": true,
+      "detail": "{\"rows\":5,\"hints\":3,\"names\":[\"Anju Tamang\",\"Himal Lens\",\"Nima Kitchen\"]}"
+    },
+    {
+      "name": "desktop: own followers page shows pending follow requests",
+      "pass": true,
+      "detail": "{\"section\":true,\"requestRows\":1,\"elon\":true}"
+    },
+    {
+      "name": "desktop: Accept moves requester into followers + notifies",
+      "pass": true,
+      "detail": "{\"edge\":\"accepted\",\"inList\":true,\"requestsLeft\":0}"
+    },
+    {
+      "name": "desktop: Decline removes the pending request",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop: private profile shows Private badge + locked posts",
+      "pass": true,
+      "detail": "{\"badge\":true,\"btn\":\"Request to follow\",\"locked\":true,\"posts\":0}"
+    },
+    {
+      "name": "desktop: follow on private account sends pending request",
+      "pass": true,
+      "detail": "{\"edge\":\"pending\",\"btn\":\"Requested\",\"pendingCls\":true,\"notified\":true}"
+    },
+    {
+      "name": "desktop: clicking Requested cancels the request",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop: followers page starts windowed at 10 (prefetch may extend)",
+      "pass": true,
+      "detail": "30 rows"
+    },
+    {
+      "name": "desktop: followers page paginates to all rows on scroll",
+      "pass": true,
+      "detail": "{\"rows\":33,\"skeleton\":false}"
+    },
+    {
+      "name": "desktop: following page lists people with follow buttons",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop: own profile has Edit + Create post, legal footer on profile",
+      "pass": true,
+      "detail": "{\"edit\":true,\"create\":true,\"footer\":true,\"footerLinks\":4}"
+    },
+    {
+      "name": "desktop: own-profile Post button opens composer",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop: legal footer removed from home + marketplace",
+      "pass": true,
+      "detail": "{\"homeFooter\":false,\"marketFooter\":false}"
+    },
+    {
+      "name": "desktop: login page links all four legal pages",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "desktop: signup page links all four legal pages",
       "pass": true,
       "detail": ""
     },
@@ -831,7 +966,7 @@
       "detail": "{\"h\":278,\"more\":\"+3\"}"
     },
     {
-      "name": "mobile: Post + fab opens Post/Reels chooser",
+      "name": "mobile: Post + fab opens Post/Reel chooser",
       "pass": true,
       "detail": ""
     },
@@ -968,7 +1103,7 @@
     {
       "name": "mobile: double-tap right seeks +10s",
       "pass": true,
-      "detail": "{\"mt0\":4.184592,\"t\":0.262844,\"dur\":5.055,\"badge\":true}"
+      "detail": "{\"mt0\":4.149829,\"t\":0.260305,\"dur\":5.055,\"badge\":true}"
     },
     {
       "name": "mobile: reel comment compose above keypad",
@@ -1038,7 +1173,7 @@
     {
       "name": "mobile: chat resizes for keyboard, compose stays reachable",
       "pass": true,
-      "detail": "{\"viewH\":424,\"composeBottom\":480,\"visible\":true}"
+      "detail": "{\"viewH\":544,\"composeBottom\":544,\"visible\":true}"
     },
     {
       "name": "mobile: chat send lands in thread + store",
@@ -1046,17 +1181,22 @@
       "detail": ""
     },
     {
+      "name": "mobile: chat send button uncovered (no Post FAB on conversation)",
+      "pass": true,
+      "detail": "{\"fab\":false,\"hit\":true}"
+    },
+    {
       "name": "mobile: marketplace two-column grid fits",
       "pass": true,
       "detail": "{\"cards\":6,\"cols\":2,\"noOverflow\":true}"
     },
     {
-      "name": "mobile: listing detail fits viewport with actions",
+      "name": "mobile: listing page stacks image above details with actions",
       "pass": true,
-      "detail": "{\"fits\":true,\"actions\":3}"
+      "detail": "{\"fits\":true,\"stacked\":true,\"actions\":4,\"noOverflow\":true}"
     },
     {
-      "name": "mobile: phone-back closes listing detail",
+      "name": "mobile: phone-back returns to marketplace",
       "pass": true,
       "detail": ""
     },
@@ -1106,13 +1246,60 @@
       "detail": ""
     },
     {
+      "name": "mobile: chat hides top bar, bottom nav, FAB and footer, keeps back arrow",
+      "pass": true,
+      "detail": "{\"top\":false,\"nav\":false,\"fab\":false,\"footer\":false,\"back\":true,\"compose\":true}"
+    },
+    {
+      "name": "mobile: chat back arrow returns to inbox with chrome restored",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile: mutual follows auto-listed in inbox",
+      "pass": true,
+      "detail": "3 hints"
+    },
+    {
+      "name": "mobile: Post FAB on home only",
+      "pass": true,
+      "detail": "{\"fabHome\":true,\"fabProfile\":false,\"fabMarket\":false}"
+    },
+    {
+      "name": "mobile: followers page lists people + pending requests",
+      "pass": true,
+      "detail": "{\"rows\":8,\"requests\":2,\"noOverflow\":true}"
+    },
+    {
+      "name": "mobile: Accept request from phone",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile: Decline request from phone",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile: own profile has Create post + legal footer",
+      "pass": true,
+      "detail": "{\"create\":true,\"footerLinks\":4}"
+    },
+    {
+      "name": "mobile: own-profile Post opens composer",
+      "pass": true,
+      "detail": ""
+    },
+    {
       "name": "no uncaught page errors",
       "pass": true,
       "detail": ""
     }
   ],
   "errors": [
+    "http 404: http://localhost:3000/this-route-does-not-exist",
     "console: Failed to load resource: the server responded with a status of 404 (Not Found)",
+    "http 404: http://localhost:3000/this-route-does-not-exist",
     "console: Failed to load resource: the server responded with a status of 404 (Not Found)"
   ]
 }

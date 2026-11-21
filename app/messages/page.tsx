@@ -8,6 +8,7 @@ import VerifiedBadge from '@/components/VerifiedBadge';
 import ThemeToggle from '@/components/ThemeToggle';
 import PeoplePicker from '@/components/PeoplePicker';
 import { useApp } from '@/lib/AppContext';
+import { useWindowed } from '@/lib/useWindowed';
 import { closeLayerWithoutBack } from '@/lib/useBackClose';
 import { IC } from '@/lib/icons';
 import { ago } from '@/lib/utils';
@@ -15,13 +16,13 @@ import { Message, User } from '@/lib/types';
 
 interface Conversation {
   other: User;
-  last: Message;
+  last: Message | null;
   unread: number;
 }
 
 export default function MessagesPage() {
   const router = useRouter();
-  const { db, me, t } = useApp();
+  const { db, me, t, mutualIds } = useApp();
   const lang = db.lang;
   const [q, setQ] = useState('');
   const [picker, setPicker] = useState(false);
@@ -47,13 +48,19 @@ export default function MessagesPage() {
         unread: msgs.filter(m => m.to === me.id && !m.read).length
       });
     });
-    return out.sort((a, b) => b.last.ts - a.last.ts);
-  }, [db.messages, db.users, me]);
+    for (const id of mutualIds()) {
+      if (byOther.has(id)) continue;
+      const other = db.users.find(u => u.id === id);
+      if (other) out.push({ other, last: null, unread: 0 });
+    }
+    return out.sort((a, b) => (b.last?.ts ?? 0) - (a.last?.ts ?? 0) || a.other.name.localeCompare(b.other.name));
+  }, [db.messages, db.users, db.follows, me]);
 
   const needle = q.trim().toLowerCase();
   const shown = conversations.filter(c =>
     !needle || c.other.name.toLowerCase().includes(needle) || c.other.username.toLowerCase().includes(needle)
   );
+  const { limit, pending, sentinel, hasMore } = useWindowed(shown.length, 10, needle);
   const totalUnread = conversations.reduce((n, c) => n + c.unread, 0);
 
   return <AppShell>
@@ -100,7 +107,7 @@ export default function MessagesPage() {
             </div>
           ) : (
             <div className="inbox-list">
-              {shown.map(c => (
+              {shown.slice(0, limit).map(c => (
                 <button
                   type="button"
                   key={c.other.id}
@@ -111,15 +118,21 @@ export default function MessagesPage() {
                   <span className="inbox-row-main">
                     <span className="inbox-row-top">
                       <b>{c.other.name}{c.other.verified && <VerifiedBadge/>}</b>
-                      <span className="inbox-row-time">{ago(c.last.ts, lang)}</span>
+                      {c.last && <span className="inbox-row-time">{ago(c.last.ts, lang)}</span>}
                     </span>
-                    <span className="inbox-row-preview">
-                      {c.last.from === me.id ? `${t('you')}: ` : ''}{c.last.text}
+                    <span className={`inbox-row-preview ${c.last ? '' : 'hint'}`}>
+                      {c.last ? `${c.last.from === me.id ? `${t('you')}: ` : ''}${c.last.text}` : t('mutualHint')}
                     </span>
                   </span>
                   {c.unread > 0 && <span className="inbox-badge">{c.unread}</span>}
                 </button>
               ))}
+              {pending && hasMore && (
+                <div className="people-skeleton inbox" aria-hidden="true">
+                  <span className="sk-avatar" /><span className="sk-lines"><i /><i /></span>
+                </div>
+              )}
+              {hasMore && <div ref={sentinel} className="feed-sentinel" aria-hidden="true" />}
             </div>
           )}
         </>

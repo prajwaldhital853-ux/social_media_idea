@@ -21,13 +21,14 @@ async function newPage(viewport, mobile = false) {
   await page.setViewport({ ...viewport, isMobile: mobile, hasTouch: mobile, deviceScaleFactor: mobile ? 2 : 1 });
   page.on('pageerror', e => errors.push('pageerror: ' + e.message));
   page.on('console', m => { if (m.type() === 'error') errors.push('console: ' + m.text().slice(0, 200)); });
+  page.on('response', r => { if (r.status() >= 400) errors.push(`http ${r.status()}: ${r.url().slice(0, 160)}`); });
   return page;
 }
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const shot = (page, name) => page.screenshot({ path: `${OUT}/${name}.png` });
 async function goto(page, path) {
   await page.goto('http://localhost:3000' + path, { waitUntil: 'domcontentloaded', timeout: 45000 });
-  await page.waitForSelector('.post, .create-post-page, .search-view, .login-card, .login-container, .modern-login, .reels-page, .media-page, .profile-view, .profile-missing, .wallet-body, .settings-body, .notif-view, .inbox-view, .chat-view, .market-view, .admin-view, .legal-doc, .signup-container, .saved-list, .empty-state, .feed-empty', { timeout: 30000 }).catch(() => {});
+  await page.waitForSelector('.post, .create-post-page, .search-view, .login-card, .login-container, .modern-login, .reels-page, .media-page, .profile-view, .profile-missing, .wallet-body, .settings-body, .notif-view, .inbox-view, .chat-view, .market-view, .admin-view, .legal-doc, .signup-container, .saved-list, .empty-state, .feed-empty, .people-page, .listing-page, .people-page-list', { timeout: 30000 }).catch(() => {});
   await sleep(900);
   if (path === '/') await loadAllFeed(page);
 }
@@ -91,9 +92,9 @@ const layout = await d.evaluate(() => {
   const main = document.querySelector('.main').getBoundingClientRect();
   const calm = document.querySelector('.side-calm');
   const cr = calm.getBoundingClientRect();
-  return { cols, mainW: Math.round(main.width), calmW: Math.round(cr.width), calmBg: getComputedStyle(calm).backgroundColor, calmEmpty: calm.children.length === 0, calmRight: Math.abs(cr.right - window.innerWidth) < 2, rail: !!document.querySelector('.rail .nav-item') };
+  return { cols, mainW: Math.round(main.width), calmW: Math.round(cr.width), calmBg: getComputedStyle(calm).backgroundColor, hasSuggest: !!calm.querySelector('.suggest-card'), calmRight: Math.abs(cr.right - window.innerWidth) < 2, rail: !!document.querySelector('.rail .nav-item') };
 });
-ok('desktop: left menu + comfortable feed + calm blank right column', layout.cols.length === 3 && layout.mainW >= 640 && layout.mainW <= 700 && layout.calmW > 200 && layout.calmEmpty && layout.calmBg !== 'rgba(0, 0, 0, 0)' && layout.calmRight && layout.rail, JSON.stringify(layout));
+ok('desktop: left menu + comfortable feed + right suggestions column', layout.cols.length === 3 && layout.mainW >= 640 && layout.mainW <= 700 && layout.calmW > 200 && layout.hasSuggest && layout.calmBg !== 'rgba(0, 0, 0, 0)' && layout.calmRight && layout.rail, JSON.stringify(layout));
 
 await d.goto('http://localhost:3000/', { waitUntil: 'domcontentloaded', timeout: 45000 });
 await d.waitForSelector('article.post', { timeout: 30000 });
@@ -101,7 +102,7 @@ await sleep(600);
 const firstPage = await d.evaluate(() => document.querySelectorAll('article.post').length);
 await loadAllFeed(d);
 const fullPage = await d.evaluate(() => document.querySelectorAll('article.post').length);
-ok('desktop: feed paginates first paint and loads more on scroll', firstPage === 6 && fullPage > firstPage, JSON.stringify({ firstPage, fullPage }));
+ok('desktop: feed paginates first paint and loads more on scroll', firstPage === 10 && fullPage > firstPage, JSON.stringify({ firstPage, fullPage }));
 
 const clickTime = async (sel, waitSel) => {
   const start = Date.now();
@@ -133,7 +134,7 @@ await shot(d, 'desktop-feed');
 const brand = await d.evaluate(() => {
   const icon = document.querySelector('link[rel="icon"]');
   const apple = document.querySelector('link[rel="apple-touch-icon"]');
-  const img = document.querySelector('.rail .brand-logo-light');
+  const img = document.querySelector('.topbar .brand-logo-light');
   return { favicon: icon?.getAttribute('href'), apple: apple?.getAttribute('href'), logoLoaded: (img?.naturalWidth || 0) > 0, logoSrc: img?.getAttribute('src') };
 });
 ok('desktop: real favicon + rail logo loaded', brand.favicon === '/exposing-icon.png' && brand.apple === '/apple-icon.png' && brand.logoLoaded && brand.logoSrc === '/exposing-logo.png', JSON.stringify(brand));
@@ -537,9 +538,11 @@ const entryChooser = await d.evaluate(() => {
   const r = card.getBoundingClientRect();
   const btns = [...document.querySelectorAll('.chooser-options button')];
   const a = btns[0].getBoundingClientRect(), b = btns[1].getBoundingClientRect();
-  return { labels: btns.map(x => x.querySelector('b')?.textContent), h: Math.round(r.height), w: Math.round(r.width), sideBySide: Math.abs(a.top - b.top) < 2, noLongCopy: !card.querySelector('.chooser-copy') && !card.querySelector('.chooser-grip'), icons: btns.every(x => !!x.querySelector('.chooser-icon svg')) };
+  const copy = card.querySelector('.chooser-copy');
+  const head = card.querySelector('.chooser-head');
+  return { labels: btns.map(x => x.querySelector('b')?.textContent), h: Math.round(r.height), w: Math.round(r.width), stacked: Math.abs(a.top - b.top) > 2, hasCreateHead: !!head && /create/i.test(head.textContent), copyVisible: !!copy && getComputedStyle(copy).display !== 'none' && getComputedStyle(copy.querySelector('small')).display !== 'none', icons: btns.every(x => !!x.querySelector('.chooser-icon svg')) };
 });
-ok('desktop: + button opens compact Post/Reels card', JSON.stringify(entryChooser.labels) === JSON.stringify(['Post', 'Reels']) && entryChooser.h < 170 && entryChooser.w <= 320 && entryChooser.sideBySide && entryChooser.noLongCopy && entryChooser.icons, JSON.stringify(entryChooser));
+ok('desktop: + button opens SS4 Create popup (Post/Reel rows)', JSON.stringify(entryChooser.labels) === JSON.stringify(['Post', 'Reel']) && entryChooser.stacked && entryChooser.hasCreateHead && entryChooser.copyVisible && entryChooser.w <= 420 && entryChooser.h <= 280 && entryChooser.icons, JSON.stringify(entryChooser));
 await shot(d, 'desktop-chooser-entry');
 
 // Reels picker validation: wrong type + over 150 MB both toast clearly
@@ -906,9 +909,15 @@ const clickBtnByText = (page, scope, re) => page.evaluate(([scope, re]) => {
   return !!btn;
 }, [scope, re]);
 
-// Profile via author name
+// Profile via author name (pick a public author so posts are visible)
 const profTarget = await d.evaluate(() => {
-  const link = [...document.querySelectorAll('article.post .post-name')].find(a => a.getAttribute('href') !== '/u/sita_k');
+  const db = JSON.parse(localStorage.getItem('exposing-demo-v1'));
+  const link = [...document.querySelectorAll('article.post .post-name')].find(a => {
+    const href = a.getAttribute('href');
+    if (href === '/u/sita_k') return false;
+    const u = db.users.find(x => `/u/${x.username}` === href);
+    return u && !u.private;
+  });
   const href = link.getAttribute('href');
   link.click();
   return href;
@@ -937,18 +946,32 @@ const followed = await d.evaluate(uid => {
 ok('desktop: follow toggle persists', followed === !profInfo.followOn, `now following=${followed}`);
 await d.evaluate(() => document.querySelector('.profile-actions .follow-btn').click());
 await sleep(300);
-await d.evaluate(() => document.querySelectorAll('.tabs .tab')[1].click());
+await clickBtnByText(d, '.tabs', '^media$');
 await sleep(400);
 ok('desktop: profile media tab shows grid', await d.evaluate(() => !!document.querySelector('.profile-media-grid') || !!document.querySelector('.profile-view .feed-empty')));
-await d.evaluate(() => document.querySelectorAll('.tabs .tab')[2].click());
+await clickBtnByText(d, '.tabs', '^about$');
 await sleep(400);
-ok('desktop: profile about tab shows cards', await d.evaluate(() => document.querySelectorAll('.about-card').length === 2));
-await d.evaluate(() => document.querySelector('.profile-stats button.profile-stat').click());
+const aboutInfo = await d.evaluate(() => ({
+  cards: document.querySelectorAll('.about-card').length,
+  bio: !!document.querySelector('.about-bio'),
+  follows: document.querySelectorAll('.about-follow').length,
+  more: !!document.querySelector('.about-more')
+}));
+ok('desktop: profile about tab shows bio + details + people they follow', aboutInfo.cards >= 2 && aboutInfo.bio && aboutInfo.follows >= 1 && aboutInfo.follows <= 5 && aboutInfo.more, JSON.stringify(aboutInfo));
+await d.evaluate(() => document.querySelector('.profile-stats a.profile-stat').click());
+await d.waitForSelector('.people-page', { timeout: 8000 }).catch(() => {});
 await sleep(400);
-ok('desktop: followers list opens people modal', await d.evaluate(() => !!document.querySelector('.people-modal')));
-await d.keyboard.press('Escape');
-await sleep(400);
-ok('desktop: Escape closes people modal', await d.evaluate(() => !document.querySelector('.people-modal')));
+const followersPage = await d.evaluate(() => ({
+  path: location.pathname,
+  rows: document.querySelectorAll('.people-page-list .people-row').length,
+  owner: !!document.querySelector('.people-page-owner'),
+  back: !!document.querySelector('.people-page .detail-header .icon-btn')
+}));
+ok('desktop: followers open on their own page with rows', followersPage.path.endsWith('/followers') && followersPage.rows > 0 && followersPage.owner && followersPage.back, JSON.stringify(followersPage));
+await shot(d, 'desktop-followers-page');
+await d.evaluate(() => document.querySelector('.people-page .detail-header .icon-btn').click());
+await sleep(500);
+ok('desktop: followers page back returns to profile', await d.evaluate(p => location.pathname === p, profTarget), profTarget);
 
 // Own profile + edit
 await goto(d, '/u/sita_k');
@@ -1107,15 +1130,21 @@ const listFile = await d.$('.listing-form input[type="file"]');
 await listFile.uploadFile(`${OUT}/test.png`);
 await d.waitForSelector('.listing-form-thumb img', { timeout: 5000 });
 await d.evaluate(() => document.querySelector('.listing-form button[type="submit"]').click());
-await d.waitForSelector('.listing-modal', { timeout: 5000 }).catch(() => {});
+await d.waitForSelector('.listing-page', { timeout: 8000 }).catch(() => {});
 await sleep(500);
 const created = await d.evaluate(() => {
   const db = JSON.parse(localStorage.getItem('exposing-demo-v1'));
   const l = db.listings.find(x => x.title === 'QA test listing');
-  return l && { uid: l.uid, price: l.price, media: l.media.length, status: l.status, mineTab: document.querySelectorAll('.market-tabs .tab')[1].classList.contains('active'), shown: document.querySelector('.listing-title')?.textContent };
+  return l && { id: l.id, uid: l.uid, price: l.price, media: l.media.length, status: l.status, path: location.pathname, shown: document.querySelector('.listing-title')?.textContent, sellerCard: !!document.querySelector('.listing-seller-card') };
 });
-ok('desktop: create listing stores + opens detail on My listings', created && created.uid === 'u1' && created.price === 1234 && created.media === 1 && created.status === 'active' && created.mineTab && created.shown === 'QA test listing', JSON.stringify(created));
+ok('desktop: create listing stores + opens its own page', created && created.uid === 'u1' && created.price === 1234 && created.media === 1 && created.status === 'active' && created.path === `/marketplace/${created.id}` && created.shown === 'QA test listing' && created.sellerCard, JSON.stringify(created));
 await shot(d, 'desktop-listing');
+const listingLayout = await d.evaluate(() => {
+  const media = document.querySelector('.listing-media').getBoundingClientRect();
+  const info = document.querySelector('.listing-info').getBoundingClientRect();
+  return { sideBySide: Math.abs(media.top - info.top) < 40 && media.right <= info.left + 2, actions: document.querySelectorAll('.listing-actions button').length };
+});
+ok('desktop: listing page shows image left, details right', listingLayout.sideBySide && listingLayout.actions >= 3, JSON.stringify(listingLayout));
 await clickBtnByText(d, '.listing-actions', 'sold');
 await sleep(450);
 ok('desktop: mark sold updates listing + flag', await d.evaluate(() => {
@@ -1125,18 +1154,262 @@ ok('desktop: mark sold updates listing + flag', await d.evaluate(() => {
 await clickBtnByText(d, '.listing-actions', 'relist');
 await sleep(450);
 ok('desktop: relist restores active', await d.evaluate(() => JSON.parse(localStorage.getItem('exposing-demo-v1')).listings.find(x => x.title === 'QA test listing').status === 'active'));
-await d.keyboard.press('Escape');
-await sleep(450);
-ok('desktop: Escape closes listing detail', await d.evaluate(() => !document.querySelector('.listing-modal')));
-await d.evaluate(() => document.querySelectorAll('.market-tabs .tab')[0].click());
-await sleep(400);
+// Edit listing: change price + add an image by URL
+await clickBtnByText(d, '.listing-actions', '^edit');
+await d.waitForSelector('.listing-form-modal', { timeout: 5000 }).catch(() => {});
+await sleep(300);
+await d.evaluate(() => {
+  const el = document.querySelector('.listing-form .field-row input[type="number"]');
+  const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+  setter.call(el, '4321');
+  el.dispatchEvent(new Event('input', { bubbles: true }));
+});
+await d.type('.listing-url-row input', 'https://images.unsplash.com/photo-1502920917128-1aa500764cbd?w=800&q=80');
+await d.evaluate(() => document.querySelector('.listing-url-row button').click());
+await sleep(300);
+await d.evaluate(() => document.querySelector('.listing-form button[type="submit"]').click());
+await sleep(600);
+const editedListing = await d.evaluate(() => {
+  const db = JSON.parse(localStorage.getItem('exposing-demo-v1'));
+  const l = db.listings.find(x => x.title === 'QA test listing');
+  return { price: l.price, media: l.media.length, urlImg: l.media.some(m => m.src.startsWith('https://images.unsplash.com')), thumbs: document.querySelectorAll('.listing-thumb').length, modalGone: !document.querySelector('.listing-form-modal') };
+});
+ok('desktop: edit listing updates price + URL image with thumbnails', editedListing.price === 4321 && editedListing.media === 2 && editedListing.urlImg && editedListing.thumbs === 2 && editedListing.modalGone, JSON.stringify(editedListing));
+await d.evaluate(() => document.querySelectorAll('.listing-thumb')[1].click());
+await sleep(300);
+ok('desktop: listing thumbnail switches main photo', await d.evaluate(() => document.querySelector('.listing-media-main img').src.includes('unsplash')));
+// Save + share on a seller's listing (buyer view)
+await goto(d, '/marketplace');
 await d.type('.market-search input', 'kayak');
 await sleep(450);
 await d.evaluate(() => document.querySelector('.market-card').click());
-await d.waitForSelector('.listing-modal', { timeout: 5000 }).catch(() => {});
+await d.waitForSelector('.listing-page', { timeout: 8000 }).catch(() => {});
+await sleep(500);
+await clickBtnByText(d, '.listing-actions', '^save$');
+await sleep(400);
+const savedListing = await d.evaluate(() => {
+  const db = JSON.parse(localStorage.getItem('exposing-demo-v1'));
+  const l = db.listings.find(x => x.title.toLowerCase().includes('kayak'));
+  return { saved: (db.listingSaves || []).some(s => s.uid === 'u1' && s.lid === l.id), on: !!document.querySelector('.listing-actions .saved-on') };
+});
+ok('desktop: Save button stores listing save', savedListing.saved && savedListing.on, JSON.stringify(savedListing));
+await clickBtnByText(d, '.listing-actions', '^share$');
+await sleep(400);
+ok('desktop: Share copies listing link (toast)', await d.evaluate(() => {
+  const t = document.querySelector('.toast');
+  return !!t && /link copied|\/marketplace\//i.test(t.textContent);
+}));
+// Seller card opens profile with their listings (already on the kayak listing)
+await d.evaluate(() => document.querySelector('.listing-seller-card').click());
+await d.waitForSelector('.profile-view', { timeout: 8000 }).catch(() => {});
+await sleep(500);
+const sellerProfile = await d.evaluate(() => ({
+  path: location.pathname,
+  listingsTab: [...document.querySelectorAll('.tabs .tab')].some(t => /listings/i.test(t.textContent))
+}));
+ok('desktop: seller card opens seller profile with Listings tab', sellerProfile.path === '/u/maya_g' && sellerProfile.listingsTab, JSON.stringify(sellerProfile));
+await clickBtnByText(d, '.tabs', '^listings$');
+await sleep(400);
+ok('desktop: seller profile lists their listings', await d.evaluate(() => document.querySelectorAll('.profile-listings .market-card').length >= 1));
+await d.evaluate(() => document.querySelector('.profile-listings .market-card').click());
+await d.waitForSelector('.listing-page', { timeout: 8000 }).catch(() => {});
+await sleep(400);
 await d.evaluate(() => document.querySelector('.listing-actions .promote-submit').click());
 await d.waitForSelector('.chat-view', { timeout: 8000 }).catch(() => {});
 ok('desktop: contact seller opens chat with seller', await d.evaluate(() => location.pathname === '/messages/u5'));
+
+// ================= PHASE 8: DESKTOP =================
+// Top bar layout: logo + search + theme left, reels/messages/notifications right
+await goto(d, '/');
+const topBar = await d.evaluate(() => {
+  const bar = document.querySelector('.topbar');
+  if (!bar) return null;
+  const r = bar.getBoundingClientRect();
+  const left = bar.querySelector('.topbar-left');
+  const right = bar.querySelector('.topbar-right');
+  const lr = left.getBoundingClientRect();
+  const rr = right.getBoundingClientRect();
+  return {
+    fixed: getComputedStyle(bar).position === 'fixed',
+    h: Math.round(r.height),
+    logo: !!left.querySelector('a[href="/"] svg, a[href="/"] img'),
+    search: !!left.querySelector('.topbar-search'),
+    theme: !!left.querySelector('button'),
+    rightLinks: [...right.querySelectorAll('a')].map(a => a.getAttribute('href')),
+    leftFirst: lr.left < 40,
+    rightLast: Math.abs(rr.right - window.innerWidth) < 40,
+    railAdmin: [...document.querySelectorAll('.rail a, .rail button')].some(x => /admin/i.test(x.textContent)),
+    composeBox: !!document.querySelector('.desktop-compose, .home-header-row')
+  };
+});
+ok('desktop: top bar has logo/search/theme left + reels/messages/notifications right', topBar && topBar.fixed && topBar.h <= 60 && topBar.logo && topBar.search && topBar.theme && JSON.stringify(topBar.rightLinks) === JSON.stringify(['/video', '/messages', '/notifications']) && topBar.leftFirst && topBar.rightLast, JSON.stringify(topBar));
+ok('desktop: Admin removed from left menu, old compose box gone', topBar && !topBar.railAdmin && !topBar.composeBox, JSON.stringify({ railAdmin: topBar?.railAdmin, composeBox: topBar?.composeBox }));
+await d.evaluate(() => document.querySelector('.rail .nav-item[href="/settings"], .rail button')?.click());
+const drawerAdmin = await d.evaluate(() => {
+  const drawer = document.querySelector('.drawer');
+  return { open: !!drawer && getComputedStyle(drawer).transform !== 'none' || !!document.querySelector('.drawer.open'), admin: [...document.querySelectorAll('.drawer a, .drawer button')].some(x => /admin/i.test(x.textContent)) };
+});
+ok('desktop: drawer has no Admin entry', !drawerAdmin.admin, JSON.stringify(drawerAdmin));
+await d.keyboard.press('Escape');
+await sleep(350);
+
+// Windowed feed: 10 first, prefetch extends before the end, no skeleton at rest
+await d.goto('http://localhost:3000/', { waitUntil: 'domcontentloaded', timeout: 45000 });
+await d.waitForSelector('article.post', { timeout: 20000 });
+await sleep(900);
+const feedInit = await d.evaluate(() => ({
+  rendered: document.querySelectorAll('article.post').length,
+  total: JSON.parse(localStorage.getItem('exposing-demo-v1')).posts.filter(p => p.status === 'live').length,
+  skeleton: !!document.querySelector('.feed-skeleton')
+}));
+ok('desktop: feed renders first 10 posts only', feedInit.rendered === Math.min(10, feedInit.total) && !feedInit.skeleton, JSON.stringify(feedInit));
+await d.evaluate(() => window.scrollTo({ top: document.documentElement.scrollHeight * 0.6, behavior: 'instant' }));
+await sleep(700);
+const feedMid = await d.evaluate(() => ({ rendered: document.querySelectorAll('article.post').length, skeleton: !!document.querySelector('.feed-skeleton') }));
+ok('desktop: feed prefetches next batch before the end (no skeleton at normal scroll)', feedMid.rendered > feedInit.rendered && !feedMid.skeleton, JSON.stringify(feedMid));
+await d.evaluate(() => window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'instant' }));
+await sleep(700);
+await d.evaluate(() => window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'instant' }));
+await sleep(700);
+const feedEnd = await d.evaluate(() => ({ rendered: document.querySelectorAll('article.post').length, skeleton: !!document.querySelector('.feed-skeleton'), sentinel: !!document.querySelector('.feed-sentinel') }));
+ok('desktop: feed reaches all posts without lingering skeleton', feedEnd.rendered >= Math.min(feedInit.total, 20) && !feedEnd.skeleton, JSON.stringify(feedEnd));
+await shot(d, 'desktop-feed-windowed');
+
+// Mutual follows appear in the inbox automatically
+await goto(d, '/messages');
+const inboxMutuals = await d.evaluate(() => {
+  const rows = [...document.querySelectorAll('.inbox-row')];
+  const hint = rows.filter(r => r.querySelector('.inbox-row-preview.hint'));
+  return { rows: rows.length, hints: hint.length, names: hint.map(r => r.querySelector('b').textContent) };
+});
+ok('desktop: mutual follows auto-listed in inbox with say-hi hint', inboxMutuals.hints >= 3 && inboxMutuals.names.includes('Anju Tamang') && inboxMutuals.names.includes('Himal Lens'), JSON.stringify(inboxMutuals));
+await shot(d, 'desktop-inbox-mutuals');
+
+// Follow requests: accept u6, decline an injected u7 request
+await goto(d, '/u/sita_k/followers');
+const reqBefore = await d.evaluate(() => ({
+  section: !!document.querySelector('.people-requests'),
+  requestRows: document.querySelectorAll('.people-row.request').length,
+  elon: [...document.querySelectorAll('.people-row.request')].some(r => r.textContent.includes('Elon Musk'))
+}));
+ok('desktop: own followers page shows pending follow requests', reqBefore.section && reqBefore.requestRows >= 1 && reqBefore.elon, JSON.stringify(reqBefore));
+await d.evaluate(() => [...document.querySelectorAll('.people-row.request')].find(r => r.textContent.includes('Elon Musk'))?.querySelector('.follow-btn').click());
+await sleep(500);
+const accepted = await d.evaluate(() => {
+  const db = JSON.parse(localStorage.getItem('exposing-demo-v1'));
+  return {
+    edge: db.follows.find(f => f.follower === 'u6' && f.following === 'u1')?.status,
+    inList: [...document.querySelectorAll('.people-page-list .people-row')].some(r => r.textContent.includes('Elon Musk')),
+    requestsLeft: document.querySelectorAll('.people-row.request').length
+  };
+});
+ok('desktop: Accept moves requester into followers + notifies', accepted.edge === 'accepted' && accepted.inList && accepted.requestsLeft === reqBefore.requestRows - 1, JSON.stringify(accepted));
+await d.evaluate(() => {
+  const db = JSON.parse(localStorage.getItem('exposing-demo-v1'));
+  db.follows.push({ follower: 'u7', following: 'u1', ts: Date.now(), status: 'pending' });
+  localStorage.setItem('exposing-demo-v1', JSON.stringify(db));
+});
+await goto(d, '/u/sita_k/followers');
+await d.evaluate(() => [...document.querySelectorAll('.people-row.request')].find(r => r.textContent.includes('Tech News'))?.querySelector('.ghost-btn').click());
+await sleep(500);
+ok('desktop: Decline removes the pending request', await d.evaluate(() => {
+  const db = JSON.parse(localStorage.getItem('exposing-demo-v1'));
+  return !db.follows.some(f => f.follower === 'u7' && f.following === 'u1') && ![...document.querySelectorAll('.people-row')].some(r => r.textContent.includes('Tech News'));
+}));
+
+// Private account: request to follow, locked posts, cancel request
+await goto(d, '/u/rojan_b');
+const priv0 = await d.evaluate(() => ({
+  badge: !!document.querySelector('.profile-private'),
+  btn: document.querySelector('.profile-actions .follow-btn')?.textContent,
+  locked: !!document.querySelector('.profile-locked'),
+  posts: document.querySelectorAll('.profile-posts article.post').length
+}));
+ok('desktop: private profile shows Private badge + locked posts', priv0.badge && /request to follow/i.test(priv0.btn || '') && priv0.locked && priv0.posts === 0, JSON.stringify(priv0));
+await d.evaluate(() => document.querySelector('.profile-actions .follow-btn').click());
+await sleep(500);
+const priv1 = await d.evaluate(() => {
+  const db = JSON.parse(localStorage.getItem('exposing-demo-v1'));
+  return {
+    edge: db.follows.find(f => f.follower === 'u1' && f.following === 'u4')?.status,
+    btn: document.querySelector('.profile-actions .follow-btn')?.textContent,
+    pendingCls: document.querySelector('.profile-actions .follow-btn')?.classList.contains('pending'),
+    notified: db.notifications.some(n => n.uid === 'u4' && /requested to follow/i.test(n.text))
+  };
+});
+ok('desktop: follow on private account sends pending request', priv1.edge === 'pending' && /requested/i.test(priv1.btn || '') && priv1.pendingCls && priv1.notified, JSON.stringify(priv1));
+await shot(d, 'desktop-private-requested');
+await d.evaluate(() => document.querySelector('.profile-actions .follow-btn').click());
+await sleep(450);
+ok('desktop: clicking Requested cancels the request', await d.evaluate(() => {
+  const db = JSON.parse(localStorage.getItem('exposing-demo-v1'));
+  return !db.follows.some(f => f.follower === 'u1' && f.following === 'u4') && /request to follow/i.test(document.querySelector('.profile-actions .follow-btn')?.textContent || '');
+}));
+
+// Followers pagination: inject 24 followers, window loads 10 then extends
+await d.evaluate(() => {
+  const db = JSON.parse(localStorage.getItem('exposing-demo-v1'));
+  for (let i = 1; i <= 24; i++) {
+    const id = `qa_f${i}`;
+    if (!db.users.some(u => u.id === id)) {
+      db.users.push({ id, email: `${id}@qa.test`, username: id, name: `QA Follower ${i}`, role: 'user', verified: false, emailVerified: true, susp: null, provider: 'email', dob: '1995-01-01', country: 'Nepal', twoStep: false, joined: Date.now(), coins: 0 });
+    }
+    if (!db.follows.some(f => f.follower === id && f.following === 'u1')) {
+      db.follows.push({ follower: id, following: 'u1', ts: Date.now() - i * 1000, status: 'accepted' });
+    }
+  }
+  localStorage.setItem('exposing-demo-v1', JSON.stringify(db));
+});
+await goto(d, '/u/sita_k/followers');
+const pag0 = await d.evaluate(() => document.querySelectorAll('.people-page-list .people-row').length);
+ok('desktop: followers page starts windowed at 10 (prefetch may extend)', pag0 >= 10 && pag0 <= 30, `${pag0} rows`);
+await d.evaluate(() => window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'instant' }));
+await sleep(700);
+await d.evaluate(() => window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'instant' }));
+await sleep(700);
+await d.evaluate(() => window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'instant' }));
+await sleep(700);
+const pag1 = await d.evaluate(() => ({ rows: document.querySelectorAll('.people-page-list .people-row').length, skeleton: !!document.querySelector('.people-skeleton') }));
+ok('desktop: followers page paginates to all rows on scroll', pag1.rows >= 30 && !pag1.skeleton, JSON.stringify(pag1));
+await d.evaluate(() => {
+  const db = JSON.parse(localStorage.getItem('exposing-demo-v1'));
+  db.users = db.users.filter(u => !u.id.startsWith('qa_f'));
+  db.follows = db.follows.filter(f => !f.follower.startsWith('qa_f'));
+  localStorage.setItem('exposing-demo-v1', JSON.stringify(db));
+});
+
+// Following page renders
+await goto(d, '/u/sita_k/following');
+ok('desktop: following page lists people with follow buttons', await d.evaluate(() => document.querySelectorAll('.people-page-list .people-row').length >= 5 && !!document.querySelector('.people-page-list .follow-btn')));
+
+// Own profile create button + legal footer placement
+await goto(d, '/u/sita_k');
+const ownActions = await d.evaluate(() => ({
+  edit: [...document.querySelectorAll('.profile-actions button')].some(b => /edit profile/i.test(b.textContent)),
+  create: [...document.querySelectorAll('.profile-actions button')].some(b => /^post$/i.test(b.textContent.trim())),
+  footer: !!document.querySelector('.site-footer .footer-links'),
+  footerLinks: document.querySelectorAll('.site-footer .footer-links a').length
+}));
+ok('desktop: own profile has Edit + Create post, legal footer on profile', ownActions.edit && ownActions.create && ownActions.footer && ownActions.footerLinks === 4, JSON.stringify(ownActions));
+await d.evaluate(() => [...document.querySelectorAll('.profile-actions button')].find(b => /^post$/i.test(b.textContent.trim()))?.click());
+await d.waitForSelector('.cp-overlay', { timeout: 5000 }).catch(() => {});
+ok('desktop: own-profile Post button opens composer', await d.evaluate(() => !!document.querySelector('.cp-overlay')));
+await d.keyboard.press('Escape');
+await sleep(400);
+await goto(d, '/');
+const homeFooter = await d.evaluate(() => !!document.querySelector('.site-footer'));
+await goto(d, '/marketplace');
+const marketFooter = await d.evaluate(() => !!document.querySelector('.site-footer'));
+ok('desktop: legal footer removed from home + marketplace', !homeFooter && !marketFooter, JSON.stringify({ homeFooter, marketFooter }));
+await goto(d, '/login');
+ok('desktop: login page links all four legal pages', await d.evaluate(() => document.querySelectorAll('.auth-legal a').length === 4));
+await goto(d, '/signup');
+ok('desktop: signup page links all four legal pages', await d.evaluate(() => document.querySelectorAll('.signup-legal-links a').length === 4));
+await d.evaluate(() => {
+  const db = JSON.parse(localStorage.getItem('exposing-demo-v1'));
+  db.meId = 'u1';
+  localStorage.setItem('exposing-demo-v1', JSON.stringify(db));
+});
 
 // Admin console (switch to admin account, inject one pending promo)
 await d.evaluate(() => {
@@ -1342,12 +1615,13 @@ ok('mobile: stack mosaic ~280px + 3 overlay', Math.abs(mMix.h - 280) <= 2 && mMi
 await m.tap('.post-fab');
 await m.waitForSelector('.chooser-overlay', { timeout: 5000 });
 await sleep(400);
-ok('mobile: Post + fab opens Post/Reels chooser', await m.evaluate(() => [...document.querySelectorAll('.chooser-options button b')].map(b => b.textContent).join(',') === 'Post,Reels'));
+ok('mobile: Post + fab opens Post/Reel chooser', await m.evaluate(() => [...document.querySelectorAll('.chooser-options button b')].map(b => b.textContent).join(',') === 'Post,Reel'));
 const mChooserCard = await m.evaluate(() => {
   const card = document.querySelector('.chooser-card');
   const r = card.getBoundingClientRect();
   const btns = [...document.querySelectorAll('.chooser-options button')].map(b => b.getBoundingClientRect());
-  return { h: Math.round(r.height), w: Math.round(r.width), sideBySide: Math.abs(btns[0].top - btns[1].top) < 2, onScreen: r.bottom <= window.innerHeight && r.top >= 0 && r.left >= 0 && r.right <= window.innerWidth, noLongCopy: !card.querySelector('.chooser-copy') };
+  const small = card.querySelector('.chooser-copy small');
+  return { h: Math.round(r.height), w: Math.round(r.width), sideBySide: Math.abs(btns[0].top - btns[1].top) < 2, onScreen: r.bottom <= window.innerHeight && r.top >= 0 && r.left >= 0 && r.right <= window.innerWidth, noLongCopy: !small || getComputedStyle(small).display === 'none' };
 });
 ok('mobile: chooser is a small compact card on screen', mChooserCard.h < 170 && mChooserCard.w <= 320 && mChooserCard.sideBySide && mChooserCard.onScreen && mChooserCard.noLongCopy, JSON.stringify(mChooserCard));
 await shot(m, 'mobile-chooser-entry');
@@ -1720,7 +1994,7 @@ const mChatKb = await m.evaluate(() => {
   const compose = document.querySelector('.chat-compose').getBoundingClientRect();
   return { viewH: Math.round(view.height), composeBottom: Math.round(compose.bottom), visible: compose.bottom <= 544 && compose.top > 0 };
 });
-ok('mobile: chat resizes for keyboard, compose stays reachable', mChatKb.viewH >= 380 && mChatKb.viewH <= 440 && mChatKb.visible, JSON.stringify(mChatKb));
+ok('mobile: chat resizes for keyboard, compose stays reachable', mChatKb.viewH >= 520 && mChatKb.viewH <= 560 && mChatKb.visible, JSON.stringify(mChatKb));
 await m.type('.chat-compose input', 'QA mobile hi');
 await m.evaluate(() => document.querySelector('.chat-send').click());
 await sleep(450);
@@ -1748,14 +2022,18 @@ const mMarket = await m.evaluate(() => ({
 ok('mobile: marketplace two-column grid fits', mMarket.cards >= 5 && mMarket.cols === 2 && mMarket.noOverflow, JSON.stringify(mMarket));
 await shot(m, 'mobile-market');
 await m.evaluate(() => document.querySelector('.market-card').click());
-await sleep(600);
+await m.waitForSelector('.listing-page', { timeout: 8000 }).catch(() => {});
+await sleep(500);
 const mListing = await m.evaluate(() => {
-  const modal = document.querySelector('.listing-modal').getBoundingClientRect();
-  return { fits: modal.width <= window.innerWidth && modal.left >= 0, actions: document.querySelectorAll('.listing-actions button').length };
+  const media = document.querySelector('.listing-media').getBoundingClientRect();
+  const info = document.querySelector('.listing-info').getBoundingClientRect();
+  return { fits: media.width <= window.innerWidth && media.left >= 0, stacked: info.top >= media.bottom - 2, actions: document.querySelectorAll('.listing-actions button').length, noOverflow: document.documentElement.scrollWidth <= window.innerWidth + 1 };
 });
-ok('mobile: listing detail fits viewport with actions', mListing.fits && mListing.actions >= 1, JSON.stringify(mListing));
+ok('mobile: listing page stacks image above details with actions', mListing.fits && mListing.stacked && mListing.actions >= 3 && mListing.noOverflow, JSON.stringify(mListing));
+await shot(m, 'mobile-listing');
 await goBack(m);
-ok('mobile: phone-back closes listing detail', await m.evaluate(() => !document.querySelector('.listing-modal') && location.pathname === '/marketplace'));
+await sleep(400);
+ok('mobile: phone-back returns to marketplace', await m.evaluate(() => location.pathname === '/marketplace'));
 
 await goto(m, '/wallet');
 ok('mobile: wallet renders balance without overflow', await m.evaluate(() => !!document.querySelector('.wallet-balance') && document.documentElement.scrollWidth <= window.innerWidth + 1));
@@ -1811,6 +2089,78 @@ await shot(m, 'mobile-notfound');
 await m.tap('.notfound-primary');
 await m.waitForSelector('article.post', { timeout: 15000 });
 ok('mobile: 404 Back to Home lands on feed', await m.evaluate(() => location.pathname === '/'));
+
+// ================= PHASE 8: MOBILE =================
+// Chat screen: only the back arrow, no top bar / bottom nav / FAB / footer
+await goto(m, '/messages/u2');
+const mChatChrome = await m.evaluate(() => ({
+  top: !!document.querySelector('.m-top'),
+  nav: !!document.querySelector('.mobile-nav'),
+  fab: !!document.querySelector('.post-fab'),
+  footer: !!document.querySelector('.site-footer'),
+  back: !!document.querySelector('.chat-header .icon-btn'),
+  compose: !!document.querySelector('.chat-compose')
+}));
+ok('mobile: chat hides top bar, bottom nav, FAB and footer, keeps back arrow', !mChatChrome.top && !mChatChrome.nav && !mChatChrome.fab && !mChatChrome.footer && mChatChrome.back && mChatChrome.compose, JSON.stringify(mChatChrome));
+await shot(m, 'mobile-chat-clean');
+await m.tap('.chat-header .icon-btn');
+await m.waitForFunction(() => location.pathname === '/messages', { timeout: 6000 }).catch(() => {});
+await sleep(500);
+ok('mobile: chat back arrow returns to inbox with chrome restored', await m.evaluate(() => location.pathname === '/messages' && !!document.querySelector('.m-top') && !!document.querySelector('.mobile-nav')));
+const mInboxHints = await m.evaluate(() => document.querySelectorAll('.inbox-row-preview.hint').length);
+ok('mobile: mutual follows auto-listed in inbox', mInboxHints >= 3, `${mInboxHints} hints`);
+await shot(m, 'mobile-inbox-mutuals');
+
+// FAB home-only
+await goto(m, '/');
+const fabHome = await m.evaluate(() => !!document.querySelector('.post-fab'));
+await goto(m, '/u/himal_lens');
+const fabProfile = await m.evaluate(() => !!document.querySelector('.post-fab'));
+await goto(m, '/marketplace');
+const fabMarket = await m.evaluate(() => !!document.querySelector('.post-fab'));
+ok('mobile: Post FAB on home only', fabHome && !fabProfile && !fabMarket, JSON.stringify({ fabHome, fabProfile, fabMarket }));
+
+// Followers page + requests on phone
+await m.evaluate(() => {
+  const db = JSON.parse(localStorage.getItem('exposing-demo-v1'));
+  db.follows = db.follows.filter(f => !(f.following === 'u1' && (f.follower === 'u8' || f.follower === 'u11')));
+  db.follows.push({ follower: 'u8', following: 'u1', ts: Date.now(), status: 'pending' });
+  db.follows.push({ follower: 'u11', following: 'u1', ts: Date.now(), status: 'pending' });
+  localStorage.setItem('exposing-demo-v1', JSON.stringify(db));
+});
+await goto(m, '/u/sita_k/followers');
+const mPeople = await m.evaluate(() => ({
+  rows: document.querySelectorAll('.people-page-list .people-row').length,
+  requests: document.querySelectorAll('.people-row.request').length,
+  noOverflow: document.documentElement.scrollWidth <= window.innerWidth + 1
+}));
+ok('mobile: followers page lists people + pending requests', mPeople.rows >= 5 && mPeople.requests === 2 && mPeople.noOverflow, JSON.stringify(mPeople));
+await shot(m, 'mobile-followers');
+await m.evaluate(() => [...document.querySelectorAll('.people-row.request')].find(r => r.textContent.includes('Kathmandu Daily'))?.querySelector('.follow-btn').click());
+await sleep(500);
+ok('mobile: Accept request from phone', await m.evaluate(() => {
+  const db = JSON.parse(localStorage.getItem('exposing-demo-v1'));
+  return db.follows.find(f => f.follower === 'u8' && f.following === 'u1')?.status === 'accepted' && document.querySelectorAll('.people-row.request').length === 1;
+}));
+await m.evaluate(() => [...document.querySelectorAll('.people-row.request')].find(r => r.textContent.includes('Goal Nepal'))?.querySelector('.ghost-btn').click());
+await sleep(500);
+ok('mobile: Decline request from phone', await m.evaluate(() => {
+  const db = JSON.parse(localStorage.getItem('exposing-demo-v1'));
+  return !db.follows.some(f => f.follower === 'u11' && f.following === 'u1') && document.querySelectorAll('.people-row.request').length === 0;
+}));
+
+// Own profile create on phone
+await goto(m, '/u/sita_k');
+const mOwn = await m.evaluate(() => ({
+  create: [...document.querySelectorAll('.profile-actions button')].some(b => /^post$/i.test(b.textContent.trim())),
+  footerLinks: document.querySelectorAll('.site-footer .footer-links a').length
+}));
+ok('mobile: own profile has Create post + legal footer', mOwn.create && mOwn.footerLinks === 4, JSON.stringify(mOwn));
+await m.evaluate(() => [...document.querySelectorAll('.profile-actions button')].find(b => /^post$/i.test(b.textContent.trim()))?.click());
+await m.waitForSelector('.cp-overlay', { timeout: 5000 }).catch(() => {});
+ok('mobile: own-profile Post opens composer', await m.evaluate(() => !!document.querySelector('.cp-overlay')));
+await m.keyboard.press('Escape');
+await sleep(400);
 
 await m.close();
 await browser.close();
