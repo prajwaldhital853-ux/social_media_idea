@@ -39,6 +39,9 @@ export function useInbox(enabled = true): { conversations: Conversation[]; inbox
         const current = last.get(otherId);
         if (!current || m.ts >= current.ts) last.set(otherId, m);
       }
+      // Mutuals you have never written to are the tail of the inbox, and only
+      // once the real threads have arrived: before that they would sit on top
+      // of a list that is about to appear above them.
       const talked = new Set(inbox.ids);
       const rows = inbox.ids
         .map(id => {
@@ -47,12 +50,14 @@ export function useInbox(enabled = true): { conversations: Conversation[]; inbox
           return other ? { other, last: message, unread: message?.unread ?? 0 } : null;
         })
         .filter((c): c is Conversation => !!c);
-      const fresh = mutualIds()
-        .filter(id => !talked.has(id))
-        .map(id => db.users.find(u => u.id === id))
-        .filter((u): u is User => !!u)
-        .map(other => ({ other, last: null, unread: 0 }))
-        .sort((a, b) => a.other.name.localeCompare(b.other.name));
+      const fresh = inbox.loaded
+        ? mutualIds()
+            .filter(id => !talked.has(id))
+            .map(id => db.users.find(u => u.id === id))
+            .filter((u): u is User => !!u)
+            .map(other => ({ other, last: null, unread: 0 }))
+            .sort((a, b) => a.other.name.localeCompare(b.other.name))
+        : [];
       return [...rows, ...fresh];
     }
     const byOther = new Map<string, Message[]>();

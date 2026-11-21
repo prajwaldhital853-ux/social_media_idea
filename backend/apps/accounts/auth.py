@@ -53,17 +53,20 @@ def hash_code(code):
 
 
 def set_auth_cookies(response, user, device_id=''):
+    # Render and Vercel both speak https to the browser, so the cookies have to
+    # carry Secure; local dev runs DEBUG=1 over http and must keep working.
+    secure = not settings.DEBUG
     response.set_cookie(
         'exposing_access', issue_access(user),
-        max_age=int(ACCESS_TTL.total_seconds()), httponly=True, samesite='Lax', path='/',
+        max_age=int(ACCESS_TTL.total_seconds()), httponly=True, samesite='Lax', path='/', secure=secure,
     )
     response.set_cookie(
         'exposing_refresh', issue_refresh(user, device_id),
-        max_age=int(REFRESH_TTL.total_seconds()), httponly=True, samesite='Lax', path='/api/auth',
+        max_age=int(REFRESH_TTL.total_seconds()), httponly=True, samesite='Lax', path='/api/auth', secure=secure,
     )
     response.set_cookie(
         'exposing_csrf', uuid.uuid4().hex,
-        max_age=int(REFRESH_TTL.total_seconds()), httponly=False, samesite='Lax', path='/',
+        max_age=int(REFRESH_TTL.total_seconds()), httponly=False, samesite='Lax', path='/', secure=secure,
     )
     return response
 

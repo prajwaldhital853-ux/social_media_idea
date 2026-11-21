@@ -171,8 +171,11 @@ export function useList(key: string, def: ListDef, query?: Query, enabled = true
   );
 
   useEffect(() => {
-    if (enabled && !snapshot(sk).loaded) void loadAt(sk, defRef.current, queryRef.current);
-  }, [sk, enabled]);
+    // Keyed on `loaded`, not just on mount: a list that is dropped while this
+    // screen is open (marking a thread read forgets the inbox) has to come back
+    // by itself, or the screen keeps showing a list nobody will ever refill.
+    if (enabled && !state.loaded) void loadAt(sk, defRef.current, queryRef.current);
+  }, [sk, enabled, state.loaded]);
 
   return {
     ids: state.ids,

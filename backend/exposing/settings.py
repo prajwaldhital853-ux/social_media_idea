@@ -8,7 +8,10 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 
 def _env_list(name, default=''):
-    raw = os.environ.get(name, default)
+    # `or`, not a default argument: Render stores a key left blank in the UI as
+    # an empty string, and an empty ALLOWED_HOSTS answers 400 DisallowedHost to
+    # every request once DEBUG is off.
+    raw = os.environ.get(name) or default
     return [item.strip() for item in raw.split(',') if item.strip()]
 
 
@@ -44,9 +47,12 @@ def _database():
     }
 
 
-SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'django-insecure-dev-only-change-me')
+SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY') or 'django-insecure-dev-only-change-me'
 DEBUG = os.environ.get('DJANGO_DEBUG', '1') == '1'
-ALLOWED_HOSTS = _env_list('DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1')
+# The deployed host is handed out by Render only after the service exists, so
+# the wildcard is the default rather than something every deploy must remember.
+# Django's host matcher wants the leading-dot form; "*.onrender.com" matches nothing.
+ALLOWED_HOSTS = _env_list('DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1,.onrender.com')
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -140,7 +146,7 @@ REST_FRAMEWORK = {
     },
 }
 
-REDIS_URL = os.environ.get('REDIS_URL', 'redis://127.0.0.1:6379/0')
+REDIS_URL = os.environ.get('REDIS_URL') or 'redis://127.0.0.1:6379/0'
 
 
 def _redis_up():
@@ -175,7 +181,12 @@ CELERY_BEAT_SCHEDULE = {
     },
 }
 
-EMAIL_BACKEND = os.environ.get('EMAIL_BACKEND', 'django.core.mail.backends.console.EmailBackend')
+# send_mail reads Django's own DEFAULT_EMAIL_BACKEND global; a project-named
+# EMAIL_BACKEND setting would be silently ignored and every OTP would knock on
+# localhost:25. Console keeps the code in the service log until real SMTP lands.
+# `or`, not a default argument: Render saves an empty key as '', and Django
+# raises ImproperlyConfigured the moment an import path is blank.
+DEFAULT_EMAIL_BACKEND = os.environ.get('EMAIL_BACKEND') or 'django.core.mail.backends.console.EmailBackend'
 GOOGLE_CLIENT_ID = os.environ.get('GOOGLE_CLIENT_ID', '')
 
 SECURE_CONTENT_TYPE_NOSNIFF = True
@@ -198,8 +209,8 @@ CORS_ALLOWED_ORIGINS = _env_list('CORS_ALLOWED_ORIGINS', 'http://localhost:3000,
 CORS_ALLOW_CREDENTIALS = True
 CSRF_TRUSTED_ORIGINS = _env_list('DJANGO_CSRF_TRUSTED_ORIGINS')
 
-EXPOSING_REPORT_THRESHOLD = int(os.environ.get('EXPOSING_REPORT_THRESHOLD', '3'))
-EXPOSING_RATE_LIMITS = os.environ.get('EXPOSING_RATE_LIMITS', '1') == '1'
+EXPOSING_REPORT_THRESHOLD = int(os.environ.get('EXPOSING_REPORT_THRESHOLD') or '3')
+EXPOSING_RATE_LIMITS = (os.environ.get('EXPOSING_RATE_LIMITS') or '1') == '1'
 # Demo escape hatch: shows the one-time login code in the UI when no mail
 # provider is configured. Off by default; never enable for a real launch.
 EXPOSING_OTP_VISIBLE = os.environ.get('EXPOSING_OTP_VISIBLE', '0') == '1'
@@ -219,6 +230,8 @@ MEDIA_URL = 'media/'
 # A hosted filesystem is disposable; a mounted disk keeps what people upload
 # between deploys. Point MEDIA_DISK at a Render disk mount path when you have one.
 MEDIA_ROOT = Path(os.environ.get('MEDIA_DISK') or '') if os.environ.get('MEDIA_DISK') else BASE_DIR / 'media'
+# Off only when something in front of Django (a CDN, an nginx) owns /media.
+SERVE_MEDIA = (os.environ.get('DJANGO_SERVE_MEDIA') or '1') == '1'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 import sys

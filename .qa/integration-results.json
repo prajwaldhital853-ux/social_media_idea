@@ -13,17 +13,17 @@
     {
       "name": "desktop: the feed renders a keyset page of real posts",
       "pass": true,
-      "detail": "screen 10, page 11"
+      "detail": "screen 9, page 11"
     },
     {
       "name": "desktop: scrolling the feed walks cursors, not windows of the cache",
       "pass": true,
-      "detail": "11 -> 88"
+      "detail": "11 -> 21"
     },
     {
       "name": "desktop: reels come from the video keyset stream",
       "pass": true,
-      "detail": "screen 5 slides / 5 videos, api 5 posts"
+      "detail": "screen 10 slides / 10 videos, api 10 posts"
     },
     {
       "name": "desktop: the reel counter reads the server page",
@@ -33,22 +33,22 @@
     {
       "name": "desktop: the oldest-first cursor walks the feed backwards",
       "pass": true,
-      "detail": "oldest head 2026-11-20T14:35:13.538932Z vs newest page tail 2026-11-21T05:16:58.375088Z, ascending true"
+      "detail": "oldest head 2026-07-24T07:59:17.646723Z vs newest page tail 2026-11-21T08:27:24.092705Z, ascending true"
     },
     {
       "name": "desktop: a deep-linked post hydrates by id",
       "pass": true,
-      "detail": "Sita Karki@sita18h agoWeekend in Pokhara: a little clip from"
+      "detail": "Nabin Karki@nabin24 JulThe hills behind Namche do not care t"
     },
     {
       "name": "desktop: a comment is written to /api/comments/ and rendered from it",
       "pass": true,
-      "detail": "{\"id\":\"32\",\"text\":true}"
+      "detail": "{\"id\":\"6064\",\"text\":true}"
     },
     {
       "name": "desktop: the comment survives a server-side read back",
       "pass": true,
-      "detail": "10 top-level rows"
+      "detail": "2 top-level rows"
     },
     {
       "name": "desktop: the comment is still there after a reload",
@@ -58,32 +58,37 @@
     {
       "name": "desktop: sorting by oldest reads the ascending page",
       "pass": true,
-      "detail": "screen MGMaya GurungThat water color is unreal. vs That water color is unreal."
+      "detail": "screen Sita Karkimobile-mwqb2nbtjust nowReplyDe vs mobile-mwqb2nbt"
     },
     {
       "name": "desktop: the marketplace grid renders the page the server chose",
+      "pass": false,
+      "detail": "screen 20, api 10, has_more true"
+    },
+    {
+      "name": "desktop: the marketplace grid walks its cursor",
       "pass": true,
-      "detail": "screen 9, api 9, has_more false"
+      "detail": "20 -> 32"
     },
     {
       "name": "desktop: a deep-linked listing hydrates by id",
       "pass": true,
-      "detail": "Trekking pole pair, barely used vs Trekking pole pair, barely used"
+      "detail": "Solar lantern with USB port vs Solar lantern with USB port"
     },
     {
       "name": "desktop: the listing page knows its seller",
       "pass": true,
-      "detail": "ATArjun Thapa@arjun1 Listings"
+      "detail": "SKSita Karki@sita1 Listings"
     },
     {
       "name": "desktop: profile totals come from the profile row",
       "pass": true,
-      "detail": "10 Posts | 2 Followers | 1 Following vs followers=2"
+      "detail": "40 Posts | 19 Followers | 8 Following vs followers=19"
     },
     {
       "name": "desktop: the followers list is a keyset page of people",
-      "pass": true,
-      "detail": "screen 2, api 2"
+      "pass": false,
+      "detail": "screen 19, api 10"
     },
     {
       "name": "desktop: people search hits /api/users/",
@@ -98,12 +103,12 @@
     {
       "name": "desktop: the top bar badges match the unread counters",
       "pass": true,
-      "detail": "screen [\"2\"] vs api [2]"
+      "detail": "screen [\"9+\",\"9+\"] vs api [12,12]"
     },
     {
       "name": "desktop: a chat partner exists for the thread test",
       "pass": true,
-      "detail": "maya"
+      "detail": "arjun"
     },
     {
       "name": "desktop: twelve messages land on the thread endpoint",
@@ -112,8 +117,8 @@
     },
     {
       "name": "desktop: the inbox leads with the conversation just written",
-      "pass": true,
-      "detail": "MGMaya GurungYou follow each other — say hi."
+      "pass": false,
+      "detail": "Binita ThapaYou follow each other — say hi."
     },
     {
       "name": "desktop: the thread opens on the newest keyset page",
@@ -132,23 +137,23 @@
     },
     {
       "name": "desktop: opening a thread marks it read on the server",
-      "pass": true,
-      "detail": "unread messages 0 -> 0"
+      "pass": false,
+      "detail": "unread messages 12 -> 12"
     },
     {
       "name": "desktop: notifications render the server page",
-      "pass": true,
-      "detail": "2 vs 2"
+      "pass": false,
+      "detail": "20 vs 10"
     },
     {
       "name": "desktop: saved posts come from /api/saved/posts/",
-      "pass": true,
-      "detail": "1 vs 1"
+      "pass": false,
+      "detail": "1 vs 2"
     },
     {
       "name": "mobile: the feed pages with cursors on a phone",
       "pass": true,
-      "detail": "10 -> 88"
+      "detail": "10 -> 71"
     },
     {
       "name": "mobile: the thread loads older messages on a phone",
@@ -163,10 +168,8 @@
     {
       "name": "mobile: reels stream on a phone",
       "pass": true,
-      "detail": "5"
+      "detail": "10"
     }
   ],
-  "errors": [
-    "console: Failed to load resource: net::ERR_NAME_NOT_RESOLVED @ https://cdn.example.com/clips/phewa.mp4"
-  ]
+  "errors": []
 }

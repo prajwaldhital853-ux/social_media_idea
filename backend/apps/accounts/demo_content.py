@@ -649,3 +649,5 @@ COUNTS = [12, 45, 90, 150, 250, 300, 450, 600, 1200, 2400, 3200, 3800, 4100]
 # The post every QA suite navigates to: video first, then photos. Kept
 # byte-identical to the caption the browser tests look for.
 MIXED_POST_TEXT = 'Weekend in Pokhara: a little clip from Phewa, then the rest of the roll.'
+# The single-video reel the feed autoplay checks look for.
+RAIN_POST_TEXT = 'Rain over New Road again. Traffic is a river.'

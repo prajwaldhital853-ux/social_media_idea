@@ -1,7 +1,12 @@
+import os
+import shutil
+import tempfile
 from decimal import Decimal
 
-from django.test import TestCase, override_settings
+from django.http import Http404
+from django.test import RequestFactory, TestCase, override_settings
 
+from apps.common.media import serve_media
 from apps.common.testutils import auth_client, make_user
 from apps.follows.models import Follow
 from apps.marketplace.models import Listing
@@ -104,3 +109,64 @@ class MetaConfigTests(TestCase):
         self.assertTrue(resp.data['features']['googleLogin'])
         self.assertFalse(resp.data['features']['googleDemo'])
         self.assertEqual(resp.data['googleClientId'], 'apps-client-id')
+
+
+class MediaServingTests(TestCase):
+    """Reels are seeked by tapping, which only works if /media answers Range
+    requests. Tests run with DEBUG off, so these also prove a deployed build
+    serves its own media rather than 404ing on every clip."""
+
+    def setUp(self):
+        self.root = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.root)
+        os.makedirs(os.path.join(self.root, 'demo'))
+        self.body = os.urandom(1000)
+        with open(os.path.join(self.root, 'demo', 'clip.mp4'), 'wb') as handle:
+            handle.write(self.body)
+
+    def get(self, path, **extra):
+        with override_settings(MEDIA_ROOT=self.root):
+            response = self.client.get(path, **extra)
+        # Reading a streaming response to the end is also what closes its file,
+        # which matters on Windows where the temp folder cannot go away while a
+        # handle is still open.
+        if getattr(response, 'streaming', False):
+            response.payload = b''.join(response.streaming_content)
+        else:
+            response.payload = response.content
+        return response
+
+    def test_serves_the_whole_file(self):
+        response = self.get('/media/demo/clip.mp4')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Accept-Ranges'], 'bytes')
+        self.assertEqual(response.payload, self.body)
+
+    def test_serves_a_byte_range(self):
+        response = self.get('/media/demo/clip.mp4', HTTP_RANGE='bytes=400-499')
+        self.assertEqual(response.status_code, 206)
+        self.assertEqual(response['Content-Range'], 'bytes 400-499/1000')
+        self.assertEqual(response.payload, self.body[400:500])
+
+    def test_serves_a_trailing_range(self):
+        response = self.get('/media/demo/clip.mp4', HTTP_RANGE='bytes=-20')
+        self.assertEqual(response.status_code, 206)
+        self.assertEqual(response.payload, self.body[-20:])
+
+    def test_rejects_a_range_past_the_end(self):
+        response = self.get('/media/demo/clip.mp4', HTTP_RANGE='bytes=9000-')
+        self.assertEqual(response.status_code, 416)
+        self.assertEqual(response['Content-Range'], 'bytes */1000')
+
+    def test_ignores_media_that_is_not_there(self):
+        self.assertEqual(self.get('/media/demo/nope.mp4').status_code, 404)
+
+    def test_refuses_to_serve_a_type_a_browser_would_run(self):
+        with open(os.path.join(self.root, 'demo', 'page.html'), 'w') as handle:
+            handle.write('<script>alert(1)</script>')
+        self.assertEqual(self.get('/media/demo/page.html').status_code, 404)
+
+    def test_refuses_to_walk_outside_the_media_root(self):
+        with override_settings(MEDIA_ROOT=self.root):
+            with self.assertRaises(Http404):
+                serve_media(RequestFactory().get('/media/x'), '../../exposing/settings.py')

@@ -1,13 +1,13 @@
-"""Build (or rebuild) the demo dataset the shipped app opens on.
+"""Build (or rebuild) the demo dataset the app opens on.
 
-    manage.py seed_demo --purge          wipe the junk and lay a fresh showcase
-    manage.py seed_demo                  only seeds when the showcase is missing
+    manage.py seed_demo --purge      wipe the junk and lay a fresh showcase
+    manage.py seed_demo              seeds only when the showcase is missing
 
-The showcase is ~35 named Nepali members, 500 photo posts (single and multi
-image), 110 reels whose clips are cached first-party, and the follow, comment,
-reaction, message, listing, wallet and moderation rows that put those posts
-inside a real network. One ``random.Random`` drives every choice, so a rebuild
-produces the same demo instead of a new one to re-test.
+The showcase is 36 named Nepali members, 500 photo posts (single and multi
+image), 110 reels whose clips are cached first-party under MEDIA_ROOT/demo, and
+the follow, comment, reaction, message, listing, wallet and moderation rows that
+put those posts inside a real network. One ``random.Random`` drives every choice,
+so a rebuild produces the same demo instead of a new one to re-test.
 """
 
 import random
@@ -19,13 +19,13 @@ from pathlib import Path
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand
-from django.db import transaction
+from django.db import connection, transaction
 from django.utils import timezone
 
 from apps.accounts.demo_content import (
-    BIOS, CHAT_CLOSERS, CHAT_OPENERS, CHAT_SCRIPTS, CLIPS, COMMENT_LINES, CORE_PEOPLE,
-    COUNTS, CATEGORIES, LISTINGS, MIXED_POST_TEXT, MOODS, PEOPLE, PHOTO_ASIDES,
-    PHOTO_LINES, PLACES, REELS_ASIDES, REEL_LINES, REPLY_LINES,
+    BIOS, CATEGORIES, CHAT_CLOSERS, CHAT_OPENERS, CHAT_SCRIPTS, CLIPS, COMMENT_LINES,
+    CORE_PEOPLE, COUNTS, LISTINGS, MIXED_POST_TEXT, MOODS, PEOPLE, PHOTO_ASIDES,
+    PHOTO_LINES, PLACES, RAIN_POST_TEXT, REEL_ASIDES, REEL_LINES, REPLY_LINES,
 )
 from apps.comments.models import Comment
 from apps.follows.models import Follow
@@ -49,10 +49,11 @@ KEEP = {'sita', 'maya', 'arjun', 'priya'}
 WINDOW_DAYS = 120
 # Activity younger than this still shows in the bell, so it has to be real.
 RECENT_DAYS = 25
+REACTION_KINDS = ['like', 'like', 'like', 'love', 'love', 'haha', 'wow', 'sad']
 
 
 def mp4_duration(path):
-    """Seconds from an mp4's mvhd box; the reels feed shows a duration."""
+    """Seconds from an mp4's mvhd box, because the reels feed shows a duration."""
     data = Path(path).read_bytes()
     start = data.find(b'mvhd')
     if start < 0:
@@ -81,6 +82,9 @@ class Command(BaseCommand):
         self.rng = random.Random(SEED)
         self.now = timezone.now().replace(microsecond=0)
         self.decks = {}
+        # The ledger is written by wallets() and promotions(), then stamped and
+        # totalled once at the end, because balances are read off the ledger.
+        self.ledger, self.ledger_stamps = [], []
 
         if options['purge'] or Post.objects.count() < self.photos:
             self.purge()
@@ -99,20 +103,21 @@ class Command(BaseCommand):
             self.wallets()
             self.messages()
             self.promotions()
+            self.settle()
             self.reports()
             self.audit()
             self.notifications()
         self.report()
 
-    # ------------------------------ helpers -------------------------------
+    # ------------------------------- helpers ------------------------------
     def fill(self, line):
         return line.replace('{place}', self.rng.choice(PLACES)).replace('{count}', str(self.rng.choice(COUNTS)))
 
     def deck(self, key, lines, asides=()):
-        """Walk a shuffled deck, then recycle it with a distinct second line.
+        """Walk a shuffled deck, then recycle it with a distinct second sentence.
 
-        Captions repeat far less often than the bank is long, which is what
-        keeps 500 posts from reading like one template.
+        Captions repeat far less often than the bank is long, which is what keeps
+        500 posts from reading like one template.
         """
         state = self.decks.setdefault(key, {'order': None, 'i': 0})
         if state['order'] is None:
@@ -125,116 +130,136 @@ class Command(BaseCommand):
             base = f'{base} {asides[(i * 7) % len(asides)]}'
         return self.fill(base)
 
+    def pick(self, values, weights=None):
+        if weights is None:
+            return self.rng.choice(values)
+        return self.rng.choices(values, weights=weights, k=1)[0]
+
     def age(self, index, total):
-        """Recent-weighted timestamp so page one looks like today, not stock months old."""
+        """Recent-weighted timestamp, so page one looks like today."""
         share = (index + self.rng.random()) / total
-        days = (share ** 2.2) * WINDOW_DAYS + self.rng.random() * 0.4
-        return self.now - timedelta(days=days, hours=self.rng.random() * 6)
+        days = (share ** 2.2) * WINDOW_DAYS
+        return self.now - timedelta(days=days, hours=self.rng.random() * 8)
 
     def later(self, ts, limit_hours=72):
-        """A reply/reaction timestamp somewhere after ``ts`` but never in the future."""
-        delta = timedelta(hours=self.rng.random() * limit_hours) * self.rng.random()
+        """A timestamp somewhere after ``ts`` and never in the future."""
+        delta = timedelta(hours=limit_hours * self.rng.random() ** 2)
         return min(ts + delta, self.now - timedelta(minutes=self.rng.randint(1, 90)))
 
     def others(self, user):
         return [u for u in self.users if u.id != user.id]
 
-    def weighted_authors(self):
-        pool = []
-        for user in self.users:
-            verified = self.profiles[user.id].verified
-            pool.extend([user] * (3 if verified else 1))
-        return pool
+    def create_stamped(self, model, rows, stamps, batch=500):
+        """Insert in one query with the timestamps the demo needs.
 
-    # ------------------------------- purge --------------------------------
+        ``auto_now_add`` wins at insert time, so its clock is switched off for
+        this one insert and the real dates go in with the rows. Rewriting them
+        afterwards is not an option: the wallet ledger refuses UPDATE at the
+        database level, and the same stamping path has to work for every table.
+        """
+        field = model._meta.get_field('created_at')
+        for row, ts in zip(rows, stamps):
+            row.created_at = ts
+        field.auto_now_add = False
+        try:
+            model.objects.bulk_create(rows, batch_size=batch)
+        finally:
+            field.auto_now_add = True
+        return rows
+
+    # -------------------------------- purge -------------------------------
     def purge(self):
         """Drop every generated row and every test member.
 
         There is no production data to protect: this database is the demo. The
-        four members the browser suites sign in as are kept, reset clean.
+        four members the browser suites sign in as are kept, and reset clean.
+
+        The ledger's append-only rule is enforced by a database trigger, and a
+        cascade from user deletion reaches it, so the trigger is muted for the
+        length of this one transaction and put back before anything else runs.
         """
-        for model in (SavedListing, SavedPost, ListingImage, Listing, CoinRequest, Ledger,
-                      Promotion, Report, AuditLog, Notification, Message, Conversation,
-                      Reaction, Comment, PostMedia, Post, Follow, Wallet):
-            model.objects.all().delete()
-        junk = User.objects.exclude(username__in=KEEP)
-        self.stdout.write(f'Purged {junk.count()} test members and all generated content.')
-        junk.delete()
-        Profile.objects.all().delete()
-        for user in User.objects.all():
-            user.failed_attempts = 0
-            user.locked_until = None
-            user.suspended_until = None
-            user.suspend_reason = ''
-            user.save()
+        with transaction.atomic():
+            with connection.cursor() as cursor:
+                cursor.execute('ALTER TABLE wallet_transaction DISABLE TRIGGER wallet_ledger_no_update')
+                cursor.execute('ALTER TABLE wallet_transaction DISABLE TRIGGER wallet_ledger_no_delete')
+                for model in (SavedListing, SavedPost, ListingImage, Listing, CoinRequest, Ledger,
+                              Promotion, Report, AuditLog, Notification, Message, Conversation,
+                              Reaction, Comment, PostMedia, Post, Follow, Wallet):
+                    model.objects.all().delete()
+                junk = User.objects.exclude(username__in=KEEP)
+                count = junk.count()
+                junk.delete()
+                Profile.objects.all().delete()
+                User.objects.update(failed_attempts=0, locked_until=None, suspended_until=None,
+                                    suspend_reason='')
+                cursor.execute('ALTER TABLE wallet_transaction ENABLE TRIGGER wallet_ledger_no_update')
+                cursor.execute('ALTER TABLE wallet_transaction ENABLE TRIGGER wallet_ledger_no_delete')
+        self.stdout.write(f'Purged {count} test members and all generated content.')
 
     # ------------------------------- people -------------------------------
     def people(self):
-        roster = [(u, f, l, c, p, av, v, pr, True) for u, f, l, c, p, av, v, pr in CORE_PEOPLE]
-        roster += [(u, f, l, c, p, av, v, pr, False) for u, f, l, c, p, av, v, pr in PEOPLE]
+        roster = [tuple(item) + (True,) for item in CORE_PEOPLE]
+        roster += [tuple(item) + (False,) for item in PEOPLE]
         self.users, self.profiles, self.by_username = [], {}, {}
         for index, (username, first, last, city, province, portrait, verified, private, core) in enumerate(roster):
-            email = f'{username}@demo.test'
             user = User.objects.filter(username=username).first() or User(username=username)
             user.first_name, user.last_name = first, last
             user.city, user.country = city, 'Nepal'
-            user.provider, user.email_verified, user.email = 'email', True, email
+            user.email, user.provider, user.email_verified = f'{username}@demo.test', 'email', True
             user.date_of_birth = datetime(1980 + (index * 7) % 22, (index % 12) + 1, (index % 27) + 1).date()
+            if username == 'sita':
+                user.is_superuser = user.is_staff = True
             if not user.password:
                 user.set_password(DEMO_PASSWORD)
             user.save()
-            profile = Profile.objects.create(
-                user=user, display_name=f'{first} {last}', bio=BIOS[index % len(BIOS)],
-                avatar_url=f'https://randomuser.me/api/portraits/{portrait}.jpg',
-                cover_url=f'https://picsum.photos/seed/expo-{username}-cover/1600/500',
-                location=city, province=province, verified=verified, is_private=private,
-                two_step=not core,
-            )
+            # Signing a user up creates their profile row, so this writes into it
+            # rather than inserting a second one.
+            Profile.objects.update_or_create(
+                user=user,
+                defaults={
+                    'display_name': f'{first} {last}', 'bio': BIOS[index % len(BIOS)],
+                    'avatar_url': f'https://randomuser.me/api/portraits/{portrait}.jpg',
+                    'cover_url': f'https://picsum.photos/seed/expo-{username}-cover/1600/500',
+                    'location': city, 'province': province, 'verified': verified,
+                    'is_private': private,
+                })
+            profile = Profile.objects.get(user=user)
             self.users.append(user)
             self.profiles[user.id] = profile
             self.by_username[username] = user
         self.sita = self.by_username['sita']
+        self.pool = self.weighted_authors()
         self.stdout.write(f'Seeded {len(self.users)} members.')
 
-    def name_of(self, user):
-        return self.profiles[user.id].display_name or user.username
+    def weighted_authors(self):
+        pool = []
+        for user in self.users:
+            pool.extend([user] * (3 if self.profiles[user.id].verified else 1))
+        return pool
 
-    # ------------------------------- graph --------------------------------
+    # -------------------------------- graph -------------------------------
     def follows(self):
-        pairs, pending = set(), 0
-        popular = self.users + [u for u in self.users if self.profiles[u.id].verified]
-        rows = []
+        pairs, pending, rows, stamps = set(), 0, [], []
         for follower in self.users:
             for _ in range(self.rng.randint(6, 18)):
-                followee = self.rng.choice(popular)
+                followee = self.rng.choice(self.pool)
                 if followee.id == follower.id or (follower.id, followee.id) in pairs:
                     continue
                 pairs.add((follower.id, followee.id))
-                private = self.profiles[followee.id].is_private
-                status = 'pending' if private and pending < 6 and self.rng.random() < 0.5 else 'accepted'
-                if status == 'pending':
-                    pending += 1
-                ts = self.now - timedelta(days=self.rng.random() * WINDOW_DAYS)
+                status = 'accepted'
+                if self.profiles[followee.id].is_private and pending < 6 and self.rng.random() < 0.5:
+                    status, pending = 'pending', pending + 1
                 rows.append(Follow(follower_id=follower.id, followee_id=followee.id, status=status))
-        Follow.objects.bulk_create(rows)
-        Follow.objects.filter(pk__in=[r.pk for r in rows]).update(created_at=self.now - timedelta(days=WINDOW_DAYS))
-        for row in rows:
-            if row.status == 'accepted':
-                self.shift(Follow, row, lambda r: self.now - timedelta(days=self.rng.random() * WINDOW_DAYS))
+                stamps.append(self.now - timedelta(days=self.rng.random() * WINDOW_DAYS))
+        self.create_stamped(Follow, rows, stamps)
         self.followers = {}
         for row in rows:
             if row.status == 'accepted':
                 self.followers[row.followee_id] = self.followers.get(row.followee_id, 0) + 1
 
-    def shift(self, model, row, when):
-        """Give one already-inserted row its real timestamp (auto_now_add wins at insert)."""
-        ts = when(row)
-        model.objects.filter(pk=row.pk).update(created_at=ts)
-        row.created_at = ts
-        return ts
-
     # -------------------------------- posts -------------------------------
     def ensure_clips(self):
+        """Cache the demo reels first-party so no clip depends on a third host."""
         folder = Path(settings.MEDIA_ROOT) / 'demo'
         folder.mkdir(parents=True, exist_ok=True)
         clips = []
@@ -249,431 +274,472 @@ class Command(BaseCommand):
 
     def posts(self):
         self.clips = self.ensure_clips()
-        self.post_media = []
-        self.all_posts, self.photo_posts, self.reel_posts = [], [], []
-        authors = self.weighted_authors()
+        rows, stamps, shapes = [], [], []
 
-        # The mixed video+photos post first, and dated newest: the browser
-        # suites open it straight off the first feed page.
-        mixed = self.new_post(self.sita, MIXED_POST_TEXT, 'Pokhara', 'happy', 'Travel',
-                              self.now - timedelta(minutes=40))
-        url, duration = self.clips[0]
-        self.post_media.append(PostMedia(post_id=mixed.id, position=0, kind='video', url=url, duration=duration))
-        for position in (1, 2, 3):
-            self.post_media.append(PostMedia(
-                post_id=mixed.id, position=position, kind='image',
-                url=f'https://picsum.photos/seed/expo-pokhara-{position}/1600/1000', duration=None))
-        self.mixed = mixed
-        self.all_posts.append(mixed)
+        def build(author, text, place, mood, category, ts, followers_only=False, public=False):
+            hidden = self.rng.random() < 0.07
+            private = self.profiles[author.id].is_private
+            rows.append(Post(
+                author=author, text=text, place=place, mood=mood, category=category,
+                audience='public' if public else ('followers' if private or followers_only or hidden else 'public')))
+            stamps.append(ts)
+            return len(rows) - 1
 
-        shapes = [(1, 0.45), (2, 0.30), (3, 0.17), (4, 0.08)]
+        # The mixed video+photos post goes in first and dated newest: the browser
+        # suites open it straight off the first feed page. Same for the single
+        # video reel the feed autoplay checks look for.
+        mixed_at = self.now - timedelta(minutes=40)
+        self.mixed_index = build(self.sita, MIXED_POST_TEXT, 'Pokhara', 'happy', 'Travel',
+                                 mixed_at, public=True)
+        self.rain_index = build(self.by_username['arjun'], RAIN_POST_TEXT, 'Kathmandu', 'tired',
+                                'City', self.now - timedelta(minutes=70), public=True)
+
+        counts = [(1, 0.45), (2, 0.30), (3, 0.17), (4, 0.08)]
         for index in range(self.photos):
-            author = self.rng.choice(authors)
-            ts = self.age(index, self.photos)
-            post = self.new_post(
-                author, self.deck('photo', PHOTO_LINES, PHOTO_ASIDES),
-                self.rng.choice(PLACES) if self.rng.random() < 0.55 else '',
-                self.rng.choice(MOODS) if self.rng.random() < 0.45 else '',
-                self.rng.choice(CATEGORIES), ts)
-            roll, total, count = self.rng.random(), 0.0, 1
-            for size, weight in shapes:
+            roll, total, images = self.rng.random(), 0.0, 1
+            for size, weight in counts:
                 total += weight
                 if roll <= total:
-                    count = size
+                    images = size
                     break
-            for position in range(count):
-                ratio = self.rng.choice(['1080/1350', '1600/900', '1080/1080', '1400/1000'])
-                self.post_media.append(PostMedia(
-                    post_id=post.id, position=position, kind='image',
-                    url=f'https://picsum.photos/seed/expo-{index:03d}-{position}/{ratio}', duration=None))
-            self.photo_posts.append(post)
-            self.all_posts.append(post)
-
+            position = build(
+                self.rng.choice(self.pool), self.deck('photo', PHOTO_LINES, PHOTO_ASIDES),
+                self.rng.choice(PLACES) if self.rng.random() < 0.55 else '',
+                self.rng.choice(MOODS) if self.rng.random() < 0.45 else '',
+                self.rng.choice(CATEGORIES), self.age(index, self.photos))
+            shapes.append((position, images, index))
         for index in range(self.reels):
-            author = self.rng.choice(authors)
-            post = self.new_post(
-                author, self.deck('reel', REEL_LINES, REELS_ASIDES),
+            position = build(
+                self.rng.choice(self.pool), self.deck('reel', REEL_LINES, REEL_ASIDES),
                 self.rng.choice(PLACES) if self.rng.random() < 0.7 else '', '',
                 self.rng.choice(['Travel', 'Nature', 'Music', 'City', 'Food', 'Sports']),
                 self.age(index, self.reels))
-            url, duration = self.clips[index % len(self.clips)]
-            self.post_media.append(PostMedia(post_id=post.id, position=0, kind='video', url=url, duration=duration))
-            self.reel_posts.append(post)
-            self.all_posts.append(post)
+            shapes.append((position, 0, -1 - index))
 
-        PostMedia.objects.bulk_create(self.post_media, batch_size=500)
+        self.create_stamped(Post, rows, stamps)
+        self.all_posts = rows
+        self.posts_by_id = {post.id: post for post in rows}
+
+        media = []
+        url, duration = self.clips[0]
+        media.append(PostMedia(post=rows[self.mixed_index], position=0, kind='video', url=url, duration=duration))
+        # Eight items on the showcase post: the mosaic then shows five cells and
+        # a +3, which is the layout a reviewer of a carousel wants to see.
+        for position in range(1, 8):
+            media.append(PostMedia(post=rows[self.mixed_index], position=position, kind='image',
+                                   url=f'https://picsum.photos/seed/expo-pokhara-{position}/1600/1000'))
+        clip, seconds = self.clips[1]
+        media.append(PostMedia(post=rows[self.rain_index], position=0, kind='video', url=clip, duration=seconds))
+        for position, images, index in shapes:
+            post = rows[position]
+            if index < 0:
+                clip, seconds = self.clips[(-index - 1) % len(self.clips)]
+                media.append(PostMedia(post=post, position=0, kind='video', url=clip, duration=seconds))
+                continue
+            for slot in range(images):
+                ratio = self.rng.choice(['1080/1350', '1600/900', '1080/1080', '1400/1000'])
+                media.append(PostMedia(post=post, position=slot, kind='image',
+                                       url=f'https://picsum.photos/seed/expo-{index:03d}-{slot}/{ratio}'))
+        PostMedia.objects.bulk_create(media, batch_size=500)
         self.media_by_post = {}
-        for item in self.post_media:
+        for item in media:
             self.media_by_post.setdefault(item.post_id, []).append(item)
-        # A couple of posts taken down by moderation, for the admin queue to act on.
-        self.hidden_posts = self.rng.sample(self.all_posts[1:], 4)
-        Post.objects.filter(pk__in=[p.id for p in self.hidden_posts]).update(status='hidden')
-        self.post_ids = [p.id for p in self.all_posts]
+        self.mixed = rows[self.mixed_index]
+        self.photo_posts = [rows[p] for p, images, index in shapes if images]
+        self.reel_posts = [rows[p] for p, images, index in shapes if not images]
+        # The two anchor posts stay live: moderation takes its samples from the rest.
+        self.hidden_posts = self.rng.sample(self.all_posts[2:], 4)
+        Post.objects.filter(pk__in=[p.pk for p in self.hidden_posts]).update(status='hidden')
 
-    def new_post(self, author, text, place, mood, category, ts):
-        private = self.profiles[author.id].is_private
-        post = Post.objects.create(
-            author=author, text=text, place=place, mood=mood, category=category,
-            audience='followers' if private or self.rng.random() < 0.07 else 'public')
-        Post.objects.filter(pk=post.pk).update(created_at=ts, updated_at=ts)
-        post.created_at = ts
-        return post
-
-    # ------------------------------ comments ------------------------------
+    # ------------------------------- comments -----------------------------
     def comments(self):
-        rows = []
+        tops, top_stamps = [], []
         for post in self.all_posts:
-            for _ in range(self.pick([0, 1, 2, 3, 4, 6, 8], [0.18, 0.22, 0.2, 0.15, 0.11, 0.08, 0.06])):
-                author = self.rng.choice(self.others(post.author))
-                ts = self.later(post.created_at, 96)
+            for _ in range(self.pick([0, 1, 2, 3, 4, 6, 8], [0.18, 0.22, 0.20, 0.15, 0.11, 0.08, 0.06])):
                 media = self.media_by_post.get(post.id) or []
                 index = self.rng.randrange(len(media)) if len(media) > 1 and self.rng.random() < 0.25 else None
-                rows.append(Comment(post=post, author=author, media_index=index,
-                                    text=self.deck('comment', COMMENT_LINES), created_at=ts))
-            # Replies live under one of that post's own comments.
-        Comment.objects.bulk_create(rows, batch_size=500)
-        top_level = [r for r in rows]
-        replies = []
-        for row in top_level:
-            if self.rng.random() > 0.18:
-                continue
-            parent_author = row.author
+                ts = self.later(post.created_at, 96)
+                tops.append(Comment(
+                    post=post, author=self.rng.choice(self.others(post.author)), media_index=index,
+                    text=self.deck('comment', COMMENT_LINES, PHOTO_ASIDES), created_at=ts))
+                top_stamps.append(ts)
+        # Written before the replies: a reply can only point at a parent that has
+        # an id, and bulk inserts refuse unsaved rows.
+        self.create_stamped(Comment, tops, top_stamps)
+
+        replies, reply_stamps = [], []
+        for parent in [row for row in tops if self.rng.random() < 0.18]:
+            post = self.posts_by_id[parent.post_id]
             for _ in range(self.rng.randint(1, 2)):
-                author = self.sita if self.rng.random() < 0.3 and parent_author != self.sita else self.rng.choice(self.others(parent_author))
-                ts = self.later(row.created_at, 48)
-                replies.append(Comment(post_id=row.post_id, author=author, parent=row, media_index=row.media_index,
+                # A third of replies are the post's own author answering
+                # underneath; nobody replies to themselves.
+                author = post.author if (post.author_id != parent.author_id
+                                         and self.rng.random() < 0.35) \
+                    else self.rng.choice(self.others(parent.author))
+                ts = self.later(parent.created_at, 48)
+                replies.append(Comment(post=post, author=author, parent=parent,
                                        text=self.deck('reply', REPLY_LINES), created_at=ts))
-        Comment.objects.bulk_create(replies, batch_size=500)
-        self.comments = rows + replies
-        for row in self.comments:
-            self.shift(Comment, row, lambda r: r.created_at)
+                reply_stamps.append(ts)
+        self.create_stamped(Comment, replies, reply_stamps)
+
+        rows = tops + replies
+        self.comments = rows
+        self.comments_by_id = {row.pk: row for row in rows}
         counts = {}
-        for row in self.comments:
+        for row in rows:
             counts[row.post_id] = counts.get(row.post_id, 0) + 1
         for post in self.all_posts:
             post.comment_count = counts.get(post.id, 0)
         Post.objects.bulk_update(self.all_posts, ['comment_count'], batch_size=400)
 
-    def pick(self, values, weights):
-        return self.rng.choices(values, weights=weights, k=1)[0]
-
-    # ------------------------------ reactions -----------------------------
+    # ------------------------------- reactions ----------------------------
     def reactions(self):
-        KINDS = ['like', 'like', 'like', 'love', 'love', 'haha', 'wow', 'sad']
-        seen = set()
-        rows = []
+        seen, rows, stamps = set(), [], []
+        post_likes = {}
+        media_likes, comment_likes = {}, {}
+
+        def react(user, target_type, target_id, kind, ts):
+            key = (user.id, target_type, str(target_id))
+            if key in seen:
+                return False
+            seen.add(key)
+            rows.append(Reaction(user=user, target_type=target_type, target_id=str(target_id),
+                                 kind=kind, created_at=ts))
+            stamps.append(ts)
+            return True
+
         for post in self.all_posts:
             pool = self.others(post.author)
-            reach = min(len(pool), 3 + self.followers.get(post.author.id, 0))
-            for reactor in self.rng.sample(pool, self.rng.randint(2, max(3, min(reach, 14)))):
-                key = (reactor.id, 'post', str(post.id))
-                if key in seen:
-                    continue
-                seen.add(key)
-                rows.append(Reaction(user=reactor, target_type='post', target_id=str(post.id),
-                                     kind=self.rng.choice(KINDS), created_at=self.later(post.created_at, 240)))
-            post.like_count = sum(1 for r in rows if r.target_type == 'post' and r.target_id == str(post.id))
+            reach = max(2, min(len(pool), 2 + self.followers.get(post.author.id, 0)))
+            for reactor in self.rng.sample(pool, self.rng.randint(2, reach)):
+                if react(reactor, 'post', post.id, self.rng.choice(REACTION_KINDS),
+                         self.later(post.created_at, 240)):
+                    post_likes[post.id] = post_likes.get(post.id, 0) + 1
             for item in (self.media_by_post.get(post.id) or []):
                 if item.kind != 'image' or self.rng.random() > 0.3:
                     continue
                 for reactor in self.rng.sample(pool, self.rng.randint(1, min(3, len(pool)))):
-                    key = (reactor.id, 'media', f'{post.id}#m{item.position}')
-                    if key in seen:
-                        continue
-                    seen.add(key)
-                    rows.append(Reaction(user=reactor, target_type='media', target_id=f'{post.id}#m{item.position}',
-                                         kind=self.rng.choice(KINDS), created_at=self.later(post.created_at, 240)))
-                    item.like_count += 1
+                    if react(reactor, 'media', f'{post.id}#m{item.position}',
+                             self.rng.choice(REACTION_KINDS), self.later(post.created_at, 240)):
+                        media_likes[item.pk] = media_likes.get(item.pk, 0) + 1
         for comment in self.rng.sample(self.comments, min(len(self.comments), 420)):
-            for reactor in self.rng.sample(self.others(comment.author), self.rng.randint(1, 4)):
-                key = (reactor.id, 'comment', str(comment.id))
-                if key in seen:
-                    continue
-                seen.add(key)
-                rows.append(Reaction(user=reactor, target_type='comment', target_id=str(comment.id),
-                                     kind='like', created_at=self.later(comment.created_at, 120)))
-                comment.like_count += 1
-        Reaction.objects.bulk_create(rows, batch_size=1000)
-        for row in rows:
-            self.shift(Reaction, row, lambda r: r.created_at)
-        Post.objects.bulk_update(self.all_posts, ['like_count'], batch_size=400)
-        PostMedia.objects.bulk_update(self.post_media, ['like_count'], batch_size=400)
-        Comment.objects.bulk_update(self.comments, ['like_count'], batch_size=400)
-        self.reactions = rows
+            pool = self.others(comment.author)
+            for reactor in self.rng.sample(pool, self.rng.randint(1, min(4, len(pool)))):
+                if react(reactor, 'comment', comment.id, 'like', self.later(comment.created_at, 120)):
+                    comment_likes[comment.id] = comment_likes.get(comment.id, 0) + 1
 
-    # -------------------------------- saves -------------------------------
+        self.create_stamped(Reaction, rows, stamps)
+        self.reaction_rows = rows
+        for post in self.all_posts:
+            post.like_count = post_likes.get(post.id, 0)
+        Post.objects.bulk_update(self.all_posts, ['like_count'], batch_size=400)
+        for item in self.media_by_post.values():
+            for media in item:
+                media.like_count = media_likes.get(media.pk, 0)
+        PostMedia.objects.bulk_update([m for group in self.media_by_post.values() for m in group],
+                                      ['like_count'], batch_size=400)
+        for comment in self.comments:
+            comment.like_count = comment_likes.get(comment.pk, 0)
+        Comment.objects.bulk_update(self.comments, ['like_count'], batch_size=400)
+
+    # --------------------------------- saves ------------------------------
     def saves(self):
-        rows = []
         recent = [p for p in self.all_posts if p.created_at > self.now - timedelta(days=60)]
+        rows, stamps = [], []
         for user in self.users:
-            for post in self.rng.sample(recent, self.rng.randint(2, 7)):
+            for post in self.rng.sample(recent, self.rng.randint(2, min(7, len(recent)))):
                 if post.author_id != user.id:
                     rows.append(SavedPost(user=user, post=post))
-        SavedPost.objects.bulk_create(rows, batch_size=400)
-        for row in rows:
-            self.shift(SavedPost, row, lambda r: self.later(self.now - timedelta(days=30), 1))
-        self.saved = rows
+                    stamps.append(self.later(post.created_at, 240))
+        self.create_stamped(SavedPost, rows, stamps)
 
-    # ------------------------------- listings -----------------------------
+    # -------------------------------- listings ----------------------------
     def listings(self):
-        self.listing_rows = []
-        sellers = self.weighted_authors()
+        rows, stamps = [], []
         for index, (title, price, category, condition, description) in enumerate(LISTINGS):
-            seller = self.rng.choice(sellers)
+            seller = self.rng.choice(self.pool)
             city = self.profiles[seller.id].location or seller.city
-            row = Listing(
-                seller=seller, title=self.fill(title),
-                description=self.fill(description),
-                price=Decimal(price) * (1 + (self.rng.randint(-12, 15) / 100)),
+            rows.append(Listing(
+                seller=seller, title=self.fill(title), description=self.fill(description),
+                price=(Decimal(price) * (1 + Decimal(self.rng.randint(-12, 15)) / Decimal(100))).quantize(Decimal('0.01')),
                 category=category, condition=condition, location=city,
                 image_url=f'https://picsum.photos/seed/expo-listing-{index:02d}/1200/900',
-                status='active' if index % 11 else 'sold')
-            row.created_at = self.age(index, len(LISTINGS))
-            self.listing_rows.append(row)
-        Listing.objects.bulk_create(self.listing_rows, batch_size=200)
+                status='active' if index % 11 else 'sold'))
+            stamps.append(self.age(index, len(LISTINGS)))
+        self.create_stamped(Listing, rows, stamps)
+        self.listing_rows = rows
         images = []
-        for row in self.listing_rows:
+        for row in rows:
             for position in range(self.rng.randint(1, 3)):
                 images.append(ListingImage(listing=row, position=position,
                                            url=f'https://picsum.photos/seed/expo-listing-{row.pk}-{position}/1200/900'))
-        ListingImage.objects.bulk_create(images, batch_size=200)
-        for row in self.listing_rows:
-            self.shift(Listing, row, lambda r: r.created_at)
+        ListingImage.objects.bulk_create(images, batch_size=300)
 
     # -------------------------------- wallets -----------------------------
+    def ledger_row(self, wallet, kind, amount, note, ts):
+        """Queue one append-only ledger entry and track the running balance.
+
+        Balances are only ever the sum of the ledger, so a spend can be checked
+        against funds already on the wallet before it is written.
+        """
+        amount = Decimal(amount).quantize(Decimal('0.01'))
+        self.totals[wallet.id] = self.totals.get(wallet.id, Decimal('0')) + (
+            amount if kind == 'credit' else -amount)
+        self.ledger.append(Ledger(wallet=wallet, kind=kind, amount=amount, note=note[:200]))
+        self.ledger_stamps.append(ts)
+
     def wallets(self):
+        # Signing a user up creates their wallet, and a purge may have removed it,
+        # so every member is matched to one rather than given a second row.
         self.wallets_by_user = {}
-        rows = []
+        self.totals = {}
+        # Wallet zero is the welcome credit, so remember when each one landed.
+        self.credits = {}
+
         for user in self.users:
-            wallet = Wallet.objects.create(user=user, balance=Decimal('1000.00'))
+            wallet, _ = Wallet.objects.get_or_create(user=user, defaults={'currency': 'NPR'})
             self.wallets_by_user[user.id] = wallet
-            rows.append(Ledger(wallet=wallet, kind='credit', amount=Decimal('1000.00'), note='Welcome credit'))
+            ts = self.now - timedelta(days=self.rng.randint(30, 120))
+            self.ledger_row(wallet, 'credit', Decimal('1000.00'), 'Welcome credit', ts)
+            self.credits[wallet.id] = ts
+
         self.coin_requests = []
         for user in self.rng.sample(self.others(self.sita), 4):
             coins = self.pick([500, 1000, 2500], [0.5, 0.3, 0.2])
-            status = self.pick(['approved', 'approved', 'pending', 'rejected'], [0.45, 0.2, 0.2, 0.15])
-            request = CoinRequest(user=user, coins=coins, amount=Decimal(coins) * Decimal('1.25'),
+            status = self.pick(['approved', 'pending', 'rejected'], [0.6, 0.2, 0.2])
+            ts = self.now - timedelta(days=self.rng.randint(1, 40))
+            request = CoinRequest(user=user, coins=coins,
+                                  amount=(Decimal(coins) * Decimal('1.25')).quantize(Decimal('0.01')),
                                   method=self.pick(['qr', 'esewa', 'khalti'], [0.5, 0.3, 0.2]),
-                                  reference=f'DEMO{self.rng.randint(100000, 999999)}', status=status)
-            request.save()
+                                  reference=f'DEMO{self.rng.randint(100000, 999999)}',
+                                  status=status, created_at=ts,
+                                  reviewed_at=self.later(ts, 24) if status != 'pending' else None)
             self.coin_requests.append(request)
             if status == 'approved':
-                rows.append(Ledger(wallet=self.wallets_by_user[user.id], kind='credit',
-                                   amount=request.amount, note=f'{coins} coins purchased'))
-        Ledger.objects.bulk_create(rows, batch_size=200)
-        for row in rows:
-            self.shift(Ledger, row, lambda r: self.now - timedelta(days=self.rng.random() * 90))
-        balances = {}
-        for row in rows:
-            delta = row.amount if row.kind == 'credit' else -row.amount
-            balances[row.wallet_id] = balances.get(row.wallet_id, Decimal('0')) + delta
-        wallets = list(self.wallets_by_user.values())
-        for wallet in wallets:
-            wallet.balance = balances.get(wallet.id, Decimal('1000.00'))
-        Wallet.objects.bulk_update(wallets, ['balance'], batch_size=200)
+                self.ledger_row(self.wallets_by_user[user.id], 'credit', request.amount,
+                                f'{coins} coins purchased', self.later(ts, 24))
+        CoinRequest.objects.bulk_create(self.coin_requests, batch_size=50)
 
-    # ------------------------------- messages -----------------------------
+    def settle(self):
+        """Stamp the ledger once, then write the totals it implies."""
+        self.create_stamped(Ledger, self.ledger, self.ledger_stamps)
+        for user, wallet in self.wallets_by_user.items():
+            wallet.balance = self.totals.get(wallet.id, Decimal('0'))
+        Wallet.objects.bulk_update(list(self.wallets_by_user.values()), ['balance'], batch_size=100)
+
+    # -------------------------------- messages ----------------------------
     def messages(self):
-        pairs = [(self.sita, self.by_username[n]) for n in ('maya', 'arjun', 'priya', 'anish', 'deepa', 'bibek', 'mingma')]
+        partners = [self.by_username[name] for name in ('maya', 'arjun', 'priya', 'anish', 'deepa', 'bibek', 'mingma')]
+        pairs = [(self.sita, partner) for partner in partners]
+        linked = {(self.sita.id, p.id) for p in partners}
         while len(pairs) < 30:
             a, b = self.rng.sample(self.users, 2)
-            if (a.id, b.id) not in [(x.id, y.id) for x, y in pairs] and (b.id, a.id) not in [(x.id, y.id) for x, y in pairs]:
-                pairs.append((a, b))
-        links, conversations = [], []
-        for a, b in pairs:
-            conversation = Conversation.objects.create(last_message_at=None)
-            Conversation.participants.through.objects.bulk_create(
-                [Conversation.participants.through(conversation_id=conversation.pk, user_id=u.id) for u in (a, b)],
-                ignore_conflicts=True)
-            conversations.append((conversation, a, b))
+            if a.id == b.id or (a.id, b.id) in linked or (b.id, a.id) in linked:
+                continue
+            linked.add((a.id, b.id))
+            pairs.append((a, b))
+
         self.messages = []
-        for order, (conversation, a, b) in enumerate(conversations):
-            lines = self.rng.sample(CHAT_SCRIPTS, self.rng.randint(3, 8))
+        conversations = []
+        for order, (a, b) in enumerate(pairs):
+            conversation = Conversation.objects.create()
+            Conversation.participants.through.objects.bulk_create(
+                [Conversation.participants.through(conversation_id=conversation.pk, user_id=user.id)
+                 for user in (a, b)], ignore_conflicts=True)
             script = [self.rng.choice(CHAT_OPENERS)]
-            for opener, reply in lines:
+            for opener, reply in self.rng.sample(CHAT_SCRIPTS, self.rng.randint(3, 8)):
                 script += [opener, reply]
             script.append(self.rng.choice(CHAT_CLOSERS))
+
             span = timedelta(days=self.rng.random() * 18 + 1)
             start = self.now - span
-            newest = start
-            rows = []
+            rows, stamps = [], []
             for index, text in enumerate(script):
                 sender = a if index % 2 == 0 else b
-                ts = start + (span * (index / max(1, len(script) - 1))) + timedelta(minutes=self.rng.randint(0, 25))
-                ts = min(ts, self.now - timedelta(minutes=2))
-                newest = max(newest, ts)
-                incoming = sender is b
-                unread_tail = order < 7 and incoming and index > len(script) - 4
+                ts = min(start + span * (index / max(1, len(script) - 1)) + timedelta(minutes=self.rng.randint(0, 20)),
+                         self.now - timedelta(minutes=2))
+                # A few of sita's threads keep unread incoming mail so the badge means something.
+                unread = order < 7 and sender is b and index > len(script) - 4
                 rows.append(Message(conversation=conversation, sender=sender, text=self.fill(text),
-                                    created_at=ts, read_at=None if unread_tail else ts))
-                self.messages.append((conversation, sender, ts, unread_tail))
-            Message.objects.bulk_create(rows, batch_size=100)
-            for row in rows:
-                self.shift(Message, row, lambda r: r.created_at)
-            conversation.last_message_at = newest
-            conversation.newest = rows[-1]
-            conversation.tail_unread = any(r.read_at is None for r in rows)
-            conversation.sender = rows[-1].sender
-        Conversation.objects.bulk_update(conversations := [c for c, _, _ in conversations],
-                                         ['last_message_at'], batch_size=100)
-        self.conversations = conversations
+                                    read_at=None if unread else ts))
+                stamps.append(ts)
+                self.messages.append((conversation, sender, ts, unread))
+            self.create_stamped(Message, rows, stamps)
+            conversation.last_message_at = stamps[-1]
+            conversations.append(conversation)
+        Conversation.objects.bulk_update(conversations, ['last_message_at'], batch_size=100)
 
-    # ------------------------------ promotions ----------------------------
+    # ------------------------------- promotions ---------------------------
     def promotions(self):
-        self.promos = []
-        targets = [('post', self.mixed, self.sita), ('post', self.rng.choice(self.photo_posts), self.sita)]
-        for author in self.rng.sample(self.others(self.sita), 4):
-            mine = [p for p in self.all_posts if p.author_id == author.id]
-            if mine:
-                targets.append(('post' if self.rng.random() < 0.7 else 'listing',
-                                self.rng.choice(mine) if self.rng.random() < 0.7 else self.rng.choice(self.listing_rows),
-                                author))
+        targets = [('post', self.mixed), ('post', self.rng.choice(self.photo_posts))]
+        for owner in self.rng.sample(self.others(self.sita), 4):
+            mine = [p for p in self.all_posts if p.author_id == owner.id]
+            listings = [l for l in self.listing_rows if l.seller_id == owner.id]
+            if mine or listings:
+                kind, row = ('post', self.rng.choice(mine)) if (mine and not listings or self.rng.random() < 0.7) \
+                    else ('listing', self.rng.choice(listings))
+                targets.append((kind, row, owner))
         statuses = ['active', 'active', 'active', 'paused', 'ended', 'active']
-        for position, (kind, row, owner) in enumerate(targets):
+        rows, stamps = [], []
+        self.promos = []
+        for position, item in enumerate(targets):
+            kind = item[0]
+            row = item[1]
+            owner = item[2] if len(item) > 2 else (row.author if kind == 'post' else row.seller)
             budget = self.pick([Decimal('250'), Decimal('500'), Decimal('1200'), Decimal('2500')],
                                [0.4, 0.3, 0.2, 0.1])
+            status = statuses[position % len(statuses)]
             promo = Promotion(
-                owner=owner, target_type=kind, target_id=str(row.pk),
-                category=row.category if kind == 'post' else row.category,
-                age_min=18, age_max=self.pick([35, 45, 55, 65]),
-                country='Nepal', city=self.profiles[owner.id].location,
-                budget=budget, package=self.pick(['starter', 'growth', 'peak']),
-                status=statuses[position % len(statuses)],
-                impressions=self.rng.randint(1200, 46000), clicks=self.rng.randint(40, 1900))
-            promo.ends_at = (self.now + timedelta(days=self.rng.randint(3, 21))
-                             if statuses[position % len(statuses)] != 'ended'
-                             else self.now - timedelta(days=self.rng.randint(2, 30)))
-            promo.save()
+                owner=owner, target_type=kind, target_id=str(row.pk), category=row.category,
+                age_min=18, age_max=self.pick([35, 45, 55, 65]), country='Nepal',
+                city=self.profiles[owner.id].location, budget=budget, package=self.pick(['starter', 'growth', 'peak']),
+                status=status, impressions=self.rng.randint(1200, 46000), clicks=self.rng.randint(40, 1900),
+                ends_at=(self.now - timedelta(days=self.rng.randint(2, 30)) if status == 'ended'
+                         else self.now + timedelta(days=self.rng.randint(3, 21))))
+            rows.append(promo)
+            stamps.append(self.now - timedelta(days=self.rng.randint(2, 30)))
             self.promos.append(promo)
-            if promo.status in ('active', 'paused'):
+            if status in ('active', 'paused'):
                 wallet = self.wallets_by_user[owner.id]
-                debit = Ledger(wallet=wallet, kind='debit', amount=budget,
-                               note=f'{promo.package.title()} promotion for {row.pk}')
-                debit.save()
-                self.shift(Ledger, debit, lambda r: self.now - timedelta(days=self.rng.randint(1, 20)))
-                Wallet.objects.filter(pk=wallet.pk).update(balance=max(Decimal('0'), wallet.balance - budget))
-            self.shift(Promotion, promo, lambda r: self.now - timedelta(days=self.rng.randint(2, 30)))
+                spent = self.totals.get(wallet.id, Decimal('0'))
+                if spent < budget:
+                    # A campaign never runs on an empty wallet: fund it first.
+                    self.ledger_row(wallet, 'credit', budget - spent + Decimal('800.00'),
+                                    'Added funds', self.now - timedelta(days=self.rng.randint(6, 12)))
+                self.ledger_row(wallet, 'debit', budget,
+                                f'{promo.package.title()} promotion on {kind} {row.pk}',
+                                self.now - timedelta(days=self.rng.randint(1, 5)))
+        self.create_stamped(Promotion, rows, stamps)
 
-    # ------------------------------- reports ------------------------------
+    # -------------------------------- reports -----------------------------
     def reports(self):
-        self.reports_rows = []
         mix = [('post', self.rng.choice(self.photo_posts), 'spam', 'open'),
                ('post', self.rng.choice(self.all_posts), 'harassment', 'open'),
                ('comment', self.rng.choice(self.comments), 'hate', 'reviewing'),
                ('listing', self.rng.choice(self.listing_rows), 'scam', 'open'),
                ('post', self.hidden_posts[0], 'nudity', 'resolved'),
                ('comment', self.rng.choice(self.comments), 'spam', 'dismissed')]
+        rows, stamps = [], []
         for kind, row, reason, status in mix:
-            owner = row.author if kind == 'post' else (row.author if kind == 'comment' else row.seller)
+            owner = row.author if kind != 'listing' else row.seller
             reporter = self.rng.choice(self.others(owner))
-            report = Report(reporter=reporter, target_type=kind, target_id=str(row.pk), reason=reason,
-                            details=f'{reason.title()} reported by @{reporter.username}.', status=status,
-                            resolved_at=self.now - timedelta(days=self.rng.randint(1, 9)) if status in ('resolved', 'dismissed') else None)
-            report.save()
-            self.shift(Report, report, lambda r: self.now - timedelta(days=self.rng.randint(1, 24)))
-            self.reports_rows.append(report)
+            ts = self.now - timedelta(days=self.rng.randint(1, 24))
+            rows.append(Report(reporter=reporter, target_type=kind, target_id=str(row.pk), reason=reason,
+                               details=f'{reason.title()} reported by @{reporter.username}.', status=status,
+                               resolved_at=ts + timedelta(hours=self.rng.randint(2, 40))
+                               if status in ('resolved', 'dismissed') else None, created_at=ts))
+            stamps.append(ts)
+        self.create_stamped(Report, rows, stamps)
+        self.report_rows = rows
 
-    # -------------------------------- audit -------------------------------
+    # --------------------------------- audit ------------------------------
     def audit(self):
-        rows = []
+        rows, stamps = [], []
+
+        def log(action, target, detail, ts):
+            rows.append(AuditLog(actor=self.sita, action=action, target=target, detail=detail, created_at=ts))
+            stamps.append(ts)
+
         for post in self.hidden_posts[:2]:
-            rows.append(AuditLog(actor=self.sita, action='auto_hide_post', target=f'post:{post.pk}',
-                                 detail='3 distinct open reports'))
-        for report in self.reports_rows:
+            ts = self.now - timedelta(days=self.rng.randint(1, 20))
+            log('auto_hide_post', f'post:{post.pk}', '3 distinct open reports', ts)
+        for report in self.report_rows:
             if report.status in ('resolved', 'dismissed'):
-                rows.append(AuditLog(actor=self.sita, action=f'{report.status}_report',
-                                     target=f'{report.target_type}:{report.target_id}', detail=report.reason))
+                log(f'{report.status}_report', f'{report.target_type}:{report.target_id}',
+                    report.reason, report.resolved_at)
         for request in self.coin_requests:
             if request.status == 'approved':
-                rows.append(AuditLog(actor=self.sita, action='approve_coin_request',
-                                     target=f'user:{request.user_id}', detail=f'{request.coins} coins'))
-        AuditLog.objects.bulk_create(rows, batch_size=50)
-        for row in rows:
-            self.shift(AuditLog, row, lambda r: self.now - timedelta(days=self.rng.randint(1, 20)))
+                log('approve_coin_request', f'user:{request.user_id}', f'{request.coins} coins',
+                    request.reviewed_at)
+        self.create_stamped(AuditLog, rows, stamps)
 
-    # ---------------------------- notifications ---------------------------
+    # ------------------------------ notifications -------------------------
     def notifications(self):
-        """Every row is derived from something a person really did, and every row
-        has a target, so a tap always lands somewhere instead of doing nothing."""
-        recent = self.now - timedelta(days=RECENT_DAYS)
+        """Every bell row comes from something a member really did, and every row
+        carries a target, so tapping one always lands somewhere."""
         rows = []
 
-        def add(recipient, actor, kind, text, target_type, target_id, ts, read=True):
+        def add(recipient, actor, kind, text, target_type, target_id, ts, read):
             if recipient is None or (actor is not None and recipient.pk == actor.pk):
                 return
             rows.append(Notification(recipient=recipient, actor=actor, kind=kind, text=text[:240],
                                      target_type=target_type, target_id=str(target_id),
                                      read_at=ts if read else None, created_at=ts))
 
-        for reaction in self.reactions:
-            if reaction.target_type != 'post' or reaction.created_at < recent:
+        cutoff = self.now - timedelta(days=RECENT_DAYS)
+        read_line = self.now - timedelta(days=5)
+
+        for reaction in self.reaction_rows:
+            ts = reaction.created_at
+            if reaction.target_type != 'post' or ts < cutoff or self.rng.random() > 0.2:
                 continue
-            post = self.posts_by_id.get(int(reaction.target_id)) if hasattr(self, 'posts_by_id') else None
-            post = next((p for p in self.all_posts if p.id == int(reaction.target_id)), None)
-            if post is None or self.rng.random() > 0.2:
-                continue
-            add(post.author, reaction.user, 'reaction',
-                f'{reaction.user.username} reacted to your post.', 'post', post.id,
-                reaction.created_at, reaction.created_at < self.now - timedelta(days=5))
+            post = self.posts_by_id.get(int(reaction.target_id))
+            if post:
+                add(post.author, reaction.user, 'reaction',
+                    f'{reaction.user.username} reacted to your post.', 'post', post.id, ts, ts < read_line)
 
         for comment in self.comments:
-            if comment.created_at < recent or self.rng.random() > 0.45:
+            ts = comment.created_at
+            if ts < cutoff or self.rng.random() > 0.45:
                 continue
+            post = self.posts_by_id.get(comment.post_id)
             if comment.parent_id:
-                parent = comment.parent
-                add(parent.author, comment.author, 'reply',
-                    f'{comment.author.username} replied to your comment.', 'post', comment.post_id,
-                    comment.created_at, comment.created_at < self.now - timedelta(days=5))
-            else:
-                post = next((p for p in self.all_posts if p.id == comment.post_id), None)
+                parent = self.comments_by_id.get(comment.parent_id)
+                if parent:
+                    add(parent.author, comment.author, 'reply',
+                        f'{comment.author.username} replied to your comment.', 'post', comment.post_id,
+                        ts, ts < read_line)
+            elif post:
                 add(post.author, comment.author, 'comment',
-                    f'{comment.author.username} commented on your post.', 'post', comment.post_id,
-                    comment.created_at, comment.created_at < self.now - timedelta(days=5))
+                    f'{comment.author.username} commented on your post.', 'post', post.id, ts, ts < read_line)
 
-        for follow in Follow.objects.all():
-            ts = self.now - timedelta(days=self.rng.random() * RECENT_DAYS)
-            kind = 'follow_request' if follow.status == 'pending' else 'follow'
-            text = (f'{follow.follower.username} requested to follow you.' if kind == 'follow_request'
-                    else f'{follow.follower.username} started following you.')
-            add(follow.followee, follow.follower, kind, text, 'user', follow.follower_id, ts,
-                ts < self.now - timedelta(days=4))
-
-        for conversation in self.conversations:
-            for _, sender, ts, unread in [m for m in self.messages if m[0] is conversation]:
-                if not unread:
-                    continue
-                recipient = self.sita if sender != self.sita and conversation in [] else None
-            pass
-
-        for conversation, sender, ts, unread in self.messages:
-            if not unread or ts < recent:
+        for follow in Follow.objects.select_related('follower', 'followee'):
+            ts = follow.created_at
+            if ts < cutoff:
                 continue
-            recipient = next(u for u in [p for p in conversation.participants.all()] if u.id != sender.id)
-            add(recipient, sender, 'message', f'{sender.username} sent you a message.', 'user', sender.id, ts, False)
+            pending = follow.status == 'pending'
+            add(follow.followee, follow.follower,
+                'follow_request' if pending else 'follow',
+                f'{follow.follower.username} {"requested to follow" if pending else "started following"} you.',
+                'user', follow.follower_id, ts, ts < read_line)
+
+        # One message notification per thread tail that is still unread.
+        for conversation, sender, ts, unread in self.messages:
+            if not unread or ts < cutoff:
+                continue
+            for recipient in conversation.participants.exclude(pk=sender.pk):
+                add(recipient, sender, 'message', f'{sender.username} sent you a message.',
+                    'user', sender.id, ts, False)
 
         for request in self.coin_requests:
             if request.status == 'approved':
                 add(request.user, self.sita, 'coins', f'Your purchase of {request.coins} coins was approved.',
-                    'wallet', self.wallets_by_user[request.user.id].pk, request.created_at, True)
-        for wallet in self.wallets_by_user.values():
-            add(wallet.user, None, 'coins', 'Nrs 1,000 welcome credit added to your wallet.',
-                'wallet', wallet.pk, wallet.created_at, True)
+                    'wallet', self.wallets_by_user[request.user.id].pk, request.reviewed_at, True)
+        for user in self.users:
+            wallet = self.wallets_by_user[user.id]
+            add(user, None, 'coins', 'Nrs 1,000 welcome credit added to your wallet.',
+                'wallet', wallet.pk, self.credits[wallet.id], True)
 
-        Notification.objects.bulk_create(rows, batch_size=1000)
+        # Sita's newest bell item has to be tappable in the QA suite: a reaction
+        # on the post the browser opens first.
+        add(self.sita, self.by_username['maya'], 'reaction', 'maya reacted to your post.',
+            'post', self.mixed.pk, self.now - timedelta(minutes=22), False)
+
+        # Cap the unread pile so badges stay believable for a busy member.
+        by_recipient = {}
         for row in rows:
-            self.shift(Notification, row, lambda r: r.created_at)
+            by_recipient.setdefault(row.recipient_id, []).append(row)
+        for recipient_rows in by_recipient.values():
+            recipient_rows.sort(key=lambda r: r.created_at, reverse=True)
+            unread = 0
+            for row in recipient_rows:
+                if row.read_at is None:
+                    unread += 1
+                    if unread > 12:
+                        row.read_at = row.created_at
+        self.create_stamped(Notification, rows, [r.created_at for r in rows], batch=1000)
 
-        # Sita's newest bell item has to be tappable: a reaction on the post the
-        # browser suites open.
-        fresh = Notification(
-            recipient=self.sita, actor=self.by_username['maya'], kind='reaction',
-            text='maya reacted to your post.', target_type='post', target_id=str(self.mixed.id),
-            read_at=None, created_at=self.now - timedelta(minutes=22))
-        fresh.save()
-        Notification.objects.filter(pk=fresh.pk).update(created_at=fresh.created_at)
-        self.notifs = rows + [fresh]
-
-    # -------------------------------- report ------------------------------
+    # --------------------------------- report -----------------------------
     def report(self):
         counts = [
             ('members', User.objects.count()),
@@ -690,4 +756,4 @@ class Command(BaseCommand):
             ('promotions', Promotion.objects.count()),
             ('reports', Report.objects.count()),
         ]
-        self.stdout.write(self.style.SUCCESS('  |  '.join(f'{k} {v}' for k, v in counts)))
+        self.stdout.write(self.style.SUCCESS('  |  '.join(f'{name} {value}' for name, value in counts)))

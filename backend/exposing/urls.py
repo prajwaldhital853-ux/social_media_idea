@@ -1,10 +1,10 @@
 from django.contrib import admin
 from django.conf import settings
-from django.conf.urls.static import static
-from django.urls import include, path
+from django.urls import include, path, re_path
 
 from apps.common import sync, uploads
 from apps.common.config import client_config
+from apps.common.media import serve_media
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
@@ -37,5 +37,7 @@ urlpatterns = [
     path('api/', include('apps.moderation.urls')),
 ]
 
-if settings.DEBUG:
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+if settings.DEBUG or settings.SERVE_MEDIA:
+    # The deployed API has no web server in front of it, so /media comes from
+    # Django — with Range support, or the reels feed cannot be seeked.
+    urlpatterns += [re_path(r'^media/(?P<path>.*)$', serve_media, name='media')]

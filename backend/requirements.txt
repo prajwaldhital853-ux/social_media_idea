@@ -9,3 +9,7 @@ sqlparse==0.6.1
 typing_extensions==4.16.0
 tzdata==2026.6
 whitenoise==6.9.0
+# exposing/__init__.py imports the Celery app, so every manage.py command needs it.
+celery==5.7.0
+redis==8.1.0
+PyJWT==2.15.1

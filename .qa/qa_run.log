@@ -1,0 +1,36 @@
+FAIL  desktop: left menu + comfortable feed + right suggestions column  — {"cols":[212,660,328],"mainW":660,"calmW":328,"calmBg":"rgba(0, 0, 0, 0)","hasSuggest":false,"calmRight":true,"rail":true}
+PASS  desktop: feed paginates first paint and loads more on scroll  — {"firstPage":10,"fullPage":20}
+PASS  desktop: Search opens fast (prefetched)  — 68ms
+PASS  desktop: Reels opens fast (prefetched)  — 62ms
+PASS  desktop: post opens fast (prefetched on hover)  — 151ms
+PASS  desktop: author profile opens fast (prefetched on hover)  — 431ms
+PASS  desktop: feed renders
+PASS  desktop: window scrollbar hidden
+PASS  desktop: no horizontal overflow
+PASS  desktop: page-enter animation
+PASS  desktop: real favicon + rail logo loaded  — {"favicon":"/exposing-icon.png","apple":"/apple-icon.png","logoLoaded":true,"logoSrc":"/exposing-logo.png"}
+FAIL  desktop: p_mix stack n5, 5 cells, +3  — {"cls":"media-mosaic stack n4","cells":4,"preview":true,"previewPaused":true}
+PASS  desktop: mixed video is paused preview
+FAIL  desktop: single video autoplays with sound + loop  — null
+FAIL  desktop: video pauses when scrolled off-screen
+FAIL  desktop: video resumes when back in view
+FAIL  desktop: mixed mosaic video opens media page at that clip (not Reels)  — {"path":"/post/2021/media/0","i":0,"src":"http://localhost:3000/media/demo/clip-flower.mp4","playing":true,"count":"1 / 4","noReels":true}
+FAIL  desktop: photo opens media route at 2/8, 8 slides, horizontal snap  — {"path":"/post/2021/media/1","count":"2 / 4","slides":4,"snap":"x mandatory","axis":"auto/hidden","row":"row","slideW":1280,"clientW":1280,"slide0Video":true,"slide1Img":true}
+FAIL  desktop: media page video slide plays with sound at 1/8  — {"count":"1 / 4","playing":true,"muted":false}
+FAIL  desktop: ArrowRight advances to 2/8
+FAIL  desktop: ArrowLeft returns to 1/8
+PASS  desktop: per-media action bar (like/comment/share)
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+Error [TypeError]: Cannot read properties of null (reading 'posts')
+    at evaluate (evaluate at file:///D:/social_medial/.qa/qa.mjs:232:23, <anonymous>:0:59)
+    at #evaluate (file:///D:/social_medial/node_modules/puppeteer-core/lib/puppeteer/cdp/ExecutionContext.js:416:19)
+    at async ExecutionContext.evaluate (file:///D:/social_medial/node_modules/puppeteer-core/lib/puppeteer/cdp/ExecutionContext.js:302:16)
+    at async IsolatedWorld.evaluate (file:///D:/social_medial/node_modules/puppeteer-core/lib/puppeteer/cdp/IsolatedWorld.js:104:16)
+    at async CdpFrame.evaluate (file:///D:/social_medial/node_modules/puppeteer-core/lib/puppeteer/api/Frame.js:364:20)
+    at async CdpPage.evaluate (file:///D:/social_medial/node_modules/puppeteer-core/lib/puppeteer/api/Page.js:837:20)
+    at async file:///D:/social_medial/.qa/qa.mjs:232:15
+
+Node.js v24.16.0
