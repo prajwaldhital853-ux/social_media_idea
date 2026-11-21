@@ -1,3 +1,4 @@
+import logging
 import random
 from datetime import timedelta
 
@@ -21,9 +22,12 @@ from .models import DeviceTrust, EmailOTP, RefreshSession, User
 from .tasks import send_otp_email
 
 LOCK_THRESHOLD = 3
-LOCK_MINUTES = 15
+# A cooloff, not a lockout that needs a rescue email: it expires by itself.
+LOCK_MINUTES = 5
 OTP_MINUTES = 10
 OTP_MAX_ATTEMPTS = 5
+
+logger = logging.getLogger(__name__)
 
 
 def _device_id(request):
@@ -43,7 +47,12 @@ def _make_otp(user, purpose, device_id=''):
         user=user, purpose=purpose, code_hash=hash_code(code), device_id=device_id,
         expires_at=timezone.now() + timedelta(minutes=OTP_MINUTES),
     )
-    send_otp_email.delay(user.email, code, purpose)
+    try:
+        send_otp_email.delay(user.email, code, purpose)
+    except Exception:
+        # The code is already stored, so a broker or mail provider that is down
+        # costs an email, never a sign-in.
+        logger.exception('Could not queue the %s code for %s', purpose, user.username)
     return otp, code
 
 
@@ -125,12 +134,15 @@ def signup(request):
     device_id = _device_id(request)
     if not google:
         otp, code = _make_otp(user, 'verify', device_id)
-    resp = Response(
-        {'user': {'id': user.pk, 'username': user.username, 'email': user.email},
-         **({} if google else _otp_response(otp, code))},
-        status=status.HTTP_201_CREATED,
-    )
-    return set_auth_cookies(resp, user, device_id)
+    # A Google address is already proved by the identity provider, so that account
+    # opens now. An emailed address is not, so the body carries only the challenge:
+    # handing out cookies here would give every unverified signup a live session.
+    if google:
+        _trust_device(user, device_id)
+        resp = Response({'user': {'id': user.pk, 'username': user.username, 'email': user.email}},
+                        status=status.HTTP_201_CREATED)
+        return set_auth_cookies(resp, user, device_id)
+    return Response(_otp_response(otp, code), status=status.HTTP_201_CREATED)
 
 
 @api_view(['POST'])
@@ -149,20 +161,25 @@ def login(request):
         return Response({'detail': 'No account matches those credentials.'}, status=401)
     if user.is_suspended:
         return Response({'detail': f'Account suspended: {user.suspend_reason}'}, status=403)
+    if user.locked_until and not user.is_locked:
+        # The cooloff elapsed, so the next three passwords are the owner's again.
+        user.locked_until = None
+        user.failed_attempts = 0
+        user.save(update_fields=['locked_until', 'failed_attempts'])
     if user.is_locked:
         return Response({
-            'detail': f'Account locked after {LOCK_THRESHOLD} wrong passwords. Use the email unlock code or try again later.',
+            'detail': f'Too many wrong passwords. Try again in {LOCK_MINUTES} minutes.',
             'locked': True, 'locked_until': user.locked_until,
+            'retry_in': int((user.locked_until - timezone.now()).total_seconds()),
         }, status=423)
     if not user.check_password(password):
         user.failed_attempts += 1
         if user.failed_attempts >= LOCK_THRESHOLD:
             user.locked_until = timezone.now() + timedelta(minutes=LOCK_MINUTES)
             user.save(update_fields=['failed_attempts', 'locked_until'])
-            otp, code = _make_otp(user, 'unlock')
             return Response({
-                'detail': f'Account locked after {LOCK_THRESHOLD} wrong passwords. An unlock code was sent to your email.',
-                'locked': True, 'locked_until': user.locked_until, **_otp_response(otp, code),
+                'detail': f'Account locked for {LOCK_MINUTES} minutes after {LOCK_THRESHOLD} wrong passwords.',
+                'locked': True, 'locked_until': user.locked_until, 'retry_in': LOCK_MINUTES * 60,
             }, status=423)
         user.save(update_fields=['failed_attempts'])
         return Response({

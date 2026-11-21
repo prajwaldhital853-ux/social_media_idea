@@ -8,8 +8,8 @@ from rest_framework.response import Response
 from apps.common.pagination import KeysetPagination
 from apps.marketplace.models import Listing
 from apps.marketplace.views import ListingSerializer
-from apps.posts.models import Post
 from apps.posts.serializers import PostSerializer
+from apps.posts.views import visible_posts
 
 from .models import SavedListing, SavedPost
 
@@ -17,15 +17,21 @@ from .models import SavedListing, SavedPost
 @api_view(['GET', 'POST'])
 @permission_classes([IsAuthenticated])
 def saved_posts(request):
+    # visible_posts is the one rule for "may this reader read this post": a save
+    # made while following someone does not survive an unfollow, and the payload
+    # would hand over the text and media of a follower-only post either way.
+    readable = visible_posts(request.user)
     if request.method == 'POST':
-        post = get_object_or_404(Post, pk=request.data.get('post'))
+        post = get_object_or_404(readable, pk=request.data.get('post'))
         try:
             with transaction.atomic():
                 SavedPost.objects.create(user=request.user, post=post)
         except IntegrityError:
             return Response({'detail': 'Already saved.'}, status=400)
         return Response({'saved': True}, status=status.HTTP_201_CREATED)
-    qs = SavedPost.objects.filter(user=request.user, post__status='live').select_related('post__author__profile')
+    qs = SavedPost.objects.filter(
+        user=request.user, post__status='live', post__in=readable
+    ).select_related('post__author__profile')
     paginator = KeysetPagination()
     rows = paginator.paginate_queryset(qs, request)
     data = PostSerializer([r.post for r in rows], many=True, context={'request': request}).data

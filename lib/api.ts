@@ -28,6 +28,24 @@ export class ApiError extends Error {
 export const API_ENABLED = process.env.NEXT_PUBLIC_API !== 'off';
 
 const DEVICE_KEY = 'exposing-device';
+
+/**
+ * A proxy timeout, a crashed worker or Django's own error page all answer with
+ * HTML rather than JSON, and that markup would otherwise be pasted straight
+ * into a form error line. Say what the user can act on, keep the body out.
+ */
+function readBody(text: string, ok: boolean, status: number): any {
+  if (!text) return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    if (ok) return { detail: 'The server sent back something unreadable.' };
+    if (status >= 500) return { detail: 'The server could not finish that request. Try again in a moment.' };
+    if (status === 429) return { detail: 'Too many requests. Wait a moment and try again.' };
+    if (status === 404) return { detail: 'The server has no answer at that address.' };
+    return { detail: `Request failed (${status}).` };
+  }
+}
 const CSRF_COOKIE = 'exposing_csrf';
 
 function deviceId(): string {
@@ -83,9 +101,7 @@ async function send(path: string, init: RequestInit, retry = true): Promise<any>
   }
   let data: any = null;
   const text = await res.text();
-  if (text) {
-    try { data = JSON.parse(text); } catch { data = { detail: text }; }
-  }
+  if (text) data = readBody(text, res.ok, res.status);
   if (!res.ok) throw new ApiError(res.status, data);
   return data;
 }
@@ -149,8 +165,7 @@ export const api = {
         };
         const fail = (status: number, data: any) => reject(new ApiError(status, data));
         xhr.onload = () => {
-          let data: any = null;
-          try { data = JSON.parse(xhr.responseText); } catch { data = xhr.responseText ? { detail: xhr.responseText } : null; }
+          const data = readBody(xhr.responseText || '', xhr.status < 400, xhr.status);
           if (xhr.status >= 400) {
             if (retry && xhr.status === 401) {
               void refreshSession().then(ok => (ok ? attempt(false) : fail(xhr.status, data)));

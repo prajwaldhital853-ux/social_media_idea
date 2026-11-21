@@ -2,6 +2,7 @@ from django.core.cache import cache
 from django.test import TestCase
 
 from apps.common.testutils import auth_client, make_user
+from apps.follows.models import Follow
 from apps.marketplace.models import Listing
 from apps.posts.models import Post
 from apps.saved.models import SavedListing, SavedPost
@@ -50,3 +51,14 @@ class SavedTests(TestCase):
         self.cs.post('/api/saved/posts/', {'post': self.post.pk}, format='json')
         other = auth_client(make_user('savedother'))
         self.assertEqual(other.get('/api/saved/posts/').data['results'], [])
+
+    def test_a_save_is_a_bookmark_not_a_permission(self):
+        """Unfollowing closes a followers-only post, even one already bookmarked."""
+        secret = Post.objects.create(author=self.owner, text='for my followers', audience='followers')
+        Follow.objects.create(follower=self.saver, followee=self.owner)
+        self.assertEqual(self.cs.post('/api/saved/posts/', {'post': secret.pk}, format='json').status_code, 201)
+        self.assertIn(secret.pk, [p['id'] for p in self.cs.get('/api/saved/posts/').data['results']])
+        Follow.objects.filter(follower=self.saver, followee=self.owner).delete()
+        self.assertNotIn(secret.pk, [p['id'] for p in self.cs.get('/api/saved/posts/').data['results']])
+        outsider = auth_client(make_user('savedoutsider'))
+        self.assertEqual(outsider.post('/api/saved/posts/', {'post': secret.pk}, format='json').status_code, 404)

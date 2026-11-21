@@ -93,6 +93,16 @@ const styles = (page, sel, props) => page.$eval(sel, (el, props) => {
   return out;
 }, props).catch(() => null);
 
+// Screenshots are the review artifact, so they must not catch a CDN tile mid-fetch.
+async function settle(page, ms = 6000) {
+  await page.waitForFunction(() => {
+    const tiles = [...document.querySelectorAll('article.post img, .market-grid img')]
+      .filter(img => { const r = img.getBoundingClientRect(); return r.bottom > 0 && r.top < window.innerHeight; });
+    return tiles.length > 0 && tiles.every(img => img.complete && img.naturalWidth > 0);
+  }, { timeout: ms }).catch(() => {});
+  await sleep(400);
+}
+
 // ================= DESKTOP =================
 const d = await newPage({ width: 1440, height: 900 });
 await goto(d, '/');
@@ -120,31 +130,92 @@ const shell = await d.evaluate(() => {
     columns: grid.gridTemplateColumns,
     gap: grid.columnGap,
     railW: Math.round(rail.width),
+    railH: Math.round(rail.height),
+    viewportH: Math.round(window.innerHeight),
+    mainW: Math.round(main.width),
+    sideRoom: Math.round(window.innerWidth - main.right),
     gapPx: Math.round(main.left - rail.right),
     railBorder: railCs.borderRightWidth,
     railBg: railCs.backgroundColor,
     topbarBorder: topCs.borderBottomWidth,
     railAuth: !!document.querySelector('.rail-auth'),
     themeInRight: !!document.querySelector('.topbar-right button[aria-label*="mode" i]'),
+    pageToggle: !!document.querySelector('.main .header-actions .icon-btn[aria-label*="mode" i]')?.offsetParent,
     toggleLeft: !!document.querySelector('.topbar-left button'),
     suggestCard: !!document.querySelector('.suggest-card'),
     suggestRail: !!document.querySelector('.suggest-rail'),
     suggestBg: document.querySelector('.suggest-rail') ? getComputedStyle(document.querySelector('.suggest-rail')).backgroundColor : ''
   };
 });
-ok('desktop: the left rail is compact', shell.railW > 0 && shell.railW <= 240, `rail ${shell.railW}px`);
+ok('desktop: the rail is a real sidebar, wide enough to read', shell.railW >= 260 && shell.railW <= 300, `rail ${shell.railW}px`);
+ok('desktop: the rail runs the full height under the top bar',
+   shell.railH >= shell.viewportH - 60, JSON.stringify({ railH: shell.railH, viewport: shell.viewportH }));
+ok('desktop: the feed leaves room on both sides', shell.mainW >= 560 && shell.mainW <= 640 && shell.sideRoom >= 300,
+   JSON.stringify({ feed: shell.mainW, sideRoom: shell.sideRoom }));
 ok('desktop: the gap between rail and feed is wide', shell.gapPx >= 32, `${shell.gapPx}px`);
 ok('desktop: no hairline between rail, feed and top bar',
    shell.railBorder === '0px' && shell.topbarBorder === '0px',
    `rail ${shell.railBorder} / topbar ${shell.topbarBorder}`);
-ok('desktop: the rail sits on the canvas, not on its own sheet',
-   shell.railBg === 'rgba(0, 0, 0, 0)', shell.railBg);
+ok('desktop: the rail is the left sheet of the screen',
+   rgb(shell.railBg) === 'rgb(23,25,28)', shell.railBg);
 ok('desktop: no sign in / sign up block inside the rail', !shell.railAuth);
-ok('desktop: the theme switch lives on the right of the top bar', shell.themeInRight && !shell.toggleLeft, JSON.stringify({ themeInRight: shell.themeInRight, toggleLeft: shell.toggleLeft }));
+ok('desktop: the theme switch lives on the right of the top bar, and nowhere else',
+   shell.themeInRight && !shell.toggleLeft && !shell.pageToggle,
+   JSON.stringify({ themeInRight: shell.themeInRight, toggleLeft: shell.toggleLeft, pageToggle: shell.pageToggle }));
 ok('desktop: suggestions are an inline list, not a card',
    !shell.suggestCard && shell.suggestRail && shell.suggestBg === 'rgba(0, 0, 0, 0)',
    JSON.stringify({ card: shell.suggestCard, rail: shell.suggestRail, bg: shell.suggestBg }));
+await settle(d);
 await shot(d, 'ss9-desktop-feed');
+
+// ---------- The tab bar gives its own height back on scroll ----------
+const resting = await d.evaluate(() => {
+  const el = document.querySelector('.home-header');
+  const r = el.getBoundingClientRect();
+  return { h: Math.round(r.height), top: Math.round(r.top), lifted: el.classList.contains('lifted') };
+});
+await d.evaluate(() => window.scrollTo(0, 700));
+await sleep(600);
+await settle(d);
+const raised = await d.evaluate(() => {
+  const el = document.querySelector('.home-header');
+  const r = el.getBoundingClientRect();
+  return {
+    h: Math.round(r.height), top: Math.round(r.top), lifted: el.classList.contains('lifted'),
+    posts: document.querySelectorAll('.post').length,
+    overflow: document.documentElement.scrollWidth > window.innerWidth + 1
+  };
+});
+ok('desktop: the For you / Following bar lifts and thins once the reader scrolls',
+   raised.lifted && resting.h - raised.h >= 6 && resting.top - raised.top >= 4 && !raised.overflow,
+   JSON.stringify({ resting, raised }));
+await shot(d, 'ss9-desktop-feed-lifted');
+await d.evaluate(() => window.scrollTo(0, 0));
+await sleep(400);
+
+// ---------- Marketplace owns the page ----------
+await goto(d, '/marketplace');
+await d.waitForSelector('.market-grid', { timeout: 15000 }).catch(() => {});
+await sleep(900);
+const market = await d.evaluate(() => {
+  const grid = document.querySelector('.market-grid');
+  const main = document.querySelector('.main').getBoundingClientRect();
+  return {
+    mainW: Math.round(main.width),
+    cols: grid ? getComputedStyle(grid).gridTemplateColumns.split(' ').length : 0,
+    cards: document.querySelectorAll('.market-card').length,
+    calm: !!document.querySelector('.side-calm')?.offsetParent,
+    pageToggle: !!document.querySelector('.main .header-actions .icon-btn[aria-label*="mode" i]')?.offsetParent,
+    overflow: document.documentElement.scrollWidth > window.innerWidth + 1
+  };
+});
+ok('desktop: the marketplace uses everything right of the rail',
+   market.mainW >= 1100 && market.cols >= 4 && !market.calm && !market.overflow, JSON.stringify(market));
+ok('desktop: the marketplace header does not duplicate the top bar mode switch', !market.pageToggle, JSON.stringify({ pageToggle: market.pageToggle }));
+await settle(d);
+await shot(d, 'ss9-desktop-marketplace');
+await goto(d, '/');
+await d.waitForSelector('.suggest-rail', { timeout: 15000 }).catch(() => {});
 
 // ---------- Notifications popover ----------
 const bellStyles = await styles(d, '[aria-label="Notifications"]', ['display']);
@@ -328,6 +399,9 @@ const mobileTheme = await m.evaluate(() => ({ theme: document.documentElement.ge
 ok('mobile: keeps the stored light theme on a narrow viewport', mobileTheme.theme === 'light', JSON.stringify(mobileTheme));
 
 await goto(m, '/messages');
+const inboxT0 = Date.now();
+await m.waitForFunction(() => document.querySelectorAll('.inbox-row').length > 0, { timeout: 10000 }).catch(() => {});
+const inboxWait = Date.now() - inboxT0;
 const mobileInbox = await m.evaluate(() => {
   const main = document.querySelector('.messenger-main');
   return {
@@ -340,7 +414,7 @@ const mobileInbox = await m.evaluate(() => {
 });
 ok('mobile: the inbox stays a single column with no thread pane',
    mobileInbox.rows > 0 && mobileInbox.mainHidden && mobileInbox.topbarHidden && mobileInbox.search,
-   JSON.stringify(mobileInbox));
+   JSON.stringify({ ...mobileInbox, waitedMs: inboxWait }));
 await shot(m, 'ss9-mobile-inbox');
 
 const mobileThread = await m.evaluate(async () => {
@@ -363,12 +437,15 @@ ok('mobile: a thread is still full width with its back button',
 await shot(m, 'ss9-mobile-thread');
 
 await goto(m, '/');
+const feedT0 = Date.now();
+await m.waitForFunction(() => document.querySelectorAll('article.post').length > 0, { timeout: 10000 }).catch(() => {});
 const mobileFeed = await m.evaluate(() => ({
   bg: getComputedStyle(document.body).backgroundColor,
   posts: document.querySelectorAll('article.post').length
 }));
 ok('mobile: the feed keeps its own sheet and loads posts',
-   mobileFeed.posts > 0 && rgb(mobileFeed.bg) === 'rgb(255,255,255)', JSON.stringify(mobileFeed));
+   mobileFeed.posts > 0 && rgb(mobileFeed.bg) === 'rgb(255,255,255)',
+   JSON.stringify({ ...mobileFeed, waitedMs: Date.now() - feedT0 }));
 
 // ================= GUEST =================
 // Its own browser context: the signed-in pages share cookies and localStorage,

@@ -10,14 +10,18 @@ import { requestGoogleToken } from '@/lib/google';
 
 type Step =
   | { kind: 'form' }
-  | { kind: 'code'; challenge: string; expiresAt?: number; devCode?: string; hint?: string }
-  | { kind: 'unlock' }
-  | { kind: 'unlockCode'; challenge: string; expiresAt?: number; devCode?: string };
+  | { kind: 'code'; challenge: string; expiresAt?: number; devCode?: string; hint?: string };
 
 const GOOGLE_KEY = 'exposing-google';
+/** The account seed_demo fills with posts, chats, reels and listings. */
+const DEMO = { identifier: 'sita', password: 'exposing-demo-1' };
+/** What the server locks for when the third password is wrong. */
+const LOCK_SECONDS = 5 * 60;
+
+const mmss = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 
 export default function ModernLogin() {
-  const { db, t, feature, ready, login, signin, verifyCode, resendCode, requestUnlock, confirmUnlock, googleSignIn, showToast } = useApp();
+  const { db, t, feature, ready, login, signin, verifyCode, resendCode, googleSignIn, showToast } = useApp();
   const router = useRouter();
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
@@ -25,10 +29,23 @@ export default function ModernLogin() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
+  /** Seconds left on the cooloff, or null once it is over. */
+  const [lockedFor, setLockedFor] = useState<number | null>(null);
 
   useEffect(() => {
     if (db.meId) router.replace('/');
   }, [db.meId, router]);
+
+  useEffect(() => {
+    if (!lockedFor) return;
+    if (lockedFor <= 1) {
+      setLockedFor(null);
+      setNotice(t('lockedReady'));
+      return;
+    }
+    const id = setTimeout(() => setLockedFor(lockedFor - 1), 1000);
+    return () => clearTimeout(id);
+  }, [lockedFor, t]);
 
   const done = (name: string) => {
     showToast(t('welcome', { name }));
@@ -64,15 +81,24 @@ export default function ModernLogin() {
     }
     if (needsSignup(res)) return;
     if (res.locked) {
-      setStep(res.challenge
-        ? { kind: 'unlockCode', challenge: res.challenge, expiresAt: res.expiresIn ? Date.now() + res.expiresIn * 1000 : undefined, devCode: res.devCode }
-        : { kind: 'unlock' });
       setError('');
+      setNotice('');
+      const secs = res.retryIn ?? (res.lockedUntil ? Math.ceil((res.lockedUntil - Date.now()) / 1000) : null);
+      setLockedFor(secs === null || secs <= 0 ? 0 : Math.min(secs, LOCK_SECONDS));
       return;
     }
     setError(res.attemptsLeft !== undefined && res.attemptsLeft > 0
       ? `${res.detail} ${attemptsLeftText(res.attemptsLeft)}`
       : res.detail || t('needIdentifier'));
+  };
+
+  const run = async (id: string, pass: string) => {
+    setBusy(true);
+    try {
+      afterAuth(await signin(id, pass));
+    } finally {
+      setBusy(false);
+    }
   };
 
   const submit = async (e: React.FormEvent) => {
@@ -90,18 +116,28 @@ export default function ModernLogin() {
       return done(user.name || user.username);
     }
 
-    setBusy(true);
-    try {
-      afterAuth(await signin(identifier.trim(), password));
-    } finally {
-      setBusy(false);
+    void run(identifier.trim(), password);
+  };
+
+  /** One tap, because a reviewer should not have to type a seeded password. */
+  const useDemo = () => {
+    setError('');
+    setNotice('');
+    setIdentifier(DEMO.identifier);
+    setPassword(DEMO.password);
+    if (!API_ENABLED) {
+      const user = db.users.find(u => u.username.toLowerCase() === DEMO.identifier) || db.users[0];
+      if (!user) return setError(t('e_noacc'));
+      login(user.id);
+      return done(user.name || user.username);
     }
+    void run(DEMO.identifier, DEMO.password);
   };
 
   const confirmCode = async (code: string) => {
     if (step.kind !== 'code') return;
     setBusy(true);
-    const res = await verifyCode(step.challenge, code, 'login');
+    const res = await verifyCode(step.challenge, code);
     setBusy(false);
     if (res.ok && res.user) return done(res.user.name || res.user.username);
     if (res.ok && res.challenge) {
@@ -114,7 +150,7 @@ export default function ModernLogin() {
   };
 
   const resend = async () => {
-    if (step.kind !== 'code' && step.kind !== 'unlockCode') return;
+    if (step.kind !== 'code') return;
     const res = await resendCode(step.challenge);
     if (res.error) return setError(res.error);
     setStep({
@@ -124,32 +160,6 @@ export default function ModernLogin() {
       devCode: res.devCode,
     });
     setError('');
-  };
-
-  const askUnlock = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setBusy(true);
-    const res = await requestUnlock(identifier.trim());
-    setBusy(false);
-    if (res.error) return setError(res.error);
-    if (res.challenge) {
-      setStep({ kind: 'unlockCode', challenge: res.challenge, expiresAt: res.expiresIn ? Date.now() + res.expiresIn * 1000 : undefined, devCode: res.devCode });
-      setError('');
-      return;
-    }
-    setError(res.detail || t('e_noacc'));
-  };
-
-  const confirmUnlockCode = async (code: string) => {
-    if (step.kind !== 'unlockCode') return;
-    setBusy(true);
-    const res = await confirmUnlock(step.challenge, code);
-    setBusy(false);
-    if (!res.ok) return setError(res.detail || t('codeExpired'));
-    setStep({ kind: 'form' });
-    setPassword('');
-    setError('');
-    setNotice(res.detail || t('unlocked'));
   };
 
   const google = async () => {
@@ -190,7 +200,7 @@ export default function ModernLogin() {
         <BrandLogo height={64} className="login-brand" href="/" />
         <h1 className="login-title">{t('loginTitle')}</h1>
 
-        {step.kind === 'form' ? <>
+        {step.kind === 'form' && lockedFor === null ? <>
           {showGoogle && (
             <button type="button" className="social-btn" onClick={google} disabled={busy}>
               <svg width="20" height="20" viewBox="0 0 24 24">
@@ -228,8 +238,9 @@ export default function ModernLogin() {
             <button type="submit" className={`login-submit ${canSubmit ? 'active' : ''}`} disabled={!canSubmit}>
               {busy ? t('checking') : t('signIn')}
             </button>
-            <button type="button" className="auth-code-link auth-unlock-link" onClick={() => { setStep({ kind: 'unlock' }); setError(''); }}>
-              {t('unlockAccount')}
+            <button type="button" className="login-demo" onClick={useDemo} disabled={busy}>
+              <b>{t('demoSignIn')}</b>
+              <span>{t('demoCreds')}</span>
             </button>
           </form>
         </> : null}
@@ -252,46 +263,18 @@ export default function ModernLogin() {
           />
         ) : null}
 
-        {step.kind === 'unlock' ? (
+        {lockedFor !== null ? (
           <div className="auth-code" role="group" aria-label={t('lockedTitle')}>
             <b className="auth-code-title">{t('lockedTitle')}</b>
             <p className="auth-code-detail">{t('lockedDetail')}</p>
-            <form onSubmit={askUnlock} noValidate>
-              <input
-                className="login-input"
-                type="text"
-                name="exposing-unlock-identifier"
-                autoComplete="username"
-                placeholder={t('unlockEmail')}
-                value={identifier}
-                onChange={e => setIdentifier(e.target.value)}
-              />
-              {error ? <p className="signup-error" role="alert">{error}</p> : null}
-              <button type="submit" className={`login-submit ${identifier.trim() && !busy ? 'active' : ''}`} disabled={!identifier.trim() || busy}>
-                {busy ? t('checking') : t('sendUnlock')}
-              </button>
-            </form>
-            <div className="auth-code-actions">
-              <button type="button" className="auth-code-link" onClick={() => { setStep({ kind: 'form' }); setError(''); }}>{t('backToLogin')}</button>
-            </div>
+            {lockedFor > 0 ? (
+              <p className="auth-lock-clock" role="timer">{t('lockedWait', { time: mmss(lockedFor) })}</p>
+            ) : (
+              <div className="auth-code-actions">
+                <button type="button" className="auth-code-link" onClick={() => setLockedFor(null)}>{t('backToLogin')}</button>
+              </div>
+            )}
           </div>
-        ) : null}
-
-        {step.kind === 'unlockCode' ? (
-          <AuthCode
-            title={t('lockedTitle')}
-            detail={t('codeDetail')}
-            expiresAt={step.expiresAt}
-            devCode={step.devCode}
-            error={error}
-            busy={busy}
-            submitLabel={t('confirm')}
-            resendLabel={t('resendCode')}
-            backLabel={t('backToLogin')}
-            onCode={confirmUnlockCode}
-            onResend={resend}
-            onBack={() => { setStep({ kind: 'form' }); setError(''); }}
-          />
         ) : null}
 
         <p className="login-footer">

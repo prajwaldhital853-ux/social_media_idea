@@ -33,9 +33,10 @@ export default function SavedPage() {
   const posts = useMemo<Post[]>(() => {
     if (serverMode) {
       const index = new Map(db.posts.map(p => [p.id, p] as [string, Post]));
-      return savedPosts.ids
-        .map(id => index.get(id))
-        .filter((p): p is Post => !!p && p.status === 'live' && canSeePost(p, me?.id ?? null, db.follows));
+      // The server already applied the audience rule to this page; re-applying a
+      // local one here — over a follow graph that is only ever a slice — hides
+      // rows the list promised and makes the count disagree with the API.
+      return savedPosts.ids.map(id => index.get(id)).filter((p): p is Post => !!p);
     }
     if (!me) return [];
     return db.saves

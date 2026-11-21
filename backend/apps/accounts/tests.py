@@ -34,15 +34,23 @@ class SignupTests(TestCase):
         self.client = APIClient()
         self.client.credentials(HTTP_X_FORWARDED_FOR=fresh_ip())
 
-    def test_signup_creates_user_profile_wallet_and_challenge(self):
+    def test_signup_stays_closed_until_the_email_is_confirmed(self):
         resp = self.client.post('/api/auth/signup/', signup_payload('alice'), format='json')
         self.assertEqual(resp.status_code, 201)
         self.assertIn('challenge', resp.data)
         self.assertIn('dev_code', resp.data)
+        self.assertNotIn('user', resp.data)
         user = User.objects.get(username='alice')
         self.assertTrue(hasattr(user, 'profile'))
         self.assertTrue(hasattr(user, 'wallet'))
         self.assertFalse(user.email_verified)
+        # The account exists, but nobody is signed in until the code is entered.
+        self.assertEqual(self.client.get('/api/auth/me/').status_code, 401)
+        resp = self.client.post('/api/auth/otp/',
+                                {'challenge': resp.data['challenge'], 'code': resp.data['dev_code']}, format='json')
+        self.assertEqual(resp.status_code, 200)
+        user.refresh_from_db()
+        self.assertTrue(user.email_verified)
         me = self.client.get('/api/auth/me/')
         self.assertEqual(me.status_code, 200)
         self.assertEqual(me.data['username'], 'alice')
@@ -140,7 +148,7 @@ class LoginLockoutTests(TestCase):
         resp = self.login('Test-Pass-9271')
         self.assertEqual(resp.status_code, 200)
 
-    def test_three_wrong_passwords_lock_and_unlock(self):
+    def test_three_wrong_passwords_lock_for_the_cooloff(self):
         for i in range(2):
             resp = self.login('wrong-password')
             self.assertEqual(resp.status_code, 401)
@@ -148,16 +156,12 @@ class LoginLockoutTests(TestCase):
         resp = self.login('wrong-password')
         self.assertEqual(resp.status_code, 423)
         self.assertTrue(resp.data['locked'])
-        challenge, code = resp.data['challenge'], resp.data['dev_code']
+        self.assertEqual(resp.data['retry_in'], 5 * 60)
+        # The cooloff expires on its own, so this path sends no rescue email.
+        self.assertNotIn('challenge', resp.data)
         resp = self.login('Test-Pass-9271')
         self.assertEqual(resp.status_code, 423)
-        resp = self.client.post('/api/auth/unlock/confirm/', {'challenge': challenge, 'code': code}, format='json')
-        self.assertEqual(resp.status_code, 200)
-        self.user.refresh_from_db()
-        self.assertIsNone(self.user.locked_until)
-        self.assertEqual(self.user.failed_attempts, 0)
-        resp = self.login('Test-Pass-9271')
-        self.assertIn(resp.status_code, (200, 202))
+        self.assertLessEqual(resp.data['retry_in'], 5 * 60)
 
     def test_lock_expires_after_window(self):
         for _ in range(3):
@@ -165,6 +169,14 @@ class LoginLockoutTests(TestCase):
         User.objects.filter(pk=self.user.pk).update(locked_until=timezone.now() - timedelta(minutes=1))
         resp = self.login('Test-Pass-9271')
         self.assertIn(resp.status_code, (200, 202))
+
+    def test_expired_cooloff_restores_the_three_attempts(self):
+        for _ in range(3):
+            self.login('wrong-password')
+        User.objects.filter(pk=self.user.pk).update(locked_until=timezone.now() - timedelta(seconds=1))
+        resp = self.login('wrong-password')
+        self.assertEqual(resp.status_code, 401)
+        self.assertEqual(resp.data['attempts_left'], 2)
 
     def test_unlock_request_unknown_email_is_generic(self):
         resp = self.client.post('/api/auth/unlock/', {'email': 'ghost@test.local'}, format='json')

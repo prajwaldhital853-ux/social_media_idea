@@ -16,7 +16,7 @@ const GOOGLE_KEY = 'exposing-google';
 type Prefill = { email: string; name: string; google_sub: string };
 
 export default function SignupPage() {
-  const { db, t, feature, ready, login, setDb, showToast, signupAccount, verifyCode, resendCode, googleSignIn } = useApp();
+  const { db, t, feature, ready, setDb, showToast, signupAccount, verifyCode, resendCode, googleSignIn } = useApp();
   const router = useRouter();
   const [name, setName] = useState('');
   const [username, setUsername] = useState('');
@@ -57,12 +57,11 @@ export default function SignupPage() {
   }, []);
 
   const localAccount = (data: { name: string; username: string; email: string; dob: string; country: string; province?: string; city?: string; provider: SignupProvider }) => {
-    const existing = db.users.find(u => u.username.toLowerCase() === data.username.toLowerCase() || u.email.toLowerCase() === data.email.toLowerCase());
-    if (existing) {
-      login(existing.id);
-      showToast(t('welcome', { name: existing.name || existing.username }));
-      router.push('/');
-      return;
+    // Signing up is never a second way in. An address or handle that already
+    // belongs to someone has to be refused, not handed out as their session.
+    const clash = db.users.find(u => u.username.toLowerCase() === data.username.toLowerCase() || u.email.toLowerCase() === data.email.toLowerCase());
+    if (clash) {
+      return setError(clash.username.toLowerCase() === data.username.toLowerCase() ? t('e_taken') : t('e_hasacc'));
     }
     const user: User = {
       id: uid(), email: data.email.toLowerCase(), username: data.username, name: data.name,
@@ -111,7 +110,7 @@ export default function SignupPage() {
       const first = res.errors && Object.values(res.errors)[0]?.[0];
       return setError(first || res.detail || t('e_email'));
     }
-    if (res.user && res.challenge) {
+    if (res.challenge) {
       setCode({
         challenge: res.challenge,
         expiresAt: res.expiresIn ? Date.now() + res.expiresIn * 1000 : undefined,
@@ -126,7 +125,7 @@ export default function SignupPage() {
   const confirmCode = async (value: string) => {
     if (!code) return;
     setBusy(true);
-    const res = await verifyCode(code.challenge, value, 'verify');
+    const res = await verifyCode(code.challenge, value);
     setBusy(false);
     if (res.ok && res.user) {
       showToast(t('welcome', { name: res.user.name || res.user.username }));

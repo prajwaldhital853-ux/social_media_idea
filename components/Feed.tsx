@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import PostCard from '@/components/PostCard';
 import { useApp } from '@/lib/AppContext';
@@ -37,9 +37,25 @@ export default function Feed() {
     serverMode ? { hasMore: feed.hasMore, loading: feed.loading, load: feed.loadMore } : undefined);
   const filling = serverMode && feed.loading && posts.length === 0;
 
+  // Once the reader is past the first card the tab bar slides up against the
+  // top bar and thins out, which is the room the posts actually need.
+  const [lifted, setLifted] = useState(false);
+  useEffect(() => {
+    let seen = -1;
+    const onScroll = () => {
+      const y = window.scrollY;
+      if (y === seen) return;
+      seen = y;
+      setLifted(y > 24);
+    };
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
   return (
     <>
-      <header className="header home-header">
+      <header className={`header home-header ${lifted ? 'lifted' : ''}`}>
         <div className="tabs" role="tablist" aria-label="Feed">
           <button type="button" role="tab" aria-selected={tab === 'foryou'} className={`tab ${tab === 'foryou' ? 'active' : ''}`} onClick={() => setTab('foryou')}>{t('forYou')}</button>
           <button type="button" role="tab" aria-selected={tab === 'following'} className={`tab ${tab === 'following' ? 'active' : ''}`} onClick={() => setTab('following')}>{t('following')}</button>

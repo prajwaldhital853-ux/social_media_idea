@@ -43,6 +43,21 @@ async function loadAllFeed(page) {
   await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
   await sleep(250);
 }
+// A demo-mode publish resolves inside one frame, so waitForSelector on the
+// progress ring races it. Tape the ring's own paint sequence in-page instead.
+const watchPublish = page => page.evaluate(() => {
+  window.__pub = [];
+  const t0 = performance.now();
+  new MutationObserver(() => {
+    const card = document.querySelector('.publish-card');
+    if (card) window.__pub.push({
+      ms: Math.round(performance.now() - t0),
+      pct: card.querySelector('.publish-pct')?.textContent,
+      label: card.querySelector('b')?.textContent
+    });
+  }).observe(document.body, { childList: true, subtree: true });
+});
+const publishTape = page => page.evaluate(() => window.__pub || []);
 const setKb = (page, kb, visible) => page.evaluate(([kb, visible]) => {
   const r = document.documentElement.style;
   r.setProperty('--keyboard-bottom', kb + 'px');
@@ -87,14 +102,30 @@ const swipe = async (page, x1, y1, x2, y2, steps = 14) => {
 const d = await newPage({ width: 1280, height: 900 });
 await goto(d, '/');
 
+// This suite reads the localStorage demo database, so it only means something
+// against a build made with NEXT_PUBLIC_API=off. An API build paints the same
+// screens from server rows and would report a hundred false failures.
+const isDemoBuild = await d.evaluate(() => !!localStorage.getItem('exposing-demo-v1'));
+ok('this build runs on the localStorage demo database', isDemoBuild, JSON.stringify({ isDemoBuild }));
+if (!isDemoBuild) {
+  console.log('\nqa.mjs needs a demo build: NEXT_PUBLIC_API=off npm run build && npm start');
+  fs.writeFileSync(`${OUT}/results.json`, JSON.stringify(results, null, 2));
+  await browser.close();
+  process.exit(1);
+}
+
 const layout = await d.evaluate(() => {
   const cols = getComputedStyle(document.querySelector('.shell')).gridTemplateColumns.split(' ').map(parseFloat);
   const main = document.querySelector('.main').getBoundingClientRect();
   const calm = document.querySelector('.side-calm');
   const cr = calm.getBoundingClientRect();
-  return { cols, mainW: Math.round(main.width), calmW: Math.round(cr.width), calmBg: getComputedStyle(calm).backgroundColor, hasSuggest: !!calm.querySelector('.suggest-card'), calmRight: Math.abs(cr.right - window.innerWidth) < 2, rail: !!document.querySelector('.rail .nav-item') };
+  return { cols, mainW: Math.round(main.width), calmW: Math.round(cr.width), calmBg: getComputedStyle(calm).backgroundColor, suggestRows: calm.querySelectorAll('.suggest-row').length, calmGutter: Math.round(window.innerWidth - cr.right), rail: !!document.querySelector('.rail .nav-item') };
 });
-ok('desktop: left menu + comfortable feed + right suggestions column', layout.cols.length === 3 && layout.mainW >= 640 && layout.mainW <= 700 && layout.calmW > 200 && layout.hasSuggest && layout.calmBg !== 'rgba(0, 0, 0, 0)' && layout.calmRight && layout.rail, JSON.stringify(layout));
+ok('desktop: left menu + feed column + quiet right rail with inline suggestions',
+  layout.cols.length === 3 && layout.mainW >= 580 && layout.mainW <= 620 && layout.calmW > 200
+  // The rail is inset by the shell's own right padding, never flush to the window.
+  && layout.suggestRows >= 1 && layout.calmBg === 'rgba(0, 0, 0, 0)'
+  && layout.calmGutter >= 16 && layout.calmGutter <= 48 && layout.rail, JSON.stringify(layout));
 
 await d.goto('http://localhost:3000/', { waitUntil: 'domcontentloaded', timeout: 45000 });
 await d.waitForSelector('article.post', { timeout: 30000 });
@@ -443,9 +474,13 @@ ok('desktop: view more loads the 5th reply', await d.evaluate(() => document.que
 const mention = await d.evaluate(() => {
   const rows = [...document.querySelectorAll('[data-comment="c1"] .comment-replies .comments-row')];
   const el = rows[rows.length - 1].querySelector('.comment-mention');
-  return el ? { text: el.textContent, color: getComputedStyle(el).color } : null;
+  return el ? { theme: document.documentElement.getAttribute('data-theme'), text: el.textContent, color: getComputedStyle(el).color } : null;
 });
-ok('desktop: reply @mention rendered in blue', mention && mention.text.startsWith('@') && mention.color === 'rgb(29, 111, 214)', JSON.stringify(mention));
+// #1d6fd6 on the light theme, #7db8ff on the dark one desktop defaults to.
+const MENTION_BLUE = { light: 'rgb(29, 111, 214)', dark: 'rgb(125, 184, 255)' };
+ok('desktop: reply @mention rendered in blue',
+  !!mention && mention.text.startsWith('@') && mention.color === MENTION_BLUE[mention.theme],
+  JSON.stringify(mention));
 
 await d.focus('[data-comment="c1r1"] .reaction-trigger');
 await d.keyboard.press('ArrowUp');
@@ -586,15 +621,17 @@ const pubChooser = await d.evaluate(() => ({
   reelEnabled: !document.querySelectorAll('.chooser-options button')[1].disabled
 }));
 ok('desktop: publish chooser offers Post + enabled Reel', JSON.stringify(pubChooser.options) === JSON.stringify(['Post', 'Reel']) && pubChooser.reelEnabled, JSON.stringify(pubChooser));
+await watchPublish(d);
 await d.evaluate(() => document.querySelectorAll('.chooser-options button')[1].click());
-await d.waitForSelector('.publish-overlay', { timeout: 5000 });
-const pctEarly = await d.evaluate(() => document.querySelector('.publish-pct')?.textContent);
-const reelLabel = await d.evaluate(() => document.querySelector('.publish-card b')?.textContent);
-await sleep(700);
-const pctLater = await d.evaluate(() => document.querySelector('.publish-pct')?.textContent);
-ok('desktop: publish ring stages % and labels reel', /^\d+%$/.test(pctEarly || '') && parseInt(pctLater) > parseInt(pctEarly) && /reel/i.test(reelLabel || ''), `${pctEarly} -> ${pctLater} / ${reelLabel}`);
-await shot(d, 'desktop-publish-progress');
 await d.waitForFunction(() => location.pathname === '/', { timeout: 10000 });
+const pubTape = await publishTape(d);
+ok('desktop: publish ring stages % and labels reel',
+  /^\d+%$/.test(pubTape[0]?.pct || '') && parseInt(pubTape[pubTape.length - 1]?.pct) > parseInt(pubTape[0]?.pct) && /reel/i.test(pubTape[0]?.label || ''),
+  JSON.stringify(pubTape));
+ok('desktop: publishing closes the chooser and lands on the feed',
+  await d.evaluate(() => location.pathname === '/' && !document.querySelector('.chooser-overlay') && !document.querySelector('.publish-overlay')),
+  JSON.stringify(await d.evaluate(() => ({ path: location.pathname, chooser: !!document.querySelector('.chooser-overlay'), overlay: !!document.querySelector('.publish-overlay') }))));
+await shot(d, 'desktop-publish-landed');
 await sleep(900);
 ok('desktop: reel published with kind reel', await d.evaluate(() => JSON.parse(localStorage.getItem('exposing-demo-v1')).posts[0].kind === 'reel'));
 const storedReel = await d.evaluate(() => { const p = JSON.parse(localStorage.getItem('exposing-demo-v1')).posts[0]; return { kind: p.kind, blobId: p.media[0]?.blobId, src: p.media[0]?.src || null }; });
@@ -1078,30 +1115,40 @@ ok('desktop: inbox lists conversations', inbox0.rows >= 1, JSON.stringify(inbox0
 await d.evaluate(() => [...document.querySelectorAll('.inbox-row')].find(r => r.textContent.includes('Bikash'))?.click());
 await d.waitForSelector('.chat-view', { timeout: 8000 }).catch(() => {});
 await sleep(700);
+// Threads are addressed by username in the URL and by id in the store, so both
+// come from the database rather than from a remembered literal.
 const chat0 = await d.evaluate(() => {
   const db = JSON.parse(localStorage.getItem('exposing-demo-v1'));
-  return { path: location.pathname, bubbles: document.querySelectorAll('.chat-bubble').length, incomingRead: db.messages.filter(m => m.from === 'u2' && m.to === 'u1').every(m => m.read) };
+  const peer = db.users.find(u => u.username === location.pathname.split('/').pop());
+  const incoming = db.messages.filter(m => m.from === peer?.id && m.to === 'u1');
+  return { path: location.pathname, peerId: peer?.id, bubbles: document.querySelectorAll('.chat-bubble').length, incoming: incoming.length, incomingRead: incoming.every(m => m.read) };
 });
-ok('desktop: conversation opens and marks incoming read', chat0.path === '/messages/u2' && chat0.bubbles >= 1 && chat0.incomingRead, JSON.stringify(chat0));
+ok('desktop: conversation opens and marks incoming read', chat0.path === '/messages/bikash_s' && chat0.bubbles >= 1 && chat0.incoming >= 1 && chat0.incomingRead, JSON.stringify(chat0));
 await d.type('.chat-compose input', 'QA desktop hello');
 await d.evaluate(() => document.querySelector('.chat-send').click());
 await sleep(500);
 const sentOk = await d.evaluate(() => {
   const db = JSON.parse(localStorage.getItem('exposing-demo-v1'));
-  const m = db.messages.filter(x => x.from === 'u1' && x.to === 'u2').sort((a, b) => b.ts - a.ts)[0];
-  const n = db.notifications.find(x => x.uid === 'u2' && x.kind === 'message' && x.href === '/messages/u1');
-  return { text: m?.text, mine: [...document.querySelectorAll('.chat-bubble-row.mine')].some(b => b.textContent.includes('QA desktop hello')), notified: !!n };
+  const me = db.users.find(u => u.id === 'u1');
+  const peer = db.users.find(u => u.username === 'bikash_s');
+  const m = db.messages.filter(x => x.from === me.id && x.to === peer.id).sort((a, b) => b.ts - a.ts)[0];
+  const n = db.notifications.find(x => x.uid === peer.id && x.kind === 'message' && x.href === `/messages/${me.username}`);
+  return { notifiedHref: n?.href || null, text: m?.text, mine: [...document.querySelectorAll('.chat-bubble-row.mine')].some(b => b.textContent.includes('QA desktop hello')), notified: !!n };
 });
 ok('desktop: send stores message + notifies recipient', sentOk.text === 'QA desktop hello' && sentOk.mine && sentOk.notified, JSON.stringify(sentOk));
 await shot(d, 'desktop-chat');
 await goto(d, '/messages');
-await d.evaluate(() => document.querySelector('.inbox-view .header-actions .ghost-btn').click());
+await d.evaluate(() => document.querySelector('.inbox-new').click());
 await d.waitForSelector('.people-modal', { timeout: 5000 }).catch(() => {});
 await d.type('.people-search input', 'himal');
 await sleep(400);
+const pickedName = await d.evaluate(() => document.querySelector('.people-pick')?.textContent || null);
 await d.evaluate(() => document.querySelector('.people-pick')?.click());
 await d.waitForSelector('.chat-view', { timeout: 8000 }).catch(() => {});
-ok('desktop: new-message picker opens chosen chat', await d.evaluate(() => location.pathname === '/messages/u10'));
+const himalName = await d.evaluate(() => JSON.parse(localStorage.getItem('exposing-demo-v1')).users.find(u => u.username.startsWith('himal'))?.username);
+ok('desktop: new-message picker opens chosen chat',
+  !!himalName && await d.evaluate(u => location.pathname === `/messages/${u}`, himalName),
+  JSON.stringify({ pickedName, himalName, path: await d.evaluate(() => location.pathname) }));
 
 // Marketplace
 await goto(d, '/marketplace');
@@ -1214,12 +1261,22 @@ ok('desktop: seller profile lists their listings', await d.evaluate(() => docume
 await d.evaluate(() => document.querySelector('.profile-listings .market-card').click());
 await d.waitForSelector('.listing-page', { timeout: 8000 }).catch(() => {});
 await sleep(400);
+// The thread must open with the listing's own owner, so read the owner out of
+// the database rather than scraping the seller card.
+const listingPeer = await d.evaluate(() => {
+  const db = JSON.parse(localStorage.getItem('exposing-demo-v1'));
+  const id = decodeURIComponent(location.pathname.split('/').pop());
+  const listing = db.listings.find(x => x.id === id);
+  return { id, uid: listing?.uid, handle: db.users.find(u => u.id === listing?.uid)?.username };
+});
 await d.evaluate(() => document.querySelector('.listing-actions .promote-submit').click());
 await d.waitForSelector('.chat-view', { timeout: 8000 }).catch(() => {});
-ok('desktop: contact seller opens chat with seller', await d.evaluate(() => location.pathname === '/messages/u5'));
+ok('desktop: contact seller opens chat with seller',
+  !!listingPeer.handle && await d.evaluate(h => location.pathname === `/messages/${h}`, listingPeer.handle),
+  JSON.stringify({ listingPeer, path: await d.evaluate(() => location.pathname) }));
 
-// ================= PHASE 8: DESKTOP =================
-// Top bar layout: logo + search + theme left, reels/messages/notifications right
+// ================= PHASE 8/9: DESKTOP =================
+// Top bar layout: logo + search left, reels + messages/notifications popovers + theme right
 await goto(d, '/');
 const topBar = await d.evaluate(() => {
   const bar = document.querySelector('.topbar');
@@ -1234,15 +1291,19 @@ const topBar = await d.evaluate(() => {
     h: Math.round(r.height),
     logo: !!left.querySelector('a[href="/"] svg, a[href="/"] img'),
     search: !!left.querySelector('.topbar-search'),
-    theme: !!left.querySelector('button'),
-    rightLinks: [...right.querySelectorAll('a')].map(a => a.getAttribute('href')),
+    theme: !!right.querySelector('button[aria-label^="Switch to"]'),
+    videoLink: !!right.querySelector('a[href="/video"]'),
+    popovers: [...right.querySelectorAll('.topbar-slot > button')].map(b => b.getAttribute('aria-label')),
     leftFirst: lr.left < 40,
     rightLast: Math.abs(rr.right - window.innerWidth) < 40,
     railAdmin: [...document.querySelectorAll('.rail a, .rail button')].some(x => /admin/i.test(x.textContent)),
     composeBox: !!document.querySelector('.desktop-compose, .home-header-row')
   };
 });
-ok('desktop: top bar has logo/search/theme left + reels/messages/notifications right', topBar && topBar.fixed && topBar.h <= 60 && topBar.logo && topBar.search && topBar.theme && JSON.stringify(topBar.rightLinks) === JSON.stringify(['/video', '/messages', '/notifications']) && topBar.leftFirst && topBar.rightLast, JSON.stringify(topBar));
+ok('desktop: top bar has logo/search left + reels + messages/notifications popovers + theme right',
+  topBar && topBar.fixed && topBar.h <= 60 && topBar.logo && topBar.search && topBar.theme && topBar.videoLink
+  && JSON.stringify(topBar.popovers) === JSON.stringify(['Messages', 'Notifications'])
+  && topBar.leftFirst && topBar.rightLast, JSON.stringify(topBar));
 ok('desktop: Admin removed from left menu, old compose box gone', topBar && !topBar.railAdmin && !topBar.composeBox, JSON.stringify({ railAdmin: topBar?.railAdmin, composeBox: topBar?.composeBox }));
 await d.evaluate(() => document.querySelector('.rail .nav-item[href="/settings"], .rail button')?.click());
 const drawerAdmin = await d.evaluate(() => {
@@ -1401,10 +1462,19 @@ const homeFooter = await d.evaluate(() => !!document.querySelector('.site-footer
 await goto(d, '/marketplace');
 const marketFooter = await d.evaluate(() => !!document.querySelector('.site-footer'));
 ok('desktop: legal footer removed from home + marketplace', !homeFooter && !marketFooter, JSON.stringify({ homeFooter, marketFooter }));
+// /login sends a signed-in visitor home, so the legal row is checked from the
+// signed-out session — the only state in which that page is reachable.
+await d.evaluate(() => {
+  const db = JSON.parse(localStorage.getItem('exposing-demo-v1'));
+  db.meId = null;
+  localStorage.setItem('exposing-demo-v1', JSON.stringify(db));
+});
 await goto(d, '/login');
-ok('desktop: login page links all four legal pages', await d.evaluate(() => document.querySelectorAll('.auth-legal a').length === 4));
+const loginLegal = await d.evaluate(() => ({ path: location.pathname, links: document.querySelectorAll('.auth-legal a').length }));
+ok('desktop: login page links all four legal pages', loginLegal.path === '/login' && loginLegal.links === 4, JSON.stringify(loginLegal));
 await goto(d, '/signup');
-ok('desktop: signup page links all four legal pages', await d.evaluate(() => document.querySelectorAll('.signup-legal-links a').length === 4));
+const signupLegal = await d.evaluate(() => ({ path: location.pathname, links: document.querySelectorAll('.signup-legal-links a').length }));
+ok('desktop: signup page links all four legal pages', signupLegal.path === '/signup' && signupLegal.links === 4, JSON.stringify(signupLegal));
 await d.evaluate(() => {
   const db = JSON.parse(localStorage.getItem('exposing-demo-v1'));
   db.meId = 'u1';
@@ -1566,12 +1636,16 @@ const fillSignup = async (username, email) => {
 await fillSignup('sita_k', 'qa.tester@demo.test');
 await d.evaluate(() => document.querySelector('.signup-form button[type="submit"]').click());
 await sleep(400);
-ok('desktop: duplicate username rejected', await d.evaluate(() => (document.querySelector('.signup-error')?.textContent || '').length > 0 && location.pathname === '/signup'));
+const dupSignup = await d.evaluate(() => ({ error: document.querySelector('.signup-error')?.textContent || '', path: location.pathname }));
+ok('desktop: duplicate username rejected', dupSignup.path === '/signup' && /taken/i.test(dupSignup.error), JSON.stringify(dupSignup));
 await fillSignup('qa_tester', 'qa.tester@demo.test');
 await shot(d, 'desktop-signup');
 await d.evaluate(() => document.querySelector('.signup-form button[type="submit"]').click());
 await d.waitForSelector('article.post', { timeout: 15000 }).catch(() => {});
 await sleep(600);
+// Demo mode has no server to confirm an address against, so the account opens
+// straight away. The emailed-code contract the API build uses is proved in
+// auth_qa.mjs, which only ever runs against the backend.
 const signupOk = await d.evaluate(() => {
   const db = JSON.parse(localStorage.getItem('exposing-demo-v1'));
   const u = db.users.find(x => x.username === 'qa_tester');
@@ -1579,9 +1653,8 @@ const signupOk = await d.evaluate(() => {
 });
 ok('desktop: signup creates account and signs in', signupOk.created && signupOk.loggedIn && signupOk.path === '/', JSON.stringify(signupOk));
 await d.evaluate(() => {
-  const db = JSON.parse(localStorage.getItem('exposing-demo-v1'));
-  db.meId = 'u1';
-  localStorage.setItem('exposing-demo-v1', JSON.stringify(db));
+  const db = JSON.parse(localStorage.getItem('exposing-demo-v1') || '{}');
+  if (db) { db.meId = 'u1'; localStorage.setItem('exposing-demo-v1', JSON.stringify(db)); }
 });
 await goto(d, '/');
 
@@ -1825,12 +1898,14 @@ await m.evaluate(() => document.querySelector('.create-publish').click());
 await m.waitForSelector('.chooser-overlay', { timeout: 5000 });
 await sleep(400);
 await shot(m, 'mobile-chooser');
+await watchPublish(m);
 await m.evaluate(() => document.querySelectorAll('.chooser-options button')[0].click());
-await m.waitForSelector('.publish-overlay', { timeout: 5000 });
-await shot(m, 'mobile-publish-progress');
 await m.waitForFunction(() => location.pathname === '/', { timeout: 10000 });
+ok('mobile: chooser + progress publishes to feed',
+  (await publishTape(m)).length >= 1 && await m.evaluate(() => document.querySelector('article.post')?.textContent.includes('QA mobile publish')),
+  JSON.stringify(await publishTape(m)));
+await shot(m, 'mobile-publish-landed');
 await sleep(900);
-ok('mobile: chooser + progress publishes to feed', await m.evaluate(() => document.querySelector('article.post')?.textContent.includes('QA mobile publish')));
 
 // Reels on mobile
 await goto(m, '/video');
@@ -1956,21 +2031,55 @@ await sleep(450);
 await shot(m, 'mobile-dark');
 ok('mobile: theme toggle works', theme === 'dark' || theme === 'light', `theme=${theme}`);
 
-// Login brand
+// Login brand — /login sends a signed-in visitor home, so open it signed out.
 const lp = await newPage({ width: 1280, height: 900 });
+await goto(lp, '/');
+await lp.evaluate(() => {
+  const db = JSON.parse(localStorage.getItem('exposing-demo-v1'));
+  db.meId = null;
+  localStorage.setItem('exposing-demo-v1', JSON.stringify(db));
+});
 await goto(lp, '/login');
 await sleep(700);
 const loginBrand = await lp.evaluate(() => {
   const img = document.querySelector('.login-brand .brand-logo-dark');
-  return { hasBrand: !!document.querySelector('.login-brand'), src: img?.getAttribute('src'), loaded: (img?.naturalWidth || 0) > 0, title: document.querySelector('.login-title')?.textContent };
+  return { path: location.pathname, hasBrand: !!document.querySelector('.login-brand'), src: img?.getAttribute('src'), loaded: (img?.naturalWidth || 0) > 0, title: document.querySelector('.login-title')?.textContent };
 });
 ok('login: real Exposing logo + wordmark', loginBrand.hasBrand && loginBrand.loaded && loginBrand.src === '/exposing-logo-dark.png' && (loginBrand.title || '').includes('Exposing'), JSON.stringify(loginBrand));
 await shot(lp, 'desktop-login-brand');
+// Same origin, same storage: leave the shared session signed back in or the
+// mobile half of the suite wakes up on a logged-out phone.
+await lp.evaluate(() => {
+  const db = JSON.parse(localStorage.getItem('exposing-demo-v1'));
+  db.meId = 'u1';
+  localStorage.setItem('exposing-demo-v1', JSON.stringify(db));
+});
 await lp.close();
 
 // ================= PHASE 7: MOBILE =================
+// The bell badge only exists while something is unread; the desktop half has
+// already read the inbox by now, so give the phone one notification of its own.
+await m.evaluate(() => {
+  const db = JSON.parse(localStorage.getItem('exposing-demo-v1'));
+  db.notifications.unshift({ id: 'qa_m_badge', uid: db.meId, kind: 'like', text: 'liked your photo', ts: Date.now(), read: false });
+  localStorage.setItem('exposing-demo-v1', JSON.stringify(db));
+});
 await goto(m, '/');
-ok('mobile: unread badge on bell', await m.evaluate(() => !!document.querySelector('.m-top .mnav-badge')));
+ok('mobile: unread badge on bell', await m.evaluate(() => {
+  const db = JSON.parse(localStorage.getItem('exposing-demo-v1'));
+  const badge = document.querySelector('.m-top .mnav-badge');
+  return !!badge && Number(badge.textContent) > 0;
+}), JSON.stringify(await m.evaluate(() => {
+  const db = JSON.parse(localStorage.getItem('exposing-demo-v1'));
+  return {
+    path: location.pathname,
+    meId: db.meId,
+    hasQA: db.notifications.some(n => n.id === 'qa_m_badge'),
+    unreadForMe: db.notifications.filter(n => n.uid === db.meId && !n.read).length,
+    mtop: !!document.querySelector('.m-top'),
+    badge: document.querySelector('.m-top .mnav-badge')?.textContent || null
+  };
+})));
 
 await goto(m, '/notifications');
 const mNotif = await m.evaluate(() => ({

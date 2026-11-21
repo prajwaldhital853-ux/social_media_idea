@@ -1,0 +1,35 @@
+PASS  desktop: opens in dark mode by default  — {"theme":"dark","stored":null,"bodyBg":"rgb(16, 17, 20)"}
+PASS  desktop: the page field is the soft canvas color  — rgb(16, 17, 20)
+PASS  desktop: the rail is a real sidebar, wide enough to read  — rail 280px
+PASS  desktop: the rail runs the full height under the top bar  — {"railH":844,"viewport":900}
+PASS  desktop: the feed leaves room on both sides  — {"feed":600,"sideRoom":524}
+PASS  desktop: the gap between rail and feed is wide  — 36px
+PASS  desktop: no hairline between rail, feed and top bar  — rail 0px / topbar 0px
+PASS  desktop: the rail is the left sheet of the screen  — rgb(23, 25, 28)
+PASS  desktop: no sign in / sign up block inside the rail
+PASS  desktop: the theme switch lives on the right of the top bar, and nowhere else  — {"themeInRight":true,"toggleLeft":false,"pageToggle":false}
+PASS  desktop: suggestions are an inline list, not a card  — {"card":false,"rail":true,"bg":"rgba(0, 0, 0, 0)"}
+PASS  desktop: the For you / Following bar lifts and thins once the reader scrolls  — {"resting":{"h":55,"top":64,"lifted":false},"raised":{"h":41,"top":58,"lifted":true,"posts":10,"overflow":false}}
+PASS  desktop: the marketplace uses everything right of the rail  — {"mainW":1160,"cols":4,"cards":30,"calm":false,"pageToggle":false,"overflow":false}
+PASS  desktop: the marketplace header does not duplicate the top bar mode switch  — {"pageToggle":false}
+PASS  desktop: the bell in the top bar is a button, not a link  — {"display":"flex"}
+PASS  desktop: the bell opens an activity box over the canvas  — {"rows":10,"groups":["New","Earlier"],"tabs":["All","Unread (7)"],"foot":"See all notifications","right":1380,"top":60,"w":380,"bg":"rgb(24, 26, 30)"}
+PASS  desktop: the Unread tab filters the popover to unread rows  — {"active":"active","allUnread":true}
+PASS  desktop: a click outside closes the popover
+PASS  desktop: a popover row navigates and closes the popover  — {"path":"/u/anish","panel":false}
+PASS  desktop: the message icon opens a thread list at the top of the page  — {"rows":9,"search":true,"expand":true,"foot":"See all messages","right":1332,"top":60}
+PASS  desktop: the full-screen messenger is inbox column plus thread pane  — {"path":"/messages","side":{"w":344,"left":280},"main":{"w":816,"left":624,"right":1440},"calmShown":false,"rows":9,"empty":true,"search":true,"newChat":true}
+PASS  desktop: the messenger owns the width (suggestions column steps aside)  — {"calmShown":false,"mainRight":1440}
+PASS  desktop: picking a thread opens it beside the inbox, not over it  — {"path":"/messages/arjun","chat":true,"bubbles":10,"compose":true,"backHidden":true,"stillListed":9,"activeRow":true}
+PASS  desktop: the thread hides the mobile back button on desktop  — {"backHidden":true}
+PASS  desktop: sending from the messenger pane appends the bubble  — {"before":10,"after":11,"last":"Qoder phase 9 check"}
+PASS  desktop: browser back steps out of the thread to the inbox  — {"path":"/messages","empty":true}
+PASS  mobile: keeps the stored light theme on a narrow viewport  — {"theme":"light","vw":390}
+PASS  mobile: the inbox stays a single column with no thread pane  — {"rows":9,"mainHidden":true,"topbarHidden":true,"search":true,"head":true,"waitedMs":124}
+PASS  mobile: a thread is still full width with its back button  — {"path":"/messages/arjun","chatW":390,"sideHidden":true,"backShown":true,"compose":true}
+PASS  mobile: the feed keeps its own sheet and loads posts  — {"bg":"rgb(255, 255, 255)","posts":9,"waitedMs":38}
+PASS  desktop: a guest signs in from the top bar, never the rail  — {"railAuth":false,"signup":true,"signin":true,"railUser":false}
+PASS  desktop: the popover tells a guest to sign in instead of failing  — {"panel":true,"cta":"Sign in"}
+PASS  no console or HTTP errors during the run
+
+33/33 checks passed

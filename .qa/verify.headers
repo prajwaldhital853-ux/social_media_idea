@@ -1,0 +1,17 @@
+HTTP/1.1 200 OK
+Date: Sat, 21 Nov 2026 13:23:24 GMT
+Server: WSGIServer/0.2 CPython/3.12.10
+Content-Type: application/json
+Vary: Accept, origin
+Allow: POST, OPTIONS
+X-Frame-Options: DENY
+Content-Length: 74
+X-Content-Type-Options: nosniff
+Referrer-Policy: strict-origin-when-cross-origin
+Permissions-Policy: camera=(), microphone=(), geolocation=()
+Cross-Origin-Opener-Policy: same-origin
+Content-Security-Policy: default-src 'none'; frame-ancestors 'none'
+Set-Cookie: exposing_access=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIzODUiLCJ1c2VybmFtZSI6ImN1cmxwcm9iZTEiLCJ0eXBlIjoiYWNjZXNzIiwiaWF0IjoxNzk1MjY3NDA0LCJleHAiOjE3OTUyNjgzMDQsImp0aSI6IjlmM2YxOWI1YTM2ZDRjNGU5MzczYTIyNGJiY2ZhZjlmIn0.64Mbw_0rXS9CJB5L-2BDqRnOe7ZA7UeKMQQUsgljpJg; expires=Sat, 21 Nov 2026 13:38:24 GMT; HttpOnly; Max-Age=900; Path=/; SameSite=Lax
+Set-Cookie: exposing_refresh=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIzODUiLCJ0eXBlIjoicmVmcmVzaCIsImRldmljZSI6ImN1cmwtcHJvYmUiLCJpYXQiOjE3OTUyNjc0MDQsImV4cCI6MTc5NTg3MjIwNCwianRpIjoiMTVhM2ZjZGQ5MzNiNDY2NDg0OGJhOTNjNWY0OTIwNWEifQ.6bIUpZbaR6mA2s5lBd2T_hJlfPYeRdfMzWcp0LotvMc; expires=Sat, 28 Nov 2026 13:23:24 GMT; HttpOnly; Max-Age=604800; Path=/api/auth; SameSite=Lax
+Set-Cookie: exposing_csrf=48a67d63acc54666b913fe10d92b7dd7; expires=Sat, 28 Nov 2026 13:23:24 GMT; Max-Age=604800; Path=/; SameSite=Lax
+

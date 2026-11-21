@@ -11,7 +11,7 @@ import { Media } from '@/lib/types';
 import { uid, fmtDur } from '@/lib/utils';
 import { mediaFromFile } from '@/lib/mediaFile';
 import { takeCreateDraft } from '@/lib/draftMedia';
-import { useBackClose } from '@/lib/useBackClose';
+import { useBackClose, closeLayerWithoutBack } from '@/lib/useBackClose';
 
 const PLACES = ['Kathmandu', 'Pokhara', 'Lalitpur', 'Bhaktapur', 'Chitwan', 'Butwal', 'Dharan', 'Nepalgunj'];
 const MOODS = [
@@ -121,6 +121,10 @@ export default function CreatePostPage() {
 
   const publish = async (kind: 'post' | 'reel') => {
     if (!me || !canPost) return;
+    // The chooser sheet owns a history entry, and closing it spends that entry
+    // with history.back(). Left alone, the back() lands on top of the push('/')
+    // below and the reader stays on /create staring at a finished ring.
+    closeLayerWithoutBack();
     setChooserOpen(false);
     setPublishKind(kind);
     setError('');

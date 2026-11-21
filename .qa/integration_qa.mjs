@@ -118,17 +118,20 @@ async function signIn(page, identifier, password) {
 
 /** Scrolls a windowed page to its foot until nothing more arrives. */
 async function walk(page, sel, rounds = 8) {
-  let last = -1;
+  let last = await count(page, sel);
   for (let i = 0; i < rounds; i++) {
     await page.evaluate(() => window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'instant' }));
-    await sleep(500);
-    const now = await count(page, sel);
-    if (now === last) break;
-    last = now;
+    // A keyset page can take longer than a polling beat to arrive; reading a
+    // fixed-interval count reports "the cursor stopped" while it is in flight.
+    const before = last;
+    await page.waitForFunction(([sel, before]) => document.querySelectorAll(sel).length > before,
+      { timeout: 6000, polling: 300 }, [sel, before]).catch(() => {});
+    last = await count(page, sel);
+    if (last === before) break;
   }
   await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
   await sleep(250);
-  return last < 0 ? await count(page, sel) : last;
+  return last;
 }
 
 const d = await newPage({ width: 1440, height: 900 });
@@ -221,9 +224,14 @@ await goto(d, '/marketplace');
 await waitFor(d, '.market-card:not(.skeleton)');
 const marketPage = await api(d, '/api/marketplace/');
 const marketCards = await count(d, '.market-card:not(.skeleton)');
-ok('desktop: the marketplace grid renders the page the server chose',
-  marketCards > 0 && marketCards === (marketPage.body?.results?.length || -1),
-  `screen ${marketCards}, api ${marketPage.body?.results?.length}, has_more ${marketPage.body?.has_more}`);
+// A wide grid fills the viewport before the harness can blink, so the honest
+// claim is not "the same number" but "it opens on the server's page, in order".
+const marketTitles = await d.evaluate(() => [...document.querySelectorAll('.market-card:not(.skeleton) .market-card-title')].map(el => el.textContent.trim()));
+const pageTitles = (marketPage.body?.results || []).map(r => r.title);
+const firstDrift = pageTitles.findIndex((title, i) => marketTitles[i] !== title);
+ok('desktop: the marketplace grid opens on the page the server chose',
+  marketCards > 0 && marketCards >= pageTitles.length && firstDrift === -1,
+  `screen ${marketCards}, api ${pageTitles.length}, drift at ${firstDrift}, has_more ${marketPage.body?.has_more}`);
 if (marketPage.body?.has_more) {
   const marketWalked = await walk(d, '.market-card:not(.skeleton)');
   ok('desktop: the marketplace grid walks its cursor', marketWalked > marketCards, `${marketCards} -> ${marketWalked}`);
@@ -254,9 +262,16 @@ ok('desktop: profile totals come from the profile row',
 const followerPage = await api(d, `/api/users/${DEMO.username}/followers/`);
 await goto(d, `/u/${DEMO.username}/followers`);
 await waitFor(d, '.people-page-list .people-row');
-ok('desktop: the followers list is a keyset page of people',
-  (await count(d, '.people-page-list .people-row')) === (followerPage.body?.results?.length || -1),
-  `screen ${await count(d, '.people-page-list .people-row')}, api ${followerPage.body?.results?.length}`);
+// One server page is what a fresh window may show at most; walking to the
+// bottom has to collect every follower the profile total promises. Counting
+// against a single page only ever measured where the prefetch had got to.
+const followersFirst = await count(d, '.people-page-list .people-row');
+const followersAll = await walk(d, '.people-page-list .people-row');
+const followerTotal = Number(profileRow.body?.followers || 0);
+ok('desktop: the followers list pages people with a cursor',
+  followerTotal > 0 && followersFirst >= (followerPage.body?.results?.length || -1)
+  && followersFirst <= (followerPage.body?.results?.length || 0) + 2 && followersAll === followerTotal,
+  `first ${followersFirst}, api page ${followerPage.body?.results?.length}, walked ${followersAll}, server total ${followerTotal}`);
 await shot(d, 'intg-desktop-followers');
 
 // ----------------------------------------------------------------- search ----
@@ -283,7 +298,6 @@ ok('desktop: the top bar badges match the unread counters',
 // ------------------------------------------------------- inbox + chat thread ---
 const chatPeer = (await api(d, `/api/users/${DEMO.username}/following/`)).body?.results?.[0]?.username;
 ok('desktop: a chat partner exists for the thread test', !!chatPeer, String(chatPeer));
-const unreadBefore = Number((await api(d, '/api/notifications/unread/')).body?.messages);
 const seeded = await d.evaluate(async ([peer]) => {
   const pair = document.cookie.split('; ').find(c => c.startsWith('exposing_csrf='));
   const headers = { 'Content-Type': 'application/json', 'X-CSRF-Token': pair ? decodeURIComponent(pair.split('=')[1]) : '' };
@@ -326,9 +340,23 @@ ok('desktop: "load more" prepends an older page of the thread',
 ok('desktop: loading older rows keeps the reader where they were',
   Math.abs(afterOlder.distance - scrollBefore) < 120, `${scrollBefore} -> ${afterOlder.distance}`);
 await shot(d, 'intg-desktop-chat');
-const unreadAfter = Number((await api(d, '/api/notifications/unread/')).body?.messages);
+// Read state belongs to a conversation, so the fixture is one the server itself
+// reports as unread — not whatever an earlier run left behind. Watching for the
+// call keeps the claim honest even once every thread has been opened.
+const unreadRow = (await api(d, '/api/messages/inbox/')).body?.results?.find(r => (r.unread || 0) > 0);
+const readCalls = [];
+const readSpy = req => { if (/\/api\/messages\/[^/]+\/read\/?$/.test(req.url())) readCalls.push(req.url()); };
+d.on('request', readSpy);
+await goto(d, `/messages/${(unreadRow && unreadRow.user.username) || chatPeer}`);
+await waitFor(d, '.chat-bubble');
+await sleep(800);
+d.off('request', readSpy);
+const afterRow = unreadRow
+  ? (await api(d, '/api/messages/inbox/')).body?.results?.find(r => r.conversation === unreadRow.conversation)
+  : null;
 ok('desktop: opening a thread marks it read on the server',
-  unreadBefore === 0 || unreadAfter < unreadBefore, `unread messages ${unreadBefore} -> ${unreadAfter}`);
+  readCalls.length >= 1 && (!unreadRow || (afterRow ? afterRow.unread || 0 : -1) === 0),
+  JSON.stringify({ peer: unreadRow?.user?.username, was: unreadRow?.unread, now: afterRow?.unread, readCalls: readCalls.length }));
 
 // ------------------------------------------------------- notifications + saved ---
 await goto(d, '/notifications');

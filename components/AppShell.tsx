@@ -30,6 +30,8 @@ export default function AppShell({ children }: AppShellProps) {
   // The inbox and a thread are one messenger surface, so the calm column steps
   // aside and the chat owns the whole width behind the top bar.
   const messengerPage = pathname === '/messages' || pathname.startsWith('/messages/');
+  // Browsing listings is a grid, not a column: it reads better edge to edge.
+  const marketPage = pathname === '/marketplace' || pathname.startsWith('/marketplace/');
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
@@ -46,7 +48,7 @@ export default function AppShell({ children }: AppShellProps) {
   if (!mounted) return null;
 
   return (
-    <div className={`shell ${focusedPage ? 'focused-page' : ''} ${inChat ? 'chat-page' : ''} ${feedPage ? 'feed-page' : ''} ${messengerPage ? 'messenger-page' : ''}`}>
+    <div className={`shell ${focusedPage ? 'focused-page' : ''} ${inChat ? 'chat-page' : ''} ${feedPage ? 'feed-page' : ''} ${messengerPage ? 'messenger-page' : ''} ${marketPage ? 'market-page' : ''}`}>
       {!focusedPage && <TopBar />}
       <NavRail />
       <main className="main">

@@ -82,10 +82,8 @@ interface AppContextType {
   merge: (frag: Fragment) => void;
   signin: (identifier: string, password: string) => Promise<AuthResult>;
   signupAccount: (payload: SignupPayload) => Promise<AuthResult>;
-  verifyCode: (challenge: string | number, code: string, purpose?: 'login' | 'verify' | 'unlock') => Promise<AuthResult>;
+  verifyCode: (challenge: string | number, code: string) => Promise<AuthResult>;
   resendCode: (challenge: string | number) => Promise<CodeResult>;
-  requestUnlock: (email: string) => Promise<CodeResult>;
-  confirmUnlock: (challenge: string | number, code: string) => Promise<AuthResult>;
   googleSignIn: (token: { id_token?: string; demo?: { email: string; name: string; sub: string } }) => Promise<AuthResult>;
   updateProfile: (patch: Record<string, any>) => Promise<void>;
   loadPerson: (username: string) => Promise<PersonRead | null>;
@@ -137,6 +135,8 @@ export interface AuthResult {
   prefill?: { email: string; name: string; google_sub: string };
   locked?: boolean;
   lockedUntil?: number;
+  /** Seconds of cooloff left, counted on the server clock. */
+  retryIn?: number;
   attemptsLeft?: number;
   detail?: string;
   errors?: Record<string, string[]>;
@@ -346,6 +346,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         newDevice: !!err.data?.new_device,
         locked: !!err.data?.locked,
         lockedUntil: at(err.data?.locked_until),
+        retryIn: err.data?.retry_in === undefined ? undefined : Number(err.data.retry_in),
         attemptsLeft: err.data?.attempts_left,
       };
     }
@@ -404,12 +405,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const verifyCode = async (challenge: string | number, code: string, purpose: 'login' | 'verify' | 'unlock' = 'login'): Promise<AuthResult> => {
-    const path = purpose === 'unlock' ? '/api/auth/unlock/confirm/' : '/api/auth/otp/';
+  /** Both purposes confirm through the same endpoint; the server knows which code this is. */
+  const verifyCode = async (challenge: string | number, code: string): Promise<AuthResult> => {
     try {
-      const data = await api.post(path, { challenge, code, device_id: api.deviceId() });
-      if (purpose === 'unlock') return { ok: true, status: 200, detail: data?.detail };
-      return await finishAuth(data);
+      return await finishAuth(await api.post('/api/auth/otp/', { challenge, code, device_id: api.deviceId() }));
     } catch (err) {
       return authResult(err);
     }
@@ -422,16 +421,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return codeResult(null, err);
     }
   };
-
-  const requestUnlock = async (email: string) => {
-    try {
-      return codeResult(await api.post('/api/auth/unlock/', { email }));
-    } catch (err) {
-      return codeResult(null, err);
-    }
-  };
-
-  const confirmUnlock = (challenge: string | number, code: string) => verifyCode(challenge, code, 'unlock');
 
   const googleSignIn = async (token: { id_token?: string; demo?: { email: string; name: string; sub: string } }): Promise<AuthResult> => {
     try {
@@ -839,10 +828,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const markAllRead = async () => {
     const self = currentMe();
     if (!self) return;
+    // Only an API session needs a stored badge: the server counts what the
+    // client has not fetched. A demo session holds every row, so writing an
+    // aggregate here would freeze the bell at zero and hide anything that
+    // arrives afterwards.
     setDb(prev => ({
       ...prev,
       notifications: prev.notifications.map(n => (n.uid === self.id ? { ...n, read: true } : n)),
-      unread: { notifications: 0, messages: prev.unread?.messages || 0 }
+      ...(API_ENABLED ? { unread: { notifications: 0, messages: prev.unread?.messages || 0 } } : {})
     }));
     if (!API_ENABLED) return;
     try {
@@ -1080,7 +1073,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         closeCreateChooser: () => setCreateChooserOpen(false),
         toast, showToast,
         ready, serverMode, resync, merge,
-        signin, signupAccount, verifyCode, resendCode, requestUnlock, confirmUnlock, googleSignIn,
+        signin, signupAccount, verifyCode, resendCode, googleSignIn,
         updateProfile, loadPerson, loadEntity,
       }}
     >

@@ -1,0 +1,83 @@
+PASS  this build runs on the localStorage demo database  — {"isDemoBuild":true}
+FAIL  desktop: left menu + feed column + quiet right rail with inline suggestions  — {"cols":[280,600,296],"mainW":600,"calmW":296,"calmBg":"rgba(0, 0, 0, 0)","suggestRows":4,"calmRight":false,"rail":true}
+PASS  desktop: feed paginates first paint and loads more on scroll  — {"firstPage":10,"fullPage":25}
+PASS  desktop: Search opens fast (prefetched)  — 225ms
+PASS  desktop: Reels opens fast (prefetched)  — 326ms
+PASS  desktop: post opens fast (prefetched on hover)  — 299ms
+PASS  desktop: author profile opens fast (prefetched on hover)  — 762ms
+PASS  desktop: feed renders
+PASS  desktop: window scrollbar hidden
+PASS  desktop: no horizontal overflow
+PASS  desktop: page-enter animation
+PASS  desktop: real favicon + rail logo loaded  — {"favicon":"/exposing-icon.png","apple":"/apple-icon.png","logoLoaded":true,"logoSrc":"/exposing-logo.png"}
+PASS  desktop: p_mix stack n5, 5 cells, +3  — {"cls":"media-mosaic stack n5","cells":5,"more":"+3","preview":true,"previewPaused":true}
+PASS  desktop: mixed video is paused preview
+PASS  desktop: single video autoplays with sound + loop  — {"paused":false,"muted":false,"loop":true}
+PASS  desktop: video pauses when scrolled off-screen
+PASS  desktop: video resumes when back in view
+PASS  desktop: mixed mosaic video opens media page at that clip (not Reels)  — {"path":"/post/p_mix/media/0","i":0,"src":"https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4","playing":true,"count":"1 / 8","noReels":true}
+PASS  desktop: photo opens media route at 2/8, 8 slides, horizontal snap  — {"path":"/post/p_mix/media/1","count":"2 / 8","slides":8,"snap":"x mandatory","axis":"auto/hidden","row":"row","slideW":1280,"clientW":1280,"slide0Video":true,"slide1Img":true}
+PASS  desktop: media page video slide plays with sound at 1/8  — {"count":"1 / 8","playing":true,"muted":false}
+PASS  desktop: ArrowRight advances to 2/8
+PASS  desktop: ArrowLeft returns to 1/8
+PASS  desktop: per-media action bar (like/comment/share)
+PASS  desktop: per-media like stored as media reaction
+PASS  desktop: photo comment sheet layers above media page  — {"sheetZ":"1450","pageZ":"1200","sheetVisible":true}
+PASS  desktop: photo comment stored with mediaIndex
+PASS  desktop: Escape closes photo sheet, media page stays
+PASS  desktop: phone-back returns to feed without reload  — {"path":"/","marker":true,"page":false}
+PASS  desktop: post totals include per-media comments+reactions  — {"commentSpan":"5","reactSpan":"9","totalComments":5,"totalReactions":9}
+PASS  desktop: 3rd photo opens media page at 3/4
+PASS  desktop: wheel advances one slide to 4/4
+PASS  desktop: horizontal wheel back returns to previous slide 3/4 (not first)
+PASS  desktop: horizontal snap settles on a whole slide, no partial flicker  — {"left":1280,"w":1280,"count":"2 / 4","vertical":0}
+PASS  desktop: picture snaps to center immediately (<300ms)  — {"ms":64,"left":3840,"w":1280}
+PASS  desktop: horizontal scroll reaches 4/4
+PASS  desktop: side prev/next arrows, next disabled on last slide  — {"prevDisabled":false,"nextDisabled":true,"sides":true,"mid":true}
+PASS  desktop: prev arrow returns to 3/4
+PASS  desktop: back from media page lands on feed
+PASS  desktop: suggestion emojis mirror post kinds  — {"kinds":["haha","like","love","sad","wow"],"suggestKinds":["haha","like","love","sad","wow"],"head":5,"chips":["Nice!","Beautiful!","Congrats!","Love this!","Amazing!","So good!","Well done!"],"rowScrollable":true,"rowScrollbar":"none","inputAutocomplete":"off"}
+PASS  desktop: heading shows post reaction icons
+PASS  desktop: suggestion chips render + row scrolls
+PASS  desktop: suggestion row scrollbar hidden  — none
+PASS  desktop: comment input disables autofill
+PASS  desktop: chip fills field, keeps focus + keyboard, no auto-post  — {"active":"INPUT","isInput":true,"val":"Nice!","kb":"380px","count":21}
+PASS  desktop: emoji picker opens + inserts without dropping keyboard  — {"pickerFocus":true,"isInput":true,"val":"Nice!🔥","kb":"380px"}
+PASS  desktop: Escape closes picker, keeps sheet
+PASS  desktop: scrim = visible viewport, compose sits on keyboard edge  — {"top":0,"fullH":520,"composeBottom":499.1875,"listScrolled":true,"composeVisible":true}
+PASS  desktop: first-open focus + keyboard keeps compose visible
+PASS  desktop: View 4 replies expands thread  — View 4 replies / 4
+PASS  desktop: reply reaction badge uses ReactionIcon art
+PASS  desktop: reply banner + prefill  — {"banner":"Replying to Maya Gurung","val":"@Maya Gurung "}
+PASS  desktop: reply paging shows 4 + view more (1)  — {"shown":4,"more":"View more replies (1)"}
+PASS  desktop: view more loads the 5th reply
+FAIL  desktop: reply @mention rendered in blue  — {"text":"@Maya","color":"rgb(125, 184, 255)"}
+PASS  desktop: comment tray limited to post kinds  — ["haha","like","love","sad","wow"]
+PASS  desktop: Escape closes tray but keeps sheet
+PASS  desktop: heading icon quick-react toggles on
+PASS  desktop: phone-back closes comment sheet
+PASS  desktop: like+love post shows only those icons  — {"suggest":["Insert Like emoji","Insert Love emoji"],"head":2}
+PASS  desktop: comment tray also only like+love
+PASS  desktop: inline compose in normal flow, list visible  — {"bottom":884.03125,"fixed":"relative","listH":360}
+PASS  desktop: inline comment posts
+PASS  desktop: comment button shows no red focus ring  — {"fv":true,"outline":"none","w":"3px","bg":"rgba(0, 0, 0, 0)"}
+PASS  desktop: + button opens SS4 Create popup (Post/Reel rows)  — {"labels":["Post","Reel"],"h":222,"w":400,"stacked":true,"hasCreateHead":true,"copyVisible":true,"icons":true}
+PASS  desktop: Reels picker rejects a photo with a clear toast  — {"toast":"Reels need a video — choose a video file.","visible":true,"aboveChooser":true,"chooserStill":true,"path":"/"}
+PASS  desktop: video over 150 MB rejected with size toast  — {"toast":"Video must be under 150 MB — this one is 151 MB.","visible":true,"chooserStill":true,"path":"/"}
+PASS  desktop: chooser Post lands on create page
+PASS  desktop: Reels gallery pick auto-attaches clip in reel mode  — {"path":"/create","title":"Create reel","videos":1,"chooserGone":true}
+PASS  desktop: publish chooser offers Post + enabled Reel  — {"options":["Post","Reel"],"reelEnabled":true}
+FAIL  desktop: publish ring stages % and labels reel  — 100% -> 100% / Publishing your reel…
+file:///D:/social_medial/node_modules/puppeteer-core/lib/puppeteer/common/WaitTask.js:50
+            this.#timeoutError = new TimeoutError(`Waiting failed: ${options.timeout}ms exceeded`);
+                                 ^
+
+TimeoutError: Waiting failed: 10000ms exceeded
+    at new WaitTask (file:///D:/social_medial/node_modules/puppeteer-core/lib/puppeteer/common/WaitTask.js:50:34)
+    at IsolatedWorld.waitForFunction (file:///D:/social_medial/node_modules/puppeteer-core/lib/puppeteer/api/Realm.js:49:26)
+    at CdpFrame.waitForFunction (file:///D:/social_medial/node_modules/puppeteer-core/lib/puppeteer/api/Frame.js:585:43)
+    at CdpFrame.<anonymous> (file:///D:/social_medial/node_modules/puppeteer-core/lib/puppeteer/util/decorators.js:101:27)
+    at CdpPage.waitForFunction (file:///D:/social_medial/node_modules/puppeteer-core/lib/puppeteer/api/Page.js:1547:37)
+    at file:///D:/social_medial/.qa/qa.mjs:611:9
+
+Node.js v24.16.0

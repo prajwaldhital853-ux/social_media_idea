@@ -473,6 +473,11 @@ a:focus:not(:focus-visible) {
   border-radius: 2px;
 }
 
+/* Once the reader scrolls, the tab bar thins and every pixel it saved is a
+   pixel of post. */
+.home-header { transition: top 0.18s ease, margin 0.18s ease, padding 0.18s ease; }
+.home-header.lifted .tab { padding-top: 8px; padding-bottom: 8px; }
+
 /* Composer */
 .composer {
   padding: 16px;
@@ -1296,6 +1301,9 @@ a:focus:not(:focus-visible) {
   .home-header .tab { padding: 12px 0; font-size: 14.5px; }
   .shell.focused-page .main { padding-top: 0; }
   .shell.focused-page .header { top: 0; }
+  /* The top bar owns the mode switch from this width up, so the page header
+     must not offer a second one that drifts under it. */
+  .main .header-actions .icon-btn[aria-label*="mode" i] { display: none; }
 }
 
 /* Modal */
@@ -1472,7 +1480,7 @@ a:focus:not(:focus-visible) {
   cursor: pointer;
 }
 
-/* Email code step (new device, signup verification, account unlock) */
+/* Email code step (new device, signup verification) and the lockout clock */
 .auth-code {
   display: flex;
   flex-direction: column;
@@ -1546,11 +1554,51 @@ a:focus:not(:focus-visible) {
   cursor: default;
 }
 
-.auth-unlock-link {
-  margin-top: 10px;
-  color: var(--muted);
-  font-size: 13px;
+/* One tap into the seeded demo account; the credentials stay visible so a
+   reviewer can also type them on a keyboard they trust. */
+.login-demo {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  margin-top: 14px;
+  padding: 11px 14px;
+  border: 1px dashed var(--line);
+  border-radius: 12px;
+  background: none;
+  cursor: pointer;
   text-align: center;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.login-demo:hover {
+  border-color: var(--brand);
+  background: var(--brand-tint);
+}
+
+.login-demo:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.login-demo b {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--ink);
+}
+
+.login-demo span {
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.auth-lock-clock {
+  align-self: center;
+  margin: 2px 0 6px;
+  font-size: 26px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--brand);
 }
 
 .auth-notice {
@@ -1593,7 +1641,7 @@ a:focus:not(:focus-visible) {
 }
 
 /* Responsive */
-@media (max-width: 1100px) {
+@media (max-width: 1023px) {
   .shell {
     grid-template-columns: 88px minmax(0, 680px) minmax(0, 1fr);
   }
@@ -6952,23 +7000,26 @@ a.market-card { text-decoration: none; }
   body { background: var(--canvas); }
 
   .shell {
-    grid-template-columns: 212px minmax(0, 660px) minmax(0, 1fr);
-    column-gap: 40px;
-    max-width: 1440px;
+    grid-template-columns: 280px minmax(0, 600px) minmax(0, 1fr);
+    column-gap: 36px;
+    max-width: none;
+    padding-right: 32px;
   }
 
   .topbar { background: var(--paper); border-bottom: 0; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.07); }
 
+  /* The rail is the left sheet of the screen, not a floating list of icons:
+     it takes the whole column and runs the full height under the top bar. */
   .rail {
     width: auto;
-    padding: 14px 8px 14px 12px;
+    padding: 16px 14px 20px 16px;
     gap: 4px;
     border-right: 0;
-    background: transparent;
+    background: var(--paper);
   }
   .rail-nav { gap: 2px; }
   .rail-bottom { gap: 6px; }
-  .nav-item { gap: 14px; padding: 8px 10px; border-radius: 12px; font-size: 15px; font-weight: 600; }
+  .nav-item { gap: 14px; padding: 9px 12px; border-radius: 12px; font-size: 15px; font-weight: 600; }
   .nav-item svg { width: 22px; height: 22px; }
   .post-btn { margin-top: 10px; width: 100%; padding: 11px; font-size: 15px; border-radius: 12px; }
   .rail-user { padding: 6px; border-radius: 12px; gap: 10px; }
@@ -6988,6 +7039,13 @@ a.market-card { text-decoration: none; }
     background: var(--card);
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
   }
+  /* Lifted: the bar climbs to the top bar and thins, so a card that was
+     half-cut at the bottom comes fully into view. */
+  .shell.feed-page .home-header.lifted {
+    top: 58px;
+    margin: 0 0 10px;
+    padding: 0 10px 2px;
+  }
   .shell.feed-page .post,
   .shell.feed-page .composer {
     margin: 0 0 16px;
@@ -6999,9 +7057,17 @@ a.market-card { text-decoration: none; }
   .shell.feed-page .post:hover { background: var(--card); }
   .shell.feed-page .feed-empty { padding: 28px 20px; }
 
+  /* Listings are a browse grid, so the marketplace owns everything right of
+     the rail instead of sitting in the feed column. */
+  .shell.market-page { grid-template-columns: 280px minmax(0, 1fr) 0; column-gap: 0; padding-right: 0; }
+  .shell.market-page .side-calm { display: none; }
+  .market-grid { grid-template-columns: repeat(auto-fill, minmax(248px, 1fr)); gap: 16px; padding: 18px 24px 32px; }
+  .market-filters { padding: 12px 24px 4px; }
+  .market-view > .header { padding-left: 24px; }
+
   /* The messenger owns the full width behind the top bar: the inbox column
      and the open thread sit side by side on one white sheet. */
-  .shell.messenger-page { grid-template-columns: 212px minmax(0, 1fr) 0; column-gap: 0; }
+  .shell.messenger-page { grid-template-columns: 280px minmax(0, 1fr) 0; column-gap: 0; padding-right: 0; }
   .shell.messenger-page .side-calm { display: none; }
   .messenger {
     display: grid;
@@ -7021,6 +7087,15 @@ a.market-card { text-decoration: none; }
   .messenger .messenger-main { background: var(--paper); }
   .messenger .chat-view { height: 100%; }
   .messenger .chat-back { display: none; }
+}
+
+/* Under a full three columns the calm suggestions give up their space first;
+   the rail and the feed keep theirs, so nothing gets squeezed. */
+@media (min-width: 1024px) and (max-width: 1179px) {
+  .shell { grid-template-columns: 280px minmax(0, 1fr); column-gap: 24px; }
+  .shell.messenger-page,
+  .shell.market-page { grid-template-columns: 280px minmax(0, 1fr) 0; }
+  .side-calm { display: none; }
 }
 
 @media (min-width: 769px) and (max-width: 1023px) {

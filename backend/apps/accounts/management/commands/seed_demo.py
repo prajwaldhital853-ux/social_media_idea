@@ -230,6 +230,9 @@ class Command(BaseCommand):
                     'cover_url': f'https://picsum.photos/seed/expo-{username}-cover/1600/500',
                     'location': city, 'province': province, 'verified': verified,
                     'is_private': private,
+                    # A demo a client can open on a borrowed laptop: seeded
+                    # members sign in with their password, not an email code.
+                    'two_step': False,
                 })
             profile = Profile.objects.get(user=user)
             self.users.append(user)

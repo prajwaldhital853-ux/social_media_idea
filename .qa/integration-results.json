@@ -18,7 +18,7 @@
     {
       "name": "desktop: scrolling the feed walks cursors, not windows of the cache",
       "pass": true,
-      "detail": "11 -> 21"
+      "detail": "11 -> 71"
     },
     {
       "name": "desktop: reels come from the video keyset stream",
@@ -33,7 +33,7 @@
     {
       "name": "desktop: the oldest-first cursor walks the feed backwards",
       "pass": true,
-      "detail": "oldest head 2026-07-24T07:59:17.646723Z vs newest page tail 2026-11-21T08:27:24.092705Z, ascending true"
+      "detail": "oldest head 2026-07-24T08:50:07.646723Z vs newest page tail 2026-11-21T09:18:14.092705Z, ascending true"
     },
     {
       "name": "desktop: a deep-linked post hydrates by id",
@@ -43,12 +43,12 @@
     {
       "name": "desktop: a comment is written to /api/comments/ and rendered from it",
       "pass": true,
-      "detail": "{\"id\":\"6064\",\"text\":true}"
+      "detail": "{\"id\":\"14446\",\"text\":true}"
     },
     {
       "name": "desktop: the comment survives a server-side read back",
       "pass": true,
-      "detail": "2 top-level rows"
+      "detail": "9 top-level rows"
     },
     {
       "name": "desktop: the comment is still there after a reload",
@@ -58,12 +58,12 @@
     {
       "name": "desktop: sorting by oldest reads the ascending page",
       "pass": true,
-      "detail": "screen Sita Karkimobile-mwqb2nbtjust nowReplyDe vs mobile-mwqb2nbt"
+      "detail": "screen Sita Karkilive-mwqgmjaa1h agoReplyDelete vs live-mwqgmjaa"
     },
     {
-      "name": "desktop: the marketplace grid renders the page the server chose",
-      "pass": false,
-      "detail": "screen 20, api 10, has_more true"
+      "name": "desktop: the marketplace grid opens on the page the server chose",
+      "pass": true,
+      "detail": "screen 20, api 10, drift at -1, has_more true"
     },
     {
       "name": "desktop: the marketplace grid walks its cursor",
@@ -78,7 +78,7 @@
     {
       "name": "desktop: the listing page knows its seller",
       "pass": true,
-      "detail": "SKSita Karki@sita1 Listings"
+      "detail": "Sita Karki@sita1 Listings · Kathmandu"
     },
     {
       "name": "desktop: profile totals come from the profile row",
@@ -86,9 +86,9 @@
       "detail": "40 Posts | 19 Followers | 8 Following vs followers=19"
     },
     {
-      "name": "desktop: the followers list is a keyset page of people",
-      "pass": false,
-      "detail": "screen 19, api 10"
+      "name": "desktop: the followers list pages people with a cursor",
+      "pass": true,
+      "detail": "first 10, api page 10, walked 19, server total 19"
     },
     {
       "name": "desktop: people search hits /api/users/",
@@ -103,7 +103,7 @@
     {
       "name": "desktop: the top bar badges match the unread counters",
       "pass": true,
-      "detail": "screen [\"9+\",\"9+\"] vs api [12,12]"
+      "detail": "screen [\"8\",\"8\"] vs api [8,8]"
     },
     {
       "name": "desktop: a chat partner exists for the thread test",
@@ -117,8 +117,8 @@
     },
     {
       "name": "desktop: the inbox leads with the conversation just written",
-      "pass": false,
-      "detail": "Binita ThapaYou follow each other — say hi."
+      "pass": true,
+      "detail": "Arjun Thapajust nowYou: intg older 11"
     },
     {
       "name": "desktop: the thread opens on the newest keyset page",
@@ -137,23 +137,23 @@
     },
     {
       "name": "desktop: opening a thread marks it read on the server",
-      "pass": false,
-      "detail": "unread messages 12 -> 12"
+      "pass": true,
+      "detail": "{\"peer\":\"deepa\",\"was\":2,\"now\":0,\"readCalls\":1}"
     },
     {
       "name": "desktop: notifications render the server page",
-      "pass": false,
-      "detail": "20 vs 10"
+      "pass": true,
+      "detail": "10 vs 10"
     },
     {
       "name": "desktop: saved posts come from /api/saved/posts/",
-      "pass": false,
-      "detail": "1 vs 2"
+      "pass": true,
+      "detail": "2 vs 2"
     },
     {
       "name": "mobile: the feed pages with cursors on a phone",
       "pass": true,
-      "detail": "10 -> 71"
+      "detail": "9 -> 71"
     },
     {
       "name": "mobile: the thread loads older messages on a phone",

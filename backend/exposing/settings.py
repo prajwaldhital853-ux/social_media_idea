@@ -172,7 +172,10 @@ CACHES = {
 
 CELERY_BROKER_URL = REDIS_URL
 CELERY_RESULT_BACKEND = REDIS_URL
-CELERY_TASK_ALWAYS_EAGER = not REDIS_AVAILABLE
+# Nothing in this deployment runs a worker, so tasks execute inline. Reaching
+# for a broker by default once cost every sign-in a 500. Set CELERY_ALWAYS_EAGER=0
+# at the same time as you add a `celery worker` service, never before.
+CELERY_TASK_ALWAYS_EAGER = (os.environ.get('CELERY_ALWAYS_EAGER') or '1') == '1'
 CELERY_TASK_EAGER_PROPAGATES = False
 CELERY_BEAT_SCHEDULE = {
     'prune-expired-auth-rows': {
@@ -181,12 +184,15 @@ CELERY_BEAT_SCHEDULE = {
     },
 }
 
-# send_mail reads Django's own DEFAULT_EMAIL_BACKEND global; a project-named
-# EMAIL_BACKEND setting would be silently ignored and every OTP would knock on
-# localhost:25. Console keeps the code in the service log until real SMTP lands.
+# `get_connection()` — and therefore send_mail — reads EMAIL_BACKEND. The name
+# this file used to set, DEFAULT_EMAIL_BACKEND, is only what mail_admins() falls
+# back to, so every OTP was dialled into localhost:25 and sat there for four
+# seconds before fail_silently swallowed it. Console keeps the code in the
+# service log until real SMTP lands.
 # `or`, not a default argument: Render saves an empty key as '', and Django
 # raises ImproperlyConfigured the moment an import path is blank.
-DEFAULT_EMAIL_BACKEND = os.environ.get('EMAIL_BACKEND') or 'django.core.mail.backends.console.EmailBackend'
+EMAIL_BACKEND = os.environ.get('EMAIL_BACKEND') or 'django.core.mail.backends.console.EmailBackend'
+DEFAULT_EMAIL_BACKEND = EMAIL_BACKEND
 GOOGLE_CLIENT_ID = os.environ.get('GOOGLE_CLIENT_ID', '')
 
 SECURE_CONTENT_TYPE_NOSNIFF = True
