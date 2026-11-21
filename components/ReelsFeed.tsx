@@ -4,7 +4,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useApp } from '@/lib/AppContext';
-import { canSeePost, compact } from '@/lib/utils';
+import { canSeePost, privateIds, compact } from '@/lib/utils';
 import { IC } from '@/lib/icons';
 import { Post, User, Media } from '@/lib/types';
 import { postsFragment, useList } from '@/lib/lists';
@@ -53,7 +53,7 @@ export default function ReelsFeed({ initialKey }: { initialKey?: string }) {
   const byId = new Map(db.posts.map(p => [p.id, p]));
   const reels = serverMode
     ? stream.ids.map(id => byId.get(id)).filter((p): p is Post => !!p)
-    : db.posts.filter(p => p.status === 'live' && canSeePost(p, me?.id ?? null, db.follows)).sort((a, b) => b.ts - a.ts);
+    : db.posts.filter(p => p.status === 'live' && canSeePost(p, me?.id ?? null, db.follows, privateIds(db.users))).sort((a, b) => b.ts - a.ts);
 
   const slides: ReelSlide[] = reels
     .flatMap(post => {

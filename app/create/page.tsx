@@ -11,7 +11,6 @@ import { Media } from '@/lib/types';
 import { uid, fmtDur } from '@/lib/utils';
 import { mediaFromFile } from '@/lib/mediaFile';
 import { takeCreateDraft } from '@/lib/draftMedia';
-import { useBackClose, closeLayerWithoutBack } from '@/lib/useBackClose';
 
 const PLACES = ['Kathmandu', 'Pokhara', 'Lalitpur', 'Bhaktapur', 'Chitwan', 'Butwal', 'Dharan', 'Nepalgunj'];
 const MOODS = [
@@ -43,7 +42,6 @@ export default function CreatePostPage() {
   const [audience, setAudience] = useState<'public' | 'followers'>('public');
   const [audienceOpen, setAudienceOpen] = useState(false);
   const [kind, setKind] = useState<'post' | 'reel'>('post');
-  const [chooserOpen, setChooserOpen] = useState(false);
   const [publishKind, setPublishKind] = useState<'post' | 'reel'>('post');
   const [progress, setProgress] = useState<number | null>(null);
   const [upload, setUpload] = useState<{ name: string; pct: number } | null>(null);
@@ -72,8 +70,6 @@ export default function CreatePostPage() {
     el.style.height = 'auto';
     el.style.height = `${Math.min(el.scrollHeight, 320)}px`;
   }, [text]);
-
-  useBackClose(chooserOpen, () => setChooserOpen(false));
 
   useEffect(() => {
     if (!audienceOpen) return;
@@ -121,11 +117,10 @@ export default function CreatePostPage() {
 
   const publish = async (kind: 'post' | 'reel') => {
     if (!me || !canPost) return;
-    // The chooser sheet owns a history entry, and closing it spends that entry
-    // with history.back(). Left alone, the back() lands on top of the push('/')
-    // below and the reader stays on /create staring at a finished ring.
-    closeLayerWithoutBack();
-    setChooserOpen(false);
+    if (kind === 'reel' && videoCount === 0) {
+      setError('Attach a video first to publish a reel.');
+      return;
+    }
     setPublishKind(kind);
     setError('');
     setProgress(PUBLISHING);
@@ -162,7 +157,7 @@ export default function CreatePostPage() {
         <header className="create-post-header">
           <button type="button" className="icon-btn" aria-label="Back" onClick={() => router.back()}>{IC.back}</button>
           <h1>{kind === 'reel' ? 'Create reel' : 'Create post'}</h1>
-          <button type="button" className="post-btn-header" onClick={() => setChooserOpen(true)} disabled={!canPost}>Post</button>
+          <button type="button" className="post-btn-header" onClick={() => void publish(kind)} disabled={!canPost}>Post</button>
         </header>
 
         <div className="create-post-body">
@@ -355,7 +350,6 @@ export default function CreatePostPage() {
 
         <footer className="create-post-footer">
           <span className={`char-count ${text.length > CHAR_LIMIT - 100 ? 'warning' : ''}`}>{text.length}/{CHAR_LIMIT}</span>
-          <button type="button" className="create-publish" onClick={() => setChooserOpen(true)} disabled={!canPost}>Post</button>
         </footer>
 
         <input
@@ -366,29 +360,6 @@ export default function CreatePostPage() {
           hidden
           onChange={e => { void attach(e.target.files); e.target.value = ''; }}
         />
-
-        {chooserOpen && createPortal(
-          <div className="chooser-overlay" onClick={() => setChooserOpen(false)}>
-            <div className="chooser-card" role="dialog" aria-modal="true" aria-label="Choose post type" onClick={e => e.stopPropagation()}>
-              <div className="chooser-grip" />
-              <h2>Share as</h2>
-              <div className="chooser-options">
-                <button type="button" onClick={() => publish('post')}>
-                  <span className="chooser-icon post">{IC.img}</span>
-                  <span className="chooser-copy"><b>Post</b><small>Share to the feed with photos, videos and text</small></span>
-                  <span className="chooser-go">{IC.chev}</span>
-                </button>
-                <button type="button" disabled={videoCount === 0} onClick={() => publish('reel')}>
-                  <span className="chooser-icon reel">{IC.video}</span>
-                  <span className="chooser-copy"><b>Reel</b><small>{videoCount === 0 ? 'Attach a video first to publish a reel' : 'Short vertical video for the Video tab'}</small></span>
-                  <span className="chooser-go">{IC.chev}</span>
-                </button>
-              </div>
-              <button type="button" className="chooser-cancel" onClick={() => setChooserOpen(false)}>Cancel</button>
-            </div>
-          </div>,
-          document.body
-        )}
 
         {progress !== null && createPortal(
           <div className="publish-overlay" role="alertdialog" aria-modal="true" aria-label="Publishing">

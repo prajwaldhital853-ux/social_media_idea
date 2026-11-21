@@ -69,7 +69,13 @@ class ListingViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         qs = Listing.objects.select_related('seller__profile').prefetch_related('images')
         user = self.request.user
-        if not (user.is_authenticated and user.is_staff):
+        if user.is_authenticated and user.is_staff:
+            pass
+        elif user.is_authenticated:
+            # A deleted ad stays readable to the seller who deleted it, so their
+            # own link answers "not available" instead of a load error.
+            qs = qs.exclude(Q(status=Listing.Status.REMOVED) & ~Q(seller=user))
+        else:
             qs = qs.exclude(status=Listing.Status.REMOVED)
         params = self.request.query_params
         if params.get('seller'):
@@ -112,6 +118,10 @@ def set_status(request, pk, action):
         listing.status = Listing.Status.SOLD
     elif action == 'relist' and listing.status == 'sold':
         listing.status = Listing.Status.ACTIVE
+    elif action == 'remove' and listing.status in (Listing.Status.ACTIVE, Listing.Status.SOLD):
+        # Deleting your own ad is a status change, not a row delete: a buyer who
+        # already saved or messaged about it still needs the history to resolve.
+        listing.status = Listing.Status.REMOVED
     else:
         return Response({'detail': 'Invalid transition.'}, status=400)
     listing.save(update_fields=['status'])

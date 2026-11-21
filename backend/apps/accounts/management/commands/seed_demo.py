@@ -26,7 +26,7 @@ from django.utils import timezone
 from apps.accounts.demo_content import (
     BIOS, CATEGORIES, CHAT_CLOSERS, CHAT_OPENERS, CHAT_SCRIPTS, CLIPS, COMMENT_LINES,
     CORE_PEOPLE, COUNTS, LISTINGS, MIXED_POST_TEXT, MOODS, PEOPLE, PHOTO_ASIDES,
-    PHOTO_LINES, PLACES, RAIN_POST_TEXT, REEL_ASIDES, REEL_LINES, REPLY_LINES,
+    PHOTO_LINES, PLACES, RAIN_POST_TEXT, REEL_ASIDES, REEL_LINES, REPLY_LINES, contacts_for,
 )
 from apps.comments.models import Comment
 from apps.follows.models import Follow
@@ -230,6 +230,7 @@ class Command(BaseCommand):
                     'cover_url': f'https://picsum.photos/seed/expo-{username}-cover/1600/500',
                     'location': city, 'province': province, 'verified': verified,
                     'is_private': private,
+                    **contacts_for(username, index),
                     # A demo a client can open on a borrowed laptop: seeded
                     # members sign in with their password, not an email code.
                     'two_step': False,

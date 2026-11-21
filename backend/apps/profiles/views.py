@@ -1,5 +1,7 @@
 from django.db.models import Count, F, Q
 from django.shortcuts import get_object_or_404
+import re
+from urllib.parse import urlparse
 from rest_framework import serializers, status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -8,8 +10,18 @@ from rest_framework.response import Response
 from apps.accounts.models import User
 from apps.common.pagination import KeysetPagination
 from apps.follows.models import Follow
+from apps.posts.services import announce_profile_change
 
 from .models import Profile
+
+
+def _is_http_url(value):
+    """Only http(s) may reach the About section: those links open in a new tab."""
+    try:
+        parsed = urlparse(value)
+    except ValueError:
+        return False
+    return parsed.scheme in ('http', 'https') and bool(parsed.netloc)
 
 
 class ProfileSerializer(serializers.ModelSerializer):
@@ -26,9 +38,39 @@ class ProfileSerializer(serializers.ModelSerializer):
         model = Profile
         fields = [
             'id', 'username', 'name', 'bio', 'avatar_url', 'cover_url', 'location', 'province',
-            'website', 'verified', 'is_private', 'two_step', 'dob', 'country', 'city',
+            'website', 'phone', 'links', 'verified', 'is_private', 'two_step', 'notify_email',
+            'dob', 'country', 'city',
         ]
         read_only_fields = ['id', 'username', 'verified']
+
+    def validate_website(self, value):
+        value = (value or '').strip()
+        if value and not _is_http_url(value):
+            raise serializers.ValidationError('Use a full http(s) address.')
+        return value
+
+    def validate_phone(self, value):
+        value = (value or '').strip()
+        if value and not re.fullmatch(r'[+]?[0-9 ()-]{6,40}', value):
+            raise serializers.ValidationError('Use digits, spaces, brackets or a leading +.')
+        return value
+
+    def validate_links(self, value):
+        """About-section links open in a new tab, so only http(s) may be stored."""
+        if not isinstance(value, list):
+            raise serializers.ValidationError('Links must be a list.')
+        if len(value) > 8:
+            raise serializers.ValidationError('Up to 8 links.')
+        clean = []
+        for item in value:
+            if not isinstance(item, dict):
+                raise serializers.ValidationError('Each link needs a label and a url.')
+            url = str(item.get('url') or '').strip()
+            label = str(item.get('label') or '').strip()[:40]
+            if not _is_http_url(url):
+                raise serializers.ValidationError(f'"{url or "this link"}" is not a web address.')
+            clean.append({'label': label, 'url': url})
+        return clean
 
     def update(self, instance, validated_data):
         user_data = validated_data.pop('user', {})
@@ -69,9 +111,18 @@ def profile_detail(request, username):
     if request.method == 'PATCH':
         if not request.user.is_authenticated or request.user.pk != user.pk:
             return Response({'detail': 'You can only edit your own profile.'}, status=403)
+        before = (profile.avatar_url, profile.cover_url)
         serializer = ProfileSerializer(profile, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         serializer.save()
+        # A new photo or banner is published as its own feed card, but only when
+        # the value actually moved — saving the form twice must not post twice.
+        for old, new, kind in (
+            (before[0], profile.avatar_url, 'profile'),
+            (before[1], profile.cover_url, 'cover'),
+        ):
+            if new and new != old:
+                announce_profile_change(user, kind, new)
         return Response(serializer.data)
     full = _can_view_full(request.user, user)
     data = ProfileSerializer(profile).data

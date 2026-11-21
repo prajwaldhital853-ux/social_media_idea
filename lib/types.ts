@@ -23,9 +23,20 @@ export interface User {
   cover?: string;
   private?: boolean;
   twoStep?: boolean;
+  /** Email a member about new followers as well as the in-app bell. */
+  notifyEmail?: boolean;
+  website?: string;
+  phone?: string;
+  links?: ProfileLink[];
   joined: number;
   coins: number;
   warning?: string | null;
+}
+
+/** A row in the About section. The url is http(s) only: it opens in a new tab. */
+export interface ProfileLink {
+  label: string;
+  url: string;
 }
 
 export interface Suspension {
@@ -46,6 +57,8 @@ export interface Post {
   removedReason?: string;
   mood?: string;
   place?: string;
+  /** Set on a card that announces a profile or cover change instead of a caption. */
+  activity?: 'profile' | 'cover';
   audience?: 'public' | 'followers';
   category?: string;
   /** Server-side aggregates: present in API mode, derived from `reactions` in demo mode. */

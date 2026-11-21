@@ -70,6 +70,9 @@ interface AppContextType {
   createChooserOpen: boolean;
   openCreateChooser: () => void;
   closeCreateChooser: () => void;
+  /** Which home feed tab is showing. The top bar owns the buttons, the feed reads it. */
+  feedTab: 'foryou' | 'following';
+  setFeedTab: (tab: 'foryou' | 'following') => void;
   toast: string | null;
   showToast: (msg: string) => void;
   /** Session bootstrap has finished (signed in or anonymous). */
@@ -176,6 +179,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [composerPostId, setComposerPostId] = useState<string | null | undefined>(undefined);
   const [createChooserOpen, setCreateChooserOpen] = useState(false);
+  const [feedTab, setFeedTab] = useState<'foryou' | 'following'>('foryou');
   const [toast, setToast] = useState<string | null>(null);
 
   /** Async continuations read the cache through this ref, never a captured render. */
@@ -450,6 +454,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!API_ENABLED || !self) return;
     const data = await api.patch<any>(`/api/profiles/${self.username}/`, toProfilePayload(patch));
     merge({ users: [{ ...self, ...profilePatch(data) }] });
+    // A changed photo or banner is announced by a post the server just created,
+    // so the lists that already hold a page of this author have to be re-read.
+    if ((patch.avatar && patch.avatar !== self.avatar) || (patch.cover && patch.cover !== self.cover)) {
+      forgetLists('feed');
+      forgetLists('profile-posts');
+    }
   };
 
   /**
@@ -1071,6 +1081,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         createChooserOpen,
         openCreateChooser: () => setCreateChooserOpen(true),
         closeCreateChooser: () => setCreateChooserOpen(false),
+        feedTab, setFeedTab,
         toast, showToast,
         ready, serverMode, resync, merge,
         signin, signupAccount, verifyCode, resendCode, googleSignIn,

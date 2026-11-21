@@ -194,6 +194,9 @@ CELERY_BEAT_SCHEDULE = {
 EMAIL_BACKEND = os.environ.get('EMAIL_BACKEND') or 'django.core.mail.backends.console.EmailBackend'
 DEFAULT_EMAIL_BACKEND = EMAIL_BACKEND
 GOOGLE_CLIENT_ID = os.environ.get('GOOGLE_CLIENT_ID', '')
+# Emails quote a link back to the site; on Render the frontend lives on another
+# host, so this is the browser origin rather than the API's own.
+SITE_URL = (os.environ.get('EXPOSING_SITE_URL') or 'http://localhost:3000').rstrip('/')
 
 SECURE_CONTENT_TYPE_NOSNIFF = True
 SECURE_BROWSER_XSS_FILTER = True

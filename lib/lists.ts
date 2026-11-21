@@ -3,8 +3,8 @@
 import { useEffect, useRef, useSyncExternalStore } from 'react';
 import { api } from './api';
 import {
-  mapComment, mapListing, mapMessage, mapNotification, mapPerson, mapPost, mapPromotion,
-  reactionsOfComment, reactionsOfPost, idOf,
+  mapCoinRequest, mapComment, mapLedger, mapListing, mapMessage, mapNotification, mapPerson,
+  mapPost, mapPromotion, reactionsOfComment, reactionsOfPost, idOf,
 } from './dto';
 import { Fragment } from './store';
 import { User } from './types';
@@ -264,6 +264,13 @@ export function notificationsFragment(rows: any[]): Fragment {
     users: rows.filter(row => row.actor_card).map(mapPerson),
   };
 }
+
+/** The ledger is one person's own money, so every row belongs to the signed-in user. */
+export function walletFragment(meId: string | null): (rows: any[]) => Fragment {
+  return rows => ({ ledger: rows.map(row => mapLedger(row, meId || '')) });
+}
+
+export const coinRequestsFragment = (rows: any[]): Fragment => ({ coinRequests: rows.map(mapCoinRequest) });
 
 export function promotionsFragment(rows: any[]): Fragment {
   return {

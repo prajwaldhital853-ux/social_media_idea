@@ -16,6 +16,7 @@
   --red: #E40104;
   --green: #00A36C;
   --tint: rgba(16, 17, 20, 0.045);
+  --action-ink: #3E4348;
   --calm: #F3EFE9;
   --canvas: #F2F4F7;
   --card: #FFFFFF;
@@ -44,6 +45,7 @@
     --red: #FF3B3B;
     --green: #00BA7C;
     --tint: rgba(242, 243, 244, 0.09);
+  --action-ink: #D8DDE3;
     --calm: #0C0E11;
     --canvas: #101114;
     --card: #181A1E;
@@ -69,6 +71,7 @@
   --red: #FF3B3B;
   --green: #00BA7C;
   --tint: rgba(242, 243, 244, 0.09);
+  --action-ink: #D8DDE3;
   --calm: #0C0E11;
   --canvas: #101114;
   --card: #181A1E;
@@ -5985,6 +5988,29 @@ textarea {
   margin-top: -48px; border-radius: 50%; border: 4px solid var(--paper);
   background: var(--paper); line-height: 0; flex-shrink: 0;
 }
+.profile-cover-open, .profile-avatar-open {
+  border: 0; padding: 0; background: none; cursor: zoom-in; display: block;
+}
+.profile-cover-open { position: absolute; inset: 0; z-index: 1; }
+.profile-avatar-open { border-radius: 50%; transition: filter .15s ease; }
+.profile-avatar-open:hover { filter: brightness(.92); }
+
+/* ---------- Full-screen picture ---------- */
+.lightbox {
+  position: fixed; inset: 0; z-index: 200; display: grid; place-items: center;
+  background: rgba(8, 10, 12, .92); animation: fadeIn .18s ease; padding: 24px;
+}
+.lightbox-close {
+  position: absolute; top: 16px; right: 18px; width: 42px; height: 42px;
+  background: rgba(255, 255, 255, .14); color: #fff;
+}
+.lightbox-close:hover { background: rgba(255, 255, 255, .26); }
+.lightbox-figure { margin: 0; display: flex; flex-direction: column; gap: 12px; align-items: center; min-width: 0; }
+.lightbox-img {
+  max-width: min(100%, 1100px); max-height: 78vh; width: auto; height: auto;
+  border-radius: 14px; box-shadow: 0 24px 60px rgba(0, 0, 0, .5); object-fit: contain;
+}
+.lightbox figcaption { font-size: 13.5px; color: rgba(255, 255, 255, .82); text-align: center; }
 .profile-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; padding-bottom: 6px; flex-wrap: wrap; }
 .profile-name {
   flex-basis: 100%; margin: 2px 0 0; font-size: 24px; font-weight: 850; line-height: 1.2;
@@ -6004,13 +6030,17 @@ textarea {
   border: 1px solid rgba(228, 1, 4, .25); padding: 8px 12px; border-radius: 10px;
 }
 .profile-susp svg { width: 15px; height: 15px; flex-shrink: 0; }
-.profile-stats { flex-basis: 100%; display: flex; gap: 18px; margin-top: 10px; flex-wrap: wrap; }
+.profile-stats { flex-basis: 100%; display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
 .profile-stat {
-  border: 0; background: none; padding: 0; font: inherit; font-size: 13.5px; color: var(--muted);
-  cursor: pointer; display: inline-flex; gap: 5px; align-items: baseline;
+  border: 0; background: var(--tint); padding: 8px 14px; border-radius: 12px;
+  font: inherit; font-size: 12.5px; color: var(--muted);
+  cursor: pointer; display: inline-flex; gap: 6px; align-items: baseline;
 }
-.profile-stat b { color: var(--ink); font-size: 15px; font-weight: 800; }
-button.profile-stat:hover { color: var(--brand); text-decoration: underline; }
+.profile-stat b { color: var(--ink); font-size: 19px; font-weight: 800; letter-spacing: -.02em; }
+button.profile-stat:hover, a.profile-stat:hover { background: var(--brand-tint); color: var(--brand); }
+button.profile-stat:hover b, a.profile-stat:hover b { color: var(--brand); }
+.about-link { color: var(--brand); text-decoration: none; word-break: break-all; }
+.about-link:hover { text-decoration: underline; }
 .profile-posts { padding-bottom: 24px; }
 .profile-media-grid {
   display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; padding: 12px;
@@ -6236,13 +6266,26 @@ button.profile-stat:hover { color: var(--brand); text-decoration: underline; }
   text-transform: uppercase; letter-spacing: .05em;
 }
 .notif-row {
-  display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
-  padding: 10px 16px; border: 0; background: none; font: inherit; color: var(--ink); cursor: pointer;
-  transition: background .15s ease;
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 3px 16px; transition: background .15s ease;
 }
 .notif-row:hover { background: var(--tint); }
 .notif-row.unread { background: var(--brand-tint); }
 .notif-row.unread:hover { background: rgba(182, 55, 64, .13); }
+.notif-open {
+  display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0;
+  text-align: left; padding: 8px 0; border: 0; background: none; font: inherit; color: var(--ink); cursor: pointer;
+}
+.notif-follow {
+  flex-shrink: 0; padding: 7px 14px; border-radius: 9999px; border: 1px solid transparent;
+  background: var(--brand); color: var(--on-brand); font: inherit; font-size: 12.5px; font-weight: 750;
+  cursor: pointer; white-space: nowrap; transition: background .15s ease, transform .15s ease;
+}
+.notif-follow:hover { background: var(--brand-d); }
+.notif-follow:active { transform: scale(.97); }
+.notif-follow.on, .notif-follow.pending { background: var(--surface); color: var(--ink); border-color: var(--line); }
+.notif-follow.on:hover, .notif-follow.pending:hover { background: var(--tint); }
+.notif-follow.pending { color: var(--muted); }
 .notif-icon { position: relative; width: 44px; height: 44px; flex-shrink: 0; display: grid; place-items: center; border-radius: 50%; }
 .notif-icon > svg { width: 20px; height: 20px; }
 .notif-icon.kind-follow { background: var(--brand-tint); color: var(--brand); }
@@ -6745,7 +6788,7 @@ button.admin-stat:hover { background: var(--brand-tint); transform: translateY(-
   .legal-head h1 { font-size: 23px; }
   .legal-section { scroll-margin-top: calc(120px + env(safe-area-inset-top)); }
 
-  .notif-row { padding: 10px 12px; }
+  .notif-row { padding: 3px 12px; }
   .notif-group-label { padding: 12px 12px 5px; }
   .inbox-search { margin: 10px 12px; }
   .inbox-row { padding: 11px 12px; }
@@ -6897,6 +6940,24 @@ a.market-card { text-decoration: none; }
 .edit-private-copy b { font-size: 13.5px; }
 .edit-private-copy small { font-size: 12px; color: var(--muted); line-height: 1.4; }
 .edit-private-row input { width: 18px; height: 18px; accent-color: var(--brand); flex-shrink: 0; }
+.edit-links { display: flex; flex-direction: column; gap: 8px; }
+.edit-links-title { font-size: 12.5px; color: var(--muted); font-weight: 700; }
+.edit-link-row { display: flex; gap: 8px; align-items: center; }
+.edit-link-label { flex: 0 0 34%; min-width: 0; }
+.edit-link-url { flex: 1 1 auto; min-width: 0; }
+.edit-link-remove {
+  flex: none; width: 34px; height: 34px; border-radius: 9px; border: 1px solid var(--line);
+  background: none; color: var(--muted); display: grid; place-items: center; cursor: pointer;
+}
+.edit-link-remove svg { width: 14px; height: 14px; }
+.edit-link-remove:hover { color: var(--red); border-color: var(--red); }
+.edit-link-add {
+  align-self: flex-start; display: inline-flex; align-items: center; gap: 6px;
+  border: 1px dashed var(--line); background: none; color: var(--muted);
+  padding: 7px 12px; border-radius: 10px; font-size: 12.5px; font-weight: 700; cursor: pointer;
+}
+.edit-link-add svg { width: 14px; height: 14px; }
+.edit-link-add:hover { color: var(--brand); border-color: var(--brand); }
 
 /* ---------- Phase 8: listing page ---------- */
 .listing-page { animation: fadeIn .2s ease; padding-bottom: 36px; }
@@ -7102,3 +7163,78 @@ a.market-card { text-decoration: none; }
   .shell.messenger-page { grid-template-columns: 88px minmax(0, 1fr) 0; }
   .shell.messenger-page .side-calm { display: none; }
 }
+
+/* ============================================================
+   Feed chrome. The tabs belong to the top bar rather than to a
+   second card under it, so the feed column opens on the first
+   post and the gap between the two cards disappears.
+   ============================================================ */
+.topbar-tabs { display: none; align-items: center; gap: 4px; }
+.topbar-tab {
+  padding: 8px 15px;
+  border-radius: 9999px;
+  font-size: 14px;
+  font-weight: 650;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.topbar-tab:hover { background: var(--tint); color: var(--ink); }
+.topbar-tab.active { color: var(--brand); background: var(--brand-tint); }
+
+@media (min-width: 769px) {
+  .topbar-tabs { display: flex; flex: 0 0 auto; }
+  .topbar-left { flex: 1 1 0; min-width: 0; }
+  .topbar-right { flex: 1 1 0; justify-content: flex-end; }
+  .shell.feed-page .home-header { display: none; }
+}
+
+/* The post is a taller, narrower sheet and the action row reads at a glance. */
+@media (min-width: 1180px) {
+  .shell { grid-template-columns: 280px minmax(0, 560px) minmax(0, 1fr); }
+  .shell.feed-page .post { padding: 18px 20px 12px; gap: 12px; }
+}
+
+/* One clean band of page color between posts, in both themes: the old tint
+   band turned into a light stripe over the dark cards. */
+.post,
+.composer { border-bottom: 8px solid var(--canvas); box-shadow: none; }
+
+.post-header { flex-wrap: wrap; }
+.post-context { font-size: 13px; color: var(--muted); white-space: nowrap; }
+.post-context .post-place { color: var(--muted); }
+.post-context .post-place:hover { text-decoration: underline; }
+.post-context .post-feeling { font-weight: 600; }
+
+/* "…updated their profile photo", read straight off the author's name. */
+.post-activity {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+/* The one-tap follow the reader sees before they visit the profile. */
+.feed-follow {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--red);
+  padding: 3px 8px;
+  border-radius: 7px;
+  flex: none;
+}
+.feed-follow:hover { background: rgba(228, 1, 4, 0.08); }
+.feed-follow.following { color: var(--muted); font-weight: 700; }
+
+.post-actions {
+  justify-content: flex-start;
+  align-items: center;
+  gap: 4px;
+  padding: 0 2px;
+  margin: 0;
+}
+.post-actions .action-btn { min-width: 46px; min-height: 44px; gap: 7px; padding: 9px 11px; justify-content: center; }
+.post-actions .save-action { margin-left: auto; }
+.action-btn { color: var(--action-ink); font-size: 14px; font-weight: 600; }
+.action-btn svg { width: 24px; height: 24px; }
+.action-btn .reaction-art { width: 28px; height: 28px; }
+.first-like { padding-left: 6px; }

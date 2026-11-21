@@ -63,10 +63,14 @@ export function mapMe(p: any): User {
     province: p.province || '',
     city: p.city || '',
     bio: p.bio || '',
+    website: p.website || '',
+    phone: p.phone || '',
+    links: Array.isArray(p.links) ? p.links : [],
     avatar: mediaUrl(p.avatar),
     cover: mediaUrl(p.cover),
     private: !!p.private,
     twoStep: p.twoStep !== false,
+    notifyEmail: p.notifyEmail !== false,
     joined: at(p.joined),
     coins: Math.round(amount(p.coins)),
   };
@@ -104,6 +108,14 @@ export function mapPerson(c: any): User {
   if (!c.provider) delete person.provider;
   if (c.joined === undefined && c.created_at === undefined) delete person.joined;
   if (c.is_private === undefined) delete person.private;
+  // About-section contacts only ride on a full profile read; a thin card that
+  // never answered them must not clear what the cache already holds.
+  if (c.website !== undefined) person.website = c.website || '';
+  else delete person.website;
+  if (c.phone !== undefined) person.phone = c.phone || '';
+  else delete person.phone;
+  if (c.links !== undefined) person.links = Array.isArray(c.links) ? c.links : [];
+  else delete person.links;
   return person as unknown as User;
 }
 
@@ -127,6 +139,7 @@ export function mapPost(row: any): Post {
     edited: !!row.edited,
     mood: row.mood || undefined,
     place: row.place || undefined,
+    activity: row.activity === 'profile' || row.activity === 'cover' ? row.activity : undefined,
     audience: row.audience === 'followers' ? 'followers' : 'public',
     likes: amount(row.like_count),
     comments: amount(row.comment_count),
@@ -369,6 +382,17 @@ export function mediaPayload(items: Media[]): Array<{ kind: 'image' | 'video'; u
     .map(m => ({ kind: m.type === 'video' ? 'video' : 'image', url: m.src as string, duration: m.dur || 0 }));
 }
 
+/**
+ * Listing photos. `position` is left out on purpose: the serializer numbers the
+ * rows in the order it receives them, and sending one would collide with the
+ * keyword it already passes.
+ */
+export function listingImages(items: Media[]): Array<{ url: string }> {
+  return (items || [])
+    .filter(m => m.src && /^https?:/i.test(m.src))
+    .map(m => ({ url: m.src as string }));
+}
+
 /** The first hashtag becomes the interest category the promotion matcher ranks on. */
 export function hashtagOf(text: string): string {
   const match = /#([^\s,.!?;:"'()[\]#]+)/.exec(text || '');
@@ -385,9 +409,13 @@ export function profilePatch(data: any): Partial<User> {
   if (data.province !== undefined) patch.province = data.province;
   if (data.is_private !== undefined) patch.private = data.is_private;
   if (data.two_step !== undefined) patch.twoStep = data.two_step;
+  if (data.notify_email !== undefined) patch.notifyEmail = !!data.notify_email;
   if (data.dob !== undefined) patch.dob = data.dob || '';
   if (data.country !== undefined) patch.country = data.country || '';
   if (data.city !== undefined) patch.city = data.city || patch.city;
+  if (data.website !== undefined) patch.website = data.website || '';
+  if (data.phone !== undefined) patch.phone = data.phone || '';
+  if (data.links !== undefined) patch.links = Array.isArray(data.links) ? data.links : [];
   return patch as Partial<User>;
 }
 
@@ -397,7 +425,9 @@ export function toProfilePayload(patch: Record<string, any>): Record<string, any
   const keys: Array<[string, string]> = [
     ['name', 'name'], ['bio', 'bio'], ['avatar', 'avatar_url'], ['cover', 'cover_url'],
     ['province', 'province'], ['private', 'is_private'], ['twoStep', 'two_step'],
+    ['notifyEmail', 'notify_email'],
     ['dob', 'dob'], ['country', 'country'], ['city', 'city'], ['website', 'website'],
+    ['phone', 'phone'], ['links', 'links'],
   ];
   for (const [from, to] of keys) {
     if (patch[from] === undefined) continue;

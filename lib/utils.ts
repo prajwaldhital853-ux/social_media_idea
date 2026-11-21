@@ -1,7 +1,15 @@
-import { Follow, Post, ReactionKind } from './types';
+import { Follow, Post, ReactionKind, User } from './types';
 
-export const canSeePost = (post: Post, meId: string | null, follows: Follow[]): boolean =>
-  post.audience !== 'followers' || post.uid === meId || (!!meId && follows.some(f => f.follower === meId && f.following === post.uid && f.status !== 'pending'));
+/** Accounts that hide everything from anyone they have not approved. */
+export const privateIds = (users: User[]): string[] => users.filter(u => !!u.private).map(u => u.id);
+
+export const canSeePost = (post: Post, meId: string | null, follows: Follow[], privateAuthors: string[]): boolean => {
+  if (post.uid === meId) return true;
+  const approved = !!meId && follows.some(f => f.follower === meId && f.following === post.uid && f.status !== 'pending');
+  // A private account is private whatever the author picked as the audience.
+  if (privateAuthors.includes(post.uid)) return approved;
+  return post.audience !== 'followers' || approved;
+};
 
 export const esc = (s: string): string => {
   return String(s).replace(/[&<>"']/g, (c) => ({
@@ -54,6 +62,21 @@ export const compact = (n: number): string => {
   if (n < 1000) return String(n);
   if (n < 1000000) return `${(n / 1000).toFixed(n < 10000 ? 1 : 0).replace(/\.0$/, '')}K`;
   return `${(n / 1000000).toFixed(1).replace(/\.0$/, '')}M`;
+};
+
+/**
+ * About-section links open in a new tab, so anything that is not a plain
+ * http(s) address — javascript:, data:, an unknown scheme — renders as null.
+ */
+export const safeUrl = (raw?: string | null): string | null => {
+  if (!raw) return null;
+  let url: URL;
+  try {
+    url = new URL(String(raw).trim());
+  } catch {
+    return null;
+  }
+  return url.protocol === 'http:' || url.protocol === 'https:' ? url.href : null;
 };
 
 export const cLabel = (n: number, lang: string): string => {

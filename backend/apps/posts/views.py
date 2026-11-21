@@ -20,12 +20,13 @@ def visible_posts(user):
     qs = Post.objects.select_related('author__profile').prefetch_related('media')
     if user.is_authenticated and user.is_staff:
         return qs
-    visible = Q(status=Post.Status.LIVE, audience=Post.Audience.PUBLIC)
+    # A private account is private whatever the author picked as the audience:
+    # only approved followers get its posts, and a pending request gets nothing.
+    visible = Q(status=Post.Status.LIVE, audience=Post.Audience.PUBLIC) & ~Q(author__profile__is_private=True)
     if user.is_authenticated:
         visible |= Q(author=user)
         visible |= Q(
             status=Post.Status.LIVE,
-            audience=Post.Audience.FOLLOWERS,
             author__followers__follower=user,
             author__followers__status='accepted',
         )
@@ -92,9 +93,11 @@ def feed(request):
     for item in data:
         item['promoted'] = False
     if promo_ids:
-        found = {p.pk: p for p in Post.objects.filter(
+        # The sponsored slot is still a post: a private author or a followers-only
+        # ad must not reach a stranger because somebody paid for it.
+        found = {p.pk: p for p in visible_posts(request.user).filter(
             pk__in=promo_ids, status=Post.Status.LIVE
-        ).select_related('author__profile').prefetch_related('media')}
+        )}
         lead_posts = [found[post_id] for post_id in promo_ids if post_id in found]
         lead = PostSerializer(lead_posts, many=True, context={'request': request}).data
         for item in lead:

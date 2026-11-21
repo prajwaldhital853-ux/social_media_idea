@@ -233,6 +233,17 @@ export const IC = {
       <path d="M3.5 10h17M8 2.5V6M16 2.5V6" />
     </svg>
   ),
+  phone: (
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M6.5 3.5h3l1.5 4-2 1.5a12 12 0 0 0 6 6l1.5-2 4 1.5v3a2 2 0 0 1-2.2 2A17 17 0 0 1 4.5 5.7 2 2 0 0 1 6.5 3.5z" />
+    </svg>
+  ),
+  link: (
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
+      <path d="M10 13.8a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1.5 1.5" />
+      <path d="M14 10.2a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1.5-1.5" />
+    </svg>
+  ),
   expand: (
     <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor" aria-hidden="true">
       <path d="M3.9 3.9h6.1v2H5.9v4.1h-2V3.9zm10.1 0h6.1v6.1h-2V5.9h-4.1v-2zM3.9 14h2v4.1h4.1v2H3.9V14zm12.2 0h2v6.1H11.9v-2H16V14z" />

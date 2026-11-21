@@ -4,9 +4,10 @@ import { useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useApp } from '@/lib/AppContext';
 import { useBackClose } from '@/lib/useBackClose';
-import { COUNTRIES } from '@/lib/utils';
+import { COUNTRIES, safeUrl, uid } from '@/lib/utils';
 import { profileImage } from '@/lib/mediaFile';
 import { API_ENABLED } from '@/lib/api';
+import { Post, ProfileLink } from '@/lib/types';
 import Avatar from './Avatar';
 import { IC } from '@/lib/icons';
 
@@ -20,6 +21,9 @@ export default function EditProfileModal({ onClose }: { onClose: () => void }) {
   const [avatar, setAvatar] = useState(me?.avatar || '');
   const [cover, setCover] = useState(me?.cover || '');
   const [dob, setDob] = useState(me?.dob || '');
+  const [phone, setPhone] = useState(me?.phone || '');
+  const [website, setWebsite] = useState(me?.website || '');
+  const [links, setLinks] = useState<ProfileLink[]>(me?.links || []);
   const [isPrivate, setIsPrivate] = useState(!!me?.private);
   const [busy, setBusy] = useState(false);
   const [uploading, setUploading] = useState(0);
@@ -52,13 +56,47 @@ export default function EditProfileModal({ onClose }: { onClose: () => void }) {
       setError('A display name is needed before saving.');
       return;
     }
+    if (phone.trim() && !/^[+]?[0-9 ()-]{6,40}$/.test(phone.trim())) {
+      setError(t('phoneBad'));
+      return;
+    }
+    if (website.trim() && !safeUrl(website)) {
+      setError(t('linkBad'));
+      return;
+    }
+    const filled = links.filter(l => l.url.trim() || l.label.trim());
+    for (const row of filled) {
+      if (!safeUrl(row.url)) {
+        setError(t('linkBad'));
+        return;
+      }
+    }
     const patch = {
       name: name.trim(), bio: bio.trim(), country, province: province.trim(), city: city.trim(),
       avatar: avatar || '', cover: cover || '', dob, private: isPrivate,
+      phone: phone.trim(), website: website.trim(),
+      links: filled.map(l => ({ label: l.label.trim() || new URL(l.url).hostname, url: (safeUrl(l.url) as string) }))
     };
     // Demo builds have no server to call, so the cache is the source of truth.
     if (!API_ENABLED) {
-      setDb(prev => ({ ...prev, users: prev.users.map(u => u.id === me.id ? { ...u, ...patch } : u) }));
+      const now = Date.now();
+      const changed: Array<'profile' | 'cover'> = [];
+      if (avatar && avatar !== me.avatar) changed.push('profile');
+      if (cover && cover !== me.cover) changed.push('cover');
+      const notes: Post[] = changed.map((activity, i) => ({
+        id: uid(),
+        uid: me.id,
+        text: '',
+        media: [{ type: 'image', src: activity === 'profile' ? avatar : cover }],
+        ts: now + i,
+        status: 'live',
+        activity,
+      }));
+      setDb(prev => ({
+        ...prev,
+        users: prev.users.map(u => u.id === me.id ? { ...u, ...patch } : u),
+        posts: [...notes, ...prev.posts],
+      }));
       showToast(t('profileUpdated'));
       onClose();
       return;
@@ -131,6 +169,45 @@ export default function EditProfileModal({ onClose }: { onClose: () => void }) {
             <span>{t('city')}</span>
             <input type="text" value={city} maxLength={40} onChange={e => setCity(e.target.value)} autoComplete="off" />
           </label>
+          <div className="field-row">
+            <label className="field">
+              <span>{t('phone')}</span>
+              <input type="tel" value={phone} maxLength={40} onChange={e => setPhone(e.target.value)} placeholder="+977 98 00000000" autoComplete="off" />
+            </label>
+            <label className="field">
+              <span>{t('website')}</span>
+              <input type="url" value={website} maxLength={160} onChange={e => setWebsite(e.target.value)} placeholder={t('linkUrl')} autoComplete="off" />
+            </label>
+          </div>
+          <div className="edit-links">
+            <span className="edit-links-title">{t('links')}</span>
+            {links.map((row, i) => (
+              <div className="edit-link-row" key={i}>
+                <input
+                  type="text"
+                  className="edit-link-label"
+                  value={row.label}
+                  maxLength={40}
+                  placeholder={t('linkLabel')}
+                  autoComplete="off"
+                  onChange={e => setLinks(prev => prev.map((r, j) => (j === i ? { ...r, label: e.target.value } : r)))}
+                />
+                <input
+                  type="url"
+                  className="edit-link-url"
+                  value={row.url}
+                  maxLength={300}
+                  placeholder={t('linkUrl')}
+                  autoComplete="off"
+                  onChange={e => setLinks(prev => prev.map((r, j) => (j === i ? { ...r, url: e.target.value } : r)))}
+                />
+                <button type="button" className="edit-link-remove" aria-label={t('removeLink')} onClick={() => setLinks(prev => prev.filter((_, j) => j !== i))}>{IC.x}</button>
+              </div>
+            ))}
+            {links.length < 8 && (
+              <button type="button" className="edit-link-add" onClick={() => setLinks(prev => [...prev, { label: '', url: '' }])}>{IC.plus}<span>{t('addLink')}</span></button>
+            )}
+          </div>
           <label className="edit-private-row">
             <span className="edit-private-copy">
               <b>{t('privateToggle')}</b>

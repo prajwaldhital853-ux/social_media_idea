@@ -60,6 +60,31 @@ class MarketplaceTests(TestCase):
         resp = self.cb.get('/api/marketplace/')
         self.assertEqual(resp.data['results'], [])
 
+    def test_removed_visible_to_its_seller(self):
+        # A deleted ad must still resolve for the seller who deleted it, or their
+        # own link reads as a broken page instead of "not available".
+        Listing.objects.filter(pk=self.listing.pk).update(status='removed')
+        resp = self.cs.get('/api/marketplace/')
+        self.assertEqual([item['id'] for item in resp.data['results']], [self.listing.pk])
+        resp = self.cs.get(f'/api/marketplace/{self.listing.pk}/')
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data['status'], 'removed')
+
+    def test_patch_replaces_images(self):
+        resp = self.cs.post('/api/marketplace/', {
+            'title': 'Camera bag', 'price': 1500, 'category': 'Electronics', 'location': 'Kathmandu',
+            'images': [{'url': 'https://cdn.test/old-1.jpg'}, {'url': 'https://cdn.test/old-2.jpg'}],
+        }, format='json')
+        listing = resp.data['id']
+        resp = self.cs.patch(f'/api/marketplace/{listing}/', {
+            'title': 'Camera bag', 'price': 1200, 'category': 'Electronics', 'location': 'Kathmandu',
+            'images': [{'url': 'https://cdn.test/new.jpg'}],
+        }, format='json')
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual([img['url'] for img in resp.data['images']], ['https://cdn.test/new.jpg'])
+        resp = self.cs.get(f'/api/marketplace/{listing}/')
+        self.assertEqual(resp.data['price'], '1200.00')
+
     def test_only_owner_can_edit(self):
         resp = self.cb.patch(f'/api/marketplace/{self.listing.pk}/', {'title': 'Hacked'}, format='json')
         self.assertIn(resp.status_code, (403, 404))

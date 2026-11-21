@@ -35,16 +35,16 @@ export default function SettingsPage() {
     );
   }
 
-  const setTwoStep = async (on: boolean) => {
-    const flip = (value: boolean) => setDb(prev => ({ ...prev, users: prev.users.map(u => (u.id === me.id ? { ...u, twoStep: value } : u)) }));
+  const setFlag = async (key: 'twoStep' | 'private' | 'notifyEmail', on: boolean) => {
+    const flip = (value: boolean) => setDb(prev => ({ ...prev, users: prev.users.map(u => (u.id === me.id ? { ...u, [key]: value } : u)) }));
     flip(on);
     if (!serverMode) return showToast(t('savedOk'));
     try {
-      await updateProfile({ twoStep: on });
+      await updateProfile({ [key]: on });
       showToast(t('savedOk'));
     } catch (err: any) {
       flip(!on);
-      showToast(err?.message || 'Could not change two-step verification.');
+      showToast(err?.message || 'That setting could not be saved.');
     }
   };
 
@@ -115,7 +115,7 @@ export default function SettingsPage() {
               <b>{t('twoStep')}</b>
               <small>{t('twoStepHint')}</small>
             </span>
-            <button type="button" role="switch" aria-checked={me.twoStep} aria-label={t('twoStep')} className={`switch ${me.twoStep ? 'on' : ''}`} onClick={() => setTwoStep(!me.twoStep)}>
+            <button type="button" role="switch" aria-checked={me.twoStep} aria-label={t('twoStep')} className={`switch ${me.twoStep ? 'on' : ''}`} onClick={() => setFlag('twoStep', !me.twoStep)}>
               <span className="switch-knob" />
             </button>
           </div>
@@ -136,6 +136,24 @@ export default function SettingsPage() {
 
         <section className="settings-card">
           <h2>{t('privacy')}</h2>
+          <div className="settings-row">
+            <span className="settings-row-copy">
+              <b>{t('privateToggle')}</b>
+              <small>{t('privateToggleSub')}</small>
+            </span>
+            <button type="button" role="switch" aria-checked={!!me.private} aria-label={t('privateToggle')} className={`switch ${me.private ? 'on' : ''}`} onClick={() => setFlag('private', !me.private)}>
+              <span className="switch-knob" />
+            </button>
+          </div>
+          <div className="settings-row">
+            <span className="settings-row-copy">
+              <b>{t('emailAlerts')}</b>
+              <small>{t('emailAlertsSub')}</small>
+            </span>
+            <button type="button" role="switch" aria-checked={me.notifyEmail !== false} aria-label={t('emailAlerts')} className={`switch ${me.notifyEmail !== false ? 'on' : ''}`} onClick={() => setFlag('notifyEmail', me.notifyEmail === false)}>
+              <span className="switch-knob" />
+            </button>
+          </div>
           <nav className="settings-legal">
             <Link href="/legal/privacy">{t('privacy')}</Link>
             <Link href="/legal/terms">{t('terms')}</Link>

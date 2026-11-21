@@ -15,7 +15,7 @@ import { IC } from '@/lib/icons';
 type Panel = 'none' | 'messages' | 'notifications';
 
 export default function TopBar() {
-  const { me, db, t } = useApp();
+  const { me, db, t, feedTab, setFeedTab } = useApp();
   const pathname = usePathname();
   const [panel, setPanel] = useState<Panel>('none');
   const msgBox = useRef<HTMLDivElement>(null);
@@ -45,6 +45,28 @@ export default function TopBar() {
           <span>Search Exposing</span>
         </Link>
       </div>
+      {pathname === '/' && (
+        <div className="topbar-tabs" role="tablist" aria-label="Feed">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={feedTab === 'foryou'}
+            className={`topbar-tab ${feedTab === 'foryou' ? 'active' : ''}`}
+            onClick={() => setFeedTab('foryou')}
+          >
+            {t('forYou')}
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={feedTab === 'following'}
+            className={`topbar-tab ${feedTab === 'following' ? 'active' : ''}`}
+            onClick={() => setFeedTab('following')}
+          >
+            {t('following')}
+          </button>
+        </div>
+      )}
       <div className="topbar-right">
         <Link
           href="/video"

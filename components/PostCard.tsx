@@ -67,6 +67,32 @@ function Caption({ text, full = false }: { text: string; full?: boolean }) {
   </div>;
 }
 
+/**
+ * The feed's one-tap follow. An author the reader already followed before this
+ * page loaded shows no text at all — unfollowing is done on their profile.
+ */
+function FeedFollow({ author }: { author: User }) {
+  const { me, t, followState, toggleFollow } = useApp();
+  const router = useRouter();
+  const latched = useRef<boolean | null>(null);
+  if (me && latched.current === null) latched.current = followState(author.id) === 'following';
+  const state = me ? followState(author.id) : 'none';
+  if (state === 'pending') return null;
+
+  const run = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!me) { router.push('/login'); return; }
+    await toggleFollow(author.id);
+  };
+
+  if (state === 'following') {
+    if (latched.current) return null;
+    return <button type="button" className="feed-follow following" onClick={run}>{t('following')}</button>;
+  }
+  return <button type="button" className="feed-follow" onClick={run}>{t('follow')}</button>;
+}
+
 export default function PostCard({ post, author, featured }: PostCardProps) {
   const router = useRouter();
   const { db, me, t, deletePost, toggleSave, isSaved, openComposer, activePromo, promoEligible, showToast } = useApp();
@@ -171,6 +197,21 @@ export default function PostCard({ post, author, featured }: PostCardProps) {
               {author.name || author.username}
             </Link>
             {author.verified && <VerifiedBadge />}
+            {post.activity && (
+              <span className="post-activity">{t(post.activity === 'cover' ? 'updatedCover' : 'updatedProfile')}</span>
+            )}
+            {(post.place || post.mood) && (
+              <span className="post-context">
+                {post.place && (
+                  <Link href={`/explore?q=${encodeURIComponent(post.place)}`} className="post-place" onClick={e => e.stopPropagation()}>at {post.place}</Link>
+                )}
+                {post.place && post.mood ? ' ' : ''}
+                {post.mood && <span className="post-feeling">feeling {post.mood}</span>}
+              </span>
+            )}
+            {!own && (
+              <FeedFollow author={author} />
+            )}
             <span className="post-handle">@{author.username}</span>
             <span className="post-time">{ago(post.ts, db.lang)}</span>
             {post.audience === 'followers' && <span className="post-audience" title="Followers only">{IC.users}</span>}
@@ -196,12 +237,6 @@ export default function PostCard({ post, author, featured }: PostCardProps) {
           {post.status === 'removed' && <p className="post-state-note">{t('removed')}</p>}
 
           {post.text && <Caption text={post.text} full={featured} />}
-          {(post.mood || post.place) && (
-            <div className="post-tags">
-              {post.mood && <span className="post-tag">{post.mood}</span>}
-              {post.place && <span className="post-tag">{post.place}</span>}
-            </div>
-          )}
         </div>
       </div>
 

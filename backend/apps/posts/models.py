@@ -12,10 +12,17 @@ class Post(models.Model):
         HIDDEN = 'hidden', 'Hidden by moderation'
         REMOVED = 'removed', 'Removed by moderation'
 
+    class Activity(models.TextChoices):
+        PROFILE = 'profile', 'New profile photo'
+        COVER = 'cover', 'New cover photo'
+
     author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='posts')
     text = models.TextField(blank=True)
     audience = models.CharField(max_length=10, choices=Audience.choices, default=Audience.PUBLIC)
     status = models.CharField(max_length=10, choices=Status.choices, default=Status.LIVE)
+    # A profile or cover change is published as a post; this says which, so the
+    # feed can label it instead of showing an empty caption.
+    activity = models.CharField(max_length=10, choices=Activity.choices, blank=True)
     mood = models.CharField(max_length=80, blank=True)
     place = models.CharField(max_length=120, blank=True)
     category = models.CharField(max_length=80, blank=True)

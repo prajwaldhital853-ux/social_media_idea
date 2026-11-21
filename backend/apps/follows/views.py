@@ -7,7 +7,7 @@ from rest_framework.response import Response
 
 from apps.accounts.models import User
 from apps.common.pagination import KeysetPagination
-from apps.notifications.services import notify
+from apps.notifications.services import email_activity, notify
 from apps.profiles.models import Profile
 
 from .models import Follow
@@ -42,10 +42,10 @@ def follow(request):
         return Response({'detail': 'Already following or requested.'}, status=400)
     if not created:
         return Response({'detail': 'Already following or requested.', 'status': edge.status}, status=400)
-    if private:
-        notify(target, request.user, 'follow_request', f'{request.user.username} requested to follow you.', 'user', request.user.pk)
-    else:
-        notify(target, request.user, 'follow', f'{request.user.username} started following you.', 'user', request.user.pk)
+    kind = 'follow_request' if private else 'follow'
+    verb = 'requested to follow you' if private else 'started following you'
+    notify(target, request.user, kind, f'{request.user.username} {verb}.', 'user', request.user.pk)
+    email_activity(target, request.user, kind)
     return Response({'status': edge.status}, status=status.HTTP_201_CREATED)
 
 

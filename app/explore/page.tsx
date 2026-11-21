@@ -7,7 +7,7 @@ import AppShell from '@/components/AppShell';
 import PostCard from '@/components/PostCard';
 import Avatar from '@/components/Avatar';
 import { useApp } from '@/lib/AppContext';
-import { canSeePost } from '@/lib/utils';
+import { canSeePost, privateIds } from '@/lib/utils';
 import { postsFragment, useList, usersFragment } from '@/lib/lists';
 import { IC } from '@/lib/icons';
 
@@ -48,7 +48,7 @@ function SearchResults() {
   const posts = normalized
     ? (serverMode
       ? postRows.ids.map(postOf).filter((p): p is NonNullable<ReturnType<typeof postOf>> => !!p)
-      : db.posts.filter(p => p.status === 'live' && canSeePost(p, me?.id ?? null, db.follows) && p.text.toLocaleLowerCase().includes(normalized)).sort((a, b) => b.ts - a.ts))
+      : db.posts.filter(p => p.status === 'live' && canSeePost(p, me?.id ?? null, db.follows, privateIds(db.users)) && p.text.toLocaleLowerCase().includes(normalized)).sort((a, b) => b.ts - a.ts))
     : [];
   const loading = serverMode && !!normalized && (!peopleRows.loaded || !postRows.loaded);
   const failed = serverMode && !!normalized && !!(peopleRows.error || postRows.error);

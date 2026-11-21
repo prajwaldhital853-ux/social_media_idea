@@ -5,9 +5,14 @@ import Link from 'next/link';
 import AppShell from '@/components/AppShell';
 import ThemeToggle from '@/components/ThemeToggle';
 import { useApp } from '@/lib/AppContext';
-import { ago, hash, uid, resizeImage } from '@/lib/utils';
+import { api, API_ENABLED } from '@/lib/api';
+import { mapCoinRequest } from '@/lib/dto';
+import { coinRequestsFragment, forgetLists, useList, walletFragment } from '@/lib/lists';
+import { useWindowed } from '@/lib/useWindowed';
+import { ago, hash, uid } from '@/lib/utils';
+import { mediaFromFile } from '@/lib/mediaFile';
 import { IC } from '@/lib/icons';
-import { CoinRequest } from '@/lib/types';
+import { CoinRequest, LedgerEntry } from '@/lib/types';
 
 const PRESETS = [50, 100, 200, 500];
 
@@ -50,12 +55,49 @@ function StatusChip({ status }: { status: string }) {
 }
 
 export default function WalletPage() {
-  const { db, me, t, setDb, showToast, cancelPromotion, ready } = useApp();
+  const { db, me, t, setDb, merge, serverMode, showToast, cancelPromotion, ready } = useApp();
   const [coins, setCoins] = useState(100);
   const [method, setMethod] = useState<'bank' | 'qr'>('bank');
   const [reference, setReference] = useState('');
   const [screenshot, setScreenshot] = useState('');
   const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const meId = me?.id || '';
+  // The ledger and the request queue are keyset lists of their own; the cache
+  // holds the rows, these hold the order.
+  const ledgerList = useList(
+    'wallet-ledger',
+    { path: '/wallet/', frag: walletFragment(meId) },
+    undefined,
+    serverMode && !!me,
+  );
+  const requestList = useList(
+    'coin-requests',
+    { path: '/wallet/requests/list/', frag: coinRequestsFragment },
+    undefined,
+    serverMode && !!me,
+  );
+
+  const myLedger = useMemo<LedgerEntry[]>(() => {
+    if (serverMode) {
+      const index = new Map(db.ledger.map(l => [l.id, l] as [string, LedgerEntry]));
+      return ledgerList.ids.map(id => index.get(id)).filter((l): l is LedgerEntry => !!l);
+    }
+    return me ? db.ledger.filter(l => l.uid === me.id).sort((a, b) => b.ts - a.ts) : [];
+  }, [db.ledger, ledgerList.ids, me, serverMode]);
+  const myRequests = useMemo<CoinRequest[]>(() => {
+    if (serverMode) {
+      const index = new Map(db.coinRequests.map(r => [r.id, r] as [string, CoinRequest]));
+      return requestList.ids.map(id => index.get(id)).filter((r): r is CoinRequest => !!r);
+    }
+    return me ? db.coinRequests.filter(r => r.uid === me.id).sort((a, b) => b.ts - a.ts) : [];
+  }, [db.coinRequests, requestList.ids, me, serverMode]);
+
+  const ledgerWindow = useWindowed(myLedger.length, 10, meId,
+    serverMode ? { hasMore: ledgerList.hasMore, loading: ledgerList.loading, load: ledgerList.loadMore } : undefined);
+  const requestWindow = useWindowed(myRequests.length, 10, meId,
+    serverMode ? { hasMore: requestList.hasMore, loading: requestList.loading, load: requestList.loadMore } : undefined);
 
   if (!me) {
     return (
@@ -78,8 +120,6 @@ export default function WalletPage() {
 
   const price = db.settings.coinPrice;
   const amount = coins * price;
-  const myRequests = db.coinRequests.filter(r => r.uid === me.id).sort((a, b) => b.ts - a.ts);
-  const myLedger = db.ledger.filter(l => l.uid === me.id).sort((a, b) => b.ts - a.ts);
   const myPromos = db.promotions.filter(p => p.uid === me.id).sort((a, b) => b.ts - a.ts);
 
   const copy = async (value: string) => {
@@ -93,17 +133,42 @@ export default function WalletPage() {
 
   const pickScreenshot = async (file: File | undefined) => {
     if (!file) return;
+    setBusy(true);
     try {
-      setScreenshot(await resizeImage(file));
-    } catch {
-      showToast(t('e_type'));
+      // In the API build this pushes the bytes to /api/uploads/ and keeps the URL;
+      // screenshot_url is a URL column and refuses a data URL.
+      setScreenshot((await mediaFromFile(file)).src || '');
+      setError('');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t('e_type'));
+    } finally {
+      setBusy(false);
     }
   };
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!reference.trim()) {
       setError(t('reference'));
+      return;
+    }
+    if (API_ENABLED) {
+      setBusy(true);
+      try {
+        const row = await api.post<any>('/api/wallet/requests/', {
+          coins, amount, method, reference: reference.trim(), screenshot_url: screenshot || '',
+        });
+        merge({ coinRequests: [mapCoinRequest(row)] });
+        forgetLists('coin-requests');
+        setReference('');
+        setScreenshot('');
+        setError('');
+        showToast(t('requestSent'));
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'The request could not be sent.');
+      } finally {
+        setBusy(false);
+      }
       return;
     }
     const request: CoinRequest = {
@@ -204,15 +269,15 @@ export default function WalletPage() {
               {screenshot && <img src={screenshot} alt={t('screenshot')} className="wallet-screenshot-preview" />}
             </label>
 
-            <button type="submit" className="promote-submit">{t('submitRequest')} · {IC.coin}{coins}</button>
+            <button type="submit" className="promote-submit" disabled={busy}>{t('submitRequest')} · {IC.coin}{coins}</button>
           </form>
         </section>
 
-        {myRequests.length > 0 && (
+        {(myRequests.length > 0 || requestList.loading) && (
           <section className="wallet-card">
             <h2 className="wallet-card-title">{t('pendingRequests')}</h2>
             <div className="wallet-rows">
-              {myRequests.map(r => (
+              {myRequests.slice(0, requestWindow.limit).map(r => (
                 <div className="wallet-row" key={r.id}>
                   <span className={`wallet-row-icon ${r.status}`}>{IC.coin}</span>
                   <span className="wallet-row-main">
@@ -223,6 +288,7 @@ export default function WalletPage() {
                   <StatusChip status={r.status} />
                 </div>
               ))}
+              {requestWindow.hasMore && <div ref={requestWindow.sentinel} className="feed-sentinel" aria-hidden="true" />}
             </div>
           </section>
         )}
@@ -258,10 +324,10 @@ export default function WalletPage() {
         <section className="wallet-card">
           <h2 className="wallet-card-title">{t('ledger')}</h2>
           {myLedger.length === 0 ? (
-            <p className="wallet-empty">{t('noLedger')}</p>
+            !serverMode || ledgerList.loaded ? <p className="wallet-empty">{t('noLedger')}</p> : null
           ) : (
             <div className="wallet-rows">
-              {myLedger.map(l => (
+              {myLedger.slice(0, ledgerWindow.limit).map(l => (
                 <div className="wallet-row" key={l.id}>
                   <span className={`wallet-row-icon ${l.delta >= 0 ? 'in' : 'out'}`}>{l.delta >= 0 ? '+' : '−'}</span>
                   <span className="wallet-row-main">
@@ -271,6 +337,7 @@ export default function WalletPage() {
                   <b className={`wallet-delta ${l.delta >= 0 ? 'in' : 'out'}`}>{l.delta >= 0 ? '+' : ''}{l.delta}</b>
                 </div>
               ))}
+              {ledgerWindow.hasMore && <div ref={ledgerWindow.sentinel} className="feed-sentinel" aria-hidden="true" />}
             </div>
           )}
         </section>

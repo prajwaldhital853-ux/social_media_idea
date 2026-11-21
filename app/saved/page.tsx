@@ -8,7 +8,7 @@ import ThemeToggle from '@/components/ThemeToggle';
 import { useApp } from '@/lib/AppContext';
 import { listingsFragment, postsFragment, useList } from '@/lib/lists';
 import { useWindowed } from '@/lib/useWindowed';
-import { canSeePost, ago } from '@/lib/utils';
+import { canSeePost, privateIds, ago } from '@/lib/utils';
 import { IC } from '@/lib/icons';
 import { Listing, Post } from '@/lib/types';
 
@@ -43,7 +43,7 @@ export default function SavedPage() {
       .filter(s => s.uid === me.id)
       .sort((a, b) => b.ts - a.ts)
       .map(s => db.posts.find(p => p.id === s.pid))
-      .filter((p): p is Post => !!p && p.status === 'live' && canSeePost(p, me.id, db.follows));
+      .filter((p): p is Post => !!p && p.status === 'live' && canSeePost(p, me.id, db.follows, privateIds(db.users)));
   }, [db.posts, db.saves, db.follows, me, savedPosts.ids, serverMode]);
 
   const listings = useMemo<Listing[]>(() => {

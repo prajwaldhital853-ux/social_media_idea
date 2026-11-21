@@ -88,6 +88,32 @@ BIOS = [
     'Doctor, runner, terrible at replying to messages.',
 ]
 
+# About-section link rows, rotated per member so most profiles carry one or two
+# clickable links and a few deliberately carry none.
+LINK_BANK = [
+    [],
+    [('portfolio', 'Portfolio')],
+    [('shop', 'Shop'), ('order', 'Order online')],
+    [('press', 'Press kit')],
+    [('booking', 'Book a session')],
+]
+
+
+def contacts_for(username, index):
+    """Phone, website and About links for a seeded member.
+
+    Deterministic, so the same demo always shows the same contact blocks. About
+    a third of the members hide each field to prove the section degrades cleanly.
+    """
+    return {
+        'phone': '' if index % 3 == 1 else f'+977 98{(4000000 + index * 13457) % 10000000:07d}',
+        'website': '' if index % 4 == 2 else f'https://{username}.example.com',
+        'links': [
+            {'label': label, 'url': f'https://example.com/{username}/{slug}'}
+            for slug, label in LINK_BANK[index % len(LINK_BANK)]
+        ],
+    }
+
 PLACES = [
     'Kathmandu', 'Lalitpur', 'Bhaktapur', 'Pokhara', 'Chitwan', 'Butwal', 'Dharan',
     'Nepalgunj', 'Hetauda', 'Bharatpur', 'Biratnagar', 'Itahari', 'Janakpur', 'Ilam',

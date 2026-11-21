@@ -4,6 +4,9 @@ import { useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useApp } from '@/lib/AppContext';
 import { useBackClose } from '@/lib/useBackClose';
+import { api, API_ENABLED } from '@/lib/api';
+import { listingImages, mapListing } from '@/lib/dto';
+import { forgetLists } from '@/lib/lists';
 import { IC } from '@/lib/icons';
 import { mediaFromFile } from '@/lib/mediaFile';
 import { uid } from '@/lib/utils';
@@ -16,7 +19,7 @@ interface ListingFormProps {
 }
 
 export default function ListingForm({ onClose, onSaved, listingId }: ListingFormProps) {
-  const { db, me, t, setDb, showToast } = useApp();
+  const { db, me, t, setDb, merge, showToast } = useApp();
   const existing = listingId ? db.listings.find(l => l.id === listingId) : undefined;
   const [title, setTitle] = useState(existing?.title || '');
   const [desc, setDesc] = useState(existing?.desc || '');
@@ -69,24 +72,48 @@ export default function ListingForm({ onClose, onSaved, listingId }: ListingForm
     setError('');
   };
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) { setError(t('e_title')); return; }
     const amount = Number(price);
     if (!Number.isFinite(amount) || amount < 1) { setError(t('e_price')); return; }
     if (!location.trim()) { setError(t('e_location')); return; }
+    const values = {
+      title: title.trim(),
+      desc: desc.trim(),
+      price: Math.round(amount),
+      category,
+      location: location.trim(),
+      media,
+    };
+
+    if (API_ENABLED) {
+      setBusy(true);
+      const fields = {
+        title: values.title, description: values.desc, price: values.price,
+        category: values.category, location: values.location, images: listingImages(values.media),
+      };
+      try {
+        const row = existing
+          ? await api.patch(`/api/marketplace/${existing.id}/`, fields)
+          : await api.post('/api/marketplace/', { ...fields, currency: 'NPR' });
+        merge({ listings: [mapListing(row)] });
+        // The market, the seller's grid and every saved page all list this row.
+        ['market', 'profile-listings', 'saved-listings'].forEach(forgetLists);
+        showToast(existing ? t('listingUpdated') : t('listingCreated'));
+        onSaved(String(row.id));
+        onClose();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'The listing could not be saved.');
+        setBusy(false);
+      }
+      return;
+    }
+
     if (existing) {
       setDb(prev => ({
         ...prev,
-        listings: prev.listings.map(l => l.id === existing.id ? {
-          ...l,
-          title: title.trim(),
-          desc: desc.trim(),
-          price: Math.round(amount),
-          category,
-          location: location.trim(),
-          media
-        } : l)
+        listings: prev.listings.map(l => l.id === existing.id ? { ...l, ...values } : l)
       }));
       showToast(t('listingUpdated'));
       onSaved(existing.id);
@@ -96,18 +123,7 @@ export default function ListingForm({ onClose, onSaved, listingId }: ListingForm
     const id = uid();
     setDb(prev => ({
       ...prev,
-      listings: [{
-        id,
-        uid: me.id,
-        title: title.trim(),
-        desc: desc.trim(),
-        price: Math.round(amount),
-        category,
-        location: location.trim(),
-        media,
-        ts: Date.now(),
-        status: 'active' as const
-      }, ...prev.listings]
+      listings: [{ id, uid: me.id, ...values, ts: Date.now(), status: 'active' as const }, ...prev.listings]
     }));
     showToast(t('listingCreated'));
     onSaved(id);

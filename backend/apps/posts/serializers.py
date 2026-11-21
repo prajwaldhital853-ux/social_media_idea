@@ -37,11 +37,11 @@ class PostSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'author', 'author_username', 'author_name', 'author_avatar_url', 'author_verified',
             'author_is_private', 'text', 'audience', 'status',
-            'mood', 'place', 'category', 'like_count', 'comment_count',
+            'mood', 'place', 'category', 'activity', 'like_count', 'comment_count',
             'edited', 'created_at', 'updated_at', 'media',
             'my_reaction', 'my_media_reactions',
         ]
-        read_only_fields = ['id', 'author', 'status', 'like_count', 'comment_count', 'edited', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'author', 'status', 'activity', 'like_count', 'comment_count', 'edited', 'created_at', 'updated_at']
         list_serializer_class = PostListSerializer
 
     def _reactions(self):

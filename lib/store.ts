@@ -4,10 +4,10 @@ import { Database, User } from './types';
  * The client cache that components render from.
  *
  * `merge` applies a server fragment onto the cache: entities are upserted by id,
- * edges (follows, reactions) by their natural key, and whole-collection
- * fragments (saves, ledger) replace their list. Nothing here knows about HTTP —
- * it only keeps the view-model consistent when a page arrives, possibly for a
- * second or third time with different counters.
+ * edges (follows, reactions) by their natural key, and the save lists are
+ * replaced because the server sends the whole set. Nothing here knows about
+ * HTTP — it only keeps the view-model consistent when a page arrives, possibly
+ * for a second or third time with different counters.
  */
 
 export type Fragment = Partial<Pick<
@@ -63,6 +63,8 @@ export function merge(db: Database, frag: Fragment): Database {
   if (frag.follows) next.follows = upsertBy(db.follows, frag.follows, ['follower', 'following']);
   if (frag.saves) next.saves = frag.saves;
   if (frag.listingSaves) next.listingSaves = frag.listingSaves;
-  if (frag.ledger) next.ledger = frag.ledger;
+  // Upserted, not replaced: the ledger arrives one keyset page at a time, and
+  // page two must not drop the rows page one already showed.
+  if (frag.ledger) next.ledger = byId(db.ledger, frag.ledger);
   return next;
 }

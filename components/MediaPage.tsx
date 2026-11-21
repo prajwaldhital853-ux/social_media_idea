@@ -4,7 +4,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import { useRouter } from 'next/navigation';
 import { useApp } from '@/lib/AppContext';
 import { useRemoteRow } from '@/lib/useRemoteRow';
-import { canSeePost } from '@/lib/utils';
+import { canSeePost, privateIds } from '@/lib/utils';
 import { IC } from '@/lib/icons';
 import AutoVideo from './AutoVideo';
 import Comments from './Comments';
@@ -22,7 +22,7 @@ export default function MediaPage({ postId, initialIndex }: MediaPageProps) {
   const post = db.posts.find(p => p.id === postId);
   // A direct link to /post/<id>/media/<n> has no list behind it; ask for the row.
   const { remote, pull } = useRemoteRow('post', postId, !!post);
-  const available = !!post && (post.status === 'live' || me?.id === post.uid || isStaff()) && canSeePost(post, me?.id ?? null, db.follows);
+  const available = !!post && (post.status === 'live' || me?.id === post.uid || isStaff()) && canSeePost(post, me?.id ?? null, db.follows, privateIds(db.users));
   const media = (post?.media || []).filter(m => m.src || m.gen);
   const start = Math.max(0, Math.min(initialIndex, Math.max(0, media.length - 1)));
   const [index, setIndex] = useState(start);

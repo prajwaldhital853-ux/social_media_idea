@@ -6,12 +6,12 @@ import PostCard from '@/components/PostCard';
 import { useApp } from '@/lib/AppContext';
 import { postsFragment, useList } from '@/lib/lists';
 import { useWindowed } from '@/lib/useWindowed';
-import { canSeePost } from '@/lib/utils';
+import { canSeePost, privateIds } from '@/lib/utils';
 import { Post } from '@/lib/types';
 
 export default function Feed() {
-  const { db, me, t, isStaff, serverMode } = useApp();
-  const [tab, setTab] = useState<'foryou' | 'following'>('foryou');
+  const { db, me, t, isStaff, serverMode, feedTab, setFeedTab } = useApp();
+  const tab = feedTab;
   const feed = useList(
     'feed',
     { path: '/feed/', frag: postsFragment(me?.id || null) },
@@ -19,6 +19,7 @@ export default function Feed() {
   );
 
   const followingIds = new Set(db.follows.filter(f => f.follower === me?.id && f.status !== 'pending').map(f => f.following));
+  const privates = useMemo(() => privateIds(db.users), [db.users]);
   const cached = useMemo(() => {
     const index = new Map(db.posts.map(p => [p.id, p] as [string, Post]));
     return feed.ids.map(id => index.get(id)).filter((p): p is Post => !!p);
@@ -27,9 +28,9 @@ export default function Feed() {
   // The server has already chosen the rows; this pass only keeps staff/self
   // visibility honest for rows that were cached before something changed.
   const serverPosts = cached.filter(p =>
-    (p.status === 'live' || me?.id === p.uid || isStaff()) && canSeePost(p, me?.id ?? null, db.follows));
+    (p.status === 'live' || me?.id === p.uid || isStaff()) && canSeePost(p, me?.id ?? null, db.follows, privates));
   const localPosts = db.posts
-    .filter(p => (p.status === 'live' || me?.id === p.uid || isStaff()) && canSeePost(p, me?.id ?? null, db.follows) && (tab !== 'following' || followingIds.has(p.uid)))
+    .filter(p => (p.status === 'live' || me?.id === p.uid || isStaff()) && canSeePost(p, me?.id ?? null, db.follows, privates) && (tab !== 'following' || followingIds.has(p.uid)))
     .sort((a, b) => b.ts - a.ts);
   const posts = serverMode ? serverPosts : localPosts;
 
@@ -57,8 +58,8 @@ export default function Feed() {
     <>
       <header className={`header home-header ${lifted ? 'lifted' : ''}`}>
         <div className="tabs" role="tablist" aria-label="Feed">
-          <button type="button" role="tab" aria-selected={tab === 'foryou'} className={`tab ${tab === 'foryou' ? 'active' : ''}`} onClick={() => setTab('foryou')}>{t('forYou')}</button>
-          <button type="button" role="tab" aria-selected={tab === 'following'} className={`tab ${tab === 'following' ? 'active' : ''}`} onClick={() => setTab('following')}>{t('following')}</button>
+          <button type="button" role="tab" aria-selected={tab === 'foryou'} className={`tab ${tab === 'foryou' ? 'active' : ''}`} onClick={() => setFeedTab('foryou')}>{t('forYou')}</button>
+          <button type="button" role="tab" aria-selected={tab === 'following'} className={`tab ${tab === 'following' ? 'active' : ''}`} onClick={() => setFeedTab('following')}>{t('following')}</button>
         </div>
       </header>
       {tab === 'following' && !me ? (
