@@ -629,18 +629,39 @@ LISTINGS = [
     ('Ceramic tea set, six cups', 2750, 'Home', 'Used - good', 'From the Bhaktapur kiln, no chips.'),
 ]
 
-# Hand-picked short clips cached first-party under MEDIA_ROOT/demo so nothing
-# in the demo depends on a third-party host answering.
+# Short clips cached first-party under MEDIA_ROOT/demo, so the demo never depends
+# on a third-party host answering at view time. Every clip carries mirrors because
+# these hosts filter bots differently: filesamples.com and test-videos.co.uk allow
+# a browser and block Python-urllib, media.w3.org is the other way round.
 CLIPS = [
-    ('clip-flower.mp4', 'https://mdn.github.io/shared-assets/videos/flower.mp4'),
-    ('clip-sample_640x360.mp4', 'https://filesamples.com/samples/video/mp4/sample_640x360.mp4'),
-    ('clip-sample_960x540.mp4', 'https://filesamples.com/samples/video/mp4/sample_960x540.mp4'),
-    ('clip-jellyfish-720.mp4', 'https://test-videos.co.uk/vids/jellyfish/mp4/h264/720/Jellyfish_720_10s_1MB.mp4'),
-    ('clip-sintel-720.mp4', 'https://test-videos.co.uk/vids/sintel/mp4/h264/720/Sintel_720_10s_1MB.mp4'),
-    ('clip-big_buck_bunny_360_10s_1mb.mp4',
-     'https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/360/Big_Buck_Bunny_360_10s_1MB.mp4'),
-    ('clip-big_buck_bunny.mp4',
-     'https://cdn.jsdelivr.net/gh/mediaelement/mediaelement-files@master/big_buck_bunny.mp4'),
+    ('clip-flower.mp4', (
+        'https://mdn.github.io/shared-assets/videos/flower.mp4',
+        'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4',
+    )),
+    ('clip-sample_640x360.mp4', (
+        'https://filesamples.com/samples/video/mp4/sample_640x360.mp4',
+        'https://vjs.zencdn.net/v/oceans.mp4',
+    )),
+    ('clip-sample_960x540.mp4', (
+        'https://filesamples.com/samples/video/mp4/sample_960x540.mp4',
+        'https://media.w3.org/2010/05/sintel/trailer.mp4',
+    )),
+    ('clip-jellyfish-720.mp4', (
+        'https://test-videos.co.uk/vids/jellyfish/mp4/h264/720/Jellyfish_720_10s_1MB.mp4',
+        'https://mdn.github.io/shared-assets/videos/flower.mp4',
+    )),
+    ('clip-sintel-720.mp4', (
+        'https://test-videos.co.uk/vids/sintel/mp4/h264/720/Sintel_720_10s_1MB.mp4',
+        'https://media.w3.org/2010/05/sintel/trailer.mp4',
+    )),
+    ('clip-big_buck_bunny_360_10s_1mb.mp4', (
+        'https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/360/Big_Buck_Bunny_360_10s_1MB.mp4',
+        'https://cdn.jsdelivr.net/gh/mediaelement/mediaelement-files@master/big_buck_bunny.mp4',
+    )),
+    ('clip-big_buck_bunny.mp4', (
+        'https://cdn.jsdelivr.net/gh/mediaelement/mediaelement-files@master/big_buck_bunny.mp4',
+        'https://vjs.zencdn.net/v/oceans.mp4',
+    )),
 ]
 
 # Number bank for the {count} slot: prices, minutes, metres, rupees.

@@ -11,6 +11,7 @@ so a rebuild produces the same demo instead of a new one to re-test.
 """
 
 import random
+import shutil
 import urllib.request
 from datetime import datetime, timedelta
 from decimal import Decimal
@@ -18,7 +19,7 @@ from pathlib import Path
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 from django.db import connection, transaction
 from django.utils import timezone
 
@@ -50,6 +51,13 @@ WINDOW_DAYS = 120
 # Activity younger than this still shows in the bell, so it has to be real.
 RECENT_DAYS = 25
 REACTION_KINDS = ['like', 'like', 'like', 'love', 'love', 'haha', 'wow', 'sad']
+# Sample-video hosts filter bots in opposite directions, so a clip is fetched
+# twice over rather than guessed once: filesamples.com and test-videos.co.uk
+# answer a browser and refuse Python-urllib, media.w3.org is the other way round.
+CLIP_AGENTS = (
+    'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Safari/537.36',
+    'Python-urllib/3.12',
+)
 
 
 def mp4_duration(path):
@@ -258,17 +266,53 @@ class Command(BaseCommand):
                 self.followers[row.followee_id] = self.followers.get(row.followee_id, 0) + 1
 
     # -------------------------------- posts -------------------------------
+    def fetch_clip(self, target, sources):
+        """Write the first source that actually serves an mp4; keep a bad body out of the folder."""
+        partial = target.with_suffix('.part')
+        for url in sources:
+            for agent in CLIP_AGENTS:
+                try:
+                    request = urllib.request.Request(url, headers={'User-Agent': agent})
+                    with urllib.request.urlopen(request, timeout=120) as response:
+                        blob = response.read()
+                except OSError:
+                    continue
+                # An HTML block page or a CDN notice would otherwise become the reel.
+                if blob[4:8] != b'ftyp':
+                    continue
+                partial.write_bytes(blob)
+                partial.replace(target)
+                return True
+        return False
+
+    def reuse_clip(self, target, saved):
+        """A dead sample host must not cost the deploy: show a clip we already have."""
+        for donor in saved:
+            shutil.copyfile(donor, target)
+            self.stdout.write(f'  {target.name} served from {donor.name}')
+            return
+        shipped = settings.BASE_DIR / 'demo_clips' / 'clip-fallback.mp4'
+        if shipped.exists():
+            shutil.copyfile(shipped, target)
+            self.stdout.write(f'  {target.name} served from the shipped fallback clip')
+            return
+        raise CommandError(
+            f'No demo clip could be fetched for {target.name}. Every sample host is unreachable '
+            'and there is nothing to copy; add backend/demo_clips/clip-fallback.mp4 or fix the network.'
+        )
+
     def ensure_clips(self):
         """Cache the demo reels first-party so no clip depends on a third host."""
         folder = Path(settings.MEDIA_ROOT) / 'demo'
         folder.mkdir(parents=True, exist_ok=True)
-        clips = []
-        for name, source in CLIPS:
+        clips, saved = [], []
+        for name, sources in CLIPS:
             target = folder / name
             if not target.exists():
                 self.stdout.write(f'Fetching demo clip {name}')
-                with urllib.request.urlopen(source, timeout=180) as response, target.open('wb') as handle:
-                    handle.write(response.read())
+                if not self.fetch_clip(target, sources):
+                    self.reuse_clip(target, saved)
+            saved.append(target)
             clips.append((f'/media/demo/{name}', mp4_duration(target)))
         return clips
 
