@@ -29,7 +29,6 @@ interface ReelSlide {
 }
 
 const RATES = [0.5, 1, 1.5, 2];
-type ReelOrder = 'views' | 'latest' | 'oldest';
 
 export default function ReelsFeed({ initialKey }: { initialKey?: string }) {
   const router = useRouter();
@@ -40,7 +39,6 @@ export default function ReelsFeed({ initialKey }: { initialKey?: string }) {
   const [index, setIndex] = useState(0);
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
-  const [order, setOrder] = useState<ReelOrder>('latest');
   const [rate, setRate] = useState(1);
   const [menuFor, setMenuFor] = useState<string | null>(null);
   const [buffering, setBuffering] = useState(false);
@@ -57,12 +55,13 @@ export default function ReelsFeed({ initialKey }: { initialKey?: string }) {
   useEffect(() => setMounted(true), []);
 
   // The reels shelf is its own keyset stream: video-bearing posts, pulled a page
-  // ahead of wherever the reader has scrolled to. `latest` is the endpoint's own
-  // order, so only the other two filters write a query.
+  // ahead of wherever the reader has scrolled to. It arrives in the endpoint's
+  // own order — newest first — because sorting a person's reels is a question
+  // about that person, and it belongs on their profile.
   const stream = useList(
     'reels',
     { path: '/posts/', frag: postsFragment(me?.id || null) },
-    { media: 'video', order: order === 'latest' ? undefined : order },
+    { media: 'video' },
     serverMode && feature('video'),
   );
 
@@ -73,9 +72,7 @@ export default function ReelsFeed({ initialKey }: { initialKey?: string }) {
         .filter(p => p.status === 'live' && (p.media || []).some(m => m.type === 'video')
           && canSeePost(p, me?.id ?? null, db.follows, privateIds(db.users))
           && !isBlocked(p.uid))
-        .sort((a, b) => (order === 'views'
-          ? (b.views ?? 0) - (a.views ?? 0) || b.ts - a.ts
-          : order === 'oldest' ? a.ts - b.ts : b.ts - a.ts));
+        .sort((a, b) => b.ts - a.ts);
 
   const slides: ReelSlide[] = reels
     .flatMap(post => {
@@ -226,19 +223,6 @@ export default function ReelsFeed({ initialKey }: { initialKey?: string }) {
           </button>
           <span className="reel-title">Reels</span>
           {slides.length > 0 && <span className="reel-count">{index + 1} / {slides.length}</span>}
-        </div>
-        <div className="reel-filters" role="group" aria-label="Sort reels">
-          {([['views', t('mostViewed')], ['latest', t('latest')], ['oldest', t('oldest')]] as [ReelOrder, string][]).map(([key, label]) => (
-            <button
-              key={key}
-              type="button"
-              className={`reel-filter ${order === key ? 'on' : ''}`}
-              aria-pressed={order === key}
-              onClick={() => { setOrder(key); setMenuFor(null); }}
-            >
-              {label}
-            </button>
-          ))}
         </div>
         {feature('video') && slides.length > 0 ? (
           <div className="reels-scroll" ref={scrollRef} onScroll={onScroll}>

@@ -98,6 +98,9 @@ const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
 const wakeListeners = new Set<(waking: boolean) => void>();
 let wakeUp: Promise<boolean> | null = null;
+let lastWakeFail = 0;
+/** After one failed wait, later calls fail fast for this long instead of each burning the full wait again. */
+const WAKE_RETRY_MS = 30000;
 
 /**
  * Watch for "the API is asleep" so a screen can say it instead of spinning.
@@ -121,9 +124,13 @@ function ping(): Promise<boolean> {
 /**
  * Wait out a cold start, with every screen told why the button still reads
  * "Checking…". One poll runs at a time however many calls are waiting on it.
+ * A wait that just failed buys nothing from a second one half a minute later:
+ * those calls fail at once so a tap doesn't cost 45 seconds of pinging a
+ * server that already said no.
  */
 function wake(): Promise<boolean> {
   if (!wakeUp) {
+    if (Date.now() - lastWakeFail < WAKE_RETRY_MS) return Promise.resolve(false);
     wakeUp = (async () => {
       wakeListeners.forEach(fn => fn(true));
       const deadline = Date.now() + WAKE_MS;
@@ -132,6 +139,7 @@ function wake(): Promise<boolean> {
           if (await ping()) return true;
           await new Promise(resolve => setTimeout(resolve, POLL_MS));
         }
+        lastWakeFail = Date.now();
         return false;
       } finally {
         wakeListeners.forEach(fn => fn(false));

@@ -264,7 +264,15 @@ await goto(d, '/');
 await scrollPost(d, 'Weekend in Pokhara');
 await sleep(400);
 await clickPost(d, 'Weekend in Pokhara', '.mosaic-cell:nth-child(2) img');
-await d.waitForSelector('.media-page', { timeout: 8000 });
+await d.waitForSelector('.media-page', { timeout: 8000 }).catch(() => {});
+if (!(await d.$('.media-page'))) {
+  // A cell clicked a beat before its handler attached swallows the press, so the
+  // step retries rather than reading its own race as a broken mosaic.
+  await scrollPost(d, 'Weekend in Pokhara');
+  await sleep(900);
+  await clickPost(d, 'Weekend in Pokhara', '.mosaic-cell:nth-child(2) img');
+  await d.waitForSelector('.media-page', { timeout: 12000 });
+}
 await sleep(1200);
 const viewer1 = await d.evaluate(() => {
   const sc = document.querySelector('.media-page-scroll');
@@ -822,9 +830,12 @@ const reels1 = await d.evaluate(() => ({
   rail: !!document.querySelector('.reel-rail'),
   onlyVideos: [...document.querySelectorAll('.reel-slide video')].length === document.querySelectorAll('.reel-slide').length,
   caption: !!document.querySelector('.reel-meta'),
+  // Which of a *person's* reels lead is their profile's business; the page
+  // everybody scrolls has no order to offer.
+  sorters: document.querySelectorAll('.profile-reel-sort, .reel-filters').length,
   noFeedCards: !document.querySelector('article.post')
 }));
-ok('desktop: reels page = video-only snap feed with sound on', reels1.slides >= 2 && reels1.playing && reels1.muted === false && reels1.snap.includes('mandatory') && reels1.rail && reels1.onlyVideos && reels1.caption && reels1.noFeedCards, JSON.stringify(reels1));
+ok('desktop: reels page = video-only snap feed with sound on', reels1.slides >= 2 && reels1.playing && reels1.muted === false && reels1.snap.includes('mandatory') && reels1.rail && reels1.onlyVideos && reels1.caption && reels1.noFeedCards && reels1.sorters === 0, JSON.stringify(reels1));
 const dNav = await d.evaluate(() => {
   const rail = document.querySelector('.reels-nav .rail');
   if (!rail) return { present: false };
@@ -1057,15 +1068,72 @@ const reelTab = await d.evaluate(() => ({
   reels: document.querySelectorAll('.profile-media-grid .reel-cell').length,
 }));
 ok('desktop: profile reels tab shows only the moving cells', reelTab.on && reelTab.cells === reelTab.reels, JSON.stringify(reelTab));
+// The order words belong to a shelf, so the check goes and finds a profile that
+// actually owns clips rather than trusting whichever author the feed led with.
+const reelHome = await d.evaluate(() => {
+  const db = JSON.parse(localStorage.getItem('exposing-demo-v1'));
+  const moving = p => (p.media || []).some(m => m.type === 'video');
+  const owner = db.users.find(u => db.posts.some(p => p.uid === u.id && p.status === 'live' && moving(p)));
+  return owner ? { href: `/u/${owner.username}`, clips: db.posts.filter(p => p.uid === owner.id && moving(p)).length } : null;
+});
+await goto(d, reelHome.href);
+await d.waitForSelector('.tabs .tab', { timeout: 10000 }).catch(() => {});
+await clickBtnByText(d, '.tabs', '^reels$');
+await sleep(500);
+const shelf = await d.evaluate(() => {
+  const first = document.querySelector('.profile-reel-sort button');
+  const cs = first ? getComputedStyle(first) : null;
+  return {
+    labels: [...document.querySelectorAll('.profile-reel-sort button')].map(el => el.textContent.trim()),
+    on: [...document.querySelectorAll('.profile-reel-sort button.on')].map(el => el.textContent.trim()),
+    cells: document.querySelectorAll('.profile-media-grid .reel-cell').length,
+    quiet: cs && { size: parseFloat(cs.fontSize), opacity: parseFloat(cs.opacity),
+      bg: cs.backgroundColor, height: Math.round(first.getBoundingClientRect().height) },
+  };
+});
+ok('desktop: a person\'s shelf is sorted by three quiet words',
+  shelf.labels.length === 3 && shelf.on.length === 1 && shelf.cells > 0 && shelf.quiet
+  && shelf.quiet.size <= 13 && shelf.quiet.opacity < 1 && shelf.quiet.height <= 26
+  && /rgba\(0, 0, 0, 0\)|transparent/.test(shelf.quiet.bg), JSON.stringify({ ...shelf, href: reelHome.href }));
+const shelfNow = () => d.evaluate(() => ({
+  order: [...document.querySelectorAll('.profile-media-grid .reel-cell video')]
+    .map(el => (el.getAttribute('src') || '').split('/').pop()).join(','),
+  cells: document.querySelectorAll('.profile-media-grid .reel-cell').length,
+  on: [...document.querySelectorAll('.profile-reel-sort button.on')].map(el => el.textContent.trim()),
+}));
+const newest = await shelfNow();
+await clickBtnByText(d, '.profile-reel-sort', '^oldest$');
+await sleep(400);
+const oldest = await shelfNow();
+await clickBtnByText(d, '.profile-reel-sort', '^most views$');
+await sleep(400);
+const views = await shelfNow();
+ok('desktop: the words hold their pick and keep the shelf drawn',
+  oldest.on.join() === 'Oldest' && views.on.join() === 'Most views'
+  && oldest.cells === shelf.cells && views.cells === shelf.cells,
+  JSON.stringify({ oldest, views, cells: shelf.cells }));
+// No demo clip has ever been watched, so "most views" has no tally to read and
+// keeps the newest-first order instead of inventing one.
+ok('desktop: a tally-less shelf keeps its newest-first order',
+  views.order === newest.order, `${views.order} vs ${newest.order}`);
+// The hunt for a clip-owning profile moved off the author this part of the run is
+// written about, so hand the page back before the checks that follow it.
+await goto(d, profTarget);
+await d.waitForSelector('.profile-view', { timeout: 10000 }).catch(() => {});
+await sleep(400);
 await clickBtnByText(d, '.tabs', '^about$');
 await sleep(400);
 const aboutInfo = await d.evaluate(() => ({
   cards: document.querySelectorAll('.about-card').length,
   bio: !!document.querySelector('.about-bio'),
+  titles: [...document.querySelectorAll('.about-card h2')].map(h => h.textContent.trim()),
+  stats: document.querySelectorAll('.about-stat').length,
   follows: document.querySelectorAll('.about-follow').length,
   more: !!document.querySelector('.about-more')
 }));
-ok('desktop: profile about tab shows bio + details + people they follow', aboutInfo.cards >= 2 && aboutInfo.bio && aboutInfo.follows >= 1 && aboutInfo.follows <= 5 && aboutInfo.more, JSON.stringify(aboutInfo));
+ok('desktop: profile about tab is grouped cards with stats tiles',
+  aboutInfo.cards >= 3 && aboutInfo.bio && aboutInfo.stats === 3
+  && aboutInfo.follows >= 1 && aboutInfo.follows <= 5 && aboutInfo.more, JSON.stringify(aboutInfo));
 await d.evaluate(() => document.querySelector('.profile-stats a.profile-stat').click());
 await d.waitForSelector('.people-page', { timeout: 8000 }).catch(() => {});
 await sleep(400);

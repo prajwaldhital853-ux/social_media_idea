@@ -31,7 +31,10 @@ export default function PostPage() {
         >
           {IC.back}
         </button>
-        <h1>{available && author ? `${author.name}'s post` : 'Post'}</h1>
+        <h1>
+          <span className="post-title-pencil" aria-hidden="true">{IC.edit}</span>
+          {available && author ? `${author.name}'s post` : 'Post'}
+        </h1>
         <span className="detail-header-spacer"/>
       </header>
       {available && author && post ? (

@@ -266,7 +266,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const feature = (key: keyof FeatureFlags) => db.settings.features[key];
 
-  const showToast = (msg: string) => setToast(msg);
+  const lastToastRef = useRef<{ msg: string; at: number } | null>(null);
+  const showToast = (msg: string) => {
+    // One action fires several calls and a stalled server fails them all, then
+    // fails every retry. The same sentence twice inside one display window is
+    // noise, not news — hold the standing toast instead of strobing the screen.
+    const last = lastToastRef.current;
+    if (last && last.msg === msg && Date.now() - last.at < 4500) return;
+    lastToastRef.current = { msg, at: Date.now() };
+    setToast(msg);
+  };
 
   /** Fresh signed-in user record, read at the moment an async continuation needs it. */
   const currentMe = (): User | null => {
