@@ -185,11 +185,14 @@ export function mapListing(row: any): Listing {
 }
 
 export function hrefOf(kind: string, targetType: string, targetId: string, actorUsername?: string): string | undefined {
+  // A message bell carries its sender as target_type='user', so this has to be
+  // read before the user branch or the notification walks you to a profile
+  // instead of the thread the message is waiting in.
+  if (kind === 'message') return actorUsername ? `/messages/${actorUsername}` : '/messages';
   if (targetType === 'post') return `/post/${targetId}`;
   if (targetType === 'listing') return `/marketplace/${targetId}`;
   if (targetType === 'user') return actorUsername ? `/u/${actorUsername}` : '/messages';
   if (targetType === 'wallet') return '/wallet';
-  if (kind === 'message') return actorUsername ? `/messages/${actorUsername}` : '/messages';
   return undefined;
 }
 

@@ -199,6 +199,7 @@ def login(request):
             'locked': True, 'locked_until': user.locked_until,
             'retry_in': int((user.locked_until - timezone.now()).total_seconds()),
         }, status=423)
+    encoded = user.password
     if not user.check_password(password):
         user.failed_attempts += 1
         if user.failed_attempts >= LOCK_THRESHOLD:
@@ -212,6 +213,10 @@ def login(request):
         return Response({
             'detail': 'Wrong password.', 'attempts_left': LOCK_THRESHOLD - user.failed_attempts,
         }, status=401)
+    if user.password != encoded:
+        # The verify re-hashed at the current work factor. An upgrade nobody
+        # writes down is paid for again on every later sign-in.
+        user.save(update_fields=['password'])
     device_id = _device_id(request)
     if not user.email_verified:
         # The password is right and the account is real; it was simply never

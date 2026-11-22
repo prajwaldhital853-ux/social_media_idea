@@ -232,9 +232,15 @@ class AdminSignInTests(TestCase):
     def test_the_second_factor_does_not_lock_staff_out_of_the_main_site(self):
         # Clause 4.4 restricts the admin area. Staff are still members, and the
         # platform's own suites sign in as the demo staff account through /api/auth/.
+        # That door takes an email and nothing else — a handle is public, so the
+        # console's own sign-in is the only place a username still opens a session.
         self.owner.profile.two_step = False
         self.owner.profile.save(update_fields=['two_step'])
-        response = self.jar().post('/api/auth/login/', {'username': 'owner', 'password': PASSWORD, 'device_id': 'main-site'}, format='json')
+        response = self.jar().post(
+            '/api/auth/login/',
+            {'email': self.owner.email, 'password': PASSWORD, 'device_id': 'main-site'},
+            format='json',
+        )
         self.assertEqual(response.status_code, 200)
         self.assertIn('exposing_access', response.cookies)
         self.assertNotIn(ADMIN_COOKIE, response.cookies)

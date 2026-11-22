@@ -134,6 +134,9 @@ WS_ORIGINS = _env_list('DJANGO_WS_ORIGINS', 'http://localhost:3000,http://127.0.
 # Realtime budgets: per-user concurrent sockets/streams and SSE pacing. Kept as
 # settings so tests can tighten time without patching module globals.
 SSE_INTERVAL = float(os.environ.get('EXPOSING_SSE_INTERVAL') or '2')
+# A thread is the one screen where two seconds reads as late: somebody is
+# waiting for a reply. Costs one indexed query a second per open thread.
+CHAT_SSE_INTERVAL = float(os.environ.get('EXPOSING_CHAT_SSE_INTERVAL') or '1')
 SSE_MAX_LIFE = float(os.environ.get('EXPOSING_SSE_MAX_LIFE') or '3300')
 SSE_STREAMS_PER_USER = int(os.environ.get('EXPOSING_SSE_STREAMS') or '3')
 WS_SOCKETS_PER_USER = int(os.environ.get('EXPOSING_WS_SOCKETS') or '8')
@@ -302,6 +305,17 @@ MEDIA_ROOT = Path(os.environ.get('MEDIA_DISK') or '') if os.environ.get('MEDIA_D
 SERVE_MEDIA = (os.environ.get('DJANGO_SERVE_MEDIA') or '1') == '1'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+# See apps/common/hashing.py: Django's own default work factor costs 3.4s per
+# sign-in on this CPU, and sign-in is the first thing every visitor does. The
+# second entry still verifies the hashes the old default wrote.
+PASSWORD_HASHERS = [
+    'apps.common.hashing.WorkFactorPasswordHasher',
+    'django.contrib.auth.hashers.PBKDF2PasswordHasher',
+    'django.contrib.auth.hashers.PBKDF2SHA1PasswordHasher',
+    'django.contrib.auth.hashers.Argon2PasswordHasher',
+    'django.contrib.auth.hashers.BCryptSHA256PasswordHasher',
+    'django.contrib.auth.hashers.ScryptPasswordHasher',
+]
 import sys
 if "test" in sys.argv:
     PASSWORD_HASHERS = ["django.contrib.auth.hashers.MD5PasswordHasher"]
