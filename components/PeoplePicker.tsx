@@ -32,7 +32,10 @@ export default function PeoplePicker({ title, exclude = [], onSelect, onClose }:
   if (typeof document === 'undefined') return null;
 
   return createPortal(
-    <div className="modal-overlay" onClick={onClose}>
+    // The root keeps a top-bar panel that opened this picker alive: the overlay
+    // lives outside that panel's box, and dismissing on a click inside the
+    // picker would take the picker — and the press meant for it — away.
+    <div className="modal-overlay" data-stays-open onClick={onClose}>
       <div className="modal-content people-modal" onClick={e => e.stopPropagation()} role="dialog" aria-label={title}>
         <div className="modal-header">
           <b>{title}</b>

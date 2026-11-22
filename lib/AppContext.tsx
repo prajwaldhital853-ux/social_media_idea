@@ -195,6 +195,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const dbRef = useRef(db);
   dbRef.current = db;
 
+  /** The bell stream survives navigation, so it reads the route through a ref too. */
+  const pathnameRef = useRef(pathname);
+  pathnameRef.current = pathname;
+
   /** Stable identity: screens list it in an effect's deps to fetch once per subject. */
   const merge = useCallback((frag: Fragment) => setDb(cur => applyFragment(cur, frag)), []);
 
@@ -356,6 +360,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setDb(prev => applyFragment(prev, notificationsFragment([row])));
       // The cache merges by id; the list's id order is what the popover renders.
       pushListRow('notifications', undefined, mapped.id);
+      if (row.kind === 'message' && row.actor) {
+        // The tray just announced a conversation. When the reader is standing in
+        // the messages screen, the column beside it has to agree: the sender's
+        // row appears, even for a person never written to before, whose
+        // conversation did not exist when that column was read.
+        pushListRow('inbox', undefined, idOf(row.actor));
+        if (pathnameRef.current.startsWith('/messages')) void refreshList('inbox', inboxListDef(selfId));
+      }
       void pullBadges();
     };
 
@@ -1067,10 +1079,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       const row = await api.post<any>(`/api/messages/${username}/`, { text: body });
       const real = mapMessage(row, self.id, to);
-      setDb(prev => ({
-        ...prev,
-        messages: prev.messages.map(m => (m.id === optimistic.id ? real : m))
-      }));
+      setDb(prev => {
+        // A live wire can beat the response to the same row. Whichever arrives
+        // second must not leave the bubble on screen twice under two ids.
+        const echoed = prev.messages.some(m => m.id === real.id);
+        return {
+          ...prev,
+          messages: echoed
+            ? prev.messages.filter(m => m.id !== optimistic.id)
+            : prev.messages.map(m => (m.id === optimistic.id ? real : m)),
+        };
+      });
+      // The first message to a person makes the thread the inbox is a list of.
+      pushListRow('inbox', undefined, to);
     } catch (err) {
       setDb(prev => ({ ...prev, messages: prev.messages.filter(m => m.id !== optimistic.id) }));
       showToast(errText(err, 'Message not sent.'));
@@ -1103,11 +1124,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }));
     if (!API_ENABLED) return;
     try {
-      await api.post(`/api/messages/${username}/read/`, {});
+      const done = await api.post<any>(`/api/messages/${username}/read/`, {});
       // The unread dot rides on the inbox row, so the row has to be re-read —
       // in place. Dropping the whole list here re-armed the column's first-load
       // skeleton on every receipt.
       refreshList('inbox', inboxListDef(self.id));
+      // Opening the thread is also how most people arrive at it, and the server
+      // just marked that person's bells read on the way. The tray has to hear:
+      // a message notification still shining next to the reply it caused.
+      if (Number(done?.notifications) > 0) {
+        refreshList('notifications', { path: '/notifications/', frag: notificationsFragment });
+      }
     } catch {}
     void pullBadges();
   }, [pullBadges]);

@@ -1,6 +1,7 @@
 import itertools
 from datetime import timedelta
 
+from django.contrib.auth.hashers import PBKDF2PasswordHasher
 from django.core.cache import cache
 from django.db import connections
 from django.test import TestCase, TransactionTestCase, override_settings
@@ -372,6 +373,59 @@ class EmailSignInTests(TestCase):
             'email': 'hashing@test.local', 'password': 'Test-Pass-9271', 'device_id': 'dev-hashing',
         }, format='json')
         self.assertEqual(right.status_code, 200, right.data)
+
+
+class _SignInWorkFactor(PBKDF2PasswordHasher):
+    """The digest new sign-ins are written at. Kept tiny so the suite stays fast;
+    what matters here is that it differs from the one being replaced."""
+
+    iterations = 1000
+
+
+@override_settings(DEBUG=True)
+class PasswordWorkFactorTests(TestCase):
+    """An account hashed at an older, slower work factor still signs in — and
+    stops paying for the old one."""
+
+    def setUp(self):
+        cache.clear()
+        self.client = APIClient()
+        self.client.credentials(HTTP_X_FORWARDED_FOR=fresh_ip())
+
+    def old_digest(self, user):
+        # Any work factor above the current one takes the same path; a small gap
+        # keeps the suite honest about time.
+        user.password = PBKDF2PasswordHasher().encode('Test-Pass-9271', 'salty', iterations=60_000)
+        user.save(update_fields=['password'])
+        # The password is the thing under test, so the device is one it already
+        # knows: an unrecognised one would stop at the two-step challenge.
+        DeviceTrust.objects.create(user=user, device_id='dev-workfactor')
+        return user.password
+
+    @override_settings(PASSWORD_HASHERS=['apps.accounts.tests._SignInWorkFactor'])
+    def test_a_slow_digest_still_opens_the_account(self):
+        user = make_user('workfactor')
+        stored = self.old_digest(user)
+        resp = self.client.post('/api/auth/login/', {
+            'email': user.email, 'password': 'Test-Pass-9271', 'device_id': 'dev-workfactor',
+        }, format='json')
+        self.assertEqual(resp.status_code, 200, resp.data)
+        user.refresh_from_db()
+        # verify() reads the work factor off the stored string, so the older hash
+        # is checked at its own cost — and the answer is written back cheaper.
+        self.assertNotEqual(user.password, stored)
+        self.assertEqual(user.password.split('$')[1], '1000')
+
+    @override_settings(PASSWORD_HASHERS=['apps.accounts.tests._SignInWorkFactor'])
+    def test_a_wrong_password_rewrites_nothing(self):
+        user = make_user('workfactor')
+        stored = self.old_digest(user)
+        resp = self.client.post('/api/auth/login/', {
+            'email': user.email, 'password': 'Test-Pass-927', 'device_id': 'dev-workfactor',
+        }, format='json')
+        self.assertEqual(resp.status_code, 401)
+        user.refresh_from_db()
+        self.assertEqual(user.password, stored)
 
 
 @override_settings(DEBUG=True)
