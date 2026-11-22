@@ -262,6 +262,13 @@ class PingTests(TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.data, {'status': 'ok'})
 
+    def test_a_head_monitor_gets_a_200_and_no_body(self):
+        # Monitors that only want to know the port is open send HEAD, and DRF does
+        # not allow it unless the view says so — a 405 there reads as downtime.
+        resp = self.client.head('/api/ping/')
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(len(resp.content), 0)
+
     def test_asks_the_database_for_nothing(self):
         with CaptureQueriesContext(connection) as queries:
             self.client.get('/api/ping/')

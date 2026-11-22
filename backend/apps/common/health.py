@@ -81,7 +81,7 @@ def health(request):
     return Response(probe())
 
 
-@api_view(['GET'])
+@api_view(['GET', 'HEAD'])
 @permission_classes([AllowAny])
 @authentication_classes([])
 @throttle_classes([])
