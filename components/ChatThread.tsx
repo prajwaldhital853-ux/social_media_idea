@@ -107,7 +107,8 @@ export default function ChatThread({ other }: { other: User }) {
           setDb(prev => applyFragment(prev, { messages: [mapped] }));
           pushListRow(`thread:${otherId}`, undefined, mapped.id);
           // The thread is open, so an incoming row is read as it lands.
-          if (mapped.from !== meId) void markReadRef.current(other.username);
+          // force is required: dbRef still holds the pre-message db here.
+          if (mapped.from !== meId) void markReadRef.current(other.username, { force: true });
         } else if (data.kind === 'typing') {
           setTyping(true);
           if (typingTimer) clearTimeout(typingTimer);

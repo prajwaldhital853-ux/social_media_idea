@@ -493,7 +493,12 @@ const security = await page.evaluate(async () => {
 ok('89: two-step verification persists a flipped switch',
   security.was !== security.now, JSON.stringify(security));
 await goto('/settings');
-const kept = await page.evaluate(() => document.querySelector('.switch[aria-label="Two-step verification"]')?.getAttribute('aria-checked'));
+// The switch mounts only after the settings fetch lands, which the goto settle
+// window can outrun; poll for it instead of racing a fixed sleep.
+const kept = await page
+  .waitForFunction(() => document.querySelector('.switch[aria-label="Two-step verification"]')?.getAttribute('aria-checked'), { timeout: 15000 })
+  .then(h => h.jsonValue())
+  .catch(() => undefined);
 ok('89: a reload reads the switch back from the server', kept === security.now, JSON.stringify({ kept, want: security.now }));
 await page.evaluate(() => document.querySelector('.switch[aria-label="Two-step verification"]')?.click());
 await sleep(1200);

@@ -49,7 +49,7 @@ interface AppContextType {
   markAllRead: () => Promise<void>;
   markRead: (id: string) => Promise<void>;
   sendMessage: (to: string, text: string) => Promise<void>;
-  markThreadRead: (username: string) => Promise<void>;
+  markThreadRead: (username: string, opts?: { force?: boolean }) => Promise<void>;
   addReport: (type: 'post' | 'comment' | 'listing' | 'profile', targetId: string, reason: string, note: string) => Promise<void>;
   logAudit: (action: string, target: string, reason: string) => void;
   requestPromotion: (targetType: 'post' | 'listing', targetId: string, cfg: PromoConfig) => Promise<boolean>;
@@ -1065,14 +1065,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
    */
   // Stable identity: a thread screen calls this on open, and a fresh function
   // per render would turn that one call into a request per render.
-  const markThreadRead = useCallback(async (username: string) => {
+  const markThreadRead = useCallback(async (username: string, opts?: { force?: boolean }) => {
     const self = currentMe();
     const other = dbRef.current.users.find(u => u.username === username);
     if (!self || !other) return;
     const unread = dbRef.current.messages.filter(m => m.from === other.id && m.to === self.id && !m.read);
     // Nothing cached reads, but the badge says something does: the row is
     // simply above the pages this thread has walked. Ask the server anyway.
-    if (!unread.length && !dbRef.current.unread?.messages) return;
+    // force skips the guard for socket deliveries, which arrive before the
+    // render that would make dbRef see them.
+    if (!opts?.force && !unread.length && !dbRef.current.unread?.messages) return;
     setDb(prev => ({
       ...prev,
       messages: prev.messages.map(m => (m.from === other.id && m.to === self.id && !m.read ? { ...m, read: true } : m)),

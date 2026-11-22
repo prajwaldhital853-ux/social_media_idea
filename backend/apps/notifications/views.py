@@ -114,6 +114,12 @@ def _since(user_pk, since_ts, since_pk, limit=50):
 
 async def _notification_events(user_pk, since_ts, interval, max_life, since_pk=0):
     deadline = time.monotonic() + max_life
+    # A stream opened without a cursor starts from "now" — everything earlier
+    # is already on the page from the mount fetch. The baseline is captured
+    # once here: re-reading timezone.now() per poll would move the goalposts
+    # and every row created before a poll would silently never be delivered.
+    if since_ts is None:
+        since_ts = timezone.now()
     try:
         yield 'retry: 4000\n\n'
         while time.monotonic() < deadline:
@@ -162,6 +168,9 @@ async def notification_stream(request):
         _notification_events(user.pk, since_ts, settings.SSE_INTERVAL, settings.SSE_MAX_LIFE, since_pk),
         content_type='text/event-stream',
     )
-    response['Cache-Control'] = 'no-cache'
+    response['Cache-Control'] = 'no-cache, no-transform'
     response['X-Accel-Buffering'] = 'no'
+    # no-transform is load-bearing: Next's proxy (and any compression layer in
+    # front of us) reads this header and skips gzipping the stream. A gzipped
+    # event-stream stays open but its frames never parse in the browser.
     return response

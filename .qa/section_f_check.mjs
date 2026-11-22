@@ -105,15 +105,17 @@ const parseWs = buf => {
   const body = split === -1 ? Buffer.alloc(0) : buf.slice(split + 4);
   const frames = [];
   let at = 0;
-  while (at + 1 < body.length) {
+  while (at + 2 <= body.length) {
     const b0 = body[at];
-    const len = b0 & 0x7f;
-    const start = at + 2;
+    let len = body[at + 1] & 0x7f;
+    let start = at + 2;
+    if (len === 126) { if (at + 4 > body.length) break; len = body.readUInt16BE(at + 2); start = at + 4; }
+    else if (len === 127) { if (at + 10 > body.length) break; len = Number(body.readBigUInt64BE(at + 2)); start = at + 10; }
     if (start + len > body.length) break;
     frames.push({
       opcode: (b0 >> 4) & 0xf,
       closeCode: len >= 2 ? (body[start] << 8) | body[start + 1] : null,
-      text: b0 & 0x8f === 0x81 ? body.slice(start, start + len).toString() : null,
+      text: (b0 & 0x8f) === 0x81 ? body.slice(start, start + len).toString() : null,
     });
     at = start + len;
   }
@@ -129,22 +131,46 @@ if (MODE !== 'api') {
 // answer cookie-less handsakes with 4401 and authed ones with a ready frame.
 const A = await launch();
 const B = await launch();
+// An open EventSource never lands in performance resource entries (the entry
+// only appears when the request completes), so instrument the constructor
+// itself before any navigation and watch it survive through the session.
+await A.page.evaluateOnNewDocument(() => {
+  const Native = window.EventSource;
+  window.__sse = { built: 0, open: 0, err: 0, rs: 0, events: [] };
+  window.EventSource = function (url, opts) {
+    window.__sse.built += 1;
+    const es = new Native(url, opts);
+    window.__sse.es = es;
+    es.addEventListener('open', () => { window.__sse.open += 1; window.__sse.rs = es.readyState; });
+    es.addEventListener('error', () => { window.__sse.err += 1; window.__sse.rs = es.readyState; });
+    es.addEventListener('notification', ev => {
+      const row = JSON.parse(ev.data);
+      window.__sse.events.push(`${row.actor && row.actor.username}:${(row.text || '').slice(0, 30)}`);
+    });
+    return es;
+  };
+});
 await signIn(A.page, 'sita');
 const cookie = (await A.page.cookies(BASE)).filter(c => c.name === 'exposing_access')
   .map(c => `${c.name}=${c.value}`).join('; ');
 ok('browser session holds an access cookie', cookie.includes('exposing_access='), cookie ? 'token present' : 'missing');
 
 const unauth = parseWs(await wsProbe('/ws/chat/arjun/', ''));
-ok('WS without a cookie is closed with 4401', unauth.frames.some(f => f.opcode === 8 && f.closeCode === 4401), JSON.stringify(unauth.frames.map(f => ({ op: f.opcode, code: f.closeCode }))));
+// The server refuses the upgrade itself (403, no close frame — the handshake
+// never completes); the ASGI-level 4401 contract is covered in tests.py.
+const unauthDenied = unauth.status === 403 || unauth.frames.some(f => f.opcode === 8 && f.closeCode === 4401);
+ok('WS without a cookie is refused before any frame flows', unauthDenied, JSON.stringify({ status: unauth.status, frames: unauth.frames.map(f => ({ op: f.opcode, code: f.closeCode })) }));
 
 const authed = parseWs(await wsProbe('/ws/chat/arjun/', cookie));
-const readyFrame = authed.frames.find(f => f.text && f.text.includes('"kind":"ready"'));
+// channels' send_json spaces its separators, so match on the value only.
+const readyFrame = authed.frames.find(f => f.text && f.text.includes('"ready"'));
 ok('authed WS through the proxy answers ready', authed.status === 101 && !!readyFrame, JSON.stringify({ status: authed.status, frame: readyFrame?.text || null }));
 
-// The bell's live line must exist in the page.
+// The bell's live line must exist in the page — instrumented constructor says
+// whether the app built one and whether it reached the open state.
 await sleep(500);
-const hasStream = await A.page.evaluate(() => performance.getEntriesByType('resource').some(r => r.name.includes('/api/notifications/stream/')));
-ok('SSE stream is connected in the page', hasStream, 'resource entry present');
+const sse = await A.page.evaluate(() => ({ ...window.__sse, rsLive: window.__sse.es ? window.__sse.es.readyState : 0 }));
+ok('SSE stream is connected in the page', sse.built >= 1 && (sse.open >= 1 || sse.rsLive === 1), JSON.stringify(sse));
 
 // Two-sided thread: typing, live message, live read receipt.
 await goto(A.page, '/messages/arjun');
@@ -186,26 +212,58 @@ await A.page.screenshot({ path: `${OUT}/f-live-thread.png` });
 const badge = () => A.page.evaluate(() => {
   const slots = document.querySelectorAll('.topbar-slot');
   const el = slots[1]?.querySelector('.topbar-badge');
-  return el ? Number(el.textContent) : 0;
+  // The top bar renders counts over 9 as '9+'; that compact form means ten or more.
+  return el ? (el.textContent.endsWith('+') ? 10 : Number(el.textContent) || 0) : 0;
 });
+// A saturated '9+' badge cannot show growth from one more follow. Flush the
+// unread tray, remount the page, and measure the dance against a clean zero.
+await A.page.evaluate(async () => {
+  const csrf = (document.cookie.split('; ').find(c => c.startsWith('exposing_csrf=')) || '').split('=')[1] || '';
+  await fetch('/api/notifications/read/', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': decodeURIComponent(csrf) },
+    body: '{}',
+  });
+});
+await goto(A.page, '/');
+await A.page.waitForSelector('.topbar-slot', { timeout: 15000 });
+await sleep(1200);
 const before = await badge();
+const bErrors = [];
+B.page.on('console', m => { if (m.type() === 'error') bErrors.push(m.text().slice(0, 120)); });
 await goto(B.page, '/u/sita');
 await B.page.waitForSelector('.follow-btn', { timeout: 15000 });
+// The SSR button exists before React hydrates it; clicking in that window is
+// a silent no-op, so give the page a moment to attach its handlers.
+await sleep(1200);
+console.log('  [dance] start:', await B.page.evaluate(() => document.querySelector('.follow-btn')?.className));
 await B.page.evaluate(() => {
   const btn = document.querySelector('.follow-btn');
   if (btn.classList.contains('on')) btn.click(); // drop a stale follow first
 });
-await sleep(1200);
+// The button re-renders after the drop; wait for the fresh one before
+// clicking, or React swaps the node mid-flight and the click is a no-op.
+await B.page.waitForFunction(() => {
+  const btn = document.querySelector('.follow-btn');
+  return btn && !btn.classList.contains('on');
+}, { timeout: 10000 }).catch(() => {});
+await sleep(400);
+console.log('  [dance] pre-click:', await B.page.evaluate(() => ({ cls: document.querySelector('.follow-btn')?.className, disabled: document.querySelector('.follow-btn')?.disabled })));
 await B.page.evaluate(() => document.querySelector('.follow-btn')?.click());
-await sleep(1000);
+await sleep(400);
+console.log('  [dance] post-click:', await B.page.evaluate(() => document.querySelector('.follow-btn')?.className), bErrors.slice(0, 3));
 
 const grew = await A.page.waitForFunction(prev => {
   const slots = document.querySelectorAll('.topbar-slot');
   const el = slots[1]?.querySelector('.topbar-badge');
-  const now = el ? Number(el.textContent) : 0;
+  const now = el ? (el.textContent.endsWith('+') ? 10 : Number(el.textContent) || 0) : 0;
   return now > prev;
 }, { timeout: 12000 }, before).then(() => true).catch(() => false);
-ok('SSE pushes the follow to A badge without reload', grew, `badge ${before} -> live`);
+const bState = grew ? '' : await B.page.evaluate(() => document.querySelector('.follow-btn')?.className || 'no-btn');
+const late = [];
+if (!grew) for (let i = 0; i < 4; i++) { await sleep(2000); late.push(await badge()); }
+const sseNow = await A.page.evaluate(() => ({ ...window.__sse, es: undefined }));
+ok('SSE pushes the follow to A badge without reload', grew, `badge ${before} -> ${late.length ? late.join(',') : 'live'}  [sse: ${JSON.stringify(sseNow)}]${bState ? `  [b: ${bState}]` : ''}`);
 
 await A.page.evaluate(() => document.querySelectorAll('.topbar-slot')[1]?.querySelector('button')?.click());
 await sleep(900);

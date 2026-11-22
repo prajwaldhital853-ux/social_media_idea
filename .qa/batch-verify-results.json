@@ -57,7 +57,7 @@
   {
     "name": "83: the count row reads as three bold numbers",
     "pass": true,
-    "detail": "[{\"label\":\"55 Posts\",\"bold\":800,\"size\":19,\"href\":null},{\"label\":\"20 Followers\",\"bold\":800,\"size\":19,\"href\":\"/u/sita/followers\"},{\"label\":\"3 Following\",\"bold\":800,\"size\":19,\"href\":\"/u/sita/following\"}]"
+    "detail": "[{\"label\":\"58 Posts\",\"bold\":800,\"size\":19,\"href\":null},{\"label\":\"20 Followers\",\"bold\":800,\"size\":19,\"href\":\"/u/sita/followers\"},{\"label\":\"3 Following\",\"bold\":800,\"size\":19,\"href\":\"/u/sita/following\"}]"
   },
   {
     "name": "83: Followers opens its own list page",
@@ -102,7 +102,7 @@
   {
     "name": "88: a post hands a crawler its own title, picture and card",
     "pass": true,
-    "detail": "{\"title\":\"Sita Karki — Exposing\",\"desc\":\"See this photo on Exposing.\",\"image\":\"http://localhost:3000/media/uploads/56dc1e00b6037485d4689bd6.png\",\"type\":\"article\",\"card\":\"summary_large_image\"}"
+    "detail": "{\"title\":\"Sita Karki — Exposing\",\"desc\":\"See this photo on Exposing.\",\"image\":\"http://localhost:3000/media/uploads/cc97a9e382b47686c894de85.png\",\"type\":\"article\",\"card\":\"summary_large_image\"}"
   },
   {
     "name": "88: a profile names the account and its handle",
@@ -147,7 +147,7 @@
   {
     "name": "89: the follower mail switch saves and answers with a toast",
     "pass": true,
-    "detail": "{\"was\":\"true\",\"now\":\"false\",\"toast\":\"\"}"
+    "detail": "{\"was\":\"true\",\"now\":\"false\",\"toast\":\"Saved.\"}"
   },
   {
     "name": "89: the policy links open the real documents",

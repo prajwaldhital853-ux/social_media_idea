@@ -33,7 +33,7 @@
     {
       "name": "desktop: the oldest-first cursor walks the feed backwards",
       "pass": true,
-      "detail": "oldest head 2026-07-24T08:50:07.646723Z vs newest page tail 2026-11-21T20:24:04.462611Z, ascending true"
+      "detail": "oldest head 2026-07-24T08:50:07.646723Z vs newest page tail 2026-11-21T20:30:30.898144Z, ascending true"
     },
     {
       "name": "desktop: a deep-linked post hydrates by id",
@@ -43,7 +43,7 @@
     {
       "name": "desktop: a comment is written to /api/comments/ and rendered from it",
       "pass": true,
-      "detail": "{\"id\":\"14481\",\"text\":true}"
+      "detail": "{\"id\":\"14483\",\"text\":true}"
     },
     {
       "name": "desktop: the comment survives a server-side read back",
@@ -58,17 +58,17 @@
     {
       "name": "desktop: sorting by oldest reads the ascending page",
       "pass": true,
-      "detail": "screen Sita Karkilive-mwqgmjaa15h agoReplyDelet vs live-mwqgmjaa"
+      "detail": "screen Sita Karkilive-mwqgmjaa17h agoReplyDelet vs live-mwqgmjaa"
     },
     {
       "name": "desktop: the marketplace grid opens on the page the server chose",
       "pass": true,
-      "detail": "screen 20, api 10, drift at -1, has_more true"
+      "detail": "screen 30, api 10, drift at -1, has_more true"
     },
     {
       "name": "desktop: the marketplace grid walks its cursor",
       "pass": true,
-      "detail": "20 -> 39"
+      "detail": "30 -> 39"
     },
     {
       "name": "desktop: a deep-linked listing hydrates by id",
@@ -78,12 +78,12 @@
     {
       "name": "desktop: the listing page knows its seller",
       "pass": true,
-      "detail": "Dinesh Chaudhary@dinesh1 Listings"
+      "detail": "DCDinesh Chaudhary@dinesh1 Listings"
     },
     {
       "name": "desktop: profile totals come from the profile row",
       "pass": true,
-      "detail": "54 Posts | 20 Followers | 3 Following vs followers=20"
+      "detail": "55 Posts | 20 Followers | 3 Following vs followers=20"
     },
     {
       "name": "desktop: the followers list pages people with a cursor",
@@ -103,7 +103,7 @@
     {
       "name": "desktop: the top bar badges match the unread counters",
       "pass": true,
-      "detail": "screen [\"3\"] vs api [3]"
+      "detail": "screen [\"1\"] vs api [1]"
     },
     {
       "name": "desktop: a chat partner exists for the thread test",
