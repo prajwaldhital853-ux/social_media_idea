@@ -9,8 +9,8 @@ import { ReactionKind } from '@/lib/types';
 import { IC } from '@/lib/icons';
 import ReactionIcon from './ReactionIcon';
 
-export default function ReactionButton({ targetType, targetId, small, kinds, extraCount = 0, openOnClick, emptyLabel = '' }: { targetType: 'post' | 'comment' | 'media'; targetId: string; small?: boolean; kinds?: ReactionKind[]; extraCount?: number; openOnClick?: boolean; emptyLabel?: string }) {
-  const { db, me, react, myReaction, t } = useApp();
+export default function ReactionButton({ targetType, targetId, small, kinds, extraCount = 0, openOnClick, emptyLabel = '', showMix = false }: { targetType: 'post' | 'comment' | 'media'; targetId: string; small?: boolean; kinds?: ReactionKind[]; extraCount?: number; openOnClick?: boolean; emptyLabel?: string; showMix?: boolean }) {
+  const { me, react, myReaction, reactionCount, reactionMix, t } = useApp();
   const list = kinds?.length ? REACTIONS.filter(r => kinds.includes(r.kind)) : REACTIONS;
   const trayWidth = list.length * 53 + 14;
   const router = useRouter();
@@ -21,7 +21,8 @@ export default function ReactionButton({ targetType, targetId, small, kinds, ext
   const button = useRef<HTMLButtonElement>(null);
   const picker = useRef<HTMLDivElement>(null);
   const mine = myReaction(targetType, targetId);
-  const count = db.reactions.filter(r => r.targetType === targetType && r.targetId === targetId).length + extraCount;
+  const count = reactionCount(targetType, targetId) + extraCount;
+  const mix = showMix ? reactionMix(targetType, targetId) : [];
   const cancel = () => { if (timer.current) clearTimeout(timer.current); timer.current = null; };
   const open = () => {
     if (!me || !button.current) return;
@@ -53,7 +54,9 @@ export default function ReactionButton({ targetType, targetId, small, kinds, ext
       if (openOnClick) { if (position) setPosition(null); else open(); return; }
       react(targetType, targetId, mine || list[0].kind); setPosition(null);
     }}>
-      {mine ? <ReactionIcon kind={mine} /> : IC.thumb}<span>{count > 0 ? compact(count) : emptyLabel}</span>
+      {mine ? <ReactionIcon kind={mine} /> : IC.thumb}
+      {showMix && count > 0 && <span className="reaction-mix">{mix.slice(0, 3).map(m => <ReactionIcon key={m.kind} kind={m.kind} />)}</span>}
+      <span>{count > 0 ? compact(count) : emptyLabel}</span>
     </button>
     {position && createPortal(<div ref={picker} className="reaction-tray" role="dialog" aria-label="Choose reaction" style={{ ...position, width: trayWidth }} onClick={e => e.stopPropagation()}>
       {list.map((r, index) => <button key={r.kind} type="button" aria-label={t(r.kind)} aria-pressed={mine === r.kind} style={{ animationDelay: `${index * 35}ms` }} onClick={() => { react(targetType, targetId, r.kind); setPosition(null); button.current?.focus(); }}><ReactionIcon kind={r.kind}/><span>{t(r.kind)}</span></button>)}

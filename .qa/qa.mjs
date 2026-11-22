@@ -308,7 +308,7 @@ const agg = await d.evaluate(id => {
   const a = [...document.querySelectorAll('article.post')].find(x => x.textContent.includes('Weekend in Pokhara'));
   const totalComments = db.comments.filter(c => c.pid === id && c.status === 'live').length;
   const totalReactions = db.reactions.filter(r => (r.targetType === 'post' && r.targetId === id) || (r.targetType === 'media' && r.targetId.startsWith(`${id}#m`))).length;
-  return { commentSpan: a.querySelector('[aria-label="Comments"] span')?.textContent, reactSpan: a.querySelector('.post-actions .reaction-trigger span')?.textContent, totalComments, totalReactions };
+  return { commentSpan: a.querySelector('[aria-label="Comments"] span')?.textContent, reactSpan: a.querySelector('.post-actions .reaction-trigger span:not(.reaction-mix)')?.textContent, totalComments, totalReactions };
 }, mixId);
 ok('desktop: post totals include per-media comments+reactions', agg.commentSpan === String(agg.totalComments) && agg.reactSpan === String(agg.totalReactions), JSON.stringify(agg));
 
@@ -857,7 +857,7 @@ const railAfter = await d.evaluate(() => {
   const db = JSON.parse(localStorage.getItem('exposing-demo-v1'));
   const newest = db.posts.filter(p => p.media.some(m => m.type === 'video')).sort((a, b) => b.ts - a.ts)[0];
   const btn = document.querySelector('.reel-rail-item .reaction-trigger');
-  return { newestId: newest?.id, newestKind: newest?.kind, mine: db.reactions.filter(r => r.targetType === 'post' && r.targetId === newest?.id && r.uid === db.meId).map(r => r.kind), trayGone: !document.querySelector('.reaction-tray'), reacted: btn.classList.contains('reacted'), art: !!btn.querySelector('.reaction-art'), count: btn.querySelector('span')?.textContent, path: location.pathname };
+  return { newestId: newest?.id, newestKind: newest?.kind, mine: db.reactions.filter(r => r.targetType === 'post' && r.targetId === newest?.id && r.uid === db.meId).map(r => r.kind), trayGone: !document.querySelector('.reaction-tray'), reacted: btn.classList.contains('reacted'), art: !!btn.querySelector('.reaction-art'), count: btn.querySelector('span:not(.reaction-mix)')?.textContent, path: location.pathname };
 });
 ok('desktop: tray pick stores the chosen reel reaction', railAfter.mine.includes('love') && railAfter.newestKind === 'reel' && railAfter.trayGone && railAfter.reacted && railAfter.art && railAfter.count === '1', JSON.stringify(railAfter));
 await shot(d, 'desktop-reels-reacted');

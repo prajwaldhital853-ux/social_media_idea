@@ -40,6 +40,7 @@ interface AppContextType {
   react: (targetType: Target, targetId: string, kind: ReactionKind) => Promise<void>;
   myReaction: (targetType: Target, targetId: string) => ReactionKind | null;
   reactionCount: (targetType: Target, targetId: string) => number;
+  reactionMix: (targetType: Target, targetId: string) => { kind: ReactionKind; n: number }[];
   toggleSave: (pid: string) => Promise<void>;
   isSaved: (pid: string) => boolean;
   toggleListingSave: (lid: string) => Promise<void>;
@@ -525,6 +526,29 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
   };
 
+  /** Keep the per-kind maps in step with the totals so the emoji mix moves with the tap. */
+  const bumpKinds = (targetType: Target, targetId: string, removed: ReactionKind | null, added: ReactionKind | null) => {
+    if (targetType === 'comment' || (!removed && !added)) return;
+    const adjust = (map?: Record<string, number>) => {
+      const next = { ...(map || {}) };
+      if (removed) {
+        const left = (next[removed] || 0) - 1;
+        if (left > 0) next[removed] = left; else delete next[removed];
+      }
+      if (added) next[added] = (next[added] || 0) + 1;
+      return next;
+    };
+    setDb(prev => {
+      if (targetType === 'media') {
+        const [postId, position] = targetId.split('#m');
+        return { ...prev, posts: prev.posts.map(p => (p.id === postId
+          ? { ...p, media: p.media.map((m, i) => (i === Number(position) ? { ...m, reactionKinds: adjust(m.reactionKinds) } : m)) }
+          : p)) };
+      }
+      return { ...prev, posts: prev.posts.map(p => (p.id === targetId ? { ...p, reactionKinds: adjust(p.reactionKinds) } : p)) };
+    });
+  };
+
   const addPost = async (post: Post): Promise<Post> => {
     if (!API_ENABLED) {
       setDb(prev => ({ ...prev, posts: [post, ...prev.posts] }));
@@ -747,6 +771,34 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return db.reactions.filter(r => r.targetType === targetType && r.targetId === targetId).length;
   };
 
+  /** The emoji people actually used, most common first — a post folds in its media. */
+  const reactionMix = (targetType: Target, targetId: string): { kind: ReactionKind; n: number }[] => {
+    const kinds: Record<string, number> = {};
+    const add = (map?: Record<string, number>) => {
+      if (!map) return;
+      for (const k in map) kinds[k] = (kinds[k] || 0) + (map[k] || 0);
+    };
+    if (targetType === 'post') {
+      const post = db.posts.find(p => p.id === targetId);
+      if (post?.reactionKinds || post?.media?.some(m => m.reactionKinds)) {
+        add(post?.reactionKinds);
+        post?.media?.forEach(m => add(m.reactionKinds));
+      } else {
+        for (const r of db.reactions) {
+          if ((r.targetType === 'post' && r.targetId === targetId) || (r.targetType === 'media' && r.targetId.startsWith(`${targetId}#m`))) kinds[r.kind] = (kinds[r.kind] || 0) + 1;
+        }
+      }
+    } else if (targetType === 'media') {
+      const [postId, position] = targetId.split('#m');
+      const media = db.posts.find(p => p.id === postId)?.media?.[Number(position)];
+      if (media?.reactionKinds) add(media.reactionKinds);
+      else for (const r of db.reactions) if (r.targetType === 'media' && r.targetId === targetId) kinds[r.kind] = (kinds[r.kind] || 0) + 1;
+    } else {
+      for (const r of db.reactions) if (r.targetType === targetType && r.targetId === targetId) kinds[r.kind] = (kinds[r.kind] || 0) + 1;
+    }
+    return Object.entries(kinds).map(([kind, n]) => ({ kind: kind as ReactionKind, n })).sort((a, b) => b.n - a.n);
+  };
+
   const react = async (targetType: Target, targetId: string, kind: ReactionKind) => {
     const self = currentMe();
     if (!self) return;
@@ -760,6 +812,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }));
     if (!API_ENABLED) return;
     bumpCount(targetType, targetId, (nextKind ? 1 : 0) - (existing ? 1 : 0));
+    bumpKinds(targetType, targetId, existing, nextKind);
     try {
       if (off) await api.del('/api/reactions/toggle/', { target_type: targetType, target_id: targetId });
       else await api.post('/api/reactions/', { target_type: targetType, target_id: targetId, kind });
@@ -771,6 +824,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           : mine(prev)
       }));
       bumpCount(targetType, targetId, (existing ? 1 : 0) - (nextKind ? 1 : 0));
+      bumpKinds(targetType, targetId, nextKind, existing);
       showToast(errText(err, 'Sign in to react.'));
     }
   };
@@ -1076,7 +1130,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         db, setDb, me, isAdmin, isStaff, t, feature,
         addPost, updatePost, deletePost, addComment, deleteComment,
         toggleFollow, isFollowing, followState, incomingRequests, acceptRequest, declineRequest, mutualIds,
-        react, myReaction, reactionCount, toggleSave, isSaved, toggleListingSave, isListingSaved,
+        react, myReaction, reactionCount, reactionMix, toggleSave, isSaved, toggleListingSave, isListingSaved,
         notify, markAllRead, markRead, sendMessage, markThreadRead, addReport, logAudit,
         requestPromotion, cancelPromotion, activePromo, promoEligible,
         updateLang, login, logout, isAuthenticated,

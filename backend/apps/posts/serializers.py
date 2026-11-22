@@ -31,6 +31,8 @@ class PostSerializer(serializers.ModelSerializer):
     media = PostMediaSerializer(many=True, required=False)
     my_reaction = serializers.SerializerMethodField()
     my_media_reactions = serializers.SerializerMethodField()
+    reaction_kinds = serializers.SerializerMethodField()
+    media_reaction_kinds = serializers.SerializerMethodField()
 
     class Meta:
         model = Post
@@ -39,7 +41,7 @@ class PostSerializer(serializers.ModelSerializer):
             'author_is_private', 'text', 'audience', 'status',
             'mood', 'place', 'category', 'activity', 'like_count', 'comment_count',
             'edited', 'created_at', 'updated_at', 'media',
-            'my_reaction', 'my_media_reactions',
+            'my_reaction', 'my_media_reactions', 'reaction_kinds', 'media_reaction_kinds',
         ]
         read_only_fields = ['id', 'author', 'status', 'activity', 'like_count', 'comment_count', 'edited', 'created_at', 'updated_at']
         list_serializer_class = PostListSerializer
@@ -58,6 +60,13 @@ class PostSerializer(serializers.ModelSerializer):
     def get_my_media_reactions(self, obj):
         media_map = self._reactions()['media']
         return {str(m.position): media_map.get(f'{obj.pk}#m{m.position}') for m in obj.media.all()}
+
+    def get_reaction_kinds(self, obj):
+        return self._reactions()['post_kinds'].get(str(obj.pk), {})
+
+    def get_media_reaction_kinds(self, obj):
+        media_kinds = self._reactions()['media_kinds']
+        return {str(m.position): media_kinds.get(f'{obj.pk}#m{m.position}', {}) for m in obj.media.all()}
 
     def create(self, validated_data):
         media_data = validated_data.pop('media', [])

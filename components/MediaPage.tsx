@@ -132,7 +132,7 @@ export default function MediaPage({ postId, initialIndex }: MediaPageProps) {
                   <img src={item.src || item.gen} alt={`Photo ${i + 1} of ${media.length}`} loading={Math.abs(i - index) <= 1 ? 'eager' : 'lazy'} decoding="async" />
                 )}
                 <div className="media-page-actions">
-                  <ReactionButton targetType="media" targetId={`${postId}#m${i}`} />
+                  <ReactionButton targetType="media" targetId={`${postId}#m${i}`} showMix />
                   <button
                     type="button"
                     className="action-btn"

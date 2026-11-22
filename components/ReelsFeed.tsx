@@ -193,7 +193,10 @@ export default function ReelsFeed({ initialKey }: { initialKey?: string }) {
                         targetId={slide.post.id}
                         openOnClick
                         emptyLabel="Like"
-                        extraCount={db.reactions.filter(r => r.targetType === 'media' && r.targetId.startsWith(`${slide.post.id}#m`)).length}
+                        showMix
+                        extraCount={slide.post.media?.some(m => m.likes !== undefined)
+                          ? slide.post.media.reduce((n, m) => n + (m.likes || 0), 0)
+                          : db.reactions.filter(r => r.targetType === 'media' && r.targetId.startsWith(`${slide.post.id}#m`)).length}
                       />
                     </div>
                     <div className="reel-rail-item">

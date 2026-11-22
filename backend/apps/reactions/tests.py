@@ -68,6 +68,29 @@ class ReactionTests(TestCase):
         ca.post('/api/reactions/', {'target_type': 'post', 'target_id': str(self.post.pk), 'kind': 'like'}, format='json')
         self.assertEqual(self.author.notifications.count(), 1)
 
+    def test_post_payload_carries_the_per_kind_reaction_mix(self):
+        from apps.posts.models import PostMedia
+
+        other = auth_client(make_user('reactother'))
+        third = auth_client(make_user('reactthird'))
+        PostMedia.objects.create(post=self.post, kind='image', url='https://example.com/a.jpg', position=0)
+        self.react('like')
+        self.react(client=other)
+        third.post('/api/reactions/', {'target_type': 'post', 'target_id': str(self.post.pk), 'kind': 'wow'}, format='json')
+        other.post('/api/reactions/', {'target_type': 'media', 'target_id': f'{self.post.pk}#m0', 'kind': 'haha'}, format='json')
+
+        row = next(r for r in self.cf.get('/api/posts/').data['results'] if str(r['id']) == str(self.post.pk))
+        self.assertEqual(row['reaction_kinds'], {'like': 2, 'wow': 1})
+        self.assertEqual(row['media_reaction_kinds'], {'0': {'haha': 1}})
+        self.assertEqual(row['like_count'], 3)
+        self.assertEqual(row['my_reaction'], 'like')
+
+        # Signed-out readers still see how the post landed, never whose.
+        arow = next(r for r in self.client.get('/api/posts/').data['results'] if str(r['id']) == str(self.post.pk))
+        self.assertEqual(arow['reaction_kinds'], {'like': 2, 'wow': 1})
+        self.assertEqual(arow['media_reaction_kinds'], {'0': {'haha': 1}})
+        self.assertIsNone(arow['my_reaction'])
+
 
 class ReactionConcurrencyTests(TransactionTestCase):
     def setUp(self):

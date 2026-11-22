@@ -64,6 +64,8 @@ export interface Post {
   /** Server-side aggregates: present in API mode, derived from `reactions` in demo mode. */
   likes?: number;
   comments?: number;
+  /** {kind: count} in API mode; undefined in demo mode (count the reaction rows instead). */
+  reactionKinds?: Record<string, number>;
   promoted?: boolean;
 }
 
@@ -74,6 +76,7 @@ export interface Media {
   dur?: number;
   blobId?: string;
   likes?: number;
+  reactionKinds?: Record<string, number>;
 }
 
 export interface Comment {

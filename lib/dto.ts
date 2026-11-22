@@ -129,11 +129,12 @@ export function mapMedia(m: any): Media {
 }
 
 export function mapPost(row: any): Post {
+  const mediaKinds: Record<string, Record<string, number>> | undefined = row.media_reaction_kinds;
   return {
     id: idOf(row.id),
     uid: idOf(row.author),
     text: row.text || '',
-    media: (row.media || []).map(mapMedia),
+    media: (row.media || []).map((m: any) => ({ ...mapMedia(m), reactionKinds: mediaKinds?.[String(m.position)] })),
     ts: at(row.created_at),
     status: row.status === 'hidden' || row.status === 'removed' ? row.status : 'live',
     edited: !!row.edited,
@@ -143,6 +144,7 @@ export function mapPost(row: any): Post {
     audience: row.audience === 'followers' ? 'followers' : 'public',
     likes: amount(row.like_count),
     comments: amount(row.comment_count),
+    reactionKinds: row.reaction_kinds || undefined,
     category: row.category || undefined,
     promoted: !!row.promoted,
   };

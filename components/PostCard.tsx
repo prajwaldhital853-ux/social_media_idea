@@ -94,7 +94,7 @@ function FeedFollow({ author }: { author: User }) {
 
 export default function PostCard({ post, author, featured }: PostCardProps) {
   const router = useRouter();
-  const { db, me, t, deletePost, toggleSave, isSaved, openComposer, activePromo, promoEligible, showToast } = useApp();
+  const { db, me, t, deletePost, toggleSave, isSaved, openComposer, activePromo, promoEligible, showToast, reactionCount } = useApp();
   const [menuOpen, setMenuOpen] = useState(false);
   const [showComments, setShowComments] = useState(false);
   const [reporting, setReporting] = useState(false);
@@ -110,6 +110,11 @@ export default function PostCard({ post, author, featured }: PostCardProps) {
   const comments = db.comments
     .filter(c => c.pid === post.id && c.status === 'live')
     .sort((a, b) => b.ts - a.ts);
+
+  /** Media-level likes fold into the card count: server sums in API mode, reaction rows in demo. */
+  const mediaLikes = post.media?.some(m => m.likes !== undefined)
+    ? post.media.reduce((n, m) => n + (m.likes || 0), 0)
+    : db.reactions.filter(r => r.targetType === 'media' && r.targetId.startsWith(`${post.id}#m`)).length;
 
   if (promoHidden) return null;
   if (promo && !own && !promoEligible(promo)) return null;
@@ -269,7 +274,7 @@ export default function PostCard({ post, author, featured }: PostCardProps) {
       )}
 
       <div className="post-actions" onClick={e => e.stopPropagation()}>
-        <ReactionButton targetType="post" targetId={post.id} extraCount={db.reactions.filter(r => r.targetType === 'media' && r.targetId.startsWith(`${post.id}#m`)).length} />
+        <ReactionButton targetType="post" targetId={post.id} extraCount={mediaLikes} showMix />
         <button
           type="button"
           className={`action-btn ${showComments ? 'on' : ''}`}
@@ -298,7 +303,7 @@ export default function PostCard({ post, author, featured }: PostCardProps) {
         </button>
       </div>
 
-      {!db.reactions.some(r => (r.targetType === 'post' && r.targetId === post.id) || (r.targetType === 'media' && r.targetId.startsWith(`${post.id}#m`))) && <small className="first-like">Be first one to like this.</small>}
+      {reactionCount('post', post.id) + mediaLikes === 0 && <small className="first-like">Be first one to like this.</small>}
 
       {showComments && <Comments postId={post.id} onClose={() => setShowComments(false)} />}
 

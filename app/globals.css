@@ -7214,3 +7214,10 @@ a.market-card { text-decoration: none; }
   .media-mosaic.stack { height: 360px; }
   .media-mosaic.mixed { height: 440px; }
 }
+
+/* The emoji people used sit between the thumb and the total, Facebook-style.
+   Sized after the mobile block above so the mix stays compact on phones too. */
+.action-btn .reaction-mix { display: inline-flex; align-items: center; margin: 0 -2px 0 -3px; }
+.action-btn .reaction-mix .reaction-art,
+.post-actions .action-btn .reaction-mix .reaction-art { width: 19px; height: 19px; }
+.action-btn .reaction-mix .reaction-art + .reaction-art { margin-left: -7px; }
