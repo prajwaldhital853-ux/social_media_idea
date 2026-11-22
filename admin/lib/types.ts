@@ -537,3 +537,29 @@ export interface PersonOutcome {
   holdings?: Holdings;
 }
 
+/** One line of the first-load card, with the platform's own wording behind it. */
+export interface WelcomeLine {
+  key: string;
+  field: 'message' | 'tagline' | 'email' | 'phone' | 'form';
+  label: string;
+  help: string;
+  limit: number;
+  value: string;
+  default: string;
+  set: boolean;
+  by: string | null;
+  at: string | null;
+}
+
+export interface WelcomeCard {
+  message: string;
+  tagline: string;
+  contact: { label: string; value: string }[];
+}
+
+/** What the welcome desk holds, and what the website will show on first load. */
+export interface WelcomeDesk {
+  lines: WelcomeLine[];
+  card: WelcomeCard;
+  detail?: string;
+}
