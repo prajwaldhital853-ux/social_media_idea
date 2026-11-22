@@ -1,20 +1,67 @@
 """One place where API errors become sentences a visitor can act on."""
 
+import logging
+
+from django.http import JsonResponse
 from rest_framework.exceptions import Throttled
 from rest_framework.views import exception_handler as drf_exception_handler
+
+from .middleware import current_request_id
+
+logger = logging.getLogger(__name__)
+
+# Django has already written the traceback by the time the 500 handler runs; this
+# is the sentence the client sees, so it has to be one a person can act on.
+SERVER_ERROR = 'The server could not finish that request. Try again in a moment.'
+
+
+def _request_id_for(request):
+    return getattr(request, 'request_id', '') or current_request_id()
+
+
+def _stamp(response, request):
+    """Every error body carries the id, so a screenshot names its own log line."""
+    rid = _request_id_for(request)
+    if not rid:
+        return response
+    if isinstance(response.data, dict):
+        response.data.setdefault('request_id', rid)
+    elif response.data is None:
+        response.data = {'request_id': rid}
+    else:
+        response.data = {'detail': response.data, 'request_id': rid}
+    response['X-Request-Id'] = rid
+    return response
 
 
 def exception_handler(exc, context):
     response = drf_exception_handler(exc, context)
-    if response is None or not isinstance(exc, Throttled):
-        return response
-    # DRF's own text is developer copy: "Request was throttled. Expected
-    # available in 60 seconds." Say the same thing as an instruction, and hand
-    # the client the seconds so a screen can count them down instead of
-    # guessing. exc.wait is the full window, which is the honest upper bound.
-    seconds = max(1, int(exc.wait or 1))
-    response.data = {
-        'detail': f'Too many attempts from your connection. Wait {seconds} seconds and try again.',
-        'retry_in': seconds,
-    }
-    return response
+    request = context.get('request')
+    if response is None:
+        return None
+    if isinstance(exc, Throttled):
+        # DRF's own text is developer copy: "Request was throttled. Expected
+        # available in 60 seconds." Say the same thing as an instruction, and hand
+        # the client the seconds so a screen can count them down instead of
+        # guessing. exc.wait is the full window, which is the honest upper bound.
+        seconds = max(1, int(exc.wait or 1))
+        response.data = {
+            'detail': f'Too many attempts from your connection. Wait {seconds} seconds and try again.',
+            'retry_in': seconds,
+        }
+    return _stamp(response, request)
+
+
+def server_error(request):
+    """Uncaught failures as JSON.
+
+    Without this a bug anywhere in the API answers a fetch with an HTML error
+    page, which the client can only report as "something unreadable" — and a
+    signed-in browser then sits on its spinner with nothing to show. The id is the
+    handle: the visitor reads it out, the log line is found.
+    """
+    return JsonResponse(
+        {'detail': SERVER_ERROR, 'request_id': _request_id_for(request)},
+        status=500,
+        headers={'X-Request-Id': _request_id_for(request)} if _request_id_for(request) else None,
+    )

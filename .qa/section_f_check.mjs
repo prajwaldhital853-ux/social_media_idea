@@ -150,7 +150,7 @@ await A.page.evaluateOnNewDocument(() => {
     return es;
   };
 });
-await signIn(A.page, 'sita');
+await signIn(A.page, 'sita@demo.test');
 const cookie = (await A.page.cookies(BASE)).filter(c => c.name === 'exposing_access')
   .map(c => `${c.name}=${c.value}`).join('; ');
 ok('browser session holds an access cookie', cookie.includes('exposing_access='), cookie ? 'token present' : 'missing');

@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import AuthCode from '@/components/AuthCode';
 import BrandLogo from '@/components/BrandLogo';
-import { useApp } from '@/lib/AppContext';
+import { AuthResult, useApp } from '@/lib/AppContext';
 import { API_ENABLED } from '@/lib/api';
 import { requestGoogleToken } from '@/lib/google';
 import { COUNTRIES, THEME_KEY, ageFromDob, uid } from '@/lib/utils';
@@ -15,8 +15,16 @@ import { SignupProvider, User } from '@/lib/types';
 const GOOGLE_KEY = 'exposing-google';
 type Prefill = { email: string; name: string; google_sub: string };
 
+/**
+ * A failure the server wrote itself carries the handle for its own log line,
+ * which is the one thing a visitor can quote back to someone who can read it.
+ */
+const serverRef = (res: AuthResult) => (res.requestId && res.status >= 500 && res.detail
+  ? `${res.detail} (ref ${res.requestId})`
+  : res.detail);
+
 export default function SignupPage() {
-  const { db, t, feature, ready, setDb, showToast, signupAccount, verifyCode, resendCode, googleSignIn } = useApp();
+  const { db, t, feature, ready, waking, setDb, showToast, signupAccount, verifyCode, resendCode, googleSignIn } = useApp();
   const router = useRouter();
   const [name, setName] = useState('');
   const [username, setUsername] = useState('');
@@ -100,53 +108,64 @@ export default function SignupPage() {
     }
 
     setBusy(true);
-    const res = await signupAccount({
-      username, email, password, name: name.trim(), dob, country, province, city,
-      google: prefill ? { sub: prefill.google_sub, email: prefill.email, name: prefill.name } : undefined,
-    });
-    setBusy(false);
-
-    if (!res.ok) {
-      const first = res.errors && Object.values(res.errors)[0]?.[0];
-      return setError(first || res.detail || t('e_email'));
-    }
-    if (res.challenge) {
-      setCode({
-        challenge: res.challenge,
-        expiresAt: res.expiresIn ? Date.now() + res.expiresIn * 1000 : undefined,
-        devCode: res.devCode,
+    try {
+      const res = await signupAccount({
+        username, email, password, name: name.trim(), dob, country, province, city,
+        google: prefill ? { sub: prefill.google_sub, email: prefill.email, name: prefill.name } : undefined,
       });
-      return;
+      if (!res.ok) {
+        const first = res.errors && Object.values(res.errors)[0]?.[0];
+        setError(first || serverRef(res) || t('e_email'));
+        return;
+      }
+      if (res.challenge) {
+        setCode({
+          challenge: res.challenge,
+          expiresAt: res.expiresIn ? Date.now() + res.expiresIn * 1000 : undefined,
+          devCode: res.devCode,
+        });
+        return;
+      }
+      showToast(t('welcome', { name: res.user?.name || name.trim() }));
+      router.push('/');
+    } finally {
+      setBusy(false);
     }
-    showToast(t('welcome', { name: res.user?.name || name.trim() }));
-    router.push('/');
   };
 
   const confirmCode = async (value: string) => {
     if (!code) return;
     setBusy(true);
-    const res = await verifyCode(code.challenge, value);
-    setBusy(false);
-    if (res.ok && res.user) {
-      showToast(t('welcome', { name: res.user.name || res.user.username }));
-      router.push('/');
-      return;
+    try {
+      const res = await verifyCode(code.challenge, value);
+      if (res.ok && res.user) {
+        showToast(t('welcome', { name: res.user.name || res.user.username }));
+        router.push('/');
+        return;
+      }
+      if (res.ok && res.challenge) {
+        setCode({ challenge: res.challenge, expiresAt: res.expiresIn ? Date.now() + res.expiresIn * 1000 : code.expiresAt, devCode: res.devCode });
+        return;
+      }
+      setError(res.attemptsLeft !== undefined && res.attemptsLeft > 0
+        ? `${serverRef(res)} ${t(res.attemptsLeft === 1 ? 'codeTryOne' : 'codeTriesLeft', { n: res.attemptsLeft })}`
+        : serverRef(res) || t('wrongCode'));
+    } finally {
+      setBusy(false);
     }
-    if (res.ok && res.challenge) {
-      setCode({ challenge: res.challenge, expiresAt: res.expiresIn ? Date.now() + res.expiresIn * 1000 : code.expiresAt, devCode: res.devCode });
-      return;
-    }
-    setError(res.attemptsLeft !== undefined && res.attemptsLeft > 0
-      ? `${res.detail} ${t(res.attemptsLeft === 1 ? 'codeTryOne' : 'codeTriesLeft', { n: res.attemptsLeft })}`
-      : res.detail || t('wrongCode'));
   };
 
   const resend = async () => {
     if (!code) return;
-    const res = await resendCode(code.challenge);
-    if (res.error) return setError(res.error);
-    setCode({ challenge: res.challenge || code.challenge, expiresAt: res.expiresIn ? Date.now() + res.expiresIn * 1000 : undefined, devCode: res.devCode });
-    setError('');
+    setBusy(true);
+    try {
+      const res = await resendCode(code.challenge);
+      if (res.error) return setError(res.error);
+      setCode({ challenge: res.challenge || code.challenge, expiresAt: res.expiresIn ? Date.now() + res.expiresIn * 1000 : undefined, devCode: res.devCode });
+      setError('');
+    } finally {
+      setBusy(false);
+    }
   };
 
   const startGoogle = async () => {
@@ -192,6 +211,7 @@ export default function SignupPage() {
       <div className="login-container signup-container">
         <div className="login-content signup-content">
           <BrandLogo height={56} className="login-brand" href="/" />
+          {waking ? <p className="auth-notice" role="status">{t('waking')}</p> : null}
           <AuthCode
             title={t('codeTitle')}
             detail={t('codeVerifyDetail', { email })}
@@ -222,6 +242,7 @@ export default function SignupPage() {
         <BrandLogo height={56} className="login-brand" href="/" />
         <h1 className="login-title">{t('signupTitle')}</h1>
         <p className="signup-sub">{t('signupSub')}</p>
+        {waking ? <p className="auth-notice" role="status">{t('waking')}</p> : null}
 
         {showGoogle && (
           <button type="button" className="social-btn" onClick={startGoogle} disabled={busy}>

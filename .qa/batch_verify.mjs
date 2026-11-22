@@ -118,7 +118,7 @@ async function signIn(identifier) {
 }
 
 // ===== #82 — the profile picture and the cover open big =====
-await signIn('sita');
+await signIn('sita@demo.test');
 await goto('/u/sita');
 await page.waitForSelector('.profile-view', { timeout: 20000 });
 
@@ -433,7 +433,7 @@ ok('88: a listing quotes its price so the preview is useful',
 
 // ===== #89 — the self-service list in Settings =====
 await goto('/login');
-await signIn('sita');
+await signIn('sita@demo.test');
 await goto('/settings');
 await page.waitForSelector('.settings-card', { timeout: 10000 }).catch(() => {});
 const settings = await page.evaluate(() => ({

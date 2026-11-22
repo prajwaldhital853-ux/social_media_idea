@@ -4,6 +4,8 @@ from django.urls import include, path, re_path
 
 from apps.common import sync, uploads
 from apps.common.config import client_config
+from apps.common.errors import server_error
+from apps.common.health import health
 from apps.common.media import serve_media
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
@@ -20,6 +22,7 @@ def client_meta(request):
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/meta/', client_meta),
+    path('api/health/', health),
     path('api/sync/', sync.sync),
     path('api/uploads/', uploads.upload),
     path('api/', include('apps.accounts.urls')),
@@ -41,3 +44,7 @@ if settings.DEBUG or settings.SERVE_MEDIA:
     # The deployed API has no web server in front of it, so /media comes from
     # Django — with Range support, or the reels feed cannot be seeked.
     urlpatterns += [re_path(r'^media/(?P<path>.*)$', serve_media, name='media')]
+
+# A crash answers a fetch with an HTML page unless this says otherwise, and all a
+# client can report about HTML is "something unreadable" — with no id to look up.
+handler500 = server_error

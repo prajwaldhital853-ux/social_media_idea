@@ -7,10 +7,12 @@
  */
 import puppeteer from 'puppeteer-core';
 
-const BASE = 'http://localhost:3000';
-const OUT = 'D:/social_medial/.qa';
+// A second checkout runs its own pair of servers, so the suite has to be pointed
+// at them instead of assumed to belong to the one on :3000.
+const BASE = process.env.QA_BASE || 'http://localhost:3000';
+const OUT = process.env.QA_OUT || 'D:/social_medial/.qa';
 const CHROME = 'C:/Program Files/Google/Chrome/Application/chrome.exe';
-const DEMO = { username: 'sita', password: 'exposing-demo-1' };
+const DEMO = { username: 'sita', email: 'sita@demo.test', password: 'exposing-demo-1' };
 
 const results = [];
 const ok = (name, pass, detail = '') => {
@@ -137,7 +139,7 @@ async function walk(page, sel, rounds = 8) {
 const d = await newPage({ width: 1440, height: 900 });
 
 // ---------------------------------------------------------------- sign in ----
-const landed = await signIn(d, DEMO.username, DEMO.password);
+const landed = await signIn(d, DEMO.email, DEMO.password);
 ok('desktop: the demo account signs in against /api/auth/', landed === '/', landed);
 const session = await api(d, '/api/sync/');
 ok('desktop: the session is the account that signed in', session.body?.me?.username === DEMO.username,
@@ -390,7 +392,7 @@ await shot(d, 'intg-desktop-saved');
 
 // ------------------------------------------------------------------ mobile ----
 const m = await newPage({ width: 390, height: 844 }, true);
-await signIn(m, DEMO.username, DEMO.password);
+await signIn(m, DEMO.email, DEMO.password);
 await goto(m, '/');
 const mFeedFirst = await waitFor(m, 'article.post');
 const mFeedWalked = await walk(m, 'article.post');

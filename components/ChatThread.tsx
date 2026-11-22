@@ -55,10 +55,14 @@ export default function ChatThread({ other }: { other: User }) {
 
   // Opening the thread is the read receipt — for every message in it, not just
   // the page this screen loaded, so the server decides what the receipt covers.
+  // Keyed on the handle, never on the `other` object: marking read refreshes
+  // the inbox, the inbox rebuilds every person card in the cache, and a new
+  // object for the same person would fire this effect again forever.
+  const otherName = other.username;
   useEffect(() => {
     if (!meId) return;
-    void markThreadRead(other.username);
-  }, [meId, other, markThreadRead]);
+    void markThreadRead(otherName);
+  }, [meId, otherName, markThreadRead]);
 
   // Receipts and replies arrive while the thread sits open: a quiet poll of the
   // newest page refreshes the ticks without ever touching the scroll anchor.

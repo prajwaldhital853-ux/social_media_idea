@@ -1,6 +1,8 @@
 from django.conf import settings
 from django.utils import timezone
 
+from apps.common.mail import send_off_request
+
 from .models import Notification
 from .tasks import send_activity_email
 
@@ -53,7 +55,7 @@ def email_activity(recipient, actor, kind):
     if not getattr(recipient.profile, 'notify_email', True):
         return None
     subject, body = (line.format(name=name_of(actor), username=actor.username) for line in copy)
-    send_activity_email.delay(recipient.email, subject, body, f'{settings.SITE_URL}/u/{actor.username}')
+    send_off_request(send_activity_email, recipient.email, subject, body, f'{settings.SITE_URL}/u/{actor.username}')
     return subject
 
 

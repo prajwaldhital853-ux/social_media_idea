@@ -13,7 +13,7 @@ import { writeFileSync, rmSync } from 'node:fs';
 const BASE = 'http://localhost:3000';
 const OUT = 'D:/social_medial/.qa';
 const CHROME = 'C:/Program Files/Google/Chrome/Application/chrome.exe';
-const DEMO = { username: 'sita', password: 'exposing-demo-1' };
+const DEMO = { username: 'sita', email: 'sita@demo.test', password: 'exposing-demo-1' };
 const PHOTO = `${OUT}/test.png`;
 const CLIP = `${OUT}/clip.mp4`;
 const BAD = `${OUT}/notes.txt`;
@@ -184,7 +184,7 @@ const mediaSrcs = page => page.$$eval('.create-media-item img, .create-media-ite
 writeFileSync(BAD, 'not a photo at all\n');
 
 const d = await newPage({ width: 1440, height: 900 });
-await signIn(d, DEMO.username, DEMO.password);
+await signIn(d, DEMO.email, DEMO.password);
 
 // ── photo: picker → /api/uploads/ → preview → POST /api/posts/ ───────────────
 const marker = `upload-qa-${Date.now().toString(36)}`;
@@ -345,7 +345,7 @@ ok('the profile row on the server holds the uploaded URL',
 
 // ── phone: the same upload path on a small screen ────────────────────────────
 const m = await newPage({ width: 390, height: 844 }, true);
-await signIn(m, DEMO.username, DEMO.password);
+await signIn(m, DEMO.email, DEMO.password);
 const mobileCapture = capture(m, 'POST', '/api/posts/');
 await goto(m, '/create');
 await waitFor(m, 'textarea.create-post-textarea');

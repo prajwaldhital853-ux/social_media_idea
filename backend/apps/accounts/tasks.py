@@ -1,6 +1,8 @@
 from celery import shared_task
 from django.core.mail import send_mail
 
+from apps.common.mail import send_off_request
+
 
 @shared_task
 def send_otp_email(email, code, purpose):
@@ -16,6 +18,15 @@ def send_otp_email(email, code, purpose):
         [email],
         fail_silently=True,
     )
+
+
+def deliver_otp_email(email, code, purpose):
+    """Post the code without spending the request's time on a mail provider.
+
+    The row is already stored when this returns, and a person who never gets the
+    mail has a resend button.
+    """
+    return send_off_request(send_otp_email, email, code, purpose)
 
 
 @shared_task
