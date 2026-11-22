@@ -6,7 +6,7 @@ import { ReactionKind } from '@/lib/types';
 export default function ReactionIcon({ kind }: { kind: ReactionKind }) {
   const id = useId().replace(/:/g, '');
   const face = kind !== 'like' && kind !== 'love';
-  return <svg className="reaction-art" viewBox="0 0 48 48" aria-hidden="true">
+  return <svg className="reaction-art" data-kind={kind} viewBox="0 0 48 48" aria-hidden="true">
     <defs>
       <radialGradient id={id} cx="35%" cy="24%" r="80%"><stop stopColor={face ? '#fff3a6' : kind === 'like' ? '#80d4ff' : '#ff9aa8'} /><stop offset=".55" stopColor={face ? '#ffd44d' : kind === 'like' ? '#2995ed' : '#ef4562'} /><stop offset="1" stopColor={face ? '#f39a20' : kind === 'like' ? '#1261c3' : '#bd2448'} /></radialGradient>
       <radialGradient id={`${id}c`}><stop stopColor="#ed7950" stopOpacity=".7"/><stop offset="1" stopColor="#ed7950" stopOpacity="0"/></radialGradient>

@@ -5,7 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { Database, Follow, User, Post, Comment, ThemeMode, ReactionKind, NotificationKind, FeatureFlags, Promotion, Message } from './types';
 import { getDb, save, emptyDb } from './storage';
 import { hydrateVideoSrcs } from './videoStore';
-import { THEME_KEY, LANG_KEY, uid, ageFromDob, DAY } from './utils';
+import { THEME_KEY, LANG_KEY, uid, ageFromDob, DAY, reactionRank } from './utils';
 import { I18N, TranslationKey } from './i18n';
 import { api, API_ENABLED, ApiError } from './api';
 import { merge as applyFragment, Fragment } from './store';
@@ -905,7 +905,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } else {
       for (const r of db.reactions) if (r.targetType === targetType && r.targetId === targetId) kinds[r.kind] = (kinds[r.kind] || 0) + 1;
     }
-    return Object.entries(kinds).map(([kind, n]) => ({ kind: kind as ReactionKind, n })).sort((a, b) => b.n - a.n);
+    return Object.entries(kinds).map(([kind, n]) => ({ kind: kind as ReactionKind, n })).sort((a, b) => reactionRank(a.kind) - reactionRank(b.kind));
   };
 
   const react = async (targetType: Target, targetId: string, kind: ReactionKind) => {
