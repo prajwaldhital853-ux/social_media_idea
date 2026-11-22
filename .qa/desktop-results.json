@@ -65,7 +65,7 @@
     {
       "name": "desktop: the marketplace uses everything right of the rail",
       "pass": true,
-      "detail": "{\"mainW\":1160,\"cols\":4,\"cards\":21,\"calm\":false,\"pageToggle\":false,\"overflow\":false}"
+      "detail": "{\"mainW\":1160,\"cols\":4,\"cards\":30,\"calm\":false,\"pageToggle\":false,\"overflow\":false}"
     },
     {
       "name": "desktop: the marketplace header does not duplicate the top bar mode switch",
@@ -80,7 +80,7 @@
     {
       "name": "desktop: the bell opens an activity box over the canvas",
       "pass": true,
-      "detail": "{\"rows\":10,\"groups\":[\"New\",\"Earlier\"],\"tabs\":[\"All\",\"Unread (1)\"],\"foot\":\"See all notifications\",\"right\":1380,\"top\":60,\"w\":380,\"bg\":\"rgb(24, 26, 30)\"}"
+      "detail": "{\"rows\":10,\"groups\":[\"New\",\"Earlier\"],\"tabs\":[\"All\",\"Unread (2)\"],\"foot\":\"See all notifications\",\"right\":1380,\"top\":60,\"w\":380,\"bg\":\"rgb(24, 26, 30)\"}"
     },
     {
       "name": "desktop: the Unread tab filters the popover to unread rows",
@@ -140,7 +140,7 @@
     {
       "name": "mobile: the inbox stays a single column with no thread pane",
       "pass": true,
-      "detail": "{\"rows\":10,\"mainHidden\":true,\"topbarHidden\":true,\"search\":true,\"head\":true,\"waitedMs\":38}"
+      "detail": "{\"rows\":10,\"mainHidden\":true,\"topbarHidden\":true,\"search\":true,\"head\":true,\"waitedMs\":393}"
     },
     {
       "name": "mobile: a thread is still full width with its back button",
@@ -150,7 +150,7 @@
     {
       "name": "mobile: the feed keeps its own sheet and loads posts",
       "pass": true,
-      "detail": "{\"bg\":\"rgb(255, 255, 255)\",\"posts\":10,\"waitedMs\":157}"
+      "detail": "{\"bg\":\"rgb(255, 255, 255)\",\"posts\":10,\"waitedMs\":234}"
     },
     {
       "name": "mobile: the For you / Following band thins on scroll without losing its place",

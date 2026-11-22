@@ -23,8 +23,10 @@ export default function TopBar() {
   const close = useCallback(() => setPanel('none'), []);
   const toggle = (next: Panel) => setPanel(p => (p === next ? 'none' : next));
 
-  useDismiss(panel !== 'none', msgBox, close);
-  useDismiss(panel !== 'none', notifBox, close);
+  // Each box guards its own panel only: with both armed, the idle box would
+  // read clicks inside the open panel as outside clicks and swallow the first one.
+  useDismiss(panel === 'messages', msgBox, close);
+  useDismiss(panel === 'notifications', notifBox, close);
   // One history layer for the whole popover, so phone-back and browser-back
   // step out of the panel before they leave the page.
   useBackClose(panel !== 'none', close);
