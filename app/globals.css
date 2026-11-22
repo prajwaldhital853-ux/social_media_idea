@@ -5144,6 +5144,97 @@ textarea {
   }
 }
 
+/* ===== Post page: a sheet, not a card =====
+   On a wide screen the post used to sit as a 720px card on a gray canvas, so
+   two bands of page colour ran down either side of it. Here the sheet is the
+   screen: one background from edge to edge, media that reaches both edges, and
+   only the words keep a measure, because a 1366px caption line is unreadable. */
+.shell.post-page {
+  max-width: none;
+  column-gap: 0;
+  padding-right: 0;
+}
+
+.shell.post-page .main {
+  background: var(--paper);
+  border-right: 0;
+}
+
+.shell.post-page .post-featured {
+  padding-inline: 0;
+}
+
+.shell.post-page .post-featured > .promoted-row,
+.shell.post-page .post-featured > .post-top,
+.shell.post-page .post-featured > .post-actions,
+.shell.post-page .post-featured > .first-like,
+.shell.post-page .post-page-comments {
+  padding-inline: max(16px, calc((100% - 760px) / 2));
+}
+
+.shell.post-page .post-featured .media-mosaic {
+  width: 100%;
+  margin: 8px 0 0;
+  border: 0;
+  border-radius: 0;
+}
+
+/* Below the desktop gutters the sheet already ran edge to edge; these are the
+   rules that make it do the same on a wide screen. */
+@media (min-width: 769px) {
+  /* One photo is shown whole: the sheet's full width, its own height, nothing
+     cropped and nothing letterboxed. */
+  .shell.post-page .post-featured .media-mosaic.single {
+    display: block;
+    height: auto;
+    max-height: none;
+    aspect-ratio: auto;
+  }
+
+  .shell.post-page .post-featured .media-mosaic.single .mosaic-cell {
+    height: auto;
+  }
+
+  .shell.post-page .post-featured .media-mosaic.single img {
+    height: auto;
+  }
+
+  /* One video keeps the width but never runs past the screen; the bars beside
+     it are the player's own, not a gap in the layout. */
+  .shell.post-page .post-featured .media-mosaic.single:has(video) {
+    display: grid;
+    height: min(78vh, 62vw);
+  }
+
+  .shell.post-page .post-featured .media-mosaic.single:has(video) video,
+  .shell.post-page .post-featured .media-mosaic.single:has(video) .post-video {
+    height: 100%;
+    object-fit: contain;
+  }
+
+  /* Grids grow with the sheet instead of holding the feed's fixed heights, so
+     the tiles stay close to square rather than turning into wide strips. */
+  .shell.post-page .post-featured .media-mosaic.two,
+  .shell.post-page .post-featured .media-mosaic.three {
+    height: min(70vh, 52vw);
+  }
+
+  .shell.post-page .post-featured .media-mosaic.four,
+  .shell.post-page .post-featured .media-mosaic.stack {
+    height: min(78vh, 62vw);
+  }
+
+  .shell.post-page .post-featured .media-mosaic.mixed {
+    height: min(82vh, 66vw);
+  }
+}
+
+.shell.post-page .feed-skeleton,
+.shell.post-page .feed-empty {
+  max-width: 760px;
+  margin-inline: auto;
+}
+
 @media (max-width: 768px) {
   .media-mosaic.stack {
     height: 280px;

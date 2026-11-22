@@ -151,6 +151,12 @@ ok('82: the close button dismisses the lightbox', await page.evaluate(() => !doc
 
 await page.evaluate(() => document.querySelector('.profile-cover-open')?.click());
 await page.waitForSelector('.lightbox', { timeout: 5000 }).catch(() => {});
+// A lightbox measured before its image decodes is a zero-width box, which reads
+// as a layout bug rather than a slow CDN.
+await page.waitForFunction(() => {
+  const img = document.querySelector('.lightbox .lightbox-img');
+  return !!img && img.complete && img.naturalWidth > 0;
+}, { timeout: 12000 }).catch(() => {});
 const coverBox = await page.evaluate(() => {
   const img = document.querySelector('.lightbox .lightbox-img');
   return {

@@ -184,6 +184,30 @@ ok('desktop: a deep-linked post hydrates by id', deepText.length > 0 && deepText
   deepText.slice(0, 60));
 await shot(d, 'intg-desktop-post-deeplink');
 
+// The post page is a sheet the width of the screen, not a card floating on a
+// canvas: a band of page colour beside it is what the review called "the side
+// white lines". Only the words keep a measure.
+const bleed = await d.evaluate(() => {
+  const box = sel => { const el = document.querySelector(sel); if (!el) return null; const r = el.getBoundingClientRect(); return { x: Math.round(r.x), w: Math.round(r.width) }; };
+  const shell = document.querySelector('.shell');
+  return {
+    vw: window.innerWidth,
+    shell: box('.shell'), shellPadRight: getComputedStyle(shell).paddingRight,
+    main: box('.main'),
+    mosaic: box('.media-mosaic'),
+    caption: box('.post-caption')
+  };
+});
+ok('desktop: the post sheet runs edge to edge with no page colour beside it',
+  bleed.shell?.x === 0 && bleed.shell?.w === bleed.vw && bleed.main?.w === bleed.vw && bleed.shellPadRight === '0px',
+  JSON.stringify(bleed));
+ok('desktop: post media reaches both edges of the screen',
+  !bleed.mosaic || (bleed.mosaic.x === 0 && bleed.mosaic.w === bleed.vw),
+  JSON.stringify(bleed.mosaic));
+ok('desktop: the caption keeps a readable measure inside the full-width sheet',
+  !bleed.caption || (bleed.caption.w <= 800 && bleed.caption.x > 0),
+  JSON.stringify(bleed.caption));
+
 // -------------------------------------------------------------- comments ------
 const marker = `live-${Date.now().toString(36)}`;
 await setNative(d, '.comments-compose input[name="comment"]', marker);

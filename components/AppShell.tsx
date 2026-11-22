@@ -22,6 +22,7 @@ export default function AppShell({ children }: AppShellProps) {
   const pathname = usePathname();
   const router = useRouter();
   const focusedPage = pathname.startsWith('/post/') || pathname === '/explore' || pathname === '/create';
+  const postPage = pathname.startsWith('/post/');
   const inChat = /^\/messages\/[^/]+/.test(pathname);
   const profilePage = pathname.startsWith('/u/');
   // Only the feed is a column of cards on the gray canvas; every other screen
@@ -48,7 +49,7 @@ export default function AppShell({ children }: AppShellProps) {
   if (!mounted) return null;
 
   return (
-    <div className={`shell ${focusedPage ? 'focused-page' : ''} ${inChat ? 'chat-page' : ''} ${feedPage ? 'feed-page' : ''} ${messengerPage ? 'messenger-page' : ''} ${marketPage ? 'market-page' : ''}`}>
+    <div className={`shell ${focusedPage ? 'focused-page' : ''} ${postPage ? 'post-page' : ''} ${inChat ? 'chat-page' : ''} ${feedPage ? 'feed-page' : ''} ${messengerPage ? 'messenger-page' : ''} ${marketPage ? 'market-page' : ''}`}>
       {!focusedPage && <TopBar />}
       <NavRail />
       <main className="main">

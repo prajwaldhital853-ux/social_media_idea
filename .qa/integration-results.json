@@ -33,7 +33,7 @@
     {
       "name": "desktop: the oldest-first cursor walks the feed backwards",
       "pass": true,
-      "detail": "oldest head 2026-07-24T08:50:07.646723Z vs newest page tail 2026-11-22T04:45:17.638476Z, ascending true"
+      "detail": "oldest head 2026-07-24T08:50:07.646723Z vs newest page tail 2026-11-22T05:37:47.506803Z, ascending true"
     },
     {
       "name": "desktop: a deep-linked post hydrates by id",
@@ -43,7 +43,7 @@
     {
       "name": "desktop: a comment is written to /api/comments/ and rendered from it",
       "pass": true,
-      "detail": "{\"id\":\"14490\",\"text\":true}"
+      "detail": "{\"id\":\"14494\",\"text\":true}"
     },
     {
       "name": "desktop: the comment survives a server-side read back",
@@ -58,17 +58,17 @@
     {
       "name": "desktop: sorting by oldest reads the ascending page",
       "pass": true,
-      "detail": "screen Sita Karkilive-mwqgmjaa20h agoReplyDelet vs live-mwqgmjaa"
+      "detail": "screen Sita Karkilive-mwqgmjaa21h agoReplyDelet vs live-mwqgmjaa"
     },
     {
       "name": "desktop: the marketplace grid opens on the page the server chose",
       "pass": true,
-      "detail": "screen 20, api 10, drift at -1, has_more true"
+      "detail": "screen 30, api 10, drift at -1, has_more true"
     },
     {
       "name": "desktop: the marketplace grid walks its cursor",
       "pass": true,
-      "detail": "20 -> 39"
+      "detail": "30 -> 39"
     },
     {
       "name": "desktop: a deep-linked listing hydrates by id",
@@ -83,7 +83,7 @@
     {
       "name": "desktop: profile totals come from the profile row",
       "pass": true,
-      "detail": "59 Posts | 20 Followers | 3 Following vs followers=20"
+      "detail": "64 Posts | 20 Followers | 3 Following vs followers=20"
     },
     {
       "name": "desktop: the followers list pages people with a cursor",
@@ -103,7 +103,7 @@
     {
       "name": "desktop: the top bar badges match the unread counters",
       "pass": true,
-      "detail": "screen [] vs api []"
+      "detail": "screen [\"1\"] vs api [1]"
     },
     {
       "name": "desktop: a chat partner exists for the thread test",
@@ -143,7 +143,7 @@
     {
       "name": "desktop: notifications render the server page",
       "pass": true,
-      "detail": "20 rows vs page of 10"
+      "detail": "10 rows vs page of 10"
     },
     {
       "name": "desktop: saved posts come from /api/saved/posts/",

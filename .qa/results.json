@@ -18,22 +18,22 @@
     {
       "name": "desktop: Search opens fast (prefetched)",
       "pass": true,
-      "detail": "250ms"
+      "detail": "148ms"
     },
     {
       "name": "desktop: Reels opens fast (prefetched)",
       "pass": true,
-      "detail": "423ms"
+      "detail": "205ms"
     },
     {
       "name": "desktop: post opens fast (prefetched on hover)",
       "pass": true,
-      "detail": "466ms"
+      "detail": "895ms"
     },
     {
       "name": "desktop: author profile opens fast (prefetched on hover)",
       "pass": true,
-      "detail": "678ms"
+      "detail": "360ms"
     },
     {
       "name": "desktop: feed renders",
@@ -348,7 +348,7 @@
     {
       "name": "desktop: publish ring stages % and labels reel",
       "pass": true,
-      "detail": "[{\"ms\":15,\"pct\":\"12%\",\"label\":\"Publishing your reel…\"},{\"ms\":27,\"pct\":\"100%\",\"label\":\"Publishing your reel…\"}]"
+      "detail": "[{\"ms\":7,\"pct\":\"12%\",\"label\":\"Publishing your reel…\"},{\"ms\":10,\"pct\":\"100%\",\"label\":\"Publishing your reel…\"}]"
     },
     {
       "name": "desktop: publishing lands on the feed with no chooser and no overlay",
@@ -363,12 +363,12 @@
     {
       "name": "desktop: reel clip stored on device, not in localStorage",
       "pass": true,
-      "detail": "{\"kind\":\"reel\",\"blobId\":\"uqyeom0t\",\"src\":null}"
+      "detail": "{\"kind\":\"reel\",\"blobId\":\"shnw71fg\",\"src\":null}"
     },
     {
       "name": "desktop: published reel survives reload and plays",
       "pass": true,
-      "detail": "{\"src\":\"blob:http://localhost:3000/3a158876-c1f6-453c-b3c1-36b8ce396301\",\"playing\":true,\"ready\":4,\"count\":\"1 / 4\"}"
+      "detail": "{\"src\":\"blob:http://localhost:3000/552854bb-881c-48e0-9be0-153d679ce899\",\"playing\":true,\"ready\":4,\"count\":\"1 / 4\"}"
     },
     {
       "name": "desktop: textarea capped at 320px",
@@ -418,7 +418,7 @@
     {
       "name": "desktop: followers-only post published with badge, visible to owner",
       "pass": true,
-      "detail": "{\"id\":\"5hozyv9z\",\"audience\":\"followers\",\"badge\":true,\"visibleToOwner\":true}"
+      "detail": "{\"id\":\"igsd9mjd\",\"audience\":\"followers\",\"badge\":true,\"visibleToOwner\":true}"
     },
     {
       "name": "desktop: followers-only post hidden from non-follower (feed + detail)",
@@ -458,12 +458,12 @@
     {
       "name": "desktop: double-tap right seeks +10s with badge",
       "pass": true,
-      "detail": "{\"t0\":1.816462,\"t\":5.055,\"dur\":5.055,\"badge\":true,\"note\":\"short clip clamps to end / loops\"}"
+      "detail": "{\"t0\":2.091117,\"t\":5.055,\"dur\":5.055,\"badge\":true,\"note\":\"short clip clamps to end / loops\"}"
     },
     {
       "name": "desktop: double-tap left seeks -10s with badge",
       "pass": true,
-      "detail": "{\"t1\":1.033759,\"t\":0,\"dur\":5.055,\"badge\":true}"
+      "detail": "{\"t1\":1.308089,\"t\":0,\"dur\":5.055,\"badge\":true}"
     },
     {
       "name": "desktop: single tap pauses reel",
@@ -483,7 +483,7 @@
     {
       "name": "desktop: tray pick stores the chosen reel reaction",
       "pass": true,
-      "detail": "{\"newestId\":\"ho6zgulv\",\"newestKind\":\"reel\",\"mine\":[\"love\"],\"trayGone\":true,\"reacted\":true,\"art\":true,\"count\":\"1\",\"path\":\"/video\"}"
+      "detail": "{\"newestId\":\"jc3jocrt\",\"newestKind\":\"reel\",\"mine\":[\"love\"],\"trayGone\":true,\"reacted\":true,\"art\":true,\"count\":\"1\",\"path\":\"/video\"}"
     },
     {
       "name": "desktop: reel rail save toggles saved post",
@@ -503,7 +503,7 @@
     {
       "name": "desktop: wheel snaps cleanly to next reel, fully settled",
       "pass": true,
-      "detail": "{\"ms\":597,\"scrollTop\":899,\"clientHeight\":900,\"count\":\"2 / 4\"}"
+      "detail": "{\"ms\":591,\"scrollTop\":899,\"clientHeight\":900,\"count\":\"2 / 4\"}"
     },
     {
       "name": "desktop: reels nav rail navigates to Marketplace",
@@ -678,7 +678,7 @@
     {
       "name": "desktop: create listing stores + opens its own page",
       "pass": true,
-      "detail": "{\"id\":\"4bnadq1i\",\"uid\":\"u1\",\"price\":1234,\"media\":1,\"status\":\"active\",\"path\":\"/marketplace/4bnadq1i\",\"shown\":\"QA test listing\",\"sellerCard\":true}"
+      "detail": "{\"id\":\"rajl4vt9\",\"uid\":\"u1\",\"price\":1234,\"media\":1,\"status\":\"active\",\"path\":\"/marketplace/rajl4vt9\",\"shown\":\"QA test listing\",\"sellerCard\":true}"
     },
     {
       "name": "desktop: listing page shows image left, details right",
@@ -1113,7 +1113,7 @@
     {
       "name": "mobile: double-tap right seeks +10s",
       "pass": true,
-      "detail": "{\"mt0\":0.504046,\"t\":5.055,\"dur\":5.055,\"badge\":true}"
+      "detail": "{\"mt0\":5.052156,\"t\":5.055,\"dur\":5.055,\"badge\":true}"
     },
     {
       "name": "mobile: reel comment compose above keypad",
