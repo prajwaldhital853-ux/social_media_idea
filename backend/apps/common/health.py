@@ -79,3 +79,19 @@ def health(request):
     """Cheap, unauthenticated, never throttled — a client retries this to decide
     whether the API is waking up or actually broken."""
     return Response(probe())
+
+
+@api_view(['GET', 'HEAD'])
+@permission_classes([AllowAny])
+@authentication_classes([])
+@throttle_classes([])
+def ping(request):
+    """The cheapest possible yes: no query, no cache write, no disk, no clock.
+
+    Two things ask only whether a process is listening and ask it repeatedly — a
+    keep-alive cron holding a sleeping instance awake, and the browser polling
+    while it waits out a cold start. Neither should put a load on the database
+    just to hear a voice, and a cron that trips over a degraded probe would fall
+    silent and let the instance sleep anyway, so this answers 200 unconditionally.
+    """
+    return Response({'status': 'ok'})
