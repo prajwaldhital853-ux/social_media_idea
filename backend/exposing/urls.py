@@ -35,6 +35,7 @@ urlpatterns = [
     path('api/', include('apps.notifications.urls')),
     path('api/', include('apps.promotions.urls')),
     path('api/', include('apps.moderation.urls')),
+    path('api/', include('apps.adminpanel.urls')),
 ]
 
 if settings.DEBUG or settings.SERVE_MEDIA:

@@ -31,3 +31,11 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# admin console: its own app in admin/, kept out of the root project's build
+admin/node_modules/
+admin/.next/
+admin/.vercel/
+admin/out/
+# QA output: screenshots, and the cached TOTP secrets the walkthrough reuses
+admin/qa/shots/

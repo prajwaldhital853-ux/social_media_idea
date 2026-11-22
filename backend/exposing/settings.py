@@ -81,6 +81,7 @@ INSTALLED_APPS = [
     'apps.messages',
     'apps.moderation',
     'apps.promotions',
+    'apps.adminpanel',
 ]
 
 MIDDLEWARE = [

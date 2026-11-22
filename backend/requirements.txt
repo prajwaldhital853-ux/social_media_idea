@@ -13,6 +13,8 @@ whitenoise==6.9.0
 celery==5.7.0
 redis==8.1.0
 PyJWT==2.15.1
+# Admin console second factor: the TOTP secret is stored encrypted, not in the clear.
+cryptography==50.0.2
 # Realtime: daphne replaces runserver (WS + HTTP), channels routes the sockets.
 channels==4.3.2
 daphne==4.2.3
