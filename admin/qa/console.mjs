@@ -1,5 +1,6 @@
 /**
- * Contract 6.1 walkthrough, in a real browser against the real API.
+ * Contract 6.1 (who may open the console) and 6.2 (what they see first), walked
+ * through in a real browser against the real API.
  *
  * Nothing here mocks the second factor: the page is asked to enrol, the secret it
  * prints is read back out of the DOM, and a live TOTP code is computed from it and
@@ -25,6 +26,8 @@ const secrets = fs.existsSync(SECRETS) ? JSON.parse(fs.readFileSync(SECRETS, 'ut
 const PASSWORD = 'exposing-demo-1';
 const OWNER = 'sita';
 const SEAT = 'moddemo';
+/** The nine counts section 6.2 asks for, in the order it asks for them. */
+const TILES = 'new_users,posts,comments,listings,open_reports,coin_requests,promotions,storage,coins_moved';
 
 const results = [];
 const ok = (name, pass, detail = '') => {
@@ -142,7 +145,7 @@ async function signIn(page, username, label, known = null) {
     await page.type('input[autocomplete="one-time-code"]', totp(known));
   }
   await page.click('button[type="submit"]');
-  await page.waitForSelector('.codes-grid code, .me-grid, .roster, .card-error', { timeout: 40000 });
+  await page.waitForSelector('.codes-grid code, .me-grid, .roster, .card-error, .health', { timeout: 40000 });
   return secrets[username] || known;
 }
 
@@ -214,16 +217,18 @@ try {
     `${codes.length} codes, e.g. ${codes[0]}`);
 
   await dismissCodes(owner);
-  await owner.waitForSelector('.roster, .panel.empty', { timeout: 40000 });
-  ok('saving the codes lands on Staff and access',
-    new URL(owner.url()).pathname === '/access', owner.url());
+  await owner.waitForSelector('.tile, .roster, .panel.empty', { timeout: 40000 });
+  ok('saving the codes lands on the dashboard, which the seat is allowed to open',
+    new URL(owner.url()).pathname === '/overview', owner.url());
   const meter = await text(owner, '.window-meter');
   ok('the top bar counts the 30-minute window down', /\d+ min left/.test(meter), meter);
   const nav = await many(owner, '.side-item-label');
-  ok('a Client seat sees both console entries',
-    nav.includes('Staff and access') && nav.includes('My seat'), nav.join(', '));
+  ok('a Client seat sees every console entry',
+    nav.includes('Staff and access') && nav.includes('My seat') && nav.includes('Dashboard'), nav.join(', '));
 
   // ── 3. appoint a Moderator, then move two screens ──────────────────────────
+  await owner.goto(`${BASE}/access`, { waitUntil: 'domcontentloaded' });
+  await owner.waitForSelector('.search input', { timeout: 40000 });
   await clickText(owner, '.console-head-right button', 'Grant a seat');
   await owner.waitForSelector('.grant', { timeout: 20000 });
   await owner.type('.grant input', SEAT);
@@ -277,11 +282,14 @@ try {
     modCodes.length === 10 && !modCodes.some(code => codes.includes(code)),
     `${modCodes.length} codes`);
   await dismissCodes(mod);
-  await mod.waitForSelector('.me-grid', { timeout: 40000 });
+  await mod.waitForSelector('.tile, .me-grid', { timeout: 40000 });
   const modNav = await many(mod, '.side-item-label');
+  ok('a Moderator is dropped on the dashboard and never sees Staff and access',
+    new URL(mod.url()).pathname === '/overview' && !modNav.includes('Staff and access'), modNav.join(', '));
+
+  await mod.goto(`${BASE}/me`, { waitUntil: 'domcontentloaded' });
+  await mod.waitForSelector('.me-grid', { timeout: 40000 });
   await shot(mod, 'moderator-1-my-seat');
-  ok('a Moderator is dropped on My seat and never sees Staff and access',
-    new URL(mod.url()).pathname === '/me' && !modNav.includes('Staff and access'), modNav.join(', '));
   const groups = await many(mod, '.me-group h3');
   ok('the seat lists its own screens under named groups',
     groups.length >= 2 && groups.includes('Coins and payments') && !groups.includes('Staff'),
@@ -313,12 +321,118 @@ try {
     Boolean(await mod.$('input[autocomplete="one-time-code"]')) && !(await mod.$('.qr-manual code')));
   await mod.type('input[autocomplete="one-time-code"]', totp(modSecret));
   await mod.click('button[type="submit"]');
+  await mod.waitForSelector('.tile, .me-grid', { timeout: 40000 });
+  await mod.goto(`${BASE}/me`, { waitUntil: 'domcontentloaded' });
   await mod.waitForSelector('.me-grid', { timeout: 40000 });
   ok('the code reopens the console with its screens intact',
     (await many(mod, '.me-group h3')).includes('Coins and payments'));
 
-  // ── 5. ending a seat takes the console away immediately ────────────────────
+  // ── 5. the dashboard (6.2) ─────────────────────────────────────────────────
+  // Both API answers the paint is made of are captured off the network, so every
+  // comparison below is between one screen and the one call that filled it — a
+  // second fetch would race the other agents writing to this same database.
+  const tilesLoad = owner.waitForResponse(res => /\/api\/admin\/overview\//.test(res.url()), { timeout: 40000 });
+  const promoLoad = owner.waitForResponse(res => /\/api\/admin\/analytics\/promotions\//.test(res.url()), { timeout: 40000 });
   await owner.bringToFront();
+  await owner.goto(`${BASE}/`, { waitUntil: 'domcontentloaded' });
+  const dash = await (await tilesLoad).json();
+  const promos = await (await promoLoad).json();
+  await owner.waitForSelector('.tile', { timeout: 40000 });
+  await shot(owner, 'owner-8-dashboard');
+
+  const ids = await owner.$$eval('.tile-grid .tile', nodes => nodes.map(node => node.dataset.tile));
+  ok('the fold carries the nine counts the contract names, in its order',
+    ids.join(',') === TILES, ids.join(', '));
+
+  const figure = async id => Number((await text(owner, `.tile[data-tile="${id}"] .tile-number`)).replace(/[^\d]/g, ''));
+  const rates = dash.tiles.filter(tile => tile.kind === 'rate');
+  const counted = [];
+  for (const tile of rates) {
+    if (Number(await figure(tile.id)) !== tile.today) counted.push(tile.label);
+  }
+  ok('every trend card shows the number its own call counted',
+    counted.length === 0, counted.length ? `${counted.join(', ')} disagree` : `${rates.length} cards, e.g. ${rates[0].today} posts today`);
+
+  const sparks = await owner.$$eval('.tile .spark polyline', nodes => nodes
+    .map(node => node.getAttribute('points').trim().split(/\s+/).length));
+  ok('each trend draws a gap-free fourteen-day line',
+    sparks.length === 5 && sparks.every(points => points === 14), `${sparks.join(', ')} points`);
+
+  const queue = dash.tiles.find(tile => tile.id === 'open_reports');
+  const split = await owner.$$eval('.tile[data-tile="open_reports"] .chip', nodes => nodes
+    .map(node => Number(node.textContent.match(/\d+/)[0]))
+    .reduce((sum, count) => sum + count, 0));
+  ok('the report card adds up: its kind chips sum to the number it says is waiting',
+    split === queue.value && split > 0, `${queue.value} open — ${(await text(owner, '.tile[data-tile="open_reports"] .chips')).replace(/\s+/g, ' ')}`);
+  const coins = dash.tiles.find(tile => tile.id === 'coins_moved');
+  const purse = dash.tiles.find(tile => tile.id === 'coin_requests');
+  ok('coins sold, coins spent and the proofs held up are all on the screen',
+    coins.spent_today >= 0 && purse.collected_npr >= 0 && /NPR [\d,]+/.test(await text(owner, '.tile[data-tile="coin_requests"] .tile-split')),
+    `${purse.sold_today} sold today, ${(await text(owner, '.tile[data-tile="coin_requests"] .tile-split')).replace(/\s+/g, ' ')}`);
+
+  const stored = dash.tiles.find(tile => tile.id === 'storage');
+  ok('storage used is measured from the upload directory, and says so',
+    stored.state === 'unknown' || (stored.bytes > 0 && /\s(B|KB|MB|GB|TB)$/.test(await text(owner, '.tile[data-tile="storage"] .tile-number'))),
+    `${stored.state}: ${await text(owner, '.tile[data-tile="storage"] .tile-number')} in ${stored.files} files`);
+
+  const healthIds = dash.health.checks.map(check => check.id);
+  const stated = dash.health.checks.every(check => check.detail.length > 12);
+  const headline = await text(owner, '.health-summary b');
+  ok('system health answers each part separately, in words',
+    healthIds.length >= 5 && stated && (await many(owner, '.health-item em')).length === healthIds.length,
+    `“${headline}” — ${healthIds.join(', ')}`);
+
+  const raised = dash.alerts.recent.filter(row => row.href);
+  const dead = await owner.evaluate(() => ({
+    tiles: [...document.querySelectorAll('.tile-link')].map(a => a.getAttribute('href')),
+    alerts: [...document.querySelectorAll('.alert-go')].map(a => a.getAttribute('href')),
+    named: [...document.querySelectorAll('.alert-here')].map(node => node.textContent.trim()),
+  }));
+  ok('an alert whose screen has not been built yet is named, not linked to a 404',
+    dead.alerts.length === 0 && dead.tiles.length === 0 && dead.named.length === raised.length,
+    `${dash.alerts.recent.length} alerts, ${dash.alerts.counts.open} open, named: ${dead.named.join(', ') || 'none'}`);
+  const pills = await many(owner, '.alert .pill');
+  ok('the alert feed carries its severity and status on every row',
+    pills.length === dash.alerts.recent.length
+      && (await owner.$$('.alert .alert-dot')).length === dash.alerts.recent.length,
+    pills.join(', '));
+
+  await owner.waitForFunction(() => document.querySelector('.campaigns')
+    || document.querySelector('.performance .empty-note'), { timeout: 40000 });
+  await owner.$eval('.performance', node => node.scrollIntoView());
+  await new Promise(resolve => setTimeout(resolve, 400));
+  await shot(owner, 'owner-9-campaigns');
+  const scored = await owner.$$eval('.campaigns thead th', nodes => nodes.slice(1, -1).map(node => node.textContent.trim()));
+  ok('campaign results carry every metric the contract lists',
+    scored.length === promos.metrics.length && scored.filter(cell => cell.includes('*')).length === 2,
+    scored.join(' | '));
+  const blanks = await owner.$$eval('.campaigns tbody td.is-dim', nodes => [...new Set(nodes.map(node => node.dataset.metric))]);
+  ok('the two metrics with no event behind them are left blank, not zeroed',
+    blanks.length === 2 && blanks.includes('profile_visits') && blanks.includes('listing_messages'),
+    `${blanks.join(', ')} across ${promos.shown} campaigns`);
+  const told = await text(owner, '.performance .panel-foot');
+  ok('and the screen says which ones and why under the table',
+    told.includes('not measured yet') && told.includes('profile visits') && told.includes('listing messages'),
+    told.slice(0, 120));
+
+  const recount = owner.waitForResponse(res => /\/api\/admin\/overview\/\?refresh=1/.test(res.url()), { timeout: 40000 });
+  await clickText(owner, '.console-head-right button', 'Re-count');
+  const again = await recount;
+  ok('Re-count re-measures the disk rather than reusing the cached figure',
+    again.status() === 200, `HTTP ${again.status()}`);
+
+  await mod.goto(`${BASE}/overview`, { waitUntil: 'domcontentloaded' });
+  await mod.waitForSelector('.tile', { timeout: 40000 });
+  const modTiles = await mod.$$eval('.tile-grid .tile', nodes => nodes.map(node => node.dataset.tile));
+  const modGate = await statusOf(mod, '/api/admin/overview/');
+  ok('a Moderator gets the same dashboard, because the role ships with it',
+    modGate.status === 200 && modTiles.join(',') === TILES, `HTTP ${modGate.status}, ${modTiles.length} cards`);
+  await shot(mod, 'moderator-5-dashboard');
+
+  // ── 6. ending a seat takes the console away immediately ────────────────────
+  await owner.bringToFront();
+  await owner.goto(`${BASE}/access`, { waitUntil: 'domcontentloaded' });
+  await owner.waitForSelector('.search input', { timeout: 40000 });
   await clearAndType(owner, '.search input', SEAT);
   await owner.waitForFunction(() => document.querySelectorAll('.seat').length === 1, { timeout: 40000 });
   await openSeat(owner, SEAT);
@@ -358,7 +472,7 @@ try {
     console_errors: [...new Set(errors)].slice(0, 20),
   };
   fs.mkdirSync(OUT, { recursive: true });
-  fs.writeFileSync(path.join(OUT, 'admin-6-1-results.json'), JSON.stringify(summary, null, 2));
+  fs.writeFileSync(path.join(OUT, 'admin-console-results.json'), JSON.stringify(summary, null, 2));
   console.log(`\n${summary.passed}/${summary.total} checks passed`
     + `\nfailed: ${summary.failed.join(' | ') || 'none'}`
     + `\nconsole errors: ${summary.console_errors.join(' | ') || 'none'}`);

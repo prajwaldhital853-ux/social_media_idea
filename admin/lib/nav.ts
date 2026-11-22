@@ -23,6 +23,13 @@ export interface NavGroup {
  */
 export const NAV: NavGroup[] = [
   {
+    id: 'numbers',
+    label: 'Numbers',
+    items: [
+      { href: '/overview', label: 'Dashboard', icon: 'chart', permission: 'overview' },
+    ],
+  },
+  {
     id: 'console',
     label: 'Console',
     items: [
@@ -45,4 +52,14 @@ export function requires(pathname: string): string | null {
     }
   }
   return null;
+}
+
+/**
+ * Whether a route an alert points at exists yet. The dashboard links an alert to
+ * the screen that clears it, but that screen may be next week's section — so a
+ * route that has not shipped is named in the alert instead of linked to a 404.
+ */
+export function shipped(href: string): boolean {
+  const pathname = (href.split('?')[0] || '/').replace(/\/$/, '') || '/';
+  return NAV.some(group => group.items.some(item => pathname === item.href));
 }

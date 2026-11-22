@@ -29,4 +29,11 @@ export const IC = {
   qr: svg(<><rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><path d="M14 14h2v2h-2zM18 18h2v2h-2z"/></>),
   search: svg(<><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/></>),
   chart: svg(<><path d="M4 19V5"/><path d="M4 19h16"/><path d="M8 15l4-6 3 4 4-7"/></>),
+  coin: svg(<><circle cx="12" cy="12" r="8"/><path d="M12 8v8M9.5 10h4a1.8 1.8 0 010 3.6h-3a1.8 1.8 0 000 3.6h4"/></>),
+  flag: svg(<><path d="M6 21V4"/><path d="M6 5h11l-2 3.5L17 12H6"/></>),
+  store: svg(<><path d="M4 9l1.5-4h13L20 9"/><path d="M5 9h14v10a1 1 0 01-1 1H6a1 1 0 01-1-1V9z"/><path d="M9.5 20v-6h5v6"/></>),
+  pulse: svg(<path d="M3 12h4l2.5-6 3 12 2.5-6h6"/>),
+  chat: svg(<path d="M4 5h16v11H9l-5 4V5z"/>),
+  disk: svg(<><ellipse cx="12" cy="6" rx="7" ry="2.8"/><path d="M5 6v12c0 1.6 3.1 2.8 7 2.8s7-1.2 7-2.8V6"/><path d="M5 12c0 1.6 3.1 2.8 7 2.8s7-1.2 7-2.8"/></>),
+  go: svg(<><path d="M5 12h12"/><path d="M12 6l6 6-6 6"/></>),
 };
