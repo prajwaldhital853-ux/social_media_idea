@@ -7,6 +7,7 @@ import { useApp } from '@/lib/AppContext';
 import { postsFragment, useList } from '@/lib/lists';
 import { useWindowed } from '@/lib/useWindowed';
 import { canSeePost, privateIds } from '@/lib/utils';
+import { useBackClose } from '@/lib/useBackClose';
 import { Post } from '@/lib/types';
 
 export default function Feed() {
@@ -53,6 +54,14 @@ export default function Feed() {
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
+
+  // Phone Back on a feed that is scrolled down is not an exit and not a trip to
+  // the profile: it lifts the reader to the top, re-pulls the newest rows, and
+  // leaves them on Home. Scrolling back up by hand pops the same entry.
+  useBackClose(lifted, () => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    if (serverMode) void feed.reload();
+  });
 
   return (
     <>

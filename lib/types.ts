@@ -64,6 +64,10 @@ export interface Post {
   /** Server-side aggregates: present in API mode, derived from `reactions` in demo mode. */
   likes?: number;
   comments?: number;
+  /** How many times the link has been handed to someone else. */
+  shares?: number;
+  /** How many times a reel was watched. Reels are counted, photos are not. */
+  views?: number;
   /** {kind: count} in API mode; undefined in demo mode (count the reaction rows instead). */
   reactionKinds?: Record<string, number>;
   promoted?: boolean;
@@ -90,6 +94,8 @@ export interface Comment {
   status: 'live' | 'removed';
   likes?: number;
   replies?: number;
+  /** True when the commenter owns the post — the server decides it, replies included. */
+  isPostAuthor?: boolean;
 }
 
 export interface Follow {
@@ -267,6 +273,8 @@ export interface Database {
   posts: Post[];
   comments: Comment[];
   follows: Follow[];
+  /** User ids the signed-in account has blocked. */
+  blocks?: string[];
   reactions: Reaction[];
   saves: Save[];
   listingSaves?: ListingSave[];

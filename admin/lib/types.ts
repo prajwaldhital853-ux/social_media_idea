@@ -204,3 +204,167 @@ export interface PromotionAnalytics {
   totals: Record<string, number>;
   shown: number;
 }
+
+/** --- contract 6.3: content and marketplace review -------------------------- */
+
+export type ContentKind = 'post' | 'comment' | 'listing' | 'user';
+
+/** The five verbs a decision can take. Which ones a target offers depends on its state. */
+export type Decision = 'dismiss' | 'remove' | 'warn' | 'release' | 'restore';
+
+export interface PersonRef {
+  id: number;
+  username: string;
+  name: string;
+  avatar_url: string;
+  verified?: boolean;
+}
+
+/** The thing a decision is made about, in the words the server sends for each kind. */
+export interface ContentPreview {
+  kind: ContentKind;
+  id: number;
+  state: string;
+  text?: string;
+  title?: string;
+  price?: string;
+  currency?: string;
+  category?: string | null;
+  condition?: string;
+  location?: string;
+  image?: string;
+  audience?: string;
+  media?: { kind: string; url: string; duration: number | null }[];
+  likes?: number;
+  comments?: number;
+  author: PersonRef | null;
+  created_at: string;
+  on_post?: { id: number; text: string; author: string; state: string };
+  email?: string | null;
+  is_staff?: boolean;
+  suspended_until?: string | null;
+}
+
+/** Every report sitting on one target, so one click can speak for the whole pile. */
+export interface Pile {
+  reports: number;
+  open: number;
+  reporters: number;
+  reasons: { reason: string; n: number }[];
+}
+
+export interface QueueRow {
+  id: number;
+  target: string;
+  target_type: ContentKind;
+  target_id: string;
+  reason: string;
+  details: string;
+  status: string;
+  created_at: string;
+  resolved_at: string | null;
+  reporter: PersonRef | null;
+  missing: boolean;
+  content: ContentPreview | null;
+  pile: Pile;
+  matches: string[];
+  campaigns: number;
+  permission: string | null;
+  actions: Decision[];
+}
+
+export interface QueueFacets {
+  open: number;
+  by_target: Partial<Record<ContentKind, number>>;
+  auto_hide_at: number;
+}
+
+export interface Page<T> {
+  results: T[];
+  next_cursor: string | null;
+  has_more: boolean;
+}
+
+export interface QueuePage extends Page<QueueRow> {
+  facets: QueueFacets;
+}
+
+export interface CampaignStop {
+  id: number;
+  owner: string;
+  package: string;
+  budget: string;
+  refunded: string;
+}
+
+export interface NoticeRow {
+  id: number;
+  target: string;
+  target_type: ContentKind;
+  target_id: string;
+  about: string;
+  text: string;
+  reason: string;
+  actor: string | null;
+  created_at: string;
+  is_live: boolean;
+  withdrawn_at: string | null;
+}
+
+/** What the server did in answer to one verb — the sentence the screen shows back. */
+export interface Outcome {
+  action: Decision;
+  kind: ContentKind;
+  target: string;
+  content: ContentPreview;
+  reports_closed: number;
+  campaigns: CampaignStop[];
+  refunded: string;
+  notice: NoticeRow | null;
+  detail: string;
+  report?: number;
+  pile?: Pile;
+  facets?: QueueFacets;
+}
+
+export interface ShelfRow {
+  target: string;
+  content: ContentPreview;
+  matches: string[];
+  campaigns: number;
+  pile: Pile;
+  permission: string | null;
+  actions: Decision[];
+  decision: { action: string; actor: string | null; at: string; detail: string } | null;
+}
+
+export interface ShelfPage extends Page<ShelfRow> {
+  counts: Record<string, number>;
+  type: ContentKind;
+}
+
+export interface TermRow {
+  id: number;
+  kind: 'word' | 'item';
+  text: string;
+  note: string;
+  is_active: boolean;
+  created_at: string;
+  created_by: string | null;
+}
+
+export interface CategoryRow {
+  id: number;
+  name: string;
+  is_active: boolean;
+  sort_order: number;
+  listings: number | null;
+}
+
+export interface PolicyPage {
+  terms: TermRow[];
+  categories: CategoryRow[];
+  auto_hide_at: number;
+}
+
+export interface NoticePage extends Page<NoticeRow> {}

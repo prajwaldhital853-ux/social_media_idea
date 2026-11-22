@@ -22,15 +22,22 @@ class CommentSerializer(serializers.ModelSerializer):
     author_verified = serializers.BooleanField(source='author.profile.verified', read_only=True)
     reply_count = serializers.SerializerMethodField()
     my_reaction = serializers.SerializerMethodField()
+    is_post_author = serializers.SerializerMethodField()
 
     class Meta:
         model = Comment
         fields = [
             'id', 'post', 'author', 'author_username', 'author_name', 'author_avatar_url', 'author_verified',
-            'parent', 'media_index', 'text', 'status', 'like_count', 'reply_count', 'my_reaction', 'created_at',
+            'parent', 'media_index', 'text', 'status', 'like_count', 'reply_count', 'my_reaction',
+            'is_post_author', 'created_at',
         ]
         read_only_fields = ['id', 'author', 'status', 'like_count', 'created_at']
         list_serializer_class = CommentListSerializer
+
+    def get_is_post_author(self, obj):
+        # The badge follows the person who owns the post, and a reply inherits it:
+        # an author answering under their own post is still the author.
+        return obj.author_id == obj.post.author_id
 
     def get_reply_count(self, obj):
         value = getattr(obj, 'annotated_reply_count', None)

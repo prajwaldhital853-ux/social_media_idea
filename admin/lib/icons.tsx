@@ -1,8 +1,8 @@
 import { ReactNode } from 'react';
 
 /**
- * Twelve hand-drawn paths, no icon package: the console is its own deploy, and a
- * dependency tree for twelve glyphs is not worth the cold start.
+ * Hand-drawn paths, no icon package: the console is its own deploy, and a
+ * dependency tree for a dozen glyphs is not worth the cold start.
  */
 function svg(children: ReactNode) {
   return (
@@ -36,4 +36,7 @@ export const IC = {
   chat: svg(<path d="M4 5h16v11H9l-5 4V5z"/>),
   disk: svg(<><ellipse cx="12" cy="6" rx="7" ry="2.8"/><path d="M5 6v12c0 1.6 3.1 2.8 7 2.8s7-1.2 7-2.8V6"/><path d="M5 12c0 1.6 3.1 2.8 7 2.8s7-1.2 7-2.8"/></>),
   go: svg(<><path d="M5 12h12"/><path d="M12 6l6 6-6 6"/></>),
+  shelf: svg(<><rect x="4" y="4" width="16" height="7" rx="1.5"/><rect x="4" y="13" width="16" height="7" rx="1.5"/><path d="M8 7.5h.01M8 16.5h.01"/></>),
+  rule: svg(<><path d="M5 5h14M5 12h14M5 19h9"/><circle cx="17.5" cy="19" r="1.6"/></>),
+  mega: svg(<><path d="M4 10v4l10 4V6L4 10z"/><path d="M14 8.5a3.5 3.5 0 010 7"/><path d="M6 14v4a1.5 1.5 0 003 0v-2.6"/></>),
 };

@@ -113,3 +113,35 @@ class CommentConcurrencyTests(TransactionTestCase):
         self.post.refresh_from_db()
         self.assertEqual(self.post.comment_count, 20)
         self.assertEqual(Comment.objects.filter(post=self.post).count(), 20)
+
+class CommentAuthorFlagTests(TestCase):
+    """The red Author badge is decided by the server: the client only has the
+    comment rows, and a reply carries no reference back to the post's owner."""
+
+    def setUp(self):
+        cache.clear()
+        self.author = make_user('badgeauthor')
+        self.fan = make_user('badgefan')
+        self.post = Post.objects.create(author=self.author, text='mine', audience='public')
+        self.ca = auth_client(self.author)
+        self.cc = auth_client(self.fan)
+
+    def _flags(self):
+        rows = APIClient().get(f'/api/comments/?post={self.post.pk}').data['results']
+        return {row['author_username']: row['is_post_author'] for row in rows}
+
+    def test_the_author_flag_marks_their_own_comment(self):
+        self.cc.post('/api/comments/', {'post': self.post.pk, 'text': 'a fan says'}, format='json')
+        self.ca.post('/api/comments/', {'post': self.post.pk, 'text': 'the author says'}, format='json')
+        self.assertEqual(self._flags(), {'badgeauthor': True, 'badgefan': False})
+
+    def test_a_reply_by_the_author_is_still_flagged(self):
+        root = self.cc.post('/api/comments/', {'post': self.post.pk, 'text': 'question'}, format='json').data['id']
+        self.ca.post('/api/comments/', {'post': self.post.pk, 'text': 'answer', 'parent': root}, format='json')
+        replies = APIClient().get(f'/api/comments/?parent={root}').data['results']
+        self.assertEqual([(r['author_username'], r['is_post_author']) for r in replies],
+                         [('badgeauthor', True)])
+
+    def test_a_stranger_never_earns_the_flag_on_someone_elses_post(self):
+        self.cc.post('/api/comments/', {'post': self.post.pk, 'text': 'hi'}, format='json')
+        self.assertFalse(self._flags()['badgefan'])

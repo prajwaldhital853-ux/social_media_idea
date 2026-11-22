@@ -53,6 +53,8 @@ export default function Comments({ postId, onClose, mediaIndex }: { postId: stri
   const isMedia = mediaIndex !== undefined;
   const targetType = isMedia ? 'media' as const : 'post' as const;
   const targetId = isMedia ? `${postId}#m${mediaIndex}` : postId;
+  // Demo mode has no server flag, so the cached post answers who owns it.
+  const postAuthorId = db.posts.find(p => p.id === postId)?.uid;
 
   // Top-level comments are a keyset page of their own; replies live under their
   // parent so one long thread cannot push the rest of the stream off the screen.
@@ -222,13 +224,16 @@ export default function Comments({ postId, onClose, mediaIndex }: { postId: stri
     const shownReplies = replies.slice(0, limit);
     const parent = isReply ? allComments.find(c => c.id === comment.parentId) : undefined;
     const replyToName = parent ? db.users.find(u => u.id === parent.uid)?.name : undefined;
+    // A reply inherits the flag: an author answering under their own post is
+    // still the author, and the server already worked that out per row.
+    const isAuthor = comment.isPostAuthor ?? (postAuthorId !== undefined ? comment.uid === postAuthorId : false);
 
     return (
       <div key={comment.id} data-comment={comment.id} className={`comments-row ${isReply ? 'reply' : ''}`}>
         <Avatar user={author} size={isReply ? 26 : 30} />
         <div className="comments-content">
           <div className="comment-bubble">
-            <div><b>{author.name}</b>{author.verified && <VerifiedBadge size={13} />}</div>
+            <div><b>{author.name}</b>{author.verified && <VerifiedBadge size={13} />}{isAuthor && <span className="comment-author-badge">{t('author')}</span>}</div>
             <p><CommentText text={comment.text} replyToName={replyToName} /></p>
             {kinds.length > 0 && (
               <span className="comment-bubble-reactions">

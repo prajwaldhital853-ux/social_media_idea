@@ -31,7 +31,7 @@ export default function UserProfilePage() {
   const { db, me, t, isFollowing, followState, toggleFollow, showToast, openComposer, serverMode, loadPerson, ready } = useApp();
   const username = String(params.username || '');
   const user = db.users.find(u => u.username.toLowerCase() === username.toLowerCase());
-  const [tab, setTab] = useState<'posts' | 'media' | 'about' | 'listings'>('posts');
+  const [tab, setTab] = useState<'posts' | 'reels' | 'photos' | 'about' | 'listings'>('posts');
   const [editing, setEditing] = useState(false);
   const [zoom, setZoom] = useState<{ src: string; caption: string } | null>(null);
   // Only the profile row knows the true totals; a paginated list holds no more
@@ -132,7 +132,9 @@ export default function UserProfilePage() {
   const countPosts = stats ? stats.posts : posts.length;
   const countFollowers = stats ? stats.followers : followers.length;
   const countFollowing = stats ? stats.following : followingList.length;
-  const tabKeys: ('posts' | 'media' | 'about' | 'listings')[] = userListings.length > 0 ? ['posts', 'media', 'listings', 'about'] : ['posts', 'media', 'about'];
+  const tabKeys: ('posts' | 'reels' | 'photos' | 'about' | 'listings')[] = userListings.length > 0
+    ? ['posts', 'reels', 'photos', 'listings', 'about']
+    : ['posts', 'reels', 'photos', 'about'];
 
   const openMedia = (postId: string, index: number, singleVideo: boolean) => {
     router.push(singleVideo ? `/video/${postId}-${index}` : `/post/${postId}/media/${index}`);
@@ -207,6 +209,11 @@ export default function UserProfilePage() {
                 </button>
               </>
             )}
+            {own && (
+              <button type="button" className="icon-btn" aria-label={t('saved')} title={t('saved')} onClick={() => router.push('/saved')}>
+                {IC.bookmark}
+              </button>
+            )}
             <button type="button" className="icon-btn" aria-label={t('share')} title={t('share')} onClick={() => void shareProfile()}>{IC.share}</button>
           </div>
 
@@ -242,7 +249,7 @@ export default function UserProfilePage() {
         <div className="tabs" role="tablist" aria-label={t('profile')}>
           {tabKeys.map(key => (
             <button key={key} type="button" role="tab" aria-selected={tab === key} className={`tab ${tab === key ? 'active' : ''}`} onClick={() => setTab(key)}>
-              {key === 'posts' ? t('postsCount') : key === 'media' ? t('media') : key === 'listings' ? t('listings') : t('about')}
+              {key === 'posts' ? t('postsCount') : key === 'reels' ? t('reels') : key === 'photos' ? t('photos') : key === 'listings' ? t('listings') : t('about')}
             </button>
           ))}
         </div>
@@ -295,27 +302,42 @@ export default function UserProfilePage() {
           )
         )}
 
-        {tab === 'media' && (
-          mediaItems.length === 0 ? (
+        {tab === 'reels' && (
+          mediaItems.filter(({ m }) => m.type === 'video').length === 0 ? (
             <p className="feed-empty">{t('noPosts')}</p>
           ) : (
             <div className="profile-media-grid">
-              {mediaItems.map(({ m, index, post }) => (
+              {mediaItems.filter(({ m }) => m.type === 'video').map(({ m, index, post }) => (
+                <button
+                  type="button"
+                  className="profile-media-cell reel-cell"
+                  key={`${post.id}-${index}`}
+                  aria-label={`${t('reels')} by ${user.name}`}
+                  onClick={() => openMedia(post.id, index, post.media.length === 1)}
+                >
+                  <video src={m.src} muted preload="metadata" playsInline />
+                  <span className="profile-media-play">{IC.video}</span>
+                  {(post.views ?? 0) > 0 && <span className="profile-cell-views">{compact(post.views ?? 0)}</span>}
+                </button>
+              ))}
+            </div>
+          )
+        )}
+
+        {tab === 'photos' && (
+          mediaItems.filter(({ m }) => m.type === 'image').length === 0 ? (
+            <p className="feed-empty">{t('noPosts')}</p>
+          ) : (
+            <div className="profile-media-grid photo-grid">
+              {mediaItems.filter(({ m }) => m.type === 'image').map(({ m, index, post }) => (
                 <button
                   type="button"
                   className="profile-media-cell"
                   key={`${post.id}-${index}`}
-                  aria-label={`${m.type} by ${user.name}`}
-                  onClick={() => openMedia(post.id, index, post.media.length === 1 && m.type === 'video')}
+                  aria-label={`${t('photos')} by ${user.name}`}
+                  onClick={() => openMedia(post.id, index, false)}
                 >
-                  {m.type === 'video' ? (
-                    <>
-                      <video src={m.src} muted preload="metadata" playsInline />
-                      <span className="profile-media-play">{IC.video}</span>
-                    </>
-                  ) : (
-                    <img src={m.src || m.gen} alt="" loading="lazy" decoding="async" />
-                  )}
+                  <img src={m.src || m.gen} alt="" loading="lazy" decoding="async" />
                 </button>
               ))}
             </div>

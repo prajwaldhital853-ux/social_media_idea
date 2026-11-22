@@ -1,0 +1,355 @@
+"""Contract 6.3: what one decision does to a post, a listing, a campaign and a person.
+
+The site can already hide a post that enough people reported and take content
+down one report at a time from an endpoint gated on Django's `is_staff` flag. A
+console a client pays for needs three more things, and they are all here:
+
+* a reason that is recorded, shown to the author, and readable afterwards;
+* one decision that clears the whole pile on a target instead of ten clicks;
+* the money side — a campaign whose content moderation removed stops, and the
+  days it never got to run are handed back through the ledger it came from.
+
+Nothing in the main apps is edited to make that happen: the content rows move on
+their own `status` column, the campaigns on their own `ends_at`, and every move
+is written to the same audit log the rest of the console uses.
+"""
+
+from decimal import Decimal
+
+from django.db.models import Count, Q
+from django.utils import timezone
+
+from apps.accounts.models import User
+from apps.comments.models import Comment
+from apps.common.api import person
+from apps.marketplace.models import Listing
+from apps.moderation.models import Report
+from apps.notifications.services import notify
+from apps.posts.models import Post
+from apps.promotions.models import Promotion
+from apps.wallet.models import Transaction as CoinMove, Wallet, apply
+
+from .journal import record
+from .models import PublicNotice
+
+OPEN_STATES = (Report.Status.OPEN, Report.Status.REVIEWING)
+KINDS = ('post', 'comment', 'listing', 'user')
+ACTIONS = ('dismiss', 'remove', 'warn', 'release', 'restore')
+
+MODEL = {'post': Post, 'comment': Comment, 'listing': Listing, 'user': User}
+# Each model calls its own "visible again" state something different.
+LIVE_STATE = {'post': Post.Status.LIVE, 'comment': Comment.Status.LIVE, 'listing': Listing.Status.ACTIVE}
+REMOVED_STATE = {'post': Post.Status.REMOVED, 'comment': Comment.Status.REMOVED, 'listing': Listing.Status.REMOVED}
+HIDDEN_STATE = {'post': Post.Status.HIDDEN, 'comment': Comment.Status.HIDDEN}
+AUDIT = {
+    'dismiss': 'dismiss_reports',
+    'remove': 'remove_content',
+    'warn': 'public_notice',
+    'release': 'release_content',
+    'restore': 'restore_content',
+}
+# Which seat has to hold the pen. Reading the queue is one key; deciding a
+# listing is marketplace work and deciding a post is content work, so a seat
+# hired for one of them is not handed the other.
+KEY_BY_KIND = {'post': 'content', 'comment': 'content', 'listing': 'listings', 'user': 'reports'}
+
+
+def actions_for(kind, state):
+    """Which of the five verbs this target is actually standing in.
+
+    A row that offers "release" for a live post is a button that can only fail,
+    so the current state decides the verbs — and `act()` still checks them again,
+    because the screen the moderator is looking at may be a minute old.
+    """
+    if kind == 'user':
+        return ['dismiss', 'warn']
+    if state == HIDDEN_STATE.get(kind):
+        return ['dismiss', 'remove', 'warn', 'release']
+    if state == REMOVED_STATE[kind]:
+        return ['restore', 'warn']
+    return ['dismiss', 'remove', 'warn']
+
+
+def pk_of(target_id):
+    text = str(target_id or '').strip()
+    return int(text) if text.isdigit() else None
+
+
+def row_for(kind, target_id):
+    """The post, comment, listing or account a report points at, if it still exists."""
+    model = MODEL.get(kind)
+    pk = pk_of(target_id)
+    if model is None or pk is None:
+        return None
+    return model.objects.filter(pk=pk).first()
+
+
+def owner_for(kind, row):
+    if kind in ('post', 'comment'):
+        return row.author
+    if kind == 'listing':
+        return row.seller
+    return row
+
+
+def state_of(kind, row):
+    if kind == 'user':
+        if row.suspended_until and row.suspended_until > timezone.now():
+            return 'suspended'
+        return 'active' if row.is_active else 'deactivated'
+    return row.status
+
+
+def match(text, terms):
+    """Which blocked words appear in this content. `terms` is read once per page."""
+    haystack = ' '.join(str(text or '').split()).lower()
+    if not haystack:
+        return []
+    return sorted({term for term in terms if term and term in haystack})
+
+
+def campaigns_on(kind, target_id):
+    if kind not in ('post', 'listing'):
+        return Promotion.objects.none()
+    return Promotion.objects.filter(
+        target_type=kind, target_id=str(target_id),
+        status__in=(Promotion.Status.ACTIVE, Promotion.Status.PAUSED),
+    ).select_related('owner')
+
+
+def unspent(promo, now):
+    """The coins a timed campaign paid for and never got the chance to spend.
+
+    A campaign with no end date was bought as an open run, so nothing about
+    stopping it early is unearned; it refunds nothing and says so.
+    """
+    budget = Decimal(promo.budget or 0)
+    if budget <= 0 or promo.ends_at is None:
+        return Decimal('0')
+    span = (promo.ends_at - promo.created_at).total_seconds()
+    left = (promo.ends_at - now).total_seconds()
+    if span <= 0 or left <= 0:
+        return Decimal('0')
+    return (budget * Decimal(str(left)) / Decimal(str(span))).quantize(Decimal('1'))
+
+
+def cancel_campaigns(kind, target_id, now):
+    """Stop what is running on this content, through the same ledger it paid from."""
+    stopped = []
+    total = Decimal('0')
+    for promo in campaigns_on(kind, target_id):
+        refund = unspent(promo, now)
+        promo.status = Promotion.Status.ENDED
+        promo.ends_at = now
+        promo.save(update_fields=['status', 'ends_at'])
+        if refund > 0:
+            wallet, _ = Wallet.objects.get_or_create(user=promo.owner)
+            apply(wallet.pk, CoinMove.Kind.CREDIT, refund,
+                  f'Refund: campaign {promo.pk} stopped when moderation removed {kind}:{target_id}')
+            total += refund
+        stopped.append({
+            'id': promo.pk, 'owner': promo.owner.username, 'package': promo.package,
+            'budget': str(promo.budget), 'refunded': str(refund),
+        })
+    return stopped, total
+
+
+def close_reports(kind, target_id, status, now):
+    """Every open report on one target, closed by the same decision.
+
+    A moderator who decides a post is fine should not have to click through the
+    six people who reported it, and a post that stays down keeps attracting
+    reports that re-hide it the moment someone releases it.
+    """
+    rows = Report.objects.filter(target_type=kind, target_id=str(target_id), status__in=OPEN_STATES)
+    count = rows.update(status=status, resolved_at=now)
+    return count
+
+
+def pile(kind, target_id):
+    """What the queue needs to know about a target before anyone opens it."""
+    rows = Report.objects.filter(target_type=kind, target_id=str(target_id))
+    stats = rows.aggregate(
+        total=Count('pk'),
+        open_n=Count('pk', filter=Q(status__in=OPEN_STATES)),
+        reporters=Count('reporter', distinct=True, filter=Q(status__in=OPEN_STATES)),
+    )
+    reasons = rows.filter(status__in=OPEN_STATES).values('reason').annotate(n=Count('pk')).order_by('-n', 'reason')
+    return {
+        'reports': stats['total'],
+        'open': stats['open_n'],
+        'reporters': stats['reporters'],
+        'reasons': [{'reason': row['reason'], 'n': row['n']} for row in reasons[:4]],
+    }
+
+
+def _media(post):
+    out = []
+    for item in post.media.all()[:4]:
+        url = item.url or (item.file.url if item.file else '')
+        out.append({'kind': item.kind, 'url': url, 'duration': item.duration})
+    return out
+
+
+def preview(kind, row):
+    """The thing itself, in the words a decision is made from."""
+    if row is None:
+        return None
+    if kind == 'post':
+        return {
+            'kind': kind, 'id': row.pk, 'state': row.status, 'text': row.text[:600],
+            'author': person(row.author), 'created_at': row.created_at,
+            'audience': row.audience, 'category': row.category, 'media': _media(row),
+            'likes': row.like_count, 'comments': row.comment_count,
+        }
+    if kind == 'comment':
+        return {
+            'kind': kind, 'id': row.pk, 'state': row.status, 'text': row.text[:600],
+            'author': person(row.author), 'created_at': row.created_at,
+            'on_post': {
+                'id': row.post_id, 'text': (row.post.text or '')[:160],
+                'author': row.post.author.username, 'state': row.post.status,
+            },
+        }
+    if kind == 'listing':
+        first = row.images.first()
+        return {
+            'kind': kind, 'id': row.pk, 'state': row.status, 'title': row.title,
+            'text': row.description[:600], 'price': str(row.price), 'currency': row.currency,
+            'category': row.category, 'condition': row.condition, 'location': row.location,
+            'image': row.image_url or (first.url if first else ''),
+            'author': person(row.seller), 'created_at': row.created_at,
+        }
+    return {
+        'kind': kind, 'id': row.pk, 'state': state_of(kind, row),
+        'author': person(row), 'created_at': row.date_joined,
+        'email': row.email, 'is_staff': row.is_staff, 'suspended_until': row.suspended_until,
+    }
+
+
+def _notice(kind, row, actor, reason, text):
+    notice = PublicNotice.objects.create(
+        target_type=kind, target_id=str(row.pk), about=owner_for(kind, row),
+        text=text[:240], reason=reason[:120], actor=actor,
+    )
+    return notice_row(notice)
+
+
+def notice_row(notice):
+    return {
+        'id': notice.pk,
+        'target': f'{notice.target_type}:{notice.target_id}',
+        'target_type': notice.target_type,
+        'target_id': notice.target_id,
+        'about': notice.about.username,
+        'text': notice.text,
+        'reason': notice.reason,
+        'actor': notice.actor.username if notice.actor else None,
+        'created_at': notice.created_at,
+        'is_live': notice.is_live,
+        'withdrawn_at': notice.withdrawn_at,
+    }
+
+
+def _say(kind, row, actor, text):
+    """The private half of the same decision, in the author's bell."""
+    return notify(owner_for(kind, row), actor, 'warning', text, kind, row.pk)
+
+
+def act(kind, target_id, actor, action, reason='', notice_text=''):
+    """Apply one action to one target. Raises ValueError with the sentence to show.
+
+    `decide()` is this with a report attached; the takedown shelf calls it
+    directly, because restoring a post three weeks after the reports closed has
+    no live report to hang the decision on.
+    """
+    if action not in ACTIONS:
+        raise ValueError('Choose dismiss, remove, warn, release or restore.')
+    row = row_for(kind, target_id)
+    if row is None:
+        raise ValueError(f'That {kind} is no longer here, so there is nothing to act on.')
+    reason = str(reason or '').strip()
+    notice_text = str(notice_text or '').strip()
+    now = timezone.now()
+    out = {
+        'action': action, 'kind': kind, 'target': f'{kind}:{row.pk}',
+        'content': preview(kind, row), 'reports_closed': 0,
+        'campaigns': [], 'refunded': '0', 'notice': None, 'detail': '',
+    }
+
+    if action == 'dismiss':
+        out['reports_closed'] = close_reports(kind, row.pk, Report.Status.DISMISSED, now)
+        out['detail'] = f'Left up. {out["reports_closed"]} open report(s) closed as dismissed.'
+
+    elif action == 'remove':
+        if kind == 'user':
+            raise ValueError('An account is not taken down from this screen — suspend it from People.')
+        if not reason:
+            raise ValueError('Say why it is coming down. The author is shown this sentence.')
+        if row.status == REMOVED_STATE[kind]:
+            raise ValueError(f'That {kind} is already taken down — restore it, or leave it down.')
+        row.status = REMOVED_STATE[kind]
+        row.save(update_fields=['status'])
+        out['reports_closed'] = close_reports(kind, row.pk, Report.Status.RESOLVED, now)
+        campaigns, refunded = cancel_campaigns(kind, row.pk, now)
+        out['campaigns'], out['refunded'] = campaigns, str(refunded)
+        _say(kind, row, actor, f'Your {kind} was removed by moderation: {reason}')
+        if notice_text:
+            out['notice'] = _notice(kind, row, actor, reason, notice_text)
+        out['content']['state'] = row.status
+        out['detail'] = (
+            f'Taken down. {out["reports_closed"]} report(s) closed'
+            + (f', {len(campaigns)} campaign(s) cancelled' if campaigns else '')
+            + (f', {refunded} coins refunded' if refunded else '')
+            + (' + a public notice' if out['notice'] else '')
+            + '.'
+        )
+
+    elif action == 'warn':
+        if not notice_text:
+            raise ValueError('Write the sentence the community is shown.')
+        out['notice'] = _notice(kind, row, actor, reason, notice_text)
+        out['reports_closed'] = close_reports(kind, row.pk, Report.Status.RESOLVED, now)
+        _say(kind, row, actor, f'A public warning notice was posted about your {kind}: {notice_text}')
+        out['detail'] = (
+            f'Left up with a public notice. {out["reports_closed"]} report(s) closed as resolved.'
+        )
+
+    elif action == 'release':
+        if kind == 'user':
+            raise ValueError('An account is not released — it is suspended or it is not.')
+        if kind not in HIDDEN_STATE:
+            raise ValueError('A listing is never held pending review: it is up, or it is taken down.')
+        if row.status != HIDDEN_STATE[kind]:
+            raise ValueError('Only content hidden pending review can be released.')
+        row.status = LIVE_STATE[kind]
+        row.save(update_fields=['status'])
+        out['reports_closed'] = close_reports(kind, row.pk, Report.Status.DISMISSED, now)
+        _say(kind, row, actor, f'Your {kind} was reviewed and is back in the feed.')
+        out['detail'] = (
+            f'Back in the feed. {out["reports_closed"]} report(s) closed, so the next report '
+            'cannot re-hide it on the old pile.'
+        )
+
+    else:  # restore
+        if kind == 'user':
+            raise ValueError('An account is reinstated from People, not here.')
+        if row.status != REMOVED_STATE[kind]:
+            raise ValueError('Only something already taken down can be restored.')
+        row.status = LIVE_STATE[kind]
+        row.save(update_fields=['status'])
+        _say(kind, row, actor, f'Your {kind} was restored by moderation.')
+        out['detail'] = 'Restored. The author is told it is back.'
+
+    record(actor, AUDIT[action], f'{kind}:{row.pk}', reason or out['detail'])
+    # The preview is rebuilt from the row as it now stands, so the console can
+    # paint the decision it just made without a second read of the queue.
+    out['content'] = preview(kind, row)
+    return out
+
+
+def decide(report, actor, action, reason='', notice_text=''):
+    """`act()` with the report that started it, so the queue can re-render one row."""
+    out = act(report.target_type, report.target_id, actor, action, reason, notice_text)
+    out['report'] = report.pk
+    return out

@@ -13,6 +13,7 @@ import Comments from './Comments';
 import Avatar from './Avatar';
 import VerifiedBadge from './VerifiedBadge';
 import ReactionButton from './ReactionButton';
+import ReportModal from './ReportModal';
 import Toast from './Toast';
 import MobileNav from './MobileNav';
 import NavRail from './NavRail';
@@ -27,33 +28,54 @@ interface ReelSlide {
   mediaIndex: number;
 }
 
+const RATES = [0.5, 1, 1.5, 2];
+type ReelOrder = 'views' | 'latest' | 'oldest';
+
 export default function ReelsFeed({ initialKey }: { initialKey?: string }) {
   const router = useRouter();
-  const { db, me, feature, toggleSave, isSaved, toggleFollow, isFollowing, serverMode } = useApp();
+  const {
+    db, me, feature, toggleSave, isSaved, toggleFollow, isFollowing, serverMode,
+    sharePost, countView, blockUser, isBlocked, showToast, t,
+  } = useApp();
   const [index, setIndex] = useState(0);
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [order, setOrder] = useState<ReelOrder>('latest');
+  const [rate, setRate] = useState(1);
+  const [menuFor, setMenuFor] = useState<string | null>(null);
+  const [buffering, setBuffering] = useState(false);
+  const [reporting, setReporting] = useState<string | null>(null);
+  const [ready, setReady] = useState<Record<string, boolean>>({});
+  const bufferHandlers = useRef<Record<string, (waiting: boolean) => void>>({});
   const scrollRef = useRef<HTMLDivElement>(null);
   const indexRef = useRef(0);
   const [mounted, setMounted] = useState(false);
   const wheelAcc = useRef(0);
   const wheelTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const countedKey = useRef<string | null>(null);
 
   useEffect(() => setMounted(true), []);
 
-  // The reels shelf is its own keyset stream: video-bearing posts, newest first,
-  // pulled a page ahead of wherever the reader has scrolled to.
+  // The reels shelf is its own keyset stream: video-bearing posts, pulled a page
+  // ahead of wherever the reader has scrolled to. `latest` is the endpoint's own
+  // order, so only the other two filters write a query.
   const stream = useList(
     'reels',
     { path: '/posts/', frag: postsFragment(me?.id || null) },
-    { media: 'video' },
+    { media: 'video', order: order === 'latest' ? undefined : order },
     serverMode && feature('video'),
   );
 
   const byId = new Map(db.posts.map(p => [p.id, p]));
   const reels = serverMode
     ? stream.ids.map(id => byId.get(id)).filter((p): p is Post => !!p)
-    : db.posts.filter(p => p.status === 'live' && canSeePost(p, me?.id ?? null, db.follows, privateIds(db.users))).sort((a, b) => b.ts - a.ts);
+    : db.posts
+        .filter(p => p.status === 'live' && (p.media || []).some(m => m.type === 'video')
+          && canSeePost(p, me?.id ?? null, db.follows, privateIds(db.users))
+          && !isBlocked(p.uid))
+        .sort((a, b) => (order === 'views'
+          ? (b.views ?? 0) - (a.views ?? 0) || b.ts - a.ts
+          : order === 'oldest' ? a.ts - b.ts : b.ts - a.ts));
 
   const slides: ReelSlide[] = reels
     .flatMap(post => {
@@ -90,6 +112,16 @@ export default function ReelsFeed({ initialKey }: { initialKey?: string }) {
     return () => window.removeEventListener('resize', onResize);
   }, []);
 
+  // The reel on screen is the reel being watched, so it is counted once — and
+  // not at all while the decoder is still catching up on it.
+  useEffect(() => {
+    const slide = slides[index];
+    if (!slide || buffering) return;
+    if (countedKey.current === slide.key) return;
+    countedKey.current = slide.key;
+    void countView(slide.post.id);
+  }, [index, slides, buffering, countView]);
+
   const go = useCallback((i: number) => {
     const el = scrollRef.current;
     if (!el) return;
@@ -108,11 +140,22 @@ export default function ReelsFeed({ initialKey }: { initialKey?: string }) {
     return () => window.removeEventListener('keydown', onKey);
   }, [go]);
 
+  // A menu raised by a hold closes on the next tap anywhere else, the way the
+  // reaction tray does; the other way out is holding the video again.
+  useEffect(() => {
+    if (!menuFor) return;
+    const away = (e: PointerEvent) => {
+      if (!(e.target as HTMLElement).closest('.reel-menu')) setMenuFor(null);
+    };
+    document.addEventListener('pointerdown', away);
+    return () => document.removeEventListener('pointerdown', away);
+  }, [menuFor]);
+
   useEffect(() => {
     const el = scrollRef.current;
     if (!el || !window.matchMedia('(pointer: fine)').matches) return;
     const onWheel = (e: WheelEvent) => {
-      if ((e.target as HTMLElement).closest('.comments-overlay, .reaction-tray, .drawer')) return;
+      if ((e.target as HTMLElement).closest('.comments-overlay, .reaction-tray, .drawer, .reel-menu')) return;
       e.preventDefault();
       wheelAcc.current += e.deltaY;
       if (wheelTimer.current) clearTimeout(wheelTimer.current);
@@ -131,13 +174,13 @@ export default function ReelsFeed({ initialKey }: { initialKey?: string }) {
 
   const onScroll = () => {
     const el = scrollRef.current;
-    if (!el || !el.clientHeight) return;
-    const i = Math.max(0, Math.min(Math.round(el.scrollTop / el.clientHeight), slides.length - 1));
+    if (!el || !el.clientHeight) return;    const i = Math.max(0, Math.min(Math.round(el.scrollTop / el.clientHeight), slides.length - 1));
     if (i !== indexRef.current) {
       indexRef.current = i;
       viewedKey.current = slides[i]?.key ?? null;
       setIndex(i);
       setCommentsOpen(false);
+      setMenuFor(null);
     }
     // Two slides of runway: the next page is already in flight before the
     // reader reaches the end of the one on screen.
@@ -147,6 +190,32 @@ export default function ReelsFeed({ initialKey }: { initialKey?: string }) {
   if (!mounted) return <div className="reels-page" />;
 
   const current = slides[index];
+
+  // Which slides have enough decoded to show something. A shelf of twelve reels
+  // loads them all, so this is per slide rather than one flag for the page.
+  const onBufferFor = (key: string) => {
+    if (!bufferHandlers.current[key]) {
+      bufferHandlers.current[key] = (waiting: boolean) =>
+        setReady(prev => (prev[key] === !waiting ? prev : { ...prev, [key]: !waiting }));
+    }
+    return bufferHandlers.current[key];
+  };
+
+  const shareReel = async (slide: ReelSlide) => {
+    const url = `${window.location.origin}/video/${slide.post.id}-${slide.mediaIndex}`;
+    let handed = false;
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: `${slide.author.name} on Exposing`, text: slide.post.text.slice(0, 140), url });
+        handed = true;
+      } else {
+        await navigator.clipboard.writeText(url);
+        handed = true;
+        showToast(t('linkCopied'));
+      }
+    } catch { /* the sheet was closed; nothing left the phone */ }
+    if (handed) void sharePost(slide.post.id);
+  };
 
   return (
     <div className="reels-page">
@@ -158,10 +227,24 @@ export default function ReelsFeed({ initialKey }: { initialKey?: string }) {
           <span className="reel-title">Reels</span>
           {slides.length > 0 && <span className="reel-count">{index + 1} / {slides.length}</span>}
         </div>
+        <div className="reel-filters" role="group" aria-label="Sort reels">
+          {([['views', t('mostViewed')], ['latest', t('latest')], ['oldest', t('oldest')]] as [ReelOrder, string][]).map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              className={`reel-filter ${order === key ? 'on' : ''}`}
+              aria-pressed={order === key}
+              onClick={() => { setOrder(key); setMenuFor(null); }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
         {feature('video') && slides.length > 0 ? (
           <div className="reels-scroll" ref={scrollRef} onScroll={onScroll}>
             {slides.map((slide, i) => {
-              const commentCount = db.comments.filter(c => c.pid === slide.post.id && c.status === 'live').length;
+              const commentCount = slide.post.comments ?? db.comments.filter(c => c.pid === slide.post.id && c.status === 'live').length;
+              const shareCount = slide.post.shares ?? 0;
               const saveCount = db.saves.filter(s => s.pid === slide.post.id).length;
               const saved = isSaved(slide.post.id);
               const following = isFollowing(slide.author.id);
@@ -169,13 +252,60 @@ export default function ReelsFeed({ initialKey }: { initialKey?: string }) {
               const open = !!expanded[slide.key];
               return (
                 <div className="reel-slide" key={slide.key}>
-                  <AutoVideo src={slide.media.src || ''} dur={slide.media.dur} active={i === index} seek loop cover preload="auto" />
+                  <AutoVideo
+                    src={slide.media.src || ''}
+                    dur={slide.media.dur}
+                    active={i === index}
+                    seek
+                    loop
+                    cover
+                    preload="auto"
+                    rate={rate}
+                    onLongPress={() => setMenuFor(menuFor === slide.key ? null : slide.key)}
+                    onBuffering={onBufferFor(slide.key)}
+                  />
+                  {!ready[slide.key] && (
+                    <div className="reel-loading" role="status" aria-label="Loading this reel">
+                      <div className="reel-loading-shape" /><div className="reel-loading-shape" /><div className="reel-loading-shape" />
+                      <span className="reel-loading-ring" aria-hidden="true" />
+                    </div>
+                  )}
+                  {menuFor === slide.key && (
+                    <div className="reel-menu" role="dialog" aria-label={t('reelOptions')} onClick={e => e.stopPropagation()}>
+                      <div className="reel-menu-row">
+                        <span className="reel-menu-label">{t('playbackSpeed')}</span>
+                        <span className="reel-menu-rates">
+                          {RATES.map(r => (
+                            <button
+                              key={r}
+                              type="button"
+                              className={`reel-rate ${rate === r ? 'on' : ''}`}
+                              aria-pressed={rate === r}
+                              onClick={() => setRate(r)}
+                            >
+                              {r}x
+                            </button>
+                          ))}
+                        </span>
+                      </div>
+                      <button type="button" className="reel-menu-item" onClick={() => { setMenuFor(null); setReporting(slide.post.id); }}>
+                        {t('report')}
+                      </button>
+                      <button
+                        type="button"
+                        className="reel-menu-item danger"
+                        onClick={() => { setMenuFor(null); void blockUser(slide.author.id); }}
+                      >
+                        {t('block')} {slide.author.name || slide.author.username}
+                      </button>
+                    </div>
+                  )}
                   <div className="reel-rail">
                     <div className="reel-avatar">
                       <Link href={`/u/${slide.author.username}`} aria-label={slide.author.name}>
                         <Avatar user={slide.author} size={46} />
                       </Link>
-                      {!own && (
+                      {!own && !isBlocked(slide.author.id) && (
                         <button
                           type="button"
                           className={`reel-follow ${following ? 'on' : ''}`}
@@ -191,9 +321,7 @@ export default function ReelsFeed({ initialKey }: { initialKey?: string }) {
                       <ReactionButton
                         targetType="post"
                         targetId={slide.post.id}
-                        openOnClick
                         emptyLabel="Like"
-                        showMix
                         extraCount={slide.post.media?.some(m => m.likes !== undefined)
                           ? slide.post.media.reduce((n, m) => n + (m.likes || 0), 0)
                           : db.reactions.filter(r => r.targetType === 'media' && r.targetId.startsWith(`${slide.post.id}#m`)).length}
@@ -217,6 +345,17 @@ export default function ReelsFeed({ initialKey }: { initialKey?: string }) {
                       </button>
                       <span>{saveCount > 0 ? compact(saveCount) : 'Save'}</span>
                     </div>
+                    <div className="reel-rail-item">
+                      <button type="button" aria-label="Share this reel" onClick={() => void shareReel(slide)}>
+                        {IC.share}
+                      </button>
+                      <span>{shareCount > 0 ? compact(shareCount) : 'Share'}</span>
+                    </div>
+                    {(slide.post.views ?? 0) > 0 && (
+                      <div className="reel-rail-item reel-views">
+                        <span>{compact(slide.post.views ?? 0)} {t('views')}</span>
+                      </div>
+                    )}
                   </div>
                   <div className="reel-meta">
                     <Link href={`/u/${slide.author.username}`} className="reel-author">
@@ -255,6 +394,7 @@ export default function ReelsFeed({ initialKey }: { initialKey?: string }) {
           </p>
         )}
         {commentsOpen && current && <Comments postId={current.post.id} onClose={() => setCommentsOpen(false)} />}
+        {reporting && <ReportModal type="post" targetId={reporting} onClose={() => setReporting(null)} />}
       </div>
       <div className="reels-nav">
         <NavRail />

@@ -30,6 +30,16 @@ export const NAV: NavGroup[] = [
     ],
   },
   {
+    id: 'moderation',
+    label: 'Moderation',
+    items: [
+      { href: '/reports', label: 'Report queue', icon: 'flag', permission: 'reports' },
+      { href: '/content', label: 'Takedown shelf', icon: 'shelf', permission: 'reports' },
+      { href: '/policy', label: 'Platform rules', icon: 'rule', permission: 'reports' },
+      { href: '/notices', label: 'Public notices', icon: 'mega', permission: 'notices' },
+    ],
+  },
+  {
     id: 'console',
     label: 'Console',
     items: [

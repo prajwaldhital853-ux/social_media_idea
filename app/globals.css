@@ -7330,3 +7330,292 @@ a.market-card { text-decoration: none; }
 .action-btn .reaction-mix .reaction-art,
 .post-actions .action-btn .reaction-mix .reaction-art { width: 19px; height: 19px; }
 .action-btn .reaction-mix .reaction-art + .reaction-art { margin-left: -7px; }
+
+/* ============================================================
+   The phone reading pass. Everything here answers a rule that
+   read well on a desk and badly in the hand, so it lives at the
+   very end and is allowed to win.
+   ============================================================ */
+
+/* Dark means a dark room. The charcoal page lifted off true black by so little
+   that the cards had no ground to sit on. Cards keep a shade of lift so the
+   feed still has edges. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #000000;
+    --canvas: #000000;
+    --calm: #000000;
+    --card: #0B0C0E;
+    --surface: #1E2126;
+    --line: #26282D;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #000000;
+  --canvas: #000000;
+  --calm: #000000;
+  --card: #0B0C0E;
+  --surface: #1E2126;
+  --line: #26282D;
+}
+
+/* A tap opens the post; it is not a highlight. Phones have no hover to clear,
+   so the tint a desktop reader sees only on approach used to stick to the card
+   after every tap until something else was touched. */
+@media (hover: none), (pointer: coarse) {
+  .post:hover { background: transparent; }
+  .shell.feed-page .post:hover { background: var(--card); }
+}
+
+/* One line for the byline, with the menu pinned to the right end of it. The
+   wrap was there so "at Bhrikutimandap" could breathe; what it actually cost
+   was the three dots dropping under the caption on a narrow screen. */
+.post-header { flex-wrap: nowrap; margin-bottom: 0; }
+.post-name, .post-context, .post-activity { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.post-context, .post-activity { flex: 0 1 auto; }
+.post-menu-wrap { margin-left: auto; }
+.post-caption { margin: 1px 0 6px; }
+
+/* A multi-photo post is a grid worth scrolling to, and the single photo already
+   fills the hand. Mobile gets the 3–4 cell shelves taller; desktop gets more
+   air in the card and a taller frame than a letterbox. */
+@media (max-width: 768px) {
+  .media-mosaic.three, .media-mosaic.four { height: 420px; }
+  .media-mosaic.stack { height: 400px; }
+}
+@media (min-width: 1024px) {
+  .shell.feed-page .post { padding: 20px 20px 14px; gap: 13px; }
+  .shell.feed-page .media-mosaic.single { aspect-ratio: 4 / 3; max-height: 560px; }
+  .shell.feed-page .media-mosaic.two,
+  .shell.feed-page .media-mosaic.three,
+  .shell.feed-page .media-mosaic.four { height: 372px; }
+  .shell.feed-page .media-mosaic.stack { height: 420px; }
+  .shell.feed-page .media-mosaic.mixed { height: 500px; }
+}
+
+/* The reels rail is a thumb target list. The circles were sized for a cursor,
+   and the running total belonged under the icon rather than inside it, so the
+   button keeps its disc and every count hangs in the same band below it. */
+.reel-rail { gap: 14px; }
+.reel-rail-item { position: relative; padding-bottom: 15px; }
+.reel-rail-item > button,
+.reel-rail-item .reaction-trigger {
+  width: 42px;
+  height: 42px;
+  min-height: 42px;
+  padding: 0;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+}
+.reel-rail-item > button svg,
+.reel-rail-item .reaction-trigger svg { width: 21px; height: 21px; }
+.reel-rail-item .reaction-trigger .reaction-art { width: 24px; height: 24px; }
+.reel-rail-item > span,
+.reel-rail-item .reaction-trigger > span {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 58px;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  color: #fff;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.85);
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+.reel-views { padding-bottom: 2px; }
+.reel-views > span { position: static; transform: none; width: auto; font-size: 11.5px; }
+
+/* Sort shelf for the reel feed. It sits under the title band, not over it, and
+   carries its own scrim so the chips stay legible on a bright video. */
+.reel-filters {
+  position: absolute;
+  top: calc(46px + env(safe-area-inset-top));
+  left: 12px;
+  z-index: 6;
+  display: flex;
+  gap: 4px;
+  padding: 3px;
+  border-radius: 999px;
+  background: rgba(10, 12, 16, 0.55);
+  backdrop-filter: blur(8px);
+}
+
+.reel-filter {
+  padding: 5px 11px;
+  border-radius: 999px;
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 12px;
+  font-weight: 700;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.reel-filter.on {
+  background: #fff;
+  color: #101114;
+}
+
+/* Long-press menu: playback speed first because it is the one setting a viewer
+   changes more than once a session, then the two account-level escapes. */
+.reel-menu {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: calc(88px + env(safe-area-inset-bottom));
+  z-index: 9;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 16px;
+  background: rgba(14, 16, 20, 0.92);
+  backdrop-filter: blur(14px);
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.5);
+  animation: fadeIn 0.16s ease;
+}
+
+.reel-menu-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 4px 6px 8px;
+}
+
+.reel-menu-label {
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 12.5px;
+  font-weight: 700;
+}
+
+.reel-menu-rates { display: inline-flex; gap: 4px; }
+
+.reel-rate {
+  min-width: 44px;
+  padding: 6px 9px;
+  border-radius: 9px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: #fff;
+  font-size: 12.5px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.reel-rate.on { background: #fff; border-color: #fff; color: #101114; }
+
+.reel-menu-item {
+  text-align: left;
+  padding: 11px 10px;
+  border-radius: 10px;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.reel-menu-item:hover { background: rgba(255, 255, 255, 0.12); }
+.reel-menu-item.danger { color: #FF6B6B; }
+.reel-menu-item.danger:hover { background: rgba(255, 60, 60, 0.16); }
+
+/* A reel that has not decoded its first frame is not an empty black screen. The
+   shapes stand in for the frame and the ring says the wait is on purpose. */
+.reel-loading {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 6px;
+  padding-bottom: 14%;
+  background: #08090B;
+  overflow: hidden;
+}
+
+.reel-loading-shape {
+  width: 27%;
+  height: 46%;
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.11), rgba(255, 255, 255, 0.03));
+  animation: reelLoadPulse 1.15s ease-in-out infinite;
+}
+
+.reel-loading-shape:nth-child(2) { animation-delay: 0.16s; }
+.reel-loading-shape:nth-child(3) { animation-delay: 0.32s; }
+
+.reel-loading-ring {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 34px;
+  height: 34px;
+  margin: -17px 0 0 -17px;
+  border-radius: 50%;
+  border: 3px solid rgba(255, 255, 255, 0.18);
+  border-top-color: #fff;
+  animation: reelSpin 0.8s linear infinite;
+}
+
+@keyframes reelSpin { to { transform: rotate(360deg); } }
+@keyframes reelLoadPulse { 0%, 100% { opacity: 0.45; } 50% { opacity: 1; } }
+
+/* The author badge rides the name it belongs to, in the site red so it reads as
+   the platform vouching rather than the commenter shouting. */
+.comment-author-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 2px 7px;
+  border: 1px solid rgba(228, 1, 4, 0.32);
+  border-radius: 999px;
+  background: rgba(228, 1, 4, 0.12);
+  color: var(--red);
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  vertical-align: 1px;
+  line-height: 1.5;
+}
+
+/* Stats are a sentence about the account, not three buttons. */
+.profile-stat {
+  background: none;
+  padding: 0 4px;
+  border-radius: 8px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.profile-stat b { color: var(--red); font-size: 15.5px; }
+button.profile-stat:hover, a.profile-stat:hover { background: none; color: var(--muted); }
+button.profile-stat:hover b, a.profile-stat:hover b { color: var(--red); }
+
+/* A reel thumbnail is tall, and its reach belongs on the tile; on the photos
+   shelf a square cell is the whole point of the grid. */
+.profile-media-grid .profile-media-cell.reel-cell { aspect-ratio: 9 / 14; }
+.profile-media-grid.photo-grid { grid-template-columns: repeat(3, 1fr); }
+.profile-cell-views {
+  position: absolute;
+  left: 7px;
+  bottom: 6px;
+  z-index: 2;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: rgba(8, 9, 11, 0.6);
+  backdrop-filter: blur(4px);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Ask-then-answer: the label small above the value rather than competing with
+   it across a fixed gutter. */
+.about-list > div { flex-direction: column; align-items: flex-start; gap: 3px; }
+.about-list dt { min-width: 0; font-size: 12px; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase; }
+.about-list dd { font-size: 15.5px; }
+.about-card h2 { font-size: 17px; }
+.about-card p { font-size: 15px; line-height: 1.6; }

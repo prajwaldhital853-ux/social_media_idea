@@ -1,10 +1,12 @@
-from django.db.models import Q
-from rest_framework import viewsets
-from rest_framework.decorators import api_view, permission_classes
+from django.db.models import F, Q
+from rest_framework import status, viewsets
+from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.permissions import AllowAny, BasePermission, IsAuthenticatedOrReadOnly, SAFE_METHODS
 from rest_framework.response import Response
 
 from apps.common.pagination import KeysetPagination
+from apps.common.ratelimit import client_ip, enforce
+from apps.follows.models import Block
 from apps.promotions.services import promoted_for
 
 from .models import Post
@@ -20,6 +22,13 @@ def visible_posts(user):
     qs = Post.objects.select_related('author__profile').prefetch_related('media')
     if user.is_authenticated and user.is_staff:
         return qs
+    # A block closes the door on both sides: you do not see what you blocked, and
+    # you do not see what blocked you. Staff see everything, since they moderate it.
+    if user.is_authenticated:
+        qs = qs.exclude(
+            Q(author_id__in=Block.objects.filter(blocker=user).values('blocked_id'))
+            | Q(author_id__in=Block.objects.filter(blocked=user).values('blocker_id'))
+        )
     # A private account is private whatever the author picked as the audience:
     # only approved followers get its posts, and a pending request gets nothing.
     visible = Q(status=Post.Status.LIVE, audience=Post.Audience.PUBLIC) & ~Q(author__profile__is_private=True)
@@ -52,6 +61,46 @@ class PostViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(author=self.request.user)
+
+    @property
+    def paginator(self):
+        """`order=views` sorts on a count instead of a timestamp, so that shelf
+        walks its own index and needs a cursor built for it."""
+        if self.request is not None and self.request.query_params.get('order') == 'views':
+            if not hasattr(self, '_views_paginator'):
+                self._views_paginator = KeysetPagination(sort_field='views')
+            return self._views_paginator
+        if not hasattr(self, '_paginator'):
+            self._paginator = self.pagination_class() if self.pagination_class else None
+        return self._paginator
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def share_post(request, pk):
+    """Record one share of one post.
+
+    The link is already out of the app's hands when the client reports it, so
+    this is a tally rather than a transaction: it can only ever go up, and a
+    visitor who shares the same post twice is counted twice.
+    """
+    enforce(f'share:{client_ip(request)}', 30, 60)
+    if not visible_posts(request.user).filter(pk=pk).exists():
+        return Response({'detail': 'No such post.'}, status=status.HTTP_404_NOT_FOUND)
+    Post.objects.filter(pk=pk).update(share_count=F('share_count') + 1)
+    return Response({'share_count': Post.objects.filter(pk=pk).values_list('share_count', flat=True).first()})
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def count_view(request, pk):
+    """One reel watched. A view is cheap to grant and expensive to fake, so the
+    limit is generous and the count is a tally rather than a unique-audience measure."""
+    enforce(f'view:{client_ip(request)}', 120, 60)
+    if not visible_posts(request.user).filter(pk=pk).exists():
+        return Response({'detail': 'No such post.'}, status=status.HTTP_404_NOT_FOUND)
+    Post.objects.filter(pk=pk).update(views=F('views') + 1)
+    return Response({'views': Post.objects.filter(pk=pk).values_list('views', flat=True).first()})
 
 
 def promo_card(promo):
