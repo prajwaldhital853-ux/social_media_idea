@@ -165,8 +165,8 @@ def user_directory(request):
         User.objects.select_related('profile')
         .annotate(
             created_at=F('date_joined'),
-            posts_count=Count('posts', distinct=True),
-            followers_count=Count('followers', distinct=True),
+            posts_count=Count('posts', filter=Q(posts__status='live'), distinct=True),
+            followers_count=Count('followers', filter=Q(followers__status='accepted'), distinct=True),
         )
     )
     query = (request.query_params.get('q') or '').strip()

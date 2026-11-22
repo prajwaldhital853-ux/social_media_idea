@@ -266,12 +266,14 @@ await waitFor(d, '.people-page-list .people-row');
 // bottom has to collect every follower the profile total promises. Counting
 // against a single page only ever measured where the prefetch had got to.
 const followersFirst = await count(d, '.people-page-list .people-row');
+const screenHandles = await d.evaluate(() => [...document.querySelectorAll('.people-page-list .people-row .people-meta small')].map(el => el.textContent.trim()));
 const followersAll = await walk(d, '.people-page-list .people-row');
 const followerTotal = Number(profileRow.body?.followers || 0);
+const pageHandles = (followerPage.body?.results || []).map(u => `@${u.username}`);
 ok('desktop: the followers list pages people with a cursor',
-  followerTotal > 0 && followersFirst >= (followerPage.body?.results?.length || -1)
-  && followersFirst <= (followerPage.body?.results?.length || 0) + 2 && followersAll === followerTotal,
-  `first ${followersFirst}, api page ${followerPage.body?.results?.length}, walked ${followersAll}, server total ${followerTotal}`);
+  followerTotal > 0 && followersFirst >= pageHandles.length
+  && pageHandles.every((handle, i) => screenHandles[i] === handle) && followersAll === followerTotal,
+  `first ${followersFirst}, api page ${pageHandles.length}, walked ${followersAll}, server total ${followerTotal}`);
 await shot(d, 'intg-desktop-followers');
 
 // ----------------------------------------------------------------- search ----
@@ -296,7 +298,9 @@ ok('desktop: the top bar badges match the unread counters',
   `screen ${JSON.stringify(badges)} vs api ${JSON.stringify(expected)}`);
 
 // ------------------------------------------------------- inbox + chat thread ---
-const chatPeer = (await api(d, `/api/users/${DEMO.username}/following/`)).body?.results?.[0]?.username;
+const peerRow = (await api(d, `/api/users/${DEMO.username}/following/`)).body?.results?.[0];
+const chatPeer = peerRow?.username;
+const peerName = peerRow?.name || chatPeer;
 ok('desktop: a chat partner exists for the thread test', !!chatPeer, String(chatPeer));
 const seeded = await d.evaluate(async ([peer]) => {
   const pair = document.cookie.split('; ').find(c => c.startsWith('exposing_csrf='));
@@ -315,8 +319,9 @@ ok('desktop: twelve messages land on the thread endpoint', seeded.sent === 12, J
 await goto(d, '/messages');
 await waitFor(d, '.inbox-row');
 const inboxTop = await textOf(d, '.inbox-row');
+// The row shows the display name, which need not contain the username.
 ok('desktop: the inbox leads with the conversation just written',
-  inboxTop.toLowerCase().includes(String(chatPeer).toLowerCase()), inboxTop.slice(0, 60));
+  inboxTop.toLowerCase().includes(String(peerName).toLowerCase()), inboxTop.slice(0, 60));
 await goto(d, `/messages/${chatPeer}`);
 await waitFor(d, '.chat-bubble');
 await sleep(600);
@@ -355,7 +360,11 @@ const afterRow = unreadRow
   ? (await api(d, '/api/messages/inbox/')).body?.results?.find(r => r.conversation === unreadRow.conversation)
   : null;
 ok('desktop: opening a thread marks it read on the server',
-  readCalls.length >= 1 && (!unreadRow || (afterRow ? afterRow.unread || 0 : -1) === 0),
+  unreadRow
+    ? readCalls.length >= 1 && (afterRow ? afterRow.unread || 0 : -1) === 0
+    // Nothing anywhere is unread, so the client's contract is to stay quiet:
+    // it asks the server only when the badge or the cache says there is news.
+    : readCalls.length === 0,
   JSON.stringify({ peer: unreadRow?.user?.username, was: unreadRow?.unread, now: afterRow?.unread, readCalls: readCalls.length }));
 
 // ------------------------------------------------------- notifications + saved ---
@@ -363,8 +372,14 @@ await goto(d, '/notifications');
 await waitFor(d, '.notif-row, .feed-empty');
 const notifRows = await count(d, '.notif-row');
 const notifApi = await api(d, '/api/notifications/');
-ok('desktop: notifications render the server page', notifRows === (notifApi.body?.results?.length || -1),
-  `${notifRows} vs ${notifApi.body?.results?.length}`);
+const notifTexts = (notifApi.body?.results || []).map(r => r.text);
+const screenNotifs = await d.evaluate(() => [...document.querySelectorAll('.notif-row .notif-text')].map(el => el.textContent.trim()));
+// The list is infinite and may have walked past page one before the harness
+// blinked, so the claim is "it opens on the server's rows, in the server's
+// order" — not "the same number", which an auto-paging screen can never keep.
+ok('desktop: notifications render the server page',
+  notifRows >= notifTexts.length && notifTexts.every((txt, i) => (screenNotifs[i] || '').endsWith(txt)),
+  `${notifRows} rows vs page of ${notifTexts.length}`);
 await goto(d, '/saved');
 await waitFor(d, '.saved-list article.post, .feed-empty');
 const savedRows = await count(d, '.saved-list article.post');

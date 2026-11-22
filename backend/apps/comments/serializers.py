@@ -1,6 +1,7 @@
 from rest_framework import serializers
 
 from apps.common.api import user_reaction_map
+from apps.posts.views import visible_posts
 
 from .models import Comment
 
@@ -45,7 +46,10 @@ class CommentSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         post = attrs.get('post') or (self.instance.post if self.instance else None)
         user = self.context['request'].user
-        if post and post.status != 'live' and post.author_id != user.id and not user.is_staff:
+        # The same rule as reading: if the post is not in your view, it is not a
+        # place you may speak — a private or follower-only author keeps a closed
+        # thread even when someone guesses the post id.
+        if post and post.author_id != user.id and not visible_posts(user).filter(pk=post.pk).exists():
             raise serializers.ValidationError('This post is not accepting comments.')
         parent = attrs.get('parent')
         if parent and post and parent.post_id != post.id:

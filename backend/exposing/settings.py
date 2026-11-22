@@ -136,6 +136,7 @@ REST_FRAMEWORK = {
     ],
     'DEFAULT_PAGINATION_CLASS': 'apps.common.pagination.KeysetPagination',
     'PAGE_SIZE': 10,
+    'EXCEPTION_HANDLER': 'apps.common.errors.exception_handler',
     'DEFAULT_THROTTLE_CLASSES': [
         'rest_framework.throttling.AnonRateThrottle',
         'rest_framework.throttling.UserRateThrottle',

@@ -42,6 +42,14 @@ class PromotionTests(TestCase):
         resp = self.promote(target_id=str(other_post.pk), budget=10)
         self.assertEqual(resp.status_code, 400)
 
+    def test_a_private_account_cannot_promote(self):
+        self.owner.profile.is_private = True
+        self.owner.profile.save(update_fields=['is_private'])
+        resp = self.promote()
+        self.assertEqual(resp.status_code, 400)
+        self.owner.wallet.refresh_from_db()
+        self.assertEqual(self.owner.wallet.balance, Decimal('1000'), 'a refused promotion costs nothing')
+
     def test_audience_matching(self):
         promo = Promotion.objects.create(owner=self.owner, target_type='post', target_id=str(self.post.pk), age_min=18, age_max=40, country='Nepal', status='active')
         self.assertTrue(audience_matches(promo, self.match))

@@ -69,6 +69,8 @@ def signup(tag, n):
 
 owner, owner_name = signup('own', 1)
 peer, peer_name = signup('peer', 2)
+outsider, outsider_name = signup('outsd', 3)
+anon = Client('10.99.%d.9' % (int(RUN) % 250))
 
 # Defaults: a fresh account is public, and email alerts are on.
 s, session = owner.get('/auth/me/')
@@ -108,9 +110,58 @@ check('owner can approve the request', s == 200 and accepted.get('status') == 'a
 s, feed2 = peer.get('/feed/?size=50')
 check('approved follower sees the post', any(r['id'] == post['id'] for r in feed2['results']), str(feed2)[:200])
 
+# --- nothing else reaches through the same door ---
+pid = post['id']
+s, _ = outsider.get(f'/posts/{pid}/')
+check('stranger cannot open the post by id', s == 404, f'{s}')
+s, thread = outsider.get(f'/comments/?post={pid}&top=1')
+check('stranger cannot read the thread', s == 200 and thread.get('results') == [], f'{s} {str(thread)[:150]}')
+s, thread = anon.get(f'/comments/?post={pid}&top=1')
+check('a shared link reveals no comments', s == 200 and thread.get('results') == [], f'{s} {str(thread)[:150]}')
+s, wrong = outsider.post('/comments/', {'post': pid, 'text': 'let me in'})
+check('stranger cannot comment', s == 400, f'{s} {wrong}')
+s, _ = outsider.post('/reactions/', {'target_type': 'post', 'target_id': str(pid), 'kind': 'like'})
+check('stranger cannot react', s == 404, f'{s}')
+s, names = outsider.get(f'/reactions/?target_type=post&target_id={pid}')
+check('reaction list names nobody', s == 200 and names.get('results') == [], f'{s} {str(names)[:150]}')
+s, _ = outsider.post('/saved/posts/', {'post': pid})
+check('stranger cannot save it', s == 404, f'{s}')
+
+# ...and the accepted follower still can, so the door is closed only to strangers.
+s, comment = peer.post('/comments/', {'post': pid, 'text': 'hello from a follower'})
+check('follower can comment', s == 201, f'{s} {comment}')
+s, _ = peer.post('/reactions/', {'target_type': 'post', 'target_id': str(pid), 'kind': 'like'})
+check('follower can react', s in (200, 201), f'{s}')
+s, rows = owner.get(f'/comments/?post={pid}&top=1')
+check('author reads their own thread', s == 200 and any(c['text'] == 'hello from a follower' for c in rows.get('results', [])),
+      f'{s} {str(rows)[:200]}')
+s, one = anon.get(f'/posts/{pid}/')
+check('a shared link cannot fetch the post body', s == 404, f'{s}')
+
+# --- a pending request is not a follower, anywhere ---
+s, before = anon.get(f'/profiles/{owner_name}/')
+s, _ = outsider.post('/follows/', {'username': owner_name})
+s, during = anon.get(f'/profiles/{owner_name}/')
+check('a pending request does not move the count',
+      before.get('followers') == during.get('followers'), f'{before.get("followers")} -> {during.get("followers")}')
+s, found = outsider.get(f'/users/?q={owner_name}')
+card = next((c for c in found.get('results', []) if c['username'] == owner_name), None)
+check('search card agrees with the profile count',
+      card is not None and card.get('followers') == during.get('followers'), f'{card} vs {during.get("followers")}')
+
+# --- and it buys no advertising ---
+s, promo = owner.post('/promotions/', {'target_type': 'post', 'target_id': str(pid), 'budget': 0})
+check('private account cannot promote', s == 400 and 'private' in str(promo).lower(), f'{s} {promo}')
+
 # --- going back to public is one switch away ---
 s, row = owner.patch(f'/profiles/{owner_name}/', {'is_private': False})
 check('account can turn public again', s == 200 and row.get('is_private') is False, f'{s} {row}')
+s, thread = outsider.get(f'/comments/?post={pid}&top=1')
+check('one switch reopens the thread', s == 200 and thread.get('results'), f'{s} {str(thread)[:150]}')
+s, promo = owner.post('/promotions/', {'target_type': 'post', 'target_id': str(pid), 'budget': 0})
+check('the same promotion is allowed once public', s == 201, f'{s} {promo}')
+if s == 201:
+    owner.post(f"/promotions/{promo['id']}/end/", {})
 
 print(f'\n{len(PASS)} passed, {len(FAIL)} failed')
 if FAIL:

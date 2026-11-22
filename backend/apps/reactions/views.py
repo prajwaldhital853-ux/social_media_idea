@@ -8,6 +8,7 @@ from rest_framework.response import Response
 from apps.comments.models import Comment
 from apps.notifications.services import notify
 from apps.posts.models import Post, PostMedia
+from apps.posts.views import visible_posts
 
 from .models import Reaction
 from .serializers import ReactionSerializer
@@ -24,6 +25,23 @@ def _media_target(target_id):
     if hash_marker and post_id.isdigit() and rest.isdigit():
         return int(post_id), int(rest)
     return None
+
+
+def _post_of_target(target_type, target_id):
+    if target_type == 'comment' and str(target_id).isdigit():
+        return Comment.objects.filter(pk=int(target_id)).values_list('post_id', flat=True).first()
+    if target_type == 'media':
+        media = _media_target(target_id)
+        return media[0] if media else None
+    if target_type == 'post' and str(target_id).isdigit():
+        return int(target_id)
+    return None
+
+
+def readable_target(user, target_type, target_id):
+    """Every reaction sits on a post, so that post's visibility rule decides."""
+    post_id = _post_of_target(target_type, target_id)
+    return post_id is not None and visible_posts(user).filter(pk=post_id).exists()
 
 
 def _adjust_counter(target_type, target_id, delta):
@@ -63,8 +81,20 @@ class ReactionViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         qs = Reaction.objects.select_related('user')
+        user = self.request.user
         target_type = self.request.query_params.get('target_type')
         target_id = self.request.query_params.get('target_id')
+        if target_type and target_id:
+            # "Who reacted to this" follows the post it sits on: an unreadable
+            # target answers with an empty page, never with a list of followers.
+            if not readable_target(user, target_type, target_id):
+                return qs.none()
+        elif not user.is_authenticated:
+            return qs.none()
+        elif not user.is_staff:
+            # Without a target filter the only reactions a reader may list are
+            # their own — an unfiltered dump would name every reactor site-wide.
+            qs = qs.filter(user=user)
         if target_type:
             qs = qs.filter(target_type=target_type)
         if target_id:
@@ -76,6 +106,8 @@ class ReactionViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         target_type = serializer.validated_data['target_type']
         target_id = serializer.validated_data['target_id']
+        if not readable_target(request.user, target_type, target_id):
+            return Response({'detail': 'No such target to react to.'}, status=status.HTTP_404_NOT_FOUND)
         for attempt in range(2):
             try:
                 with transaction.atomic():

@@ -1,5 +1,6 @@
 from django.core.cache import cache
 from django.test import TestCase, TransactionTestCase
+from django.utils import timezone
 
 from apps.common.testutils import auth_client, make_user, run_threads
 from apps.follows.models import Follow
@@ -22,6 +23,18 @@ class MessageTests(TestCase):
         self.assertEqual(Conversation.objects.count(), 1)
         self.assertEqual(Message.objects.count(), 2)
         self.assertTrue(self.b.notifications.filter(kind='message').exists())
+
+    def test_a_thread_leaves_one_bell_row_not_one_per_message(self):
+        for i in range(8):
+            self.ca.post('/api/messages/msgb/', {'text': f'p{i}'}, format='json')
+        rows = self.b.notifications.filter(kind='message')
+        self.assertEqual(rows.count(), 1)
+        self.assertEqual(rows[0].text, 'msga sent you a message.')
+        rows.update(read_at=timezone.now())
+        self.ca.post('/api/messages/msgb/', {'text': 'again'}, format='json')
+        row = self.b.notifications.filter(kind='message').get()
+        self.assertIsNone(row.read_at)
+        self.assertEqual(self.cb.get('/api/notifications/unread/').data['unread'], 1)
 
     def test_inbox_unread_and_mark_read(self):
         self.ca.post('/api/messages/msgb/', {'text': 'hello'}, format='json')

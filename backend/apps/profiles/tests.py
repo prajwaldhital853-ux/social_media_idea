@@ -2,7 +2,7 @@ from django.core.cache import cache
 from django.test import TestCase
 from rest_framework.test import APIClient
 
-from apps.common.testutils import auth_client, make_user
+from apps.common.testutils import auth_client, make_user, staff_client
 from apps.follows.models import Follow
 from apps.posts.models import Post
 
@@ -59,5 +59,28 @@ class ProfileTests(TestCase):
         Follow.objects.create(follower=self.viewer, followee=self.owner, status='accepted')
         pending_user = make_user('profilepending')
         Follow.objects.create(follower=pending_user, followee=self.owner, status='pending')
+        Post.objects.create(author=self.owner, text='taken down', status='hidden')
         resp = APIClient().get('/api/profiles/profileowner/')
         self.assertEqual(resp.data['followers'], 1)
+        self.assertEqual(resp.data['posts'], 1)
+
+    def test_every_card_reports_the_same_counts_as_the_profile(self):
+        """The profile, the search card, the sync graph and the admin roster all
+        show a follower and post number; a pending request or a moderated post
+        must not make one of them disagree with the profile page."""
+        Follow.objects.create(follower=self.viewer, followee=self.owner, status='accepted')
+        pending_user = make_user('cardpending')
+        Follow.objects.create(follower=pending_user, followee=self.owner, status='pending')
+        Post.objects.create(author=self.owner, text='taken down', status='hidden')
+
+        search = auth_client(pending_user).get('/api/users/?q=profileowner').data['results']
+        card = next(c for c in search if c['username'] == 'profileowner')
+        self.assertEqual((card['followers'], card['posts']), (1, 1))
+
+        people = auth_client(self.viewer).get('/api/sync/').data['people']
+        graph = next(c for c in people if c['username'] == 'profileowner')
+        self.assertEqual(graph['followers'], 1)
+
+        roster = staff_client().get('/api/moderation/users/').data['results']
+        admin_card = next(c for c in roster if c['username'] == 'profileowner')
+        self.assertEqual((admin_card['followers'], admin_card['posts']), (1, 1))

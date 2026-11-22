@@ -988,6 +988,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const requestPromotion = async (targetType: 'post' | 'listing', targetId: string, cfg: PromoConfig): Promise<boolean> => {
     const self = currentMe();
     if (!self) return false;
+    // Nobody outside the approved followers can see a private account's post, so
+    // a promotion there would spend coins on an audience of zero. Same answer the
+    // API gives, before the wallet is touched.
+    if (self.private) {
+      showToast('A private account cannot promote. Turn off the private switch first.');
+      return false;
+    }
     const pack = db.settings.packages.find(p => p.id === cfg.packageId);
     if (!pack || self.coins < pack.coins) return false;
     if (!API_ENABLED) {

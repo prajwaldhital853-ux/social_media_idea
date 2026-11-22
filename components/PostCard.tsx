@@ -68,28 +68,27 @@ function Caption({ text, full = false }: { text: string; full?: boolean }) {
 }
 
 /**
- * The feed's one-tap follow. An author the reader already followed before this
- * page loaded shows no text at all — unfollowing is done on their profile.
+ * The feed's one-tap follow. Anyone the reader already follows or has asked to
+ * follow shows no text at all — managing that lives on their profile. A tap in
+ * the window before the session finishes restoring waits instead of bouncing a
+ * signed-in reader to the sign-in screen.
  */
 function FeedFollow({ author }: { author: User }) {
-  const { me, t, followState, toggleFollow } = useApp();
+  const { me, ready, t, followState, toggleFollow } = useApp();
   const router = useRouter();
-  const latched = useRef<boolean | null>(null);
-  if (me && latched.current === null) latched.current = followState(author.id) === 'following';
   const state = me ? followState(author.id) : 'none';
-  if (state === 'pending') return null;
+  if (state !== 'none') return null;
 
-  const run = async (e: React.MouseEvent) => {
+  const run = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    if (!me) { router.push('/login'); return; }
-    await toggleFollow(author.id);
+    if (!me) {
+      if (ready) router.push('/login');
+      return;
+    }
+    void toggleFollow(author.id);
   };
 
-  if (state === 'following') {
-    if (latched.current) return null;
-    return <button type="button" className="feed-follow following" onClick={run}>{t('following')}</button>;
-  }
   return <button type="button" className="feed-follow" onClick={run}>{t('follow')}</button>;
 }
 
@@ -212,7 +211,6 @@ export default function PostCard({ post, author, featured }: PostCardProps) {
             {!own && (
               <FeedFollow author={author} />
             )}
-            <span className="post-handle">@{author.username}</span>
             <span className="post-time">{ago(post.ts, db.lang)}</span>
             {post.audience === 'followers' && <span className="post-audience" title="Followers only">{IC.users}</span>}
             {post.edited && <span className="post-edited">· {t('edited')}</span>}
@@ -223,7 +221,7 @@ export default function PostCard({ post, author, featured }: PostCardProps) {
               {menuOpen && (
                 <div className="post-menu" onClick={e => e.stopPropagation()}>
                   {menuItem(t('copyLink'), () => { void handleShare(undefined, true); })}
-                  {own && db.settings.features.promotion && menuItem(t('promote'), () => setPromoting(true))}
+                  {own && !me?.private && db.settings.features.promotion && menuItem(t('promote'), () => setPromoting(true))}
                   {own && menuItem(t('edit'), () => openComposer(post.id))}
                   {own && menuItem(t('del'), () => { if (window.confirm(t('confirmDelete'))) deletePost(post.id); }, true)}
                   {!own && me && menuItem(t('report'), () => setReporting(true))}

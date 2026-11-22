@@ -51,8 +51,15 @@ class PostVisibilityTests(TestCase):
     def test_card_says_whether_following_needs_approval(self):
         self.author.profile.is_private = True
         self.author.profile.save(update_fields=['is_private'])
-        row = APIClient().get('/api/posts/').data['results'][0]
-        self.assertTrue(row['author_is_private'])
+        # A stranger gets no card at all: there is nothing of a private account
+        # in their feed to annotate.
+        self.assertEqual(APIClient().get('/api/posts/').data['results'], [])
+        # An accepted follower does see it, and the card still says the account
+        # is private so the follow button knows there is no pending state to show.
+        Follow.objects.create(follower=self.fan, followee=self.author, status='accepted')
+        rows = auth_client(self.fan).get('/api/posts/').data['results']
+        self.assertEqual(len(rows), 2)
+        self.assertTrue(all(row['author_is_private'] for row in rows))
 
     def test_only_author_can_delete(self):
         resp = auth_client(self.stranger).delete(f'/api/posts/{self.public.pk}/')

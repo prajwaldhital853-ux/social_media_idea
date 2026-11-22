@@ -1,8 +1,10 @@
 from django.core.cache import cache
 from django.test import TestCase, TransactionTestCase
+from rest_framework.test import APIClient
 
 from apps.comments.models import Comment
 from apps.common.testutils import auth_client, make_user, run_threads
+from apps.follows.models import Follow
 from apps.notifications.models import Notification
 from apps.posts.models import Post
 
@@ -58,6 +60,38 @@ class CommentTests(TestCase):
         Comment.objects.create(post=self.post, author=self.author, text='second')
         resp = self.cc.get(f'/api/comments/?post={self.post.pk}&top=1')
         self.assertEqual([c['text'] for c in resp.data['results']], ['second', 'root'])
+
+    def test_private_authors_thread_follows_the_post_rule(self):
+        self.author.profile.is_private = True
+        self.author.profile.save(update_fields=['is_private'])
+        Comment.objects.create(post=self.post, author=self.commenter, text='inside')
+        fan = make_user('threadfan')
+        Follow.objects.create(follower=fan, followee=self.author, status='accepted')
+
+        rows = auth_client(fan).get(f'/api/comments/?post={self.post.pk}&top=1').data['results']
+        self.assertEqual([c['text'] for c in rows], ['inside'])
+        rows = self.ca.get(f'/api/comments/?post={self.post.pk}&top=1').data['results']
+        self.assertEqual([c['text'] for c in rows], ['inside'])
+
+        stranger = auth_client(make_user('threadstranger'))
+        rows = stranger.get(f'/api/comments/?post={self.post.pk}&top=1').data['results']
+        self.assertEqual(rows, [])
+        resp = stranger.post('/api/comments/', {'post': self.post.pk, 'text': 'hello'}, format='json')
+        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(
+            APIClient().get(f'/api/comments/?post={self.post.pk}&top=1').data['results'], []
+        )
+
+    def test_your_own_comment_stays_reachable_after_you_lose_the_post(self):
+        root = Comment.objects.create(post=self.post, author=self.commenter, text='from before')
+        Post.objects.filter(pk=self.post.pk).update(comment_count=1)
+        self.author.profile.is_private = True
+        self.author.profile.save(update_fields=['is_private'])
+        # The commenter is not a follower, yet the row they wrote is theirs: they
+        # can still read it and delete it rather than be stuck with it forever.
+        rows = self.cc.get(f'/api/comments/?post={self.post.pk}&top=1').data['results']
+        self.assertEqual([c['text'] for c in rows], ['from before'])
+        self.assertEqual(self.cc.delete(f'/api/comments/{root.pk}/').status_code, 204)
 
 
 class CommentConcurrencyTests(TransactionTestCase):

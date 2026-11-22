@@ -1,11 +1,7 @@
-
-> exposing-frontend@0.1.0 start
-> next start
-
   ▲ Next.js 14.2.5
   - Local:        http://localhost:3000
 
  ✓ Starting...
- ✓ Ready in 1051ms
-(node:15648) [DEP0060] DeprecationWarning: The `util._extend` API is deprecated. Please use Object.assign() instead.
+ ✓ Ready in 1041ms
+(node:14944) [DEP0060] DeprecationWarning: The `util._extend` API is deprecated. Please use Object.assign() instead.
 (Use `node --trace-deprecation ...` to show where the warning was created)

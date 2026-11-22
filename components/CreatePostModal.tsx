@@ -163,7 +163,7 @@ function Composer({ original }: { original?: Post }) {
                 </div>
               )}
               <button type="button" className="cp-attach" disabled={busy} onClick={() => fileRef.current?.click()}>{IC.img} Add photos or video</button>
-              {feature('promotion') && !original && <label className="cp-promote-toggle"><span>{t('promoteSection')}<small>Optional · paid with Coins</small></span><input type="checkbox" checked={promote} onChange={e => setPromote(e.target.checked)} /></label>}
+              {feature('promotion') && !original && !me?.private && <label className="cp-promote-toggle"><span>{t('promoteSection')}<small>Optional · paid with Coins</small></span><input type="checkbox" checked={promote} onChange={e => setPromote(e.target.checked)} /></label>}
               {promote && <PromoteForm targetType="post" confirmLabel="Use this promotion" onConfirm={cfg => setPromoConfig(cfg)} />}
               {promote && promoConfig && <small>Promotion selected. It will be requested when you post.</small>}
             </div>

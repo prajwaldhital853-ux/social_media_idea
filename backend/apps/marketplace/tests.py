@@ -1,7 +1,7 @@
 from django.core.cache import cache
 from django.test import TestCase
 
-from apps.common.testutils import auth_client, make_user
+from apps.common.testutils import auth_client, make_user, staff_client
 from apps.marketplace.models import Listing
 
 
@@ -62,13 +62,21 @@ class MarketplaceTests(TestCase):
 
     def test_removed_visible_to_its_seller(self):
         # A deleted ad must still resolve for the seller who deleted it, or their
-        # own link reads as a broken page instead of "not available".
+        # own link reads as a broken page instead of "not available" — but it has
+        # no place in the grid, which is a page of live offers.
         Listing.objects.filter(pk=self.listing.pk).update(status='removed')
-        resp = self.cs.get('/api/marketplace/')
-        self.assertEqual([item['id'] for item in resp.data['results']], [self.listing.pk])
+        for client in (self.cs, self.cb):
+            self.assertEqual([item['id'] for item in client.get('/api/marketplace/').data['results']], [])
+        self.assertEqual(self.cs.get('/api/marketplace/?mine=1').data['results'], [])
         resp = self.cs.get(f'/api/marketplace/{self.listing.pk}/')
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.data['status'], 'removed')
+        self.assertEqual(self.cb.get(f'/api/marketplace/{self.listing.pk}/').status_code, 404)
+        # Moderation still reaches the archive, but only by asking for it.
+        staff = staff_client()
+        self.assertEqual(staff.get('/api/marketplace/').data['results'], [])
+        archive = staff.get('/api/marketplace/?status=removed').data['results']
+        self.assertIn(self.listing.pk, [item['id'] for item in archive])
 
     def test_patch_replaces_images(self):
         resp = self.cs.post('/api/marketplace/', {

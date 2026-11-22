@@ -150,7 +150,11 @@ def signup(request):
 @authentication_classes([])
 def login(request):
     ip = client_ip(request)
-    enforce(f'login-ip:{ip}', 5, 60)
+    # This counter only refuses a flood from one address; the credential defence
+    # is the three-try lock below and the per-account cap after it. At five per
+    # minute a household behind one router, or anyone who mistypes twice and
+    # reloads, gets refused before the lock has anything to say.
+    enforce(f'login-ip:{ip}', 10, 60)
     identifier = (request.data.get('username') or request.data.get('email') or '').strip().lower()
     if not identifier:
         return Response({'detail': 'Enter your email or username.'}, status=400)

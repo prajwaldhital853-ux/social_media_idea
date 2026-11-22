@@ -60,6 +60,15 @@ def promotion_list(request):
             target = Listing.objects.filter(pk=target_id, seller=request.user).first() if target_id.isdigit() else None
         if not target:
             return Response({'detail': 'You can only promote your own content.'}, status=400)
+        # Nobody outside the approved followers can see a private account's post,
+        # so a promotion there would spend coins on an audience of zero. Say so
+        # before the wallet is touched rather than after.
+        profile = getattr(request.user, 'profile', None)
+        if profile is not None and profile.is_private:
+            return Response(
+                {'detail': 'A private account cannot promote. Turn off the private switch first.'},
+                status=400,
+            )
         pack = package_by_id(data.get('package'))
         budget = data.get('budget', 0)
         if pack:

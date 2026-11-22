@@ -28,7 +28,7 @@ const COVER_PALETTES = [
 export default function UserProfilePage() {
   const params = useParams();
   const router = useRouter();
-  const { db, me, t, isFollowing, followState, toggleFollow, showToast, openComposer, serverMode, loadPerson } = useApp();
+  const { db, me, t, isFollowing, followState, toggleFollow, showToast, openComposer, serverMode, loadPerson, ready } = useApp();
   const username = String(params.username || '');
   const user = db.users.find(u => u.username.toLowerCase() === username.toLowerCase());
   const [tab, setTab] = useState<'posts' | 'media' | 'about' | 'listings'>('posts');
@@ -138,6 +138,13 @@ export default function UserProfilePage() {
     router.push(singleVideo ? `/video/${postId}-${index}` : `/post/${postId}/media/${index}`);
   };
 
+  // A hard load paints this card a beat before the session finishes restoring,
+  // and a fast tap must not bounce a signed-in reader to the sign-in screen.
+  const needSession = (run: () => void) => {
+    if (me) { run(); return; }
+    if (ready) router.push('/login');
+  };
+
   const shareProfile = async () => {
     const url = `${window.location.origin}/u/${user.username}`;
     try {
@@ -191,11 +198,11 @@ export default function UserProfilePage() {
                 <button
                   type="button"
                   className={`follow-btn ${following ? 'on' : ''} ${fState === 'pending' ? 'pending' : ''}`}
-                  onClick={() => me ? toggleFollow(user.id) : router.push('/login')}
+                  onClick={() => needSession(() => { void toggleFollow(user.id); })}
                 >
                   {fState === 'following' ? t('unfollow') : fState === 'pending' ? t('requested') : user.private ? t('requestFollow') : followsMe ? t('followBack') : t('follow')}
                 </button>
-                <button type="button" className="ghost-btn" onClick={() => me ? router.push(`/messages/${user.username}`) : router.push('/login')}>
+                <button type="button" className="ghost-btn" onClick={() => needSession(() => router.push(`/messages/${user.username}`))}>
                   {IC.msg}<span>{t('message')}</span>
                 </button>
               </>
@@ -228,7 +235,7 @@ export default function UserProfilePage() {
               }}
             ><b>{compact(countPosts)}</b> {t('postsCount')}</button>
             <Link href={`/u/${user.username}/followers`} className="profile-stat"><b>{compact(countFollowers)}</b> {t('followers')}</Link>
-            <Link href={`/u/${user.username}/following`} className="profile-stat"><b>{compact(countFollowing)}</b> {t('followingCount')}</Link>
+            <Link href={`/u/${user.username}/following`} className="profile-stat following-stat"><b>{compact(countFollowing)}</b> {t('followingCount')}</Link>
           </div>
         </div>
 

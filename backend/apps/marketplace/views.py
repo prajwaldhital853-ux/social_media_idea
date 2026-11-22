@@ -69,15 +69,20 @@ class ListingViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         qs = Listing.objects.select_related('seller__profile').prefetch_related('images')
         user = self.request.user
-        if user.is_authenticated and user.is_staff:
-            pass
-        elif user.is_authenticated:
-            # A deleted ad stays readable to the seller who deleted it, so their
-            # own link answers "not available" instead of a load error.
-            qs = qs.exclude(Q(status=Listing.Status.REMOVED) & ~Q(seller=user))
-        else:
-            qs = qs.exclude(status=Listing.Status.REMOVED)
         params = self.request.query_params
+        removed = Q(status=Listing.Status.REMOVED)
+        if getattr(self, 'action', None) == 'retrieve':
+            # A deleted ad still answers its own link, for its seller and for the
+            # moderator who took it down, so both read "not available" instead of
+            # a load error.
+            if not (user.is_authenticated and user.is_staff):
+                stranger = removed if not user.is_authenticated else removed & ~Q(seller=user)
+                qs = qs.exclude(stranger)
+        elif not (user.is_authenticated and user.is_staff and params.get('status')):
+            # The grid is a page of live offers for everyone: the seller who
+            # deleted an ad and the staff who moderates it both reach the archive
+            # on purpose, and nobody gets a deleted row padding an ordinary page.
+            qs = qs.exclude(removed)
         if params.get('seller'):
             qs = qs.filter(seller__username=params['seller'])
         if params.get('mine') and user.is_authenticated:

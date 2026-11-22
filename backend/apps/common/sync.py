@@ -75,7 +75,7 @@ def _cards(ids):
     rows = (
         User.objects.filter(pk__in=ids)
         .select_related('profile')
-        .annotate(followers_count=Count('followers', distinct=True))
+        .annotate(followers_count=Count('followers', filter=Q(followers__status='accepted'), distinct=True))
         .order_by('pk')[:GRAPH_LIMIT]
     )
     cards = []
@@ -114,7 +114,7 @@ def sync(request):
         .exclude(pk__in=following_ids)
         .exclude(pk__in=[row['follower'] for row in edge_rows if row['status'] == Follow.Status.PENDING])
         .select_related('profile')
-        .annotate(followers_count=Count('followers', distinct=True))
+        .annotate(followers_count=Count('followers', filter=Q(followers__status='accepted'), distinct=True))
         .order_by('-profile__verified', '-followers_count', 'pk')[:12]
     )
     suggestion_rows = []

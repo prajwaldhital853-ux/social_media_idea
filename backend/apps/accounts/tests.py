@@ -194,9 +194,17 @@ class LoginLockoutTests(TestCase):
     def test_login_ip_rate_limit(self):
         ip = fresh_ip()
         self.client.credentials(HTTP_X_FORWARDED_FOR=ip)
-        codes = [self.login('wrong-password').status_code for _ in range(6)]
-        self.assertEqual(codes[:5], [401, 401, 423, 423, 423])
-        self.assertEqual(codes[5], 429)
+        responses = [self.login('wrong-password') for _ in range(11)]
+        codes = [r.status_code for r in responses]
+        # Two wrong passwords, then the lock answers 423 for every try until the
+        # per-minute cap of ten is spent: the cooloff, not the counter, is what
+        # keeps a persistent guesser out.
+        self.assertEqual(codes[:2], [401, 401])
+        self.assertEqual(set(codes[2:10]), {423})
+        self.assertEqual(codes[10], 429)
+        # The refusal is shown to a person, so it says what to do and for how long.
+        self.assertIn('Too many attempts', responses[10].data['detail'])
+        self.assertGreater(responses[10].data['retry_in'], 0)
 
     def test_suspended_account_cannot_login(self):
         User.objects.filter(pk=self.user.pk).update(suspended_until=timezone.now() + timedelta(days=1), suspend_reason='spam')

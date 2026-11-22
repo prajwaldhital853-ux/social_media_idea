@@ -1,0 +1,162 @@
+[
+  {
+    "name": "82: the profile photo opens as a big lightbox with its caption",
+    "pass": true,
+    "detail": "{\"open\":true,\"w\":420,\"natural\":320,\"caption\":\"Sita Karki · View profile photo\",\"closer\":true,\"chip\":112}"
+  },
+  {
+    "name": "82: the close button dismisses the lightbox",
+    "pass": true,
+    "detail": ""
+  },
+  {
+    "name": "82: the cover opens big and keeps its landscape shape",
+    "pass": true,
+    "detail": "{\"open\":true,\"caption\":\"Sita Karki · View cover photo\",\"landscape\":true}"
+  },
+  {
+    "name": "82: Escape closes the lightbox the same way",
+    "pass": true,
+    "detail": ""
+  },
+  {
+    "name": "84: About lists the phone as a dialable link",
+    "pass": true,
+    "detail": "{\"label\":\"Phone number\",\"value\":\"+977 984000000\",\"href\":\"tel:+977984000000\",\"rel\":\"\",\"target\":\"\"}"
+  },
+  {
+    "name": "84: About opens the website in a new tab it cannot reach back from",
+    "pass": true,
+    "detail": "{\"label\":\"Website\",\"value\":\"sita.example.com/\",\"href\":\"https://sita.example.com/\",\"rel\":\"noopener noreferrer\",\"target\":\"_blank\"}"
+  },
+  {
+    "name": "84: a website without a scheme is refused with a usable instruction",
+    "pass": true,
+    "detail": "{\"error\":\"Use a full http(s) address, like https://example.com\",\"stillOpen\":true}"
+  },
+  {
+    "name": "84: a phone with letters in it is refused too",
+    "pass": true,
+    "detail": ""
+  },
+  {
+    "name": "84: a saved link appears on About with its own label and address",
+    "pass": true,
+    "detail": "{\"savedRows\":[{\"label\":\"City\",\"href\":\"\"},{\"label\":\"Joined\",\"href\":\"\"},{\"label\":\"Date of birth\",\"href\":\"\"},{\"label\":\"Phone number\",\"href\":\"tel:+977984000000\"},{\"label\":\"Website\",\"href\":\"https://sita.example.com/\"},{\"label\":\"Newsletter\",\"href\":\"https://sita.example.com/news\"},{\"label\":\"Posts\",\"href\":\"\"},{\"label\":\"Followers\",\"href\":\"\"},{\"label\":\"Following\",\"href\":\"\"}],\"wrote\":{\"rows\":1}}"
+  },
+  {
+    "name": "84: the corrected website survives the save",
+    "pass": true,
+    "detail": "[{\"label\":\"City\",\"href\":\"\"},{\"label\":\"Joined\",\"href\":\"\"},{\"label\":\"Date of birth\",\"href\":\"\"},{\"label\":\"Phone number\",\"href\":\"tel:+977984000000\"},{\"label\":\"Website\",\"href\":\"https://sita.example.com/\"},{\"label\":\"Newsletter\",\"href\":\"https://sita.example.com/news\"},{\"label\":\"Posts\",\"href\":\"\"},{\"label\":\"Followers\",\"href\":\"\"},{\"label\":\"Following\",\"href\":\"\"}]"
+  },
+  {
+    "name": "82: a new profile photo publishes its own update post",
+    "pass": true,
+    "detail": "{\"path\":\"/u/sita\",\"activity\":\"updated their profile photo\",\"name\":\"Sita Karki\",\"hasImage\":true}"
+  },
+  {
+    "name": "83: the count row reads as three bold numbers",
+    "pass": true,
+    "detail": "[{\"label\":\"46 Posts\",\"bold\":800,\"size\":19,\"href\":null},{\"label\":\"20 Followers\",\"bold\":800,\"size\":19,\"href\":\"/u/sita/followers\"},{\"label\":\"7 Following\",\"bold\":800,\"size\":19,\"href\":\"/u/sita/following\"}]"
+  },
+  {
+    "name": "83: Followers opens its own list page",
+    "pass": true,
+    "detail": "{\"label\":\"20 Followers\",\"bold\":800,\"size\":19,\"href\":\"/u/sita/followers\"}"
+  },
+  {
+    "name": "83: the followers list arrives with rows, not an empty shell",
+    "pass": true,
+    "detail": "{\"path\":\"/u/sita/followers\",\"rows\":21,\"title\":\"\"}"
+  },
+  {
+    "name": "83: another account shows Follow and Message side by side",
+    "pass": true,
+    "detail": "{\"actions\":[\"Follow\",\"Message\"]}"
+  },
+  {
+    "name": "83: Message lands on the thread with a way to reply",
+    "pass": true,
+    "detail": "{\"path\":\"/messages/arjun\",\"bubbles\":0,\"compose\":true}"
+  },
+  {
+    "name": "87: sita follows arjun from his profile",
+    "pass": true,
+    "detail": "Following"
+  },
+  {
+    "name": "87: signed in as the new follower to read their side",
+    "pass": true,
+    "detail": "/"
+  },
+  {
+    "name": "87: the follower notification carries a Follow back button",
+    "pass": true,
+    "detail": "{\"exists\":true,\"label\":\"Follow back\",\"on\":false}"
+  },
+  {
+    "name": "87: pressing it follows back and the button says so",
+    "pass": true,
+    "detail": "{\"exists\":true,\"label\":\"Following\",\"on\":true}"
+  },
+  {
+    "name": "88: a post hands a crawler its own title, picture and card",
+    "pass": true,
+    "detail": "{\"title\":\"Sita Karki — Exposing\",\"desc\":\"See this photo on Exposing.\",\"image\":\"http://localhost:3000/media/uploads/f80f218e0ebf4207d39b3573.png\",\"type\":\"article\",\"card\":\"summary_large_image\"}"
+  },
+  {
+    "name": "88: a profile names the account and its handle",
+    "pass": true,
+    "detail": "{\"title\":\"Sita Karki (@sita) — Exposing\",\"desc\":\"Photographer. Kathmandu rooftops and 5am alarms.\",\"image\":\"https://picsum.photos/seed/expo-sita-cover/1600/500\",\"type\":\"profile\",\"card\":\"summary_large_image\"}"
+  },
+  {
+    "name": "88: a listing quotes its price so the preview is useful",
+    "pass": true,
+    "detail": "{\"title\":\"Still on the shelf · NPR 900 — Exposing\",\"desc\":\"Other in Kathmandu.\",\"image\":\"https://social-media-idea.vercel.app/exposing-icon.png\",\"type\":\"article\",\"card\":\"summary\"}"
+  },
+  {
+    "name": "89: Settings offers appearance, language, account, security and privacy",
+    "pass": true,
+    "detail": "{\"cards\":[\"Appearance\",\"Language\",\"Account\",\"Security\",\"Privacy Policy\"],\"choices\":[\"Light\",\"Dark\",\"ENEnglish\",\"नेनेपाली\"],\"switches\":[\"Two-step verification\",\"Private account\",\"Email about followers\"],\"legal\":[\"/legal/privacy\",\"/legal/terms\",\"/legal/user-policy\",\"/legal/cookies\"],\"logout\":true}"
+  },
+  {
+    "name": "89: the theme choice takes effect and is remembered",
+    "pass": true,
+    "detail": "{\"before\":\"dark\",\"want\":\"Light\",\"stored\":\"light\",\"pressed\":\"true\"}"
+  },
+  {
+    "name": "89: the language choice re-renders the screen in Nepali",
+    "pass": true,
+    "detail": "{\"en\":\"Appearance\",\"np\":\"रूप\",\"stored\":\"ne\"}"
+  },
+  {
+    "name": "89: two-step verification persists a flipped switch",
+    "pass": true,
+    "detail": "{\"was\":\"false\",\"now\":\"true\"}"
+  },
+  {
+    "name": "89: a reload reads the switch back from the server",
+    "pass": true,
+    "detail": "{\"kept\":\"true\",\"want\":\"true\"}"
+  },
+  {
+    "name": "89: private account and follower mail are both offered as switches",
+    "pass": true,
+    "detail": "{\"account\":{\"on\":\"false\",\"role\":\"switch\"},\"emails\":{\"on\":\"true\",\"role\":\"switch\"}}"
+  },
+  {
+    "name": "89: the follower mail switch saves and answers with a toast",
+    "pass": true,
+    "detail": "{\"was\":\"true\",\"now\":\"false\",\"toast\":\"\"}"
+  },
+  {
+    "name": "89: the policy links open the real documents",
+    "pass": true,
+    "detail": "{\"path\":\"/legal/privacy\",\"doc\":true}"
+  },
+  {
+    "name": "no console or HTTP errors during the batch pass",
+    "pass": true,
+    "detail": ""
+  }
+]

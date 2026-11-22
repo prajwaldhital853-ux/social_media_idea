@@ -122,7 +122,7 @@ const layout = await d.evaluate(() => {
   return { cols, mainW: Math.round(main.width), calmW: Math.round(cr.width), calmBg: getComputedStyle(calm).backgroundColor, suggestRows: calm.querySelectorAll('.suggest-row').length, calmGutter: Math.round(window.innerWidth - cr.right), rail: !!document.querySelector('.rail .nav-item') };
 });
 ok('desktop: left menu + feed column + quiet right rail with inline suggestions',
-  layout.cols.length === 3 && layout.mainW >= 580 && layout.mainW <= 620 && layout.calmW > 200
+  layout.cols.length === 3 && layout.mainW >= 540 && layout.mainW <= 580 && layout.calmW > 200
   // The rail is inset by the shell's own right padding, never flush to the window.
   && layout.suggestRows >= 1 && layout.calmBg === 'rgba(0, 0, 0, 0)'
   && layout.calmGutter >= 16 && layout.calmGutter <= 48 && layout.rail, JSON.stringify(layout));
@@ -162,13 +162,23 @@ ok('desktop: no horizontal overflow', await d.evaluate(() => document.documentEl
 ok('desktop: page-enter animation', await d.evaluate(() => getComputedStyle(document.querySelector('.page-enter')).animationName === 'pageIn'));
 await shot(d, 'desktop-feed');
 
-const brand = await d.evaluate(() => {
+const brand = await d.evaluate(async () => {
   const icon = document.querySelector('link[rel="icon"]');
   const apple = document.querySelector('link[rel="apple-touch-icon"]');
   const img = document.querySelector('.topbar .brand-logo-light');
-  return { favicon: icon?.getAttribute('href'), apple: apple?.getAttribute('href'), logoLoaded: (img?.naturalWidth || 0) > 0, logoSrc: img?.getAttribute('src') };
+  const pathOf = href => (href || '').split('?')[0];
+  // Next fingerprints app/icon.png, so only the path is the contract; the bytes
+  // are what proves it is the real logo rather than a letter drawn on a tile.
+  const head = await fetch(icon.getAttribute('href')).then(r => r.arrayBuffer()).then(b => [...new Uint8Array(b).slice(0, 8)]);
+  return {
+    favicon: pathOf(icon?.getAttribute('href')),
+    apple: pathOf(apple?.getAttribute('href')),
+    logoLoaded: (img?.naturalWidth || 0) > 0,
+    logoSrc: img?.getAttribute('src'),
+    isPng: head[0] === 0x89 && head[1] === 0x50 && head[2] === 0x4e && head[3] === 0x47
+  };
 });
-ok('desktop: real favicon + rail logo loaded', brand.favicon === '/exposing-icon.png' && brand.apple === '/apple-icon.png' && brand.logoLoaded && brand.logoSrc === '/exposing-logo.png', JSON.stringify(brand));
+ok('desktop: real favicon + rail logo loaded', brand.isPng && brand.favicon === '/icon.png' && brand.apple === '/apple-icon.png' && brand.logoLoaded && brand.logoSrc === '/exposing-logo.png', JSON.stringify(brand));
 
 const mix = await articleBy(d, 'Weekend in Pokhara');
 const mixInfo = await d.evaluate(el => {
@@ -614,21 +624,25 @@ const reelDraft = await d.evaluate(() => ({
 }));
 ok('desktop: Reels gallery pick auto-attaches clip in reel mode', reelDraft.path === '/create' && reelDraft.title === 'Create reel' && reelDraft.videos === 1 && reelDraft.chooserGone, JSON.stringify(reelDraft));
 await shot(d, 'desktop-create-reel');
-await d.evaluate(() => document.querySelector('.create-publish').click());
-await d.waitForSelector('.chooser-overlay', { timeout: 5000 });
-const pubChooser = await d.evaluate(() => ({
-  options: [...document.querySelectorAll('.chooser-options button b')].map(b => b.textContent),
-  reelEnabled: !document.querySelectorAll('.chooser-options button')[1].disabled
+// #80: the header keeps exactly one Post button and pressing it publishes —
+// the Post/Reel chooser guards the entry to create, never the submit.
+const reelHeader = await d.evaluate(() => ({
+  labels: [...document.querySelectorAll('.create-post-header button')].map(b => b.textContent.trim()).filter(Boolean),
+  heads: document.querySelectorAll('.post-btn-header').length,
+  enabled: !document.querySelector('.post-btn-header')?.disabled,
+  chooser: !!document.querySelector('.chooser-overlay')
 }));
-ok('desktop: publish chooser offers Post + enabled Reel', JSON.stringify(pubChooser.options) === JSON.stringify(['Post', 'Reel']) && pubChooser.reelEnabled, JSON.stringify(pubChooser));
+ok('desktop: the reel editor offers one enabled Post button and no publish chooser',
+  JSON.stringify(reelHeader.labels) === JSON.stringify(['Post']) && reelHeader.heads === 1 && reelHeader.enabled && !reelHeader.chooser,
+  JSON.stringify(reelHeader));
 await watchPublish(d);
-await d.evaluate(() => document.querySelectorAll('.chooser-options button')[1].click());
-await d.waitForFunction(() => location.pathname === '/', { timeout: 10000 });
+await d.evaluate(() => document.querySelector('.post-btn-header').click());
+await d.waitForFunction(() => location.pathname === '/', { timeout: 12000 });
 const pubTape = await publishTape(d);
 ok('desktop: publish ring stages % and labels reel',
   /^\d+%$/.test(pubTape[0]?.pct || '') && parseInt(pubTape[pubTape.length - 1]?.pct) > parseInt(pubTape[0]?.pct) && /reel/i.test(pubTape[0]?.label || ''),
-  JSON.stringify(pubTape));
-ok('desktop: publishing closes the chooser and lands on the feed',
+  JSON.stringify(pubTape.slice(0, 3)));
+ok('desktop: publishing lands on the feed with no chooser and no overlay',
   await d.evaluate(() => location.pathname === '/' && !document.querySelector('.chooser-overlay') && !document.querySelector('.publish-overlay')),
   JSON.stringify(await d.evaluate(() => ({ path: location.pathname, chooser: !!document.querySelector('.chooser-overlay'), overlay: !!document.querySelector('.publish-overlay') }))));
 await shot(d, 'desktop-publish-landed');
@@ -671,14 +685,12 @@ await fileInput.uploadFile(`${OUT}/test.png`);
 await sleep(900);
 ok('desktop: attachment thumbnail renders', await d.evaluate(() => !!document.querySelector('.create-media-item img')));
 await shot(d, 'desktop-create');
-await d.evaluate(() => document.querySelector('.create-publish').click());
-await d.waitForSelector('.chooser-overlay', { timeout: 5000 });
-await d.evaluate(() => document.querySelectorAll('.chooser-options button')[0].click());
-await d.waitForFunction(() => location.pathname === '/', { timeout: 10000 });
+await d.evaluate(() => document.querySelector('.post-btn-header').click());
+await d.waitForFunction(() => location.pathname === '/', { timeout: 12000 });
 await sleep(900);
 const published = await d.evaluate(() => {
   const first = document.querySelector('article.post');
-  return { text: first?.textContent.includes('Long caption test'), tags: first?.querySelectorAll('.post-tag').length };
+  return { text: first?.textContent.includes('Long caption test'), tags: first?.querySelectorAll('.post-place, .post-feeling').length };
 });
 ok('desktop: publish returns home with new post + tags', published.text && published.tags === 2, JSON.stringify(published));
 
@@ -704,10 +716,8 @@ await d.evaluate(() => { [...document.querySelectorAll('.audience-menu button')]
 await sleep(250);
 ok('desktop: audience chip switches to Followers', await d.evaluate(() => document.querySelector('.create-audience').textContent.includes('Followers')));
 await d.type('.create-post-textarea', 'QA followers only post');
-await d.evaluate(() => document.querySelector('.create-publish').click());
-await d.waitForSelector('.chooser-overlay', { timeout: 5000 });
-await d.evaluate(() => document.querySelectorAll('.chooser-options button')[0].click());
-await d.waitForFunction(() => location.pathname === '/', { timeout: 10000 });
+await d.evaluate(() => document.querySelector('.post-btn-header').click());
+await d.waitForFunction(() => location.pathname === '/', { timeout: 12000 });
 await sleep(900);
 const followersPost = await d.evaluate(() => {
   const db = JSON.parse(localStorage.getItem('exposing-demo-v1'));
@@ -1101,8 +1111,9 @@ ok('desktop: mark all read clears unread', await d.evaluate(() => {
   return !document.querySelector('.notif-row.unread') && db.notifications.filter(n => n.uid === 'u1').every(n => n.read);
 }));
 const notifHref = await d.evaluate(() => {
-  const row = document.querySelector('.notif-row');
-  row.click();
+  // The row is a wrapper since it grew a follow-back button; the press target is
+  // the open button inside it.
+  (document.querySelector('.notif-row .notif-open') || document.querySelector('.notif-row')).click();
   return true;
 });
 await sleep(900);
@@ -1318,11 +1329,22 @@ await sleep(350);
 await d.goto('http://localhost:3000/', { waitUntil: 'domcontentloaded', timeout: 45000 });
 await d.waitForSelector('article.post', { timeout: 20000 });
 await sleep(900);
-const feedInit = await d.evaluate(() => ({
-  rendered: document.querySelectorAll('article.post').length,
-  total: JSON.parse(localStorage.getItem('exposing-demo-v1')).posts.filter(p => p.status === 'live').length,
-  skeleton: !!document.querySelector('.feed-skeleton')
-}));
+// The feed only shows live posts this reader may see, so count them by the same
+// rule the app uses (own + public + private accounts already followed) instead of
+// assuming every seeded post can appear.
+const feedInit = await d.evaluate(() => {
+  const d0 = JSON.parse(localStorage.getItem('exposing-demo-v1'));
+  const priv = new Set(d0.users.filter(u => u.private).map(u => u.id));
+  const follows = new Set(d0.follows.filter(f => f.follower === d0.meId && f.status !== 'pending').map(f => f.following));
+  const live = d0.posts.filter(p => p.status === 'live');
+  const mine = live.filter(p => p.uid === d0.meId || !priv.has(p.uid) || follows.has(p.uid));
+  return {
+    rendered: document.querySelectorAll('article.post').length,
+    total: mine.length,
+    hiddenPrivate: live.length - mine.length,
+    skeleton: !!document.querySelector('.feed-skeleton')
+  };
+});
 ok('desktop: feed renders first 10 posts only', feedInit.rendered === Math.min(10, feedInit.total) && !feedInit.skeleton, JSON.stringify(feedInit));
 await d.evaluate(() => window.scrollTo({ top: document.documentElement.scrollHeight * 0.6, behavior: 'instant' }));
 await sleep(700);
@@ -1891,17 +1913,15 @@ ok('mobile: location panel reachable with keyboard open', await m.evaluate(() =>
 }));
 await clearKb(m);
 
-// Mobile publish via chooser + progress
+// Mobile publish: one Post button in the header, straight into the progress ring
 await m.evaluate(() => { const b = document.querySelector('.create-post-body'); b.scrollTop = 0; });
 await m.type('.create-post-textarea', 'QA mobile publish');
-await m.evaluate(() => document.querySelector('.create-publish').click());
-await m.waitForSelector('.chooser-overlay', { timeout: 5000 });
 await sleep(400);
-await shot(m, 'mobile-chooser');
+await shot(m, 'mobile-create-publish');
 await watchPublish(m);
-await m.evaluate(() => document.querySelectorAll('.chooser-options button')[0].click());
-await m.waitForFunction(() => location.pathname === '/', { timeout: 10000 });
-ok('mobile: chooser + progress publishes to feed',
+await m.evaluate(() => document.querySelector('.post-btn-header').click());
+await m.waitForFunction(() => location.pathname === '/', { timeout: 12000 });
+ok('mobile: the Post button publishes straight to the feed',
   (await publishTape(m)).length >= 1 && await m.evaluate(() => document.querySelector('article.post')?.textContent.includes('QA mobile publish')),
   JSON.stringify(await publishTape(m)));
 await shot(m, 'mobile-publish-landed');

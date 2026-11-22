@@ -2,6 +2,7 @@ from django.core.cache import cache
 from django.test import TestCase, TransactionTestCase
 
 from apps.common.testutils import auth_client, make_user, run_threads
+from apps.follows.models import Follow
 from apps.posts.models import Post
 from apps.reactions.models import Reaction
 
@@ -44,6 +45,21 @@ class ReactionTests(TestCase):
         self.assertEqual(resp.status_code, 204)
         self.post.refresh_from_db()
         self.assertEqual(self.post.like_count, 0)
+
+    def test_reactions_follow_the_posts_visibility(self):
+        self.author.profile.is_private = True
+        self.author.profile.save(update_fields=['is_private'])
+        stranger = auth_client(make_user('reactstranger'))
+        self.assertEqual(self.react(client=stranger).status_code, 404)
+        self.assertEqual(
+            Reaction.objects.filter(target_type='post', target_id=str(self.post.pk)).count(), 0,
+        )
+        rows = stranger.get(f'/api/reactions/?target_type=post&target_id={self.post.pk}').data['results']
+        self.assertEqual(rows, [])
+        Follow.objects.create(follower=self.fan, followee=self.author, status='accepted')
+        self.assertEqual(self.react().status_code, 201)
+        rows = self.cf.get(f'/api/reactions/?target_type=post&target_id={self.post.pk}').data['results']
+        self.assertEqual([r['username'] for r in rows], ['reactfan'])
 
     def test_reaction_notifies_author_not_self(self):
         self.react()

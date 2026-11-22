@@ -8,32 +8,32 @@
     {
       "name": "desktop: left menu + feed column + quiet right rail with inline suggestions",
       "pass": true,
-      "detail": "{\"cols\":[280,600,296],\"mainW\":600,\"calmW\":296,\"calmBg\":\"rgba(0, 0, 0, 0)\",\"suggestRows\":4,\"calmGutter\":32,\"rail\":true}"
+      "detail": "{\"cols\":[280,560,336],\"mainW\":560,\"calmW\":336,\"calmBg\":\"rgba(0, 0, 0, 0)\",\"suggestRows\":4,\"calmGutter\":32,\"rail\":true}"
     },
     {
       "name": "desktop: feed paginates first paint and loads more on scroll",
       "pass": true,
-      "detail": "{\"firstPage\":10,\"fullPage\":25}"
+      "detail": "{\"firstPage\":10,\"fullPage\":14}"
     },
     {
       "name": "desktop: Search opens fast (prefetched)",
       "pass": true,
-      "detail": "56ms"
+      "detail": "72ms"
     },
     {
       "name": "desktop: Reels opens fast (prefetched)",
       "pass": true,
-      "detail": "150ms"
+      "detail": "182ms"
     },
     {
       "name": "desktop: post opens fast (prefetched on hover)",
       "pass": true,
-      "detail": "184ms"
+      "detail": "202ms"
     },
     {
       "name": "desktop: author profile opens fast (prefetched on hover)",
       "pass": true,
-      "detail": "184ms"
+      "detail": "229ms"
     },
     {
       "name": "desktop: feed renders",
@@ -58,7 +58,7 @@
     {
       "name": "desktop: real favicon + rail logo loaded",
       "pass": true,
-      "detail": "{\"favicon\":\"/exposing-icon.png\",\"apple\":\"/apple-icon.png\",\"logoLoaded\":true,\"logoSrc\":\"/exposing-logo.png\"}"
+      "detail": "{\"favicon\":\"/icon.png\",\"apple\":\"/apple-icon.png\",\"logoLoaded\":true,\"logoSrc\":\"/exposing-logo.png\",\"isPng\":true}"
     },
     {
       "name": "desktop: p_mix stack n5, 5 cells, +3",
@@ -168,7 +168,7 @@
     {
       "name": "desktop: picture snaps to center immediately (<300ms)",
       "pass": true,
-      "detail": "{\"ms\":66,\"left\":3840,\"w\":1280}"
+      "detail": "{\"ms\":48,\"left\":3840,\"w\":1280}"
     },
     {
       "name": "desktop: horizontal scroll reaches 4/4",
@@ -341,17 +341,17 @@
       "detail": "{\"path\":\"/create\",\"title\":\"Create reel\",\"videos\":1,\"chooserGone\":true}"
     },
     {
-      "name": "desktop: publish chooser offers Post + enabled Reel",
+      "name": "desktop: the reel editor offers one enabled Post button and no publish chooser",
       "pass": true,
-      "detail": "{\"options\":[\"Post\",\"Reel\"],\"reelEnabled\":true}"
+      "detail": "{\"labels\":[\"Post\"],\"heads\":1,\"enabled\":true,\"chooser\":false}"
     },
     {
       "name": "desktop: publish ring stages % and labels reel",
       "pass": true,
-      "detail": "[{\"ms\":12,\"pct\":\"12%\",\"label\":\"Publishing your reel…\"},{\"ms\":16,\"pct\":\"100%\",\"label\":\"Publishing your reel…\"}]"
+      "detail": "[{\"ms\":8,\"pct\":\"12%\",\"label\":\"Publishing your reel…\"},{\"ms\":11,\"pct\":\"100%\",\"label\":\"Publishing your reel…\"}]"
     },
     {
-      "name": "desktop: publishing closes the chooser and lands on the feed",
+      "name": "desktop: publishing lands on the feed with no chooser and no overlay",
       "pass": true,
       "detail": "{\"path\":\"/\",\"chooser\":false,\"overlay\":false}"
     },
@@ -363,12 +363,12 @@
     {
       "name": "desktop: reel clip stored on device, not in localStorage",
       "pass": true,
-      "detail": "{\"kind\":\"reel\",\"blobId\":\"1p8p5jy1\",\"src\":null}"
+      "detail": "{\"kind\":\"reel\",\"blobId\":\"t67krv30\",\"src\":null}"
     },
     {
       "name": "desktop: published reel survives reload and plays",
       "pass": true,
-      "detail": "{\"src\":\"blob:http://localhost:3000/e8c4f43b-35e5-4297-9734-af37cedcae67\",\"playing\":true,\"ready\":4,\"count\":\"1 / 7\"}"
+      "detail": "{\"src\":\"blob:http://localhost:3000/786311ec-1fe7-4c00-bca8-244906717d3d\",\"playing\":true,\"ready\":4,\"count\":\"1 / 4\"}"
     },
     {
       "name": "desktop: textarea capped at 320px",
@@ -418,7 +418,7 @@
     {
       "name": "desktop: followers-only post published with badge, visible to owner",
       "pass": true,
-      "detail": "{\"id\":\"gicoao7h\",\"audience\":\"followers\",\"badge\":true,\"visibleToOwner\":true}"
+      "detail": "{\"id\":\"wu6wim2a\",\"audience\":\"followers\",\"badge\":true,\"visibleToOwner\":true}"
     },
     {
       "name": "desktop: followers-only post hidden from non-follower (feed + detail)",
@@ -438,12 +438,12 @@
     {
       "name": "desktop: feed video click opens Reels at that clip, playing",
       "pass": true,
-      "detail": "{\"path\":\"/video/p11-0\",\"i\":2,\"src\":\"https://www.w3schools.com/html/mov_bbb.mp4\",\"playing\":true,\"count\":\"3 / 7\",\"total\":7}"
+      "detail": "{\"path\":\"/video/p11-0\",\"i\":2,\"src\":\"https://www.w3schools.com/html/mov_bbb.mp4\",\"playing\":true,\"count\":\"3 / 4\",\"total\":4}"
     },
     {
       "name": "desktop: reels page = video-only snap feed with sound on",
       "pass": true,
-      "detail": "{\"slides\":7,\"playing\":true,\"muted\":false,\"snap\":\"y mandatory\",\"rail\":true,\"onlyVideos\":true,\"caption\":true,\"noFeedCards\":true}"
+      "detail": "{\"slides\":4,\"playing\":true,\"muted\":false,\"snap\":\"y mandatory\",\"rail\":true,\"onlyVideos\":true,\"caption\":true,\"noFeedCards\":true}"
     },
     {
       "name": "desktop: reels keeps left nav rail fixed, no frame overlap",
@@ -458,12 +458,12 @@
     {
       "name": "desktop: double-tap right seeks +10s with badge",
       "pass": true,
-      "detail": "{\"t0\":1.718226,\"t\":0.25591,\"dur\":5.055,\"badge\":true,\"note\":\"short clip clamps to end / loops\"}"
+      "detail": "{\"t0\":1.899022,\"t\":0.267352,\"dur\":5.055,\"badge\":true,\"note\":\"short clip clamps to end / loops\"}"
     },
     {
       "name": "desktop: double-tap left seeks -10s with badge",
       "pass": true,
-      "detail": "{\"t1\":1.28454,\"t\":0.295004,\"badge\":true}"
+      "detail": "{\"t1\":1.369647,\"t\":0.292859,\"badge\":true}"
     },
     {
       "name": "desktop: single tap pauses reel",
@@ -483,7 +483,7 @@
     {
       "name": "desktop: tray pick stores the chosen reel reaction",
       "pass": true,
-      "detail": "{\"newestId\":\"bl5k0b7h\",\"newestKind\":\"reel\",\"mine\":[\"love\"],\"trayGone\":true,\"reacted\":true,\"art\":true,\"count\":\"1\",\"path\":\"/video\"}"
+      "detail": "{\"newestId\":\"mb035qzw\",\"newestKind\":\"reel\",\"mine\":[\"love\"],\"trayGone\":true,\"reacted\":true,\"art\":true,\"count\":\"1\",\"path\":\"/video\"}"
     },
     {
       "name": "desktop: reel rail save toggles saved post",
@@ -498,12 +498,12 @@
     {
       "name": "desktop: ArrowDown snaps to next reel, previous pauses",
       "pass": true,
-      "detail": "{\"count\":\"2 / 7\",\"firstPaused\":true,\"secondPlaying\":true}"
+      "detail": "{\"count\":\"2 / 4\",\"firstPaused\":true,\"secondPlaying\":true}"
     },
     {
       "name": "desktop: wheel snaps cleanly to next reel, fully settled",
       "pass": true,
-      "detail": "{\"ms\":582,\"scrollTop\":899,\"clientHeight\":900,\"count\":\"2 / 7\"}"
+      "detail": "{\"ms\":580,\"scrollTop\":899,\"clientHeight\":900,\"count\":\"2 / 4\"}"
     },
     {
       "name": "desktop: reels nav rail navigates to Marketplace",
@@ -678,7 +678,7 @@
     {
       "name": "desktop: create listing stores + opens its own page",
       "pass": true,
-      "detail": "{\"id\":\"mrhozw9p\",\"uid\":\"u1\",\"price\":1234,\"media\":1,\"status\":\"active\",\"path\":\"/marketplace/mrhozw9p\",\"shown\":\"QA test listing\",\"sellerCard\":true}"
+      "detail": "{\"id\":\"54ynr5z4\",\"uid\":\"u1\",\"price\":1234,\"media\":1,\"status\":\"active\",\"path\":\"/marketplace/54ynr5z4\",\"shown\":\"QA test listing\",\"sellerCard\":true}"
     },
     {
       "name": "desktop: listing page shows image left, details right",
@@ -748,17 +748,17 @@
     {
       "name": "desktop: feed renders first 10 posts only",
       "pass": true,
-      "detail": "{\"rendered\":10,\"total\":28,\"skeleton\":false}"
+      "detail": "{\"rendered\":10,\"total\":17,\"hiddenPrivate\":1,\"skeleton\":false}"
     },
     {
       "name": "desktop: feed prefetches next batch before the end (no skeleton at normal scroll)",
       "pass": true,
-      "detail": "{\"rendered\":20,\"skeleton\":false}"
+      "detail": "{\"rendered\":17,\"skeleton\":false}"
     },
     {
       "name": "desktop: feed reaches all posts without lingering skeleton",
       "pass": true,
-      "detail": "{\"rendered\":28,\"skeleton\":false,\"sentinel\":false}"
+      "detail": "{\"rendered\":17,\"skeleton\":false,\"sentinel\":false}"
     },
     {
       "name": "desktop: mutual follows auto-listed in inbox with say-hi hint",
@@ -1086,19 +1086,19 @@
       "detail": ""
     },
     {
-      "name": "mobile: chooser + progress publishes to feed",
+      "name": "mobile: the Post button publishes straight to the feed",
       "pass": true,
-      "detail": "[{\"ms\":17,\"pct\":\"12%\",\"label\":\"Publishing your post…\"},{\"ms\":20,\"pct\":\"100%\",\"label\":\"Publishing your post…\"}]"
+      "detail": "[{\"ms\":8,\"pct\":\"12%\",\"label\":\"Publishing your post…\"},{\"ms\":11,\"pct\":\"100%\",\"label\":\"Publishing your post…\"}]"
     },
     {
       "name": "mobile: reels full-screen video feed, sound on, rail + caption",
       "pass": true,
-      "detail": "{\"slides\":7,\"playing\":true,\"muted\":false,\"rail\":true,\"meta\":true,\"hasNav\":true,\"navVisible\":true,\"navTabs\":5,\"navAtBottom\":true,\"pageLifted\":true}"
+      "detail": "{\"slides\":4,\"playing\":true,\"muted\":false,\"rail\":true,\"meta\":true,\"hasNav\":true,\"navVisible\":true,\"navTabs\":5,\"navAtBottom\":true,\"pageLifted\":true}"
     },
     {
       "name": "mobile: reels keeps bottom nav visible above safe area",
       "pass": true,
-      "detail": "{\"slides\":7,\"playing\":true,\"muted\":false,\"rail\":true,\"meta\":true,\"hasNav\":true,\"navVisible\":true,\"navTabs\":5,\"navAtBottom\":true,\"pageLifted\":true}"
+      "detail": "{\"slides\":4,\"playing\":true,\"muted\":false,\"rail\":true,\"meta\":true,\"hasNav\":true,\"navVisible\":true,\"navTabs\":5,\"navAtBottom\":true,\"pageLifted\":true}"
     },
     {
       "name": "mobile: reel Like tap opens reaction tray fully on screen",
@@ -1113,7 +1113,7 @@
     {
       "name": "mobile: double-tap right seeks +10s",
       "pass": true,
-      "detail": "{\"mt0\":4.280288,\"t\":0.257037,\"dur\":5.055,\"badge\":true}"
+      "detail": "{\"mt0\":4.343536,\"t\":0.301967,\"dur\":5.055,\"badge\":true}"
     },
     {
       "name": "mobile: reel comment compose above keypad",

@@ -330,8 +330,10 @@ else:
     s, b, _ = rl.post('/auth/signup/', {'username': f'rlx{RUN}', 'email': f'rlx{RUN}@smoke.test', 'password': 'Smoke-Pass-9271', 'dob': '1995-01-01', 'country': 'Nepal'})
     check('4th signup throttled', s == 429, str(s))
     lr = Client(f'10.77.{OCT}.8')
-    codes = [lr.post('/auth/login/', {'username': 'nobody', 'password': 'x'})[0] for _ in range(6)]
-    check('login IP limit 5/min then 429', codes[5] == 429, str(codes))
+    logins = [lr.post('/auth/login/', {'username': 'nobody', 'password': 'x'}) for _ in range(11)]
+    codes = [s for s, _b, _h in logins]
+    check('login IP limit 10/min then 429', codes[:10] == [401] * 10 and codes[10] == 429, str(codes))
+    check('the throttle refuses in human words', 'Too many attempts' in (logins[10][1].get('detail') or ''), str(logins[10][1])[:160])
 
 # --- google demo flow ---
 g = Client(f'10.77.{OCT}.9')

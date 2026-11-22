@@ -168,27 +168,22 @@ ok('desktop: suggestions are an inline list, not a card',
 await settle(d);
 await shot(d, 'ss9-desktop-feed');
 
-// ---------- The tab bar gives its own height back on scroll ----------
-const resting = await d.evaluate(() => {
-  const el = document.querySelector('.home-header');
-  const r = el.getBoundingClientRect();
-  return { h: Math.round(r.height), top: Math.round(r.top), lifted: el.classList.contains('lifted') };
-});
-await d.evaluate(() => window.scrollTo(0, 700));
-await sleep(600);
-await settle(d);
-const raised = await d.evaluate(() => {
-  const el = document.querySelector('.home-header');
-  const r = el.getBoundingClientRect();
+// ---------- The tabs ride the top bar, so they cost the feed no height ----------
+const tabs = await d.evaluate(() => {
+  const band = document.querySelector('.home-header');
+  const bar = document.querySelector('.topbar-tabs');
+  const r = bar?.getBoundingClientRect();
   return {
-    h: Math.round(r.height), top: Math.round(r.top), lifted: el.classList.contains('lifted'),
+    bandShown: !!band && getComputedStyle(band).display !== 'none',
+    bandH: band ? Math.round(band.getBoundingClientRect().height) : -1,
+    pinned: !!r && r.width > 0 && r.top < 56,
+    tabCount: document.querySelectorAll('.topbar-tabs .topbar-tab').length,
     posts: document.querySelectorAll('.post').length,
     overflow: document.documentElement.scrollWidth > window.innerWidth + 1
   };
 });
-ok('desktop: the For you / Following bar lifts and thins once the reader scrolls',
-   raised.lifted && resting.h - raised.h >= 6 && resting.top - raised.top >= 4 && !raised.overflow,
-   JSON.stringify({ resting, raised }));
+ok('desktop: For you / Following live in the top bar, not in a band over the feed',
+   tabs.pinned && tabs.tabCount === 2 && !tabs.bandShown && !tabs.overflow, JSON.stringify(tabs));
 await shot(d, 'ss9-desktop-feed-lifted');
 await d.evaluate(() => window.scrollTo(0, 0));
 await sleep(400);
@@ -265,18 +260,25 @@ const panelClosed = await (async () => {
 })();
 ok('desktop: a click outside closes the popover', panelClosed);
 
-// A row click leaves the popover and lands on the target.
+// A row click leaves the popover and lands on the target. Rows are marked up as
+// a div holding a navigate button plus, for follow rows, a follow-back button,
+// so the press goes on the button a real pointer would hit.
 await d.evaluate(() => document.querySelector('[aria-label="Notifications"]')?.click());
 await sleep(400);
 const rowJump = await d.evaluate(async () => {
-  const row = document.querySelector('.topbar-panel .notif-row');
-  if (!row) return null;
-  row.click();
-  await new Promise(r => setTimeout(r, 1400));
+  const rows = [...document.querySelectorAll('.topbar-panel .notif-row')];
+  for (const row of rows.slice(0, 6)) {
+    const open = row.querySelector('.notif-open');
+    if (!open) return { broken: true, rows: rows.length };
+    open.click();
+    await new Promise(r => setTimeout(r, 1200));
+    // A row with no target only marks itself read, so keep looking for one that goes somewhere.
+    if (location.pathname !== '/') break;
+  }
   return { path: location.pathname, panel: !!document.querySelector('.topbar-panel') };
 });
 ok('desktop: a popover row navigates and closes the popover',
-   rowJump && !rowJump.panel && rowJump.path !== '/', JSON.stringify(rowJump));
+   rowJump && !rowJump.broken && !rowJump.panel && rowJump.path !== '/', JSON.stringify(rowJump));
 await shot(d, 'ss9-desktop-notif-jump');
 
 // ---------- Messenger popover ----------
@@ -446,6 +448,32 @@ const mobileFeed = await m.evaluate(() => ({
 ok('mobile: the feed keeps its own sheet and loads posts',
    mobileFeed.posts > 0 && rgb(mobileFeed.bg) === 'rgb(255,255,255)',
    JSON.stringify({ ...mobileFeed, waitedMs: Date.now() - feedT0 }));
+
+// On a phone the tabs are still their own band, so the room it gives back on
+// scroll is a mobile behaviour and only means anything measured at 390px. The
+// band stays pinned under the top bar; what it hands over is its own height.
+const bandAtRest = await m.evaluate(() => {
+  const el = document.querySelector('.home-header');
+  const r = el.getBoundingClientRect();
+  return { h: Math.round(r.height), top: Math.round(r.top), lifted: el.classList.contains('lifted') };
+});
+await m.evaluate(() => window.scrollTo(0, 700));
+await sleep(700);
+const bandRaised = await m.evaluate(() => {
+  const el = document.querySelector('.home-header');
+  const r = el.getBoundingClientRect();
+  return {
+    h: Math.round(r.height), top: Math.round(r.top), lifted: el.classList.contains('lifted'),
+    posts: document.querySelectorAll('article.post').length,
+    overflow: document.documentElement.scrollWidth > window.innerWidth + 1
+  };
+});
+ok('mobile: the For you / Following band thins on scroll without losing its place',
+   bandRaised.lifted && bandAtRest.h - bandRaised.h >= 4 && bandRaised.top === bandAtRest.top && !bandRaised.overflow,
+   JSON.stringify({ resting: bandAtRest, raised: bandRaised }));
+await shot(m, 'ss9-mobile-feed-lifted');
+await m.evaluate(() => window.scrollTo(0, 0));
+await sleep(400);
 
 // ================= GUEST =================
 // Its own browser context: the signed-in pages share cookies and localStorage,

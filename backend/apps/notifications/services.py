@@ -1,4 +1,5 @@
 from django.conf import settings
+from django.utils import timezone
 
 from .models import Notification
 from .tasks import send_activity_email
@@ -24,6 +25,24 @@ def notify(recipient, actor, kind, text, target_type='', target_id=''):
         recipient=recipient, actor=actor, kind=kind, text=text[:240],
         target_type=target_type, target_id=str(target_id),
     )
+
+
+def notify_latest(recipient, actor, kind, text, target_type='', target_id=''):
+    """One row per person and event, re-stamped when that person repeats it.
+
+    Chat is the case that needs it: a twelve-message thread would otherwise leave
+    twelve identical bell rows and twelve unread on the badge, burying everything
+    else the tray holds.
+    """
+    if recipient is None or (actor is not None and recipient.pk == actor.pk):
+        return None
+    row = Notification.objects.filter(recipient=recipient, actor=actor, kind=kind).first()
+    if row is None:
+        return notify(recipient, actor, kind, text, target_type, target_id)
+    now = timezone.now()
+    Notification.objects.filter(pk=row.pk).update(text=text[:240], read_at=None, created_at=now)
+    row.text, row.read_at, row.created_at = text[:240], None, now
+    return row
 
 
 def email_activity(recipient, actor, kind):

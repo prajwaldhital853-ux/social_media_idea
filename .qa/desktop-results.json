@@ -1,5 +1,5 @@
 {
-  "passed": 33,
+  "passed": 34,
   "failed": 0,
   "results": [
     {
@@ -25,7 +25,7 @@
     {
       "name": "desktop: the feed leaves room on both sides",
       "pass": true,
-      "detail": "{\"feed\":600,\"sideRoom\":524}"
+      "detail": "{\"feed\":560,\"sideRoom\":564}"
     },
     {
       "name": "desktop: the gap between rail and feed is wide",
@@ -58,9 +58,9 @@
       "detail": "{\"card\":false,\"rail\":true,\"bg\":\"rgba(0, 0, 0, 0)\"}"
     },
     {
-      "name": "desktop: the For you / Following bar lifts and thins once the reader scrolls",
+      "name": "desktop: For you / Following live in the top bar, not in a band over the feed",
       "pass": true,
-      "detail": "{\"resting\":{\"h\":55,\"top\":64,\"lifted\":false},\"raised\":{\"h\":41,\"top\":58,\"lifted\":true,\"posts\":10,\"overflow\":false}}"
+      "detail": "{\"bandShown\":false,\"bandH\":0,\"pinned\":true,\"tabCount\":2,\"posts\":10,\"overflow\":false}"
     },
     {
       "name": "desktop: the marketplace uses everything right of the rail",
@@ -80,7 +80,7 @@
     {
       "name": "desktop: the bell opens an activity box over the canvas",
       "pass": true,
-      "detail": "{\"rows\":10,\"groups\":[\"New\",\"Earlier\"],\"tabs\":[\"All\",\"Unread (6)\"],\"foot\":\"See all notifications\",\"right\":1380,\"top\":60,\"w\":380,\"bg\":\"rgb(24, 26, 30)\"}"
+      "detail": "{\"rows\":10,\"groups\":[\"Earlier\"],\"tabs\":[\"All\",\"Unread\"],\"foot\":\"See all notifications\",\"right\":1380,\"top\":60,\"w\":380,\"bg\":\"rgb(24, 26, 30)\"}"
     },
     {
       "name": "desktop: the Unread tab filters the popover to unread rows",
@@ -95,7 +95,7 @@
     {
       "name": "desktop: a popover row navigates and closes the popover",
       "pass": true,
-      "detail": "{\"path\":\"/u/priya\",\"panel\":false}"
+      "detail": "{\"path\":\"/u/arjun\",\"panel\":false}"
     },
     {
       "name": "desktop: the message icon opens a thread list at the top of the page",
@@ -140,7 +140,7 @@
     {
       "name": "mobile: the inbox stays a single column with no thread pane",
       "pass": true,
-      "detail": "{\"rows\":9,\"mainHidden\":true,\"topbarHidden\":true,\"search\":true,\"head\":true,\"waitedMs\":238}"
+      "detail": "{\"rows\":9,\"mainHidden\":true,\"topbarHidden\":true,\"search\":true,\"head\":true,\"waitedMs\":793}"
     },
     {
       "name": "mobile: a thread is still full width with its back button",
@@ -150,7 +150,12 @@
     {
       "name": "mobile: the feed keeps its own sheet and loads posts",
       "pass": true,
-      "detail": "{\"bg\":\"rgb(255, 255, 255)\",\"posts\":9,\"waitedMs\":159}"
+      "detail": "{\"bg\":\"rgb(255, 255, 255)\",\"posts\":10,\"waitedMs\":269}"
+    },
+    {
+      "name": "mobile: the For you / Following band thins on scroll without losing its place",
+      "pass": true,
+      "detail": "{\"resting\":{\"h\":43,\"top\":56,\"lifted\":false},\"raised\":{\"h\":39,\"top\":56,\"lifted\":true,\"posts\":10,\"overflow\":false}}"
     },
     {
       "name": "desktop: a guest signs in from the top bar, never the rail",

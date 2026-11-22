@@ -11,7 +11,7 @@ from apps.accounts.models import User
 from apps.common.api import person
 from apps.common.pagination import KeysetPagination, decode_cursor
 from apps.follows.models import Follow
-from apps.notifications.services import notify
+from apps.notifications.services import notify_latest
 
 from .models import Conversation, Message
 
@@ -96,7 +96,7 @@ def thread(request, username):
         with transaction.atomic():
             message = Message.objects.create(conversation=conversation, sender=request.user, text=text)
             Conversation.objects.filter(pk=conversation.pk).update(last_message_at=message.created_at)
-        notify(other, request.user, 'message', f'{request.user.username} sent you a message.', 'user', request.user.pk)
+        notify_latest(other, request.user, 'message', f'{request.user.username} sent you a message.', 'user', request.user.pk)
         return Response(MessageSerializer(message).data, status=status.HTTP_201_CREATED)
     conversation = Conversation.objects.filter(participants=request.user).filter(participants=other).first()
     if not conversation:

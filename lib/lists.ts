@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useSyncExternalStore } from 'react';
-import { api } from './api';
+import { api, API_ENABLED } from './api';
 import {
   mapCoinRequest, mapComment, mapLedger, mapListing, mapMessage, mapNotification, mapPerson,
   mapPost, mapPromotion, reactionsOfComment, reactionsOfPost, idOf,
@@ -87,7 +87,9 @@ function apiPath(path: string): string {
 }
 
 async function fetchPage(key: string, def: ListDef, query: Query | undefined, cursor: string | null): Promise<void> {
-  if (snapshot(key).loading) return;
+  // A demo build has no server of its own: fetching anyway would merge real
+  // rows into the seeded cache and hand screens people the demo never had.
+  if (!API_ENABLED || snapshot(key).loading) return;
   set(key, { loading: true, error: null });
   try {
     const page = await api.get<{ results: any[]; next_cursor: string | null; has_more: boolean }>(
@@ -192,24 +194,34 @@ export function useList(key: string, def: ListDef, query?: Query, enabled = true
 
 /**
  * The author embedded in a post, comment or listing row. Everything the row
- * leaves unanswered stays unanswered — mapPerson then decides what a card may
- * overwrite in a record the cache already knows in full.
+ * leaves unanswered stays unanswered — `cards` and mapPerson then decide what
+ * the cache may take.
  */
-function authorCard(row: any): User {
-  return mapPerson({
+function authorCard(row: any): any {
+  return {
     id: row.author ?? row.id,
     username: row.author_username ?? row.username,
     name: row.author_name ?? row.name,
     avatar_url: row.author_avatar_url ?? row.avatar_url,
     verified: row.author_verified ?? row.verified,
     is_private: row.author_is_private ?? row.is_private,
-  });
+  };
+}
+
+/**
+ * Collect the person cards one page embeds. Every screen finds people by
+ * handle, so a card that cannot answer with one is a dead entry — and worse, a
+ * record that makes those lookups throw for the whole cache. Rows that carry no
+ * card at all (a system notification, an anonymous listing) contribute nothing.
+ */
+function cards(rows: any[], card: (row: any) => any): User[] {
+  return rows.map(card).filter(c => c && c.username).map(mapPerson);
 }
 
 export function postsFragment(meId: string | null): (rows: any[]) => Fragment {
   return rows => ({
     posts: rows.map(mapPost),
-    users: rows.map(authorCard),
+    users: cards(rows, authorCard),
     reactions: meId ? rows.flatMap(row => reactionsOfPost(row, meId)) : [],
     promotions: rows.filter(row => row.promo).map(mapPromotion),
   });
@@ -218,13 +230,13 @@ export function postsFragment(meId: string | null): (rows: any[]) => Fragment {
 export function commentsFragment(meId: string | null): (rows: any[]) => Fragment {
   return rows => ({
     comments: rows.map(mapComment),
-    users: rows.map(authorCard),
+    users: cards(rows, authorCard),
     reactions: meId ? rows.flatMap(row => reactionsOfComment(row, meId)) : [],
   });
 }
 
 export function usersFragment(rows: any[]): Fragment {
-  return { users: rows.map(mapPerson) };
+  return { users: cards(rows, row => row) };
 }
 
 /**
@@ -246,7 +258,7 @@ export function inboxFragment(meId: string): (rows: any[]) => Fragment {
       ...mapMessage(row.last_message, meId, idOf(row.user.id)),
       unread: Number(row.unread) || 0,
     })),
-    users: rows.filter(row => row.user).map(mapPerson),
+    users: cards(rows, row => row.user),
   });
 }
 
@@ -254,14 +266,14 @@ export function listingsFragment(rows: any[]): Fragment {
   return {
     listings: rows.map(mapListing),
     // Only the keys the row answers for: a thin card must not reset a real profile.
-    users: rows.map(row => mapPerson({ id: row.seller, username: row.seller_username, name: row.seller_name })),
+    users: cards(rows, row => ({ id: row.seller, username: row.seller_username, name: row.seller_name })),
   };
 }
 
 export function notificationsFragment(rows: any[]): Fragment {
   return {
     notifications: rows.map(mapNotification),
-    users: rows.filter(row => row.actor_card).map(mapPerson),
+    users: cards(rows, row => row.actor_card),
   };
 }
 
@@ -275,6 +287,6 @@ export const coinRequestsFragment = (rows: any[]): Fragment => ({ coinRequests: 
 export function promotionsFragment(rows: any[]): Fragment {
   return {
     promotions: rows.map(mapPromotion),
-    users: rows.filter(row => row.owner_card).map(mapPerson),
+    users: cards(rows, row => row.owner_card),
   };
 }

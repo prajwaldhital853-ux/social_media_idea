@@ -120,7 +120,8 @@ export default function EditProfileModal({ onClose }: { onClose: () => void }) {
           <b>{t('editProfile')}</b>
           <button type="button" className="modal-close" onClick={onClose} aria-label={t('close')}>{IC.x}</button>
         </div>
-        <form className="edit-profile-form" onSubmit={submit}>
+        {/* Native url bubbles are untranslated and preempt the app's own instruction. */}
+        <form className="edit-profile-form" onSubmit={submit} noValidate>
           <div className="edit-avatar-row">
             <Avatar user={{ ...me, avatar: avatar || undefined }} size={72} />
             <button type="button" className="edit-avatar-btn" disabled={busy} onClick={() => fileRef.current?.click()}>
