@@ -63,7 +63,7 @@
     {
       "name": "desktop: a comment is written to /api/comments/ and rendered from it",
       "pass": true,
-      "detail": "{\"id\":\"2120\",\"text\":true}"
+      "detail": "{\"id\":\"2122\",\"text\":true}"
     },
     {
       "name": "desktop: the comment survives a server-side read back",
@@ -83,12 +83,12 @@
     {
       "name": "desktop: the marketplace grid opens on the page the server chose",
       "pass": true,
-      "detail": "screen 30, api 10, drift at -1, has_more true"
+      "detail": "screen 20, api 10, drift at -1, has_more true"
     },
     {
       "name": "desktop: the marketplace grid walks its cursor",
       "pass": true,
-      "detail": "30 -> 32"
+      "detail": "20 -> 32"
     },
     {
       "name": "desktop: a deep-linked listing hydrates by id",
@@ -113,7 +113,7 @@
     {
       "name": "desktop: an author with a shelf of reels exists",
       "pass": true,
-      "detail": "sita, 10 clips, head bumped to beat 24 views"
+      "detail": "sita, 10 clips, head bumped to beat 26 views"
     },
     {
       "name": "desktop: the profile leads its reels with three quiet words",
