@@ -2661,6 +2661,11 @@ a.trend-item:hover { text-decoration: none; }
   text-decoration: underline;
 }
 
+/* The generic .action-btn rule sets its colour later in the file and would
+   flatten this row's liked state back to grey, so the comment row carries its
+   own override the way the media page and the reel rail already do. */
+.comment-meta .reaction-trigger.reacted { color: var(--brand); }
+
 .comment-reactions-inline {
   display: flex;
   gap: 2px;

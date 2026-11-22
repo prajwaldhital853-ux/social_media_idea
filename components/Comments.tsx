@@ -34,7 +34,7 @@ function CommentText({ text, replyToName }: { text: string; replyToName?: string
 }
 
 export default function Comments({ postId, onClose, mediaIndex }: { postId: string; onClose?: () => void; mediaIndex?: number }) {
-  const { db, me, addComment, deleteComment, react, myReaction, reactionCount, t, serverMode, showToast } = useApp();
+  const { db, me, addComment, deleteComment, react, myReaction, reactionCount, reactionMix, t, serverMode, showToast } = useApp();
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
   const [sort, setSort] = useState('newest');
@@ -92,7 +92,9 @@ export default function Comments({ postId, onClose, mediaIndex }: { postId: stri
     ? []
     : db.reactions.filter(r => r.targetType === targetType && r.targetId === targetId);
   const reactionsShown = serverMode ? reactionCount(targetType, targetId) : postReactions.length;
-  const postKinds = REACTIONS.map(r => r.kind).filter(k => postReactions.some(r => r.kind === k));
+  // The API build ships tallies, not reaction rows, so db.reactions is empty
+  // here and the kinds have to come from the mix, which reads them.
+  const postKinds = reactionMix(targetType, targetId).map(m => m.kind);
   const quickKinds = postKinds.length ? postKinds : REACTIONS.map(r => r.kind);
   const myPostReaction = myReaction(targetType, targetId);
 
