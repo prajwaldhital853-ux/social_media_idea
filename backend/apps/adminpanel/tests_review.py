@@ -33,6 +33,7 @@ POLICY_URL = '/api/admin/policy/'
 TERMS_URL = '/api/admin/policy/terms/'
 CATEGORIES_URL = '/api/admin/policy/categories/'
 NOTICES_URL = '/api/admin/notices/'
+ATTACH_URL = '/api/admin/notices/attach/'
 
 OPEN = Report.Status.OPEN
 RESOLVED = Report.Status.RESOLVED
@@ -772,6 +773,141 @@ class NoticeTests(ReviewTestCase):
         response = self.session('night_mod').get(NOTICES_URL)
         self.assertEqual(response.status_code, 403)
         self.assertEqual(response.data['permission'], 'notices')
+
+    def test_a_notice_goes_on_content_that_nobody_reported(self):
+        """Contract 6.5: the dashboard is the only door, so the door has to exist."""
+        desk = self.session('night_mod')
+        post = self.post_of(text='this remedy cures cancer in two days')
+
+        out = desk.post(ATTACH_URL, {'target': f'post:{post.pk}', 'text': 'This claim is false.',
+                                     'reason': 'misinformation'}, format='json')
+        self.assertEqual(out.status_code, 201)
+        self.assertEqual(out.data['notice']['target'], f'post:{post.pk}')
+        self.assertEqual(out.data['notice']['about'], 'ordinary')
+        self.assertEqual(out.data['notice']['actor'], 'night_mod')
+        self.assertEqual(out.data['notice']['reason'], 'misinformation')
+        self.assertTrue(out.data['notice']['is_live'])
+        self.assertIn('standing on post', out.data['detail'])
+
+        page = desk.get(NOTICES_URL)
+        self.assertEqual([row['target'] for row in page.data['results']], [f'post:{post.pk}'])
+
+        community = APIClient().get(f'/api/notices/post/{post.pk}/')
+        self.assertEqual(community.status_code, 200)
+        self.assertEqual([row['text'] for row in community.data['notices']], ['This claim is false.'],
+                         'what the dashboard wrote is what the site reads')
+
+        entry = AuditLog.objects.get(action='attach_notice')
+        self.assertEqual(entry.target, f'post:{post.pk}')
+        self.assertEqual(entry.actor, self.mod)
+        self.assertIn('misinformation', entry.detail)
+        self.assertIn('This claim is false.', entry.detail)
+        self.assertEqual(Report.objects.count(), 0, 'the notice was not waiting for a report')
+
+    def test_every_kind_of_content_takes_a_notice_the_same_way(self):
+        desk = self.session('night_mod')
+        comment = Comment.objects.create(post=self.post_of(), author=self.member, text='a rude reply')
+        listing = self.listing_of()
+        member = self.member
+
+        for target, kind in ((f'comment:{comment.pk}', 'comment'),
+                             (f'listing:{listing.pk}', 'listing'),
+                             (f'user:{member.pk}', 'user')):
+            out = desk.post(ATTACH_URL, {'target': target, 'text': f'A warning about {kind}.',
+                                         'reason': 'policy'}, format='json')
+            self.assertEqual(out.status_code, 201, target)
+            self.assertEqual(out.data['notice']['target_type'], kind)
+
+        self.assertEqual(
+            {row['target'] for row in desk.get(NOTICES_URL).data['results']},
+            {f'comment:{comment.pk}', f'listing:{listing.pk}', f'user:{member.pk}'})
+        self.assertEqual(APIClient().get(f'/api/notices/comment/{comment.pk}/').data['notices'][0]['about'],
+                         'ordinary')
+
+    def test_a_notice_needs_both_the_sentence_and_the_reason_for_it(self):
+        desk = self.session('night_mod')
+        post = self.post_of()
+
+        blank = desk.post(ATTACH_URL, {'target': f'post:{post.pk}', 'text': '  ',
+                                       'reason': 'spam'}, format='json')
+        self.assertEqual(blank.status_code, 400)
+        self.assertIn('sentence the community will read', blank.data['detail'])
+
+        no_reason = desk.post(ATTACH_URL, {'target': f'post:{post.pk}', 'text': 'False claim.',
+                                           'reason': ''}, format='json')
+        self.assertEqual(no_reason.status_code, 400)
+        self.assertIn('audit row keeps', no_reason.data['detail'])
+
+        too_long = desk.post(ATTACH_URL, {'target': f'post:{post.pk}', 'text': 'x' * 241,
+                                          'reason': 'spam'}, format='json')
+        self.assertEqual(too_long.status_code, 400)
+        self.assertIn('240', too_long.data['detail'])
+        self.assertEqual(PublicNotice.objects.count(), 0)
+
+    def test_the_target_has_to_be_content_that_is_actually_here(self):
+        desk = self.session('night_mod')
+        post = self.post_of()
+
+        gone = desk.post(ATTACH_URL, {'target': 'post:999999', 'text': 'Nothing.', 'reason': 'spam'},
+                         format='json')
+        self.assertEqual(gone.status_code, 404)
+        self.assertIn('no post 999999', gone.data['detail'])
+
+        wrong_kind = desk.post(ATTACH_URL, {'target': 'shop:5', 'text': 'Nothing.', 'reason': 'spam'},
+                               format='json')
+        self.assertEqual(wrong_kind.status_code, 400)
+        self.assertIn('post:17', wrong_kind.data['detail'])
+
+        not_a_number = desk.post(ATTACH_URL, {'target': 'post:abc', 'text': 'Nothing.', 'reason': 'spam'},
+                                 format='json')
+        self.assertEqual(not_a_number.status_code, 400)
+        self.assertIn('not an id', not_a_number.data['detail'])
+        self.assertEqual(PublicNotice.objects.count(), 0)
+
+    def test_the_same_sentence_does_not_go_up_over_the_same_content_twice(self):
+        desk = self.session('night_mod')
+        post = self.post_of()
+
+        first = desk.post(ATTACH_URL, {'target': f'post:{post.pk}', 'text': 'False claim.',
+                                       'reason': 'misinformation'}, format='json')
+        self.assertEqual(first.status_code, 201)
+        twice = desk.post(ATTACH_URL, {'target': f'post:{post.pk}', 'text': 'False claim.',
+                                       'reason': 'misinformation'}, format='json')
+        self.assertEqual(twice.status_code, 400)
+        self.assertIn('already standing', twice.data['detail'])
+        self.assertEqual(PublicNotice.objects.count(), 1)
+
+        second = desk.post(ATTACH_URL, {'target': f'post:{post.pk}', 'text': 'And this one is dangerous.',
+                                        'reason': 'misinformation'}, format='json')
+        self.assertEqual(second.status_code, 201)
+        self.assertEqual(len(APIClient().get(f'/api/notices/post/{post.pk}/').data['notices']), 2)
+
+        desk.post(f'{NOTICES_URL}{first.data["notice"]["id"]}/withdraw/', {}, format='json')
+        self.assertEqual(desk.post(ATTACH_URL, {'target': f'post:{post.pk}', 'text': 'False claim.',
+                                                'reason': 'misinformation'}, format='json').status_code, 201,
+                         'a withdrawn sentence may be put back up')
+
+    def test_notices_are_one_key_and_the_pen_for_the_content_is_another(self):
+        seat = self.seat(self.mod)
+        seat.denied_keys = ['content']
+        seat.save(update_fields=['denied_keys'])
+        desk = self.session('night_mod')
+        post, listing = self.post_of(), self.listing_of()
+
+        refused = desk.post(ATTACH_URL, {'target': f'post:{post.pk}', 'text': 'False claim.',
+                                         'reason': 'misinformation'}, format='json')
+        self.assertEqual(refused.status_code, 403)
+        self.assertEqual(refused.data['permission'], 'content')
+        self.assertEqual(refused.data['label'], 'Post and comment review')
+
+        marketplace = desk.post(ATTACH_URL, {'target': f'listing:{listing.pk}', 'text': 'Counterfeit.',
+                                             'reason': 'fraud'}, format='json')
+        self.assertEqual(marketplace.status_code, 201, 'the seat still holds the listing pen')
+        self.assertEqual(PublicNotice.objects.filter(target_type='post').count(), 0)
+
+        stranger = auth_client(make_user(username='curious'))
+        self.assertEqual(stranger.post(ATTACH_URL, {'target': f'post:{post.pk}', 'text': 'Hi.',
+                                                    'reason': 'spam'}, format='json').status_code, 403)
 
 
 class VerbTableTests(ReviewTestCase):

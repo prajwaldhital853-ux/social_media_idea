@@ -228,6 +228,38 @@ async function seatFlags(page, username) {
   }, username);
 }
 
+const nap = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+/**
+ * The sign-in page paints its boxes while it is still asking the server who this
+ * browser is, so a browser that never signed out of a live seat gets a form for a
+ * heartbeat and then the console. Typing during that heartbeat is typing into
+ * nothing. Read the page until it says the same thing twice in a row, and walk it
+ * back out whenever it says it is already inside.
+ */
+async function signInDoor(page) {
+  const where = () => page.evaluate(() => {
+    if (document.querySelector('.side-signout')) return 'console';
+    if (document.querySelector('input[autocomplete="username"]')
+      && !document.querySelector('.skeleton-stack')) return 'door';
+    return 'thinking';
+  }).catch(() => 'thinking'); // the page is mid-navigation, so it has decided nothing yet
+  for (let attempt = 0; attempt < 80; attempt += 1) {
+    const first = await where();
+    if (first === 'console') {
+      await clickText(page, '.side-signout', 'Sign out');
+      continue;
+    }
+    if (first === 'door') {
+      await nap(600);
+      if (await where() === 'door') return;
+      continue;
+    }
+    await nap(250);
+  }
+  throw new Error('the sign-in door never settled into either the form or the console');
+}
+
 /**
  * The whole sign-in: password, then whatever the console asks for. A seat that
  * has never enrolled prints a QR; an enrolled seat only wants the code, and the
@@ -236,7 +268,7 @@ async function seatFlags(page, username) {
 async function signIn(page, username, label, known = null) {
   fs.mkdirSync(OUT, { recursive: true });
   await page.goto(`${BASE}/login`, { waitUntil: 'domcontentloaded' });
-  await page.waitForSelector('input[autocomplete="username"]', { visible: true });
+  await signInDoor(page);
   await page.type('input[autocomplete="username"]', username);
   await page.type('input[type="password"]', PASSWORD);
   await page.click('button[type="submit"]');
@@ -283,17 +315,9 @@ async function seatSignIn(page, username, secret) {
   await page.goto(`${BASE}/login`, { waitUntil: 'domcontentloaded' });
   // A seat switched off and back on inside its own thirty-minute window holds a
   // cookie the server takes seriously again, so this route walks the browser home
-  // instead of showing the door. Give that redirect a moment to land, then decide
-  // which page this actually is — reading the form while it is being replaced is
-  // how the suite used to type a username into nothing.
-  const live = await page.waitForSelector('.side-signout', { timeout: 5000 })
-    .then(() => true, () => false);
-  if (live) {
-    await clickText(page, '.side-signout', 'Sign out');
-    await page.waitForSelector('input[autocomplete="username"]', { timeout: 40000 });
-  } else {
-    await page.waitForSelector('input[autocomplete="username"]', { timeout: 40000 });
-  }
+  // instead of showing the door. `signInDoor` reads which of the two this page
+  // turned out to be before the first keystroke.
+  await signInDoor(page);
   await clearAndType(page, 'input[autocomplete="username"]', username);
   await clearAndType(page, 'input[type="password"]', PASSWORD);
   await page.click('button[type="submit"]');
@@ -1539,6 +1563,277 @@ try {
       && modAudit.some(entry => entry.actor === SEAT && entry.action === 'suspend_user'),
     `${modAudit[0].action} by ${modAudit[0].actor}`);
   await shot(mod, 'people-8-moderator-decides');
+
+  // ── 9. the notice desk and the first-load wording (contract 6.5, 6.6) ──────
+  /*
+   * Section 7 proved the notice that comes out of a decision; this proves the one
+   * that comes out of the desk alone, on content nobody reported, and then the
+   * wording a visitor reads before they have an account. Both halves are written
+   * by this run and wiped by the seeds that made the content they act on.
+   */
+  const NOTICE_TEXT = 'console QA sample - this claim has been checked and is false.';
+  const NOTICE_WHY = 'console QA sample - misinformation, the health claim has no source';
+  const NOTICE_AGAIN = 'console QA sample - and this second sentence stands beside the first.';
+  const CARD_MESSAGE = 'console QA sample - a hundred small studios, one feed to see them all.';
+  const CARD_TAGLINE = 'console QA sample - made by the people who use it';
+  const CARD_PHONE = '+977-1-4567890';
+
+  const DESK = '.panel[data-attach="notice"]';
+  const KIND_PICK = `${DESK} select[aria-label="What the notice goes on"]`;
+  const NOTICE_ID = `${DESK} input[name="id"]`;
+  const NOTICE_BOX = `${DESK} textarea[name="text"]`;
+  const NOTICE_WHY_BOX = `${DESK} input[name="reason"]`;
+  const PUT_UP = `${DESK} .ask-actions button`;
+  const noticeAt = target => `.notices .notice[data-target="${target}"]`;
+  /** The sentences the desk says are standing on one piece of content, withdrawn ones left out. */
+  const standingOn = async (target, count) => {
+    await owner.waitForFunction(([sel, want]) => document.querySelectorAll(sel).length === want,
+      { timeout: 40000 }, [`${noticeAt(target)}:not(.gone) .notice-text`, count]);
+    return owner.$$eval(`${noticeAt(target)}:not(.gone) .notice-text`, nodes => nodes.map(n => n.textContent.trim()));
+  };
+  const EDITOR = '.panel[data-welcome="editor"]';
+  const lineBox = field => `${EDITOR} [data-line="${field}"]`;
+  const SAVE = `${EDITOR} .ask-actions button`;
+
+  const kindOf = target => target.split(':')[0];
+  const idOf = target => target.split(':')[1];
+
+  /**
+   * The line under each box names the seat that wrote it inside a <b>, so it is
+   * text and element glued together — `until` reads element children only, which
+   * would hand back the username and never the words being waited for.
+   */
+  const whoSays = async (field, needle) => {
+    const sel = `${lineBox(field)} .welcome-who`;
+    await owner.waitForFunction(([where, want]) => {
+      const node = document.querySelector(where);
+      return !!node && node.textContent.replace(/\s+/g, ' ').includes(want);
+    }, { timeout: 40000 }, [sel, needle]);
+    return text(owner, sel);
+  };
+
+  // 9.1 — the desk writes a notice with no report behind it.
+  await owner.bringToFront();
+  await owner.goto(`${BASE}/notices`, { waitUntil: 'domcontentloaded' });
+  await owner.waitForSelector(DESK, { timeout: 40000 });
+  ok('the notice desk is a door of its own, not a side effect of a decision',
+    (await text(owner, `${DESK} h2`)).includes('Put a notice on content')
+      && (await many(owner, `${KIND_PICK} option`)).length === 4,
+    `${(await many(owner, `${KIND_PICK} option`)).join(' / ')}`);
+  ok('and it says which pen a notice about this kind also needs',
+    (await lineText(owner, `${DESK} p.note`)).includes('Post and comment review'),
+    (await lineText(owner, `${DESK} p.note`)).replace(/\s+/g, ' ').slice(0, 110));
+  ok('the sentence and the reason both have to be there before the button wakes',
+    await heldBack(owner, PUT_UP), 'empty boxes, dead button');
+
+  await clearAndType(owner, NOTICE_ID, idOf(spare.target));
+  await clearAndType(owner, NOTICE_BOX, NOTICE_TEXT);
+  ok('and a sentence alone is still not enough — the reason is what the log keeps',
+    await heldBack(owner, PUT_UP), 'reason blank');
+
+  await clearAndType(owner, NOTICE_WHY_BOX, NOTICE_WHY);
+  const putUp = await answered(owner, PUT_UP, 'Put the notice up', 'admin/notices/attach/');
+  const putBanner = await expectBanner(owner, 'standing on post');
+  ok('one click puts it up, and the screen answers with what just happened',
+    putUp.status === 201 && putBanner.includes(`${kindOf(spare.target)} ${idOf(spare.target)}`)
+      && putUp.body.notice.about === AUTHOR, `${putUp.status} ${putBanner.slice(0, 90)}`);
+  ok('the sentence is on the row, with the seat that wrote it named',
+    (await until(owner, `${noticeAt(spare.target)} .notice-text`, 'console QA sample')).includes(NOTICE_TEXT)
+      && (await lineText(owner, `${noticeAt(spare.target)} .notice-meta`)).includes(OWNER),
+    (await lineText(owner, `${noticeAt(spare.target)} .notice-meta`)).replace(/\s+/g, ' ').slice(0, 110));
+  ok('and it is standing, which is the only state the community ever sees',
+    (await text(owner, `${noticeAt(spare.target)} .pill`)) === 'Standing',
+    await text(owner, `${noticeAt(spare.target)} .pill`));
+  await shot(owner, 'notices-1-hand-written');
+
+  // 9.2 — the open door, with nobody signed in.
+  const stranger = await freshPage();
+  await stranger.goto(`${BASE}/login`, { waitUntil: 'domcontentloaded' });
+  const openRead = await statusOf(stranger, `/api/notices/${kindOf(spare.target)}/${idOf(spare.target)}/`);
+  ok('a stranger with no session reads exactly what will be shown over that post',
+    openRead.status === 200 && openRead.body.notices.length === 1
+      && openRead.body.notices[0].text === NOTICE_TEXT,
+    `${openRead.status} · ${(openRead.body.notices || []).length} notice(s)`);
+
+  // 9.3 — taking it down is the desk too, and it is not a deletion.
+  const taken = await answered(owner, `${noticeAt(spare.target)} .notice-act button`,
+    'Withdraw notice', 'withdraw/');
+  const withdrawnBanner = await expectBanner(owner, 'is withdrawn');
+  await waitGone(owner, `${noticeAt(spare.target)} .notice-act button`);
+  ok('withdrawing is a decision of its own, said in the past tense',
+    taken.status === 200 && taken.body.is_live === false && !!taken.body.withdrawn_at
+      && withdrawnBanner.includes(`@${AUTHOR}`)
+      && (await text(owner, `${noticeAt(spare.target)} .pill`)).startsWith('Withdrawn'),
+    `${taken.status} ${withdrawnBanner.slice(0, 90)}`);
+  const shutDoor = await statusOf(stranger, `/api/notices/${kindOf(spare.target)}/${idOf(spare.target)}/`);
+  ok('the community stops seeing it the moment it is withdrawn',
+    shutDoor.status === 200 && shutDoor.body.notices.length === 0,
+    `${shutDoor.body.notices.length} notice(s) still open`);
+  ok('and the row is still on the desk, because a notice people read is history',
+    (await many(owner, '.notices .notice')).length > 0
+      && (await until(owner, '.toolbar-count', 'standing of')).includes('of'),
+    await lineText(owner, '.toolbar-count'));
+  await shot(owner, 'notices-2-withdrawn');
+
+  // 9.4 — the guards: the same sentence twice, and a seat with no pen.
+  await clearAndType(owner, NOTICE_ID, idOf(spare.target));
+  await clearAndType(owner, NOTICE_BOX, NOTICE_TEXT);
+  await clearAndType(owner, NOTICE_WHY_BOX, NOTICE_WHY);
+  const backUp = await answered(owner, PUT_UP, 'Put the notice up', 'admin/notices/attach/');
+  const backBanner = await expectBanner(owner, 'is standing');
+  ok('a sentence nobody reads any more may go back over the same content',
+    backUp.status === 201 && (await standingOn(spare.target, 1))[0] === NOTICE_TEXT,
+    `${backUp.status} ${backBanner.slice(0, 70)}`);
+
+  await clearAndType(owner, NOTICE_BOX, NOTICE_TEXT);
+  await clearAndType(owner, NOTICE_WHY_BOX, NOTICE_WHY);
+  const upTwice = await answered(owner, PUT_UP, 'Put the notice up', 'admin/notices/attach/');
+  const upTwiceBanner = await expectBad(owner, 'already standing');
+  ok('the same sentence does not go over the same content twice',
+    upTwice.status === 400 && upTwiceBanner.includes('already standing')
+      && (await standingOn(spare.target, 1)).length === 1,
+    `${upTwice.status} ${upTwiceBanner.slice(0, 80)}`);
+
+  await clearAndType(owner, NOTICE_BOX, NOTICE_AGAIN);
+  const second = await answered(owner, PUT_UP, 'Put the notice up', 'admin/notices/attach/');
+  const beside = await standingOn(spare.target, 2);
+  ok('a second sentence about the same thing stands beside the first',
+    second.status === 201 && beside.length === 2 && beside.includes(NOTICE_AGAIN)
+      && (await statusOf(owner, `/api/admin/notices/?target=post&q=${idOf(spare.target)}`))
+        .body.results.filter(row => row.target === spare.target && row.is_live).length === 2,
+    `${second.status} · ${beside.length} standing on ${spare.target}`);
+
+  // The pen for the kind, not the pen for notices, is what decides this.
+  await owner.bringToFront();
+  await owner.goto(`${BASE}/access`, { waitUntil: 'domcontentloaded' });
+  await owner.waitForSelector('.search input', { timeout: 40000 });
+  await clearAndType(owner, '.search input', SEAT);
+  await openSeat(owner, SEAT);
+  for (let n = 0; n < 2; n += 1) {
+    await clickText(owner, '.seat-keys button.key', 'Post and comment review');
+  }
+  await clickText(owner, '.key-actions button', 'Save screens');
+  await expectBanner(owner, 'Saved');
+
+  await mod.bringToFront();
+  await mod.goto(`${BASE}/notices`, { waitUntil: 'domcontentloaded' });
+  await mod.waitForSelector('.notices .notice, .panel.empty', { timeout: 40000 });
+  const modWrite = await postOf(mod, '/api/admin/notices/attach/',
+    { target: spare.target, text: 'console QA sample - written from a seat with no pen.', reason: 'spam' });
+  ok('a seat that lost the content pen reads every notice and writes none about a post',
+    modWrite.status === 403 && modWrite.body.permission === 'content'
+      && modWrite.body.label === 'Post and comment review',
+    `${modWrite.status} ${modWrite.body.permission || 'allowed'}`);
+  const modListing = await postOf(mod, '/api/admin/notices/attach/',
+    { target: sell.target, text: 'console QA sample - this listing is not what it claims.',
+      reason: 'console QA sample - counterfeit' });
+  ok('while the same sentence about a listing goes straight through, on the other pen',
+    modListing.status === 201 && modListing.body.notice.target === sell.target
+      && modListing.body.notice.actor === SEAT,
+    `${modListing.status} ${modListing.body.notice ? modListing.body.notice.actor : 'no notice'}`);
+  await shot(mod, 'notices-3-no-pen');
+
+  await owner.bringToFront();
+  await owner.goto(`${BASE}/access`, { waitUntil: 'domcontentloaded' });
+  await owner.waitForSelector('.search input', { timeout: 40000 });
+  await clearAndType(owner, '.search input', SEAT);
+  await openSeat(owner, SEAT);
+  await clickText(owner, '.seat-keys button.key', 'Post and comment review');
+  await clickText(owner, '.key-actions button', 'Save screens');
+  await expectBanner(owner, 'Saved');
+  const backAgain = (await statusOf(owner, `/api/admin/staff/?q=${SEAT}`)).body.results[0];
+  ok('and handing the pen back is one click, because it was never a code change',
+    !backAgain.denied_keys.includes('content') && backAgain.permissions.includes('content'),
+    `denied ${backAgain.denied_keys.join(', ') || 'none'}`);
+
+  // 9.5 — the wording a visitor reads before they have an account.
+  await owner.bringToFront();
+  await owner.goto(`${BASE}/welcome`, { waitUntil: 'domcontentloaded' });
+  await owner.waitForSelector(EDITOR, { timeout: 40000 });
+  const unwritten = await many(owner, `${EDITOR} .welcome-who`);
+  ok('the platform ships with its own wording, so the card is never an empty box',
+    (await owner.$eval(`${lineBox('message')} textarea`, node => node.value)).startsWith('Welcome to Exposing')
+      && unwritten.every(line => line.includes('unwritten') || line.includes('written by')),
+    unwritten[0].replace(/\s+/g, ' ').slice(0, 90));
+  ok('and saving nothing is not a button, because it would write an audit row for nothing',
+    await heldBack(owner, SAVE), 'nothing typed yet');
+
+  await clearAndType(owner, `${lineBox('message')} textarea`, CARD_MESSAGE);
+  await clearAndType(owner, `${lineBox('tagline')} input`, CARD_TAGLINE);
+  await clearAndType(owner, `${lineBox('phone')} input`, CARD_PHONE);
+  ok('the counters tell the Client how much room the line has',
+    (await lineText(owner, `${lineBox('message')} span`)).includes(`${CARD_MESSAGE.length}/300`)
+      && !(await heldBack(owner, SAVE)),
+    await lineText(owner, `${lineBox('message')} span`));
+
+  const formBlank = await owner.$eval(`${EDITOR} [data-line="form"] input`, node => node.value);
+  const cap = await owner.$eval(`${lineBox('message')} textarea`, node => node.maxLength);
+  ok('a line cannot be typed past the length the card holds',
+    cap === 300 && formBlank === '', `${cap} characters is the cap, and the form link is still empty`);
+
+  const saved = await answered(owner, SAVE, 'Save the wording', 'admin/welcome/');
+  const savedBanner = await expectBanner(owner, 'next first load');
+  ok('saving writes the wording and says where it will be read',
+    saved.status === 200 && savedBanner.includes('welcome message')
+      && savedBanner.includes('tagline'), `${saved.status} ${savedBanner.slice(0, 110)}`);
+  ok('the card the desk shows is the card that was saved, not the box being typed',
+    (await until(owner, '.panel[data-welcome="card"] .notice-text', 'console QA sample')).includes(CARD_MESSAGE),
+    (await text(owner, '.panel[data-welcome="card"] .notice-text')).slice(0, 90));
+  ok('and every line now names the seat that wrote it',
+    (await whoSays('message', 'written by')).includes(OWNER),
+    (await text(owner, `${lineBox('message')} .welcome-who`)).replace(/\s+/g, ' ').slice(0, 90));
+  await shot(owner, 'welcome-1-wording');
+
+  const site = await statusOf(stranger, '/api/welcome/');
+  ok('the website reads it with nobody signed in, and gets only the card',
+    site.status === 200 && site.body.message === CARD_MESSAGE && site.body.tagline === CARD_TAGLINE
+      && Object.keys(site.body).join(',') === 'message,tagline,contact',
+    `${site.status} · ${Object.keys(site.body).join(',')}`);
+  ok('the contact details are the ones filled in, and an empty line is left off',
+    site.body.contact.some(line => line.value === CARD_PHONE)
+      && !site.body.contact.some(line => line.label === 'Support form'),
+    site.body.contact.map(line => `${line.label} ${line.value}`).join(' · ').slice(0, 120));
+  const closedDesk = await statusOf(stranger, '/api/admin/welcome/');
+  ok('the door that changes the wording is not the open one',
+    closedDesk.status === 401 || closedDesk.status === 403, `${closedDesk.status}`);
+
+  // 9.6 — undo, the fallback, and writing the same words twice.
+  await clearAndType(owner, `${lineBox('tagline')} input`, 'console QA sample - a line nobody will keep');
+  await clickText(owner, `${EDITOR} .ask-actions button:nth-child(2)`, 'Undo');
+  ok('undoing the typing hands the boxes back to what is stored',
+    (await owner.$eval(`${lineBox('tagline')} input`, node => node.value)) === CARD_TAGLINE
+      && await heldBack(owner, SAVE), 'the box is back to the saved line');
+
+  await clearAndType(owner, `${lineBox('tagline')} input`, '');
+  const emptied = await answered(owner, SAVE, 'Save the wording', 'admin/welcome/');
+  ok('a line emptied on purpose falls back to the platform’s own wording',
+    emptied.status === 200
+      && (await statusOf(stranger, '/api/welcome/')).body.tagline === 'Expose the work.'
+      && (await whoSays('tagline', 'unwritten')).includes('unwritten'),
+    `${emptied.status} · ${emptied.body.card.tagline}`);
+
+  const sameAgain = await postOf(owner, '/api/admin/welcome/', {
+    message: CARD_MESSAGE, tagline: '', phone: CARD_PHONE,
+  });
+  ok('and typing the same words a second time is refused, not logged twice',
+    sameAgain.status === 400 && sameAgain.body.detail.includes('already says exactly this'),
+    `${sameAgain.status} ${sameAgain.body.detail.slice(0, 70)}`);
+
+  await mod.bringToFront();
+  await mod.goto(`${BASE}/welcome`, { waitUntil: 'domcontentloaded' });
+  await mod.waitForSelector('.panel.blocked, .panel', { timeout: 40000 });
+  const modWording = await postOf(mod, '/api/admin/welcome/', { tagline: 'console QA sample - mine now.' });
+  const welcomeShown = await mod.$eval('.side-nav', node => node.textContent.includes('First-load wording'));
+  ok('the wording is the Client’s and the Admin’s: a moderator is not offered the screen at all',
+    (await mod.$(EDITOR)) === null && !welcomeShown && modWording.status === 403
+      && modWording.body.permission === 'welcome_text',
+    `${modWording.status} ${modWording.body.permission || 'allowed'} · nav ${welcomeShown}`);
+  ok('and the card the visitor reads still says what the Client wrote',
+    (await statusOf(stranger, '/api/welcome/')).body.message === CARD_MESSAGE
+      && (await statusOf(stranger, '/api/welcome/')).body.tagline === 'Expose the work.',
+    (await statusOf(stranger, '/api/welcome/')).body.tagline);
+  await shot(mod, 'welcome-2-locked');
+  await stranger.close();
 } catch (err) {
   ok('the walkthrough completed', false, `${err.message}`);
   await shot(owner, 'crash-owner').catch(() => undefined);

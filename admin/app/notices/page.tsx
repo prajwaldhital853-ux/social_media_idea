@@ -16,6 +16,117 @@ const TARGETS: { id: ContentKind | ''; label: string }[] = [
   { id: 'user', label: 'About an account' },
 ];
 
+const PEN: Record<string, string> = {
+  post: 'Post and comment review',
+  comment: 'Post and comment review',
+  listing: 'Marketplace listing review',
+  user: 'Report queue',
+};
+
+/**
+ * The hand-written notice. A decision in the queue still writes one as a side
+ * effect, but contract 6.5 says a notice is only ever added or removed through
+ * this dashboard — so the desk needs its own way of saying it, for the claim
+ * that nobody reported.
+ */
+function AttachDesk({ busy, onDone }: {
+  busy: boolean;
+  onDone: (banner: { kind: 'ok' | 'bad'; text: string }) => void;
+}) {
+  const [kind, setKind] = useState('post');
+  const [ident, setIdent] = useState('');
+  const [text, setText] = useState('');
+  const [reason, setReason] = useState('');
+  const [sending, setSending] = useState(false);
+  const { noteGate } = useSession();
+
+  const ready = ident.trim() !== '' && text.trim() !== '' && reason.trim() !== '';
+
+  const send = async () => {
+    setSending(true);
+    try {
+      const out = await api<{ detail?: string }>('admin/notices/attach/', {
+        method: 'POST',
+        body: { target: `${kind}:${ident.trim()}`, text: text.trim(), reason: reason.trim() },
+      });
+      setText('');
+      setReason('');
+      onDone({ kind: 'ok', text: out.detail || 'The notice is standing.' });
+    } catch (err) {
+      if (!noteGate(err)) onDone({ kind: 'bad', text: (err as Error).message });
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <section className="panel" data-attach="notice">
+      <div className="panel-head">
+        <div>
+          <h2>Put a notice on content</h2>
+          <p>
+            The sentence goes over the post, comment, listing or account it names and everyone
+            reading that content sees it. Nobody but this desk can put one up or take one down.
+          </p>
+        </div>
+      </div>
+
+      <div className="ask">
+        <div className="term-add">
+          <label className="field">
+            <span>What it goes on</span>
+            <select value={kind} onChange={event => setKind(event.target.value)} aria-label="What the notice goes on">
+              {TARGETS.filter(item => item.id).map(item => (
+                <option key={item.id} value={item.id}>{item.label.replace('About a ', 'A ')}</option>
+              ))}
+            </select>
+          </label>
+          <label className="field grow">
+            <span>Its number</span>
+            <input
+              name="id" value={ident} maxLength={12} autoComplete="off" aria-label="Content id"
+              placeholder="5815 — the number at the end of the address bar"
+              onChange={event => setIdent(event.target.value.replace(/[^0-9]/g, ''))}
+            />
+          </label>
+        </div>
+
+        <label className="field">
+          <span>The sentence the community reads <em>{text.length}/240</em></span>
+          <textarea
+            name="text" rows={2} value={text} maxLength={240}
+            placeholder="This claim has been checked and is false."
+            onChange={event => setText(event.target.value)}
+          />
+        </label>
+
+        <label className="field">
+          <span>Why it is going up</span>
+          <input
+            name="reason" value={reason} maxLength={120} autoComplete="off" aria-label="Why the notice goes up"
+            placeholder="misinformation — the health claim has no source"
+            onChange={event => setReason(event.target.value)}
+          />
+        </label>
+
+        <div className="ask-actions">
+          <button
+            type="button" className="btn primary" disabled={busy || sending || !ready} onClick={send}
+            title={ready ? 'Put this notice on the content' : 'The sentence and the reason are both needed'}
+          >
+            {IC.mega}<span>{sending ? 'Working…' : 'Put the notice up'}</span>
+          </button>
+        </div>
+
+        <p className="note">
+          Writing about a {kind === 'user' ? 'n account' : kind} also needs
+          <b> {PEN[kind]}</b> on the seat, and the number is the one in the address bar.
+        </p>
+      </div>
+    </section>
+  );
+}
+
 export default function NoticesPage() {
   const { noteGate } = useSession();
   const [rows, setRows] = useState<NoticeRow[] | null>(null);
@@ -125,12 +236,17 @@ export default function NoticesPage() {
         </p>
       )}
 
+      <AttachDesk busy={busy} onDone={next => {
+        setBanner(next);
+        if (next.kind === 'ok') load();
+      }}/>
+
       <p className="note row">
         {IC.mega}
         <span>
-          A notice is written by the <b>Public notice</b> decision on the report queue or the
-          takedown shelf. The author also receives a private warning in their own bell; this screen
-          is only the half the community sees.
+          The same sentence is also written by the <b>Public notice</b> decision on the report queue
+          and the takedown shelf. A notice is the half the community sees; the author gets a private
+          warning in their own bell as well, and that is sent from the account itself.
         </span>
       </p>
 
@@ -142,8 +258,8 @@ export default function NoticesPage() {
         <section className="panel empty">
           <h2>No notices</h2>
           <p>
-            Nothing has been said to the community about content on this platform yet. A notice
-            appears the moment a decision is made with the Public notice verb.
+            Nothing has been said to the community about content on this platform yet. Write the
+            first sentence above, or make a decision with the Public notice verb on the queue.
           </p>
         </section>
       ) : (

@@ -433,6 +433,52 @@ def notice_list(request):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 @rbac.staff_only('notices')
+def notice_create(request):
+    """Put a warning notice on one piece of content by hand.
+
+    Contract 6.5 says a notice is added and removed only through the dashboard,
+    so this is the door. The pen for the kind still has to be on the seat: a seat
+    hired for the marketplace holds notices, and notices about a post are not
+    its to write.
+    """
+    target = str(request.data.get('target') or '').strip()
+    kind, _, raw_id = target.partition(':')
+    if kind not in review.MODEL:
+        return Response({'detail': 'Name the content as post:17, comment:17, listing:17 or user:17.'},
+                        status=400)
+    denied = _held(request, review.KEY_BY_KIND.get(kind))
+    if denied is not None:
+        return denied
+    text = str(request.data.get('text') or '').strip()
+    reason = str(request.data.get('reason') or '').strip()
+    if not text:
+        return Response({'detail': 'Write the sentence the community will read.'}, status=400)
+    if len(text) > 240:
+        return Response({'detail': 'A notice is read over the content it is about, not under it. '
+                                   'Keep it to 240 characters.'}, status=400)
+    if not reason:
+        return Response({'detail': 'Say why the notice is going up — that is the reason the audit row keeps.'},
+                        status=400)
+    pk = review.pk_of(raw_id)
+    if pk is None:
+        return Response({'detail': f'{raw_id or "Nothing"} is not an id. Open the content and copy the number.'},
+                        status=400)
+    if PublicNotice.objects.filter(target_type=kind, target_id=str(pk), is_live=True, text=text).exists():
+        return Response({'detail': 'That sentence is already standing on this content.'}, status=400)
+    try:
+        notice = review.attach(kind, str(pk), request.user, reason, text)
+    except ValueError as err:
+        return Response({'detail': str(err)}, status=404)
+    record(request.user, 'attach_notice', f'{kind}:{pk}', f'{reason} — {text[:120]}')
+    return Response({'notice': notice,
+                     'detail': f'The notice is standing on {kind} {pk}. Anyone reading it now '
+                               f'reads this sentence first, and the audit row says who put it there.'},
+                    status=201)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+@rbac.staff_only('notices')
 def notice_withdraw(request, pk):
     """Take a public notice down again, and say who did it.
 

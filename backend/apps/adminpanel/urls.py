@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import views_overview, views_people, views_review, views_session, views_staff
+from . import views_overview, views_people, views_review, views_session, views_staff, views_welcome
 
 urlpatterns = [
     path('admin/session/', views_session.admin_session),
@@ -25,6 +25,7 @@ urlpatterns = [
     path('admin/policy/categories/', views_review.category_create),
     path('admin/policy/categories/<int:pk>/', views_review.category_update),
     path('admin/notices/', views_review.notice_list),
+    path('admin/notices/attach/', views_review.notice_create),
     path('admin/notices/<int:pk>/withdraw/', views_review.notice_withdraw),
     path('notices/<str:kind>/<int:pk>/', views_review.public_notices),
     path('admin/people/', views_people.people_directory),
@@ -35,4 +36,6 @@ urlpatterns = [
     path('admin/people/<str:username>/warn/', views_people.person_warn),
     path('admin/people/<str:username>/clear-flags/', views_people.person_clear_flags),
     path('admin/people/<str:username>/delete/', views_people.person_delete),
+    path('admin/welcome/', views_welcome.welcome_desk),
+    path('welcome/', views_welcome.welcome_public),
 ]
