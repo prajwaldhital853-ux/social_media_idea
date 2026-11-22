@@ -57,7 +57,7 @@
   {
     "name": "83: the count row reads as three bold numbers",
     "pass": true,
-    "detail": "[{\"label\":\"48 Posts\",\"bold\":800,\"size\":19,\"href\":null},{\"label\":\"20 Followers\",\"bold\":800,\"size\":19,\"href\":\"/u/sita/followers\"},{\"label\":\"3 Following\",\"bold\":800,\"size\":19,\"href\":\"/u/sita/following\"}]"
+    "detail": "[{\"label\":\"53 Posts\",\"bold\":800,\"size\":19,\"href\":null},{\"label\":\"20 Followers\",\"bold\":800,\"size\":19,\"href\":\"/u/sita/followers\"},{\"label\":\"3 Following\",\"bold\":800,\"size\":19,\"href\":\"/u/sita/following\"}]"
   },
   {
     "name": "83: Followers opens its own list page",
@@ -72,7 +72,7 @@
   {
     "name": "83: another account shows Follow and Message side by side",
     "pass": true,
-    "detail": "{\"actions\":[\"Following\",\"Message\"]}"
+    "detail": "{\"actions\":[\"Follow\",\"Message\"]}"
   },
   {
     "name": "83: Message lands on the thread with a way to reply",
@@ -102,7 +102,7 @@
   {
     "name": "88: a post hands a crawler its own title, picture and card",
     "pass": true,
-    "detail": "{\"title\":\"Sita Karki — Exposing\",\"desc\":\"See this photo on Exposing.\",\"image\":\"http://localhost:3000/media/uploads/d21deee8e344c684a60352e2.png\",\"type\":\"article\",\"card\":\"summary_large_image\"}"
+    "detail": "{\"title\":\"Sita Karki — Exposing\",\"desc\":\"See this photo on Exposing.\",\"image\":\"http://localhost:3000/media/uploads/85556790e19cf90a7cb7e97d.png\",\"type\":\"article\",\"card\":\"summary_large_image\"}"
   },
   {
     "name": "88: a profile names the account and its handle",
