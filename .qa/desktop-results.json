@@ -65,7 +65,7 @@
     {
       "name": "desktop: the marketplace uses everything right of the rail",
       "pass": true,
-      "detail": "{\"mainW\":1160,\"cols\":4,\"cards\":21,\"calm\":false,\"pageToggle\":false,\"overflow\":false}"
+      "detail": "{\"mainW\":1160,\"cols\":4,\"cards\":30,\"calm\":false,\"pageToggle\":false,\"overflow\":false}"
     },
     {
       "name": "desktop: the marketplace header does not duplicate the top bar mode switch",
@@ -100,12 +100,12 @@
     {
       "name": "desktop: the message icon opens a thread list at the top of the page",
       "pass": true,
-      "detail": "{\"rows\":9,\"search\":true,\"expand\":true,\"foot\":\"See all messages\",\"right\":1332,\"top\":60}"
+      "detail": "{\"rows\":10,\"search\":true,\"expand\":true,\"foot\":\"See all messages\",\"right\":1332,\"top\":60}"
     },
     {
       "name": "desktop: the full-screen messenger is inbox column plus thread pane",
       "pass": true,
-      "detail": "{\"path\":\"/messages\",\"side\":{\"w\":344,\"left\":280},\"main\":{\"w\":816,\"left\":624,\"right\":1440},\"calmShown\":false,\"rows\":9,\"empty\":true,\"search\":true,\"newChat\":true}"
+      "detail": "{\"path\":\"/messages\",\"side\":{\"w\":344,\"left\":280},\"main\":{\"w\":816,\"left\":624,\"right\":1440},\"calmShown\":false,\"rows\":10,\"empty\":true,\"search\":true,\"newChat\":true}"
     },
     {
       "name": "desktop: the messenger owns the width (suggestions column steps aside)",
@@ -115,7 +115,7 @@
     {
       "name": "desktop: picking a thread opens it beside the inbox, not over it",
       "pass": true,
-      "detail": "{\"path\":\"/messages/arjun\",\"chat\":true,\"bubbles\":10,\"compose\":true,\"backHidden\":true,\"stillListed\":9,\"activeRow\":true}"
+      "detail": "{\"path\":\"/messages/own282435\",\"chat\":true,\"bubbles\":10,\"compose\":true,\"backHidden\":true,\"stillListed\":10,\"activeRow\":true}"
     },
     {
       "name": "desktop: the thread hides the mobile back button on desktop",
@@ -140,17 +140,17 @@
     {
       "name": "mobile: the inbox stays a single column with no thread pane",
       "pass": true,
-      "detail": "{\"rows\":9,\"mainHidden\":true,\"topbarHidden\":true,\"search\":true,\"head\":true,\"waitedMs\":793}"
+      "detail": "{\"rows\":10,\"mainHidden\":true,\"topbarHidden\":true,\"search\":true,\"head\":true,\"waitedMs\":141}"
     },
     {
       "name": "mobile: a thread is still full width with its back button",
       "pass": true,
-      "detail": "{\"path\":\"/messages/arjun\",\"chatW\":390,\"sideHidden\":true,\"backShown\":true,\"compose\":true}"
+      "detail": "{\"path\":\"/messages/own282435\",\"chatW\":390,\"sideHidden\":true,\"backShown\":true,\"compose\":true}"
     },
     {
       "name": "mobile: the feed keeps its own sheet and loads posts",
       "pass": true,
-      "detail": "{\"bg\":\"rgb(255, 255, 255)\",\"posts\":10,\"waitedMs\":269}"
+      "detail": "{\"bg\":\"rgb(255, 255, 255)\",\"posts\":10,\"waitedMs\":24}"
     },
     {
       "name": "mobile: the For you / Following band thins on scroll without losing its place",

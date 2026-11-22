@@ -77,7 +77,7 @@
   {
     "name": "desktop: signup creates the account and asks to confirm the email",
     "pass": true,
-    "detail": "{\"title\":\"Confirm it is you\",\"detail\":\"We emailed a 6-digit code to qav7ipa@demo.test. Enter it to activate the account.\",\"hint\":\"Sent to qav7ipa@demo.test\",\"meta\":\"Code expires in"
+    "detail": "{\"title\":\"Confirm it is you\",\"detail\":\"We emailed a 6-digit code to qaazr4q@demo.test. Enter it to activate the account.\",\"hint\":\"Sent to qaazr4q@demo.test\",\"meta\":\"Code expires in"
   },
   {
     "name": "desktop: the code step counts down and offers resend + back",
@@ -87,7 +87,7 @@
   {
     "name": "desktop: the DEBUG mailer exposes the code as a one-tap chip",
     "pass": true,
-    "detail": "Demo mailer code: 782676"
+    "detail": "Demo mailer code: 923650"
   },
   {
     "name": "desktop: signup alone does not open a session",
@@ -107,12 +107,12 @@
   {
     "name": "desktop: resend rotates the challenge and restarts the clock",
     "pass": true,
-    "detail": "{\"was\":\"Demo mailer code: 782676\",\"meta\":\"Code expires in 10:00\",\"dev\":\"Demo mailer code: 831131\",\"code\":\"\"}"
+    "detail": "{\"was\":\"Demo mailer code: 923650\",\"meta\":\"Code expires in 10:00\",\"dev\":\"Demo mailer code: 529284\",\"code\":\"\"}"
   },
   {
     "name": "desktop: the verified code completes signup and opens the session",
     "pass": true,
-    "detail": "{\"id\":432,\"username\":\"qav7ipa\",\"email\":\"qav7ipa@demo.test\",\"name\":\"QA Tester\",\"first_name\":\"QA\",\"last_name\":\"Tester\",\"bio\":\"\",\"avatar\":\"\",\"cover\":\"\",\"location\":\"\",\"province\":\"\",\"website\":\"\",\"phone\":\"\",\"links\":[],\"role\":\"user\",\"is_staff\":false,\"is_superuser\":false,\"verified\":false,\"emailVerified\":true,\"provider\":\"email\",\"dob\":\"1996-04-02\",\"country\":\"Nepal\",\"city\":\"\",\"private\":false,\"twoStep\":true,\"notifyEmail\":true,\"joined\":\"2026-11-21T20:33:21.571996Z\",\"coins\":0,\"susp\":null,\"lockedUntil\":null}"
+    "detail": "{\"id\":434,\"username\":\"qaazr4q\",\"email\":\"qaazr4q@demo.test\",\"name\":\"QA Tester\",\"first_name\":\"QA\",\"last_name\":\"Tester\",\"bio\":\"\",\"avatar\":\"\",\"cover\":\"\",\"location\":\"\",\"province\":\"\",\"website\":\"\",\"phone\":\"\",\"links\":[],\"role\":\"user\",\"is_staff\":false,\"is_superuser\":false,\"verified\":false,\"emailVerified\":true,\"provider\":\"email\",\"dob\":\"1996-04-02\",\"country\":\"Nepal\",\"city\":\"\",\"private\":false,\"twoStep\":true,\"notifyEmail\":true,\"joined\":\"2026-11-22T03:55:12.472251Z\",\"coins\":0,\"susp\":null,\"lockedUntil\":null}"
   },
   {
     "name": "desktop: one wrong password reports the plural attempts left",
@@ -172,7 +172,7 @@
   {
     "name": "desktop: after a refresh the browser still passes CSRF on writes",
     "pass": true,
-    "detail": "{\"status\":201,\"id\":5716}"
+    "detail": "{\"status\":201,\"id\":5719}"
   },
   {
     "name": "desktop: the language choice survives navigation",
@@ -187,7 +187,7 @@
   {
     "name": "desktop: the lockout copy is translated too",
     "pass": true,
-    "detail": "{\"title\":\"खाता लक भयो\",\"detail\":\"धेरै पटक गलत पासवर्ड भयो। ५ मिनेटपछि लक आफैँ खुल्छ।\",\"clock\":\"फेरि प्रयास गर्न 4:06 बाँकी छ।\",\"time\":\"4:06\",\"forms\":0,\"codes\":0}"
+    "detail": "{\"title\":\"खाता लक भयो\",\"detail\":\"धेरै पटक गलत पासवर्ड भयो। ५ मिनेटपछि लक आफैँ खुल्छ।\",\"clock\":\"फेरि प्रयास गर्न 4:03 बाँकी छ।\",\"time\":\"4:03\",\"forms\":0,\"codes\":0}"
   },
   {
     "name": "mobile: sign-in fits 390px with tap targets a thumb can hit",

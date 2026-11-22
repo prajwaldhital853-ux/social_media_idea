@@ -1704,7 +1704,7 @@ const mMix = await m.evaluate(() => {
   const mo = a.querySelector('.media-mosaic');
   return { h: mo.clientHeight, more: mo.querySelector('.media-more')?.textContent };
 });
-ok('mobile: stack mosaic ~280px + 3 overlay', Math.abs(mMix.h - 280) <= 2 && mMix.more === '+3', JSON.stringify(mMix));
+ok('mobile: stack mosaic ~360px + 3 overlay', Math.abs(mMix.h - 360) <= 2 && mMix.more === '+3', JSON.stringify(mMix));
 
 // FAB opens the entry chooser
 await m.tap('.post-fab');

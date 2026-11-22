@@ -33,7 +33,7 @@
     {
       "name": "desktop: the oldest-first cursor walks the feed backwards",
       "pass": true,
-      "detail": "oldest head 2026-07-24T08:50:07.646723Z vs newest page tail 2026-11-21T17:17:36.105184Z, ascending true"
+      "detail": "oldest head 2026-07-24T08:50:07.646723Z vs newest page tail 2026-11-21T17:28:19.663801Z, ascending true"
     },
     {
       "name": "desktop: a deep-linked post hydrates by id",
@@ -43,7 +43,7 @@
     {
       "name": "desktop: a comment is written to /api/comments/ and rendered from it",
       "pass": true,
-      "detail": "{\"id\":\"14473\",\"text\":true}"
+      "detail": "{\"id\":\"14475\",\"text\":true}"
     },
     {
       "name": "desktop: the comment survives a server-side read back",
@@ -58,7 +58,7 @@
     {
       "name": "desktop: sorting by oldest reads the ascending page",
       "pass": true,
-      "detail": "screen Sita Karkilive-mwqgmjaa13h agoReplyDelet vs live-mwqgmjaa"
+      "detail": "screen Sita Karkilive-mwqgmjaa14h agoReplyDelet vs live-mwqgmjaa"
     },
     {
       "name": "desktop: the marketplace grid opens on the page the server chose",
@@ -78,17 +78,17 @@
     {
       "name": "desktop: the listing page knows its seller",
       "pass": true,
-      "detail": "DCDinesh Chaudhary@dinesh1 Listings"
+      "detail": "Dinesh Chaudhary@dinesh1 Listings"
     },
     {
       "name": "desktop: profile totals come from the profile row",
       "pass": true,
-      "detail": "46 Posts | 20 Followers | 3 Following vs followers=20"
+      "detail": "47 Posts | 20 Followers | 3 Following vs followers=20"
     },
     {
       "name": "desktop: the followers list pages people with a cursor",
       "pass": true,
-      "detail": "first 10, api page 10, walked 20, server total 20"
+      "detail": "first 20, api page 10, walked 20, server total 20"
     },
     {
       "name": "desktop: people search hits /api/users/",

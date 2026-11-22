@@ -7200,3 +7200,17 @@ a.market-card { text-decoration: none; }
 .action-btn svg { width: 24px; height: 24px; }
 .action-btn .reaction-art { width: 28px; height: 28px; }
 .first-like { padding-left: 6px; }
+
+/* Mobile feed comfort: thumb-sized action icons and taller cards/media. Kept
+   at the end of the file so it beats every desktop-proportion rule above. */
+@media (max-width: 768px) {
+  .post { padding: 14px 12px 10px; gap: 7px; }
+  .post-actions .action-btn { min-width: 52px; min-height: 48px; gap: 8px; padding: 10px 12px; font-size: 15px; }
+  .post-actions .action-btn svg { width: 28px; height: 28px; }
+  .post-actions .action-btn .reaction-art { width: 33px; height: 33px; }
+  .media-mosaic.single,
+  .thread-view .post-featured .media-mosaic.single { height: 66svh; }
+  .media-mosaic.two, .media-mosaic.three, .media-mosaic.four { height: 320px; }
+  .media-mosaic.stack { height: 360px; }
+  .media-mosaic.mixed { height: 440px; }
+}
