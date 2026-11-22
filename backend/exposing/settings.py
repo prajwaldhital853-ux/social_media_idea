@@ -85,6 +85,9 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    # First so the id is already stamped when a later middleware short-circuits a
+    # request with a 403 or a 400.
+    'apps.common.middleware.RequestIdMiddleware',
     'apps.common.middleware.ApiSlashMiddleware',
     'django.middleware.security.SecurityMiddleware',
     # Hosted platforms give the app one port and no web server, so Django has to
@@ -215,6 +218,10 @@ CELERY_BEAT_SCHEDULE = {
 # raises ImproperlyConfigured the moment an import path is blank.
 EMAIL_BACKEND = os.environ.get('EMAIL_BACKEND') or 'django.core.mail.backends.console.EmailBackend'
 DEFAULT_EMAIL_BACKEND = EMAIL_BACKEND
+# Python opens a socket with no deadline, so one unreachable SMTP host was enough
+# to hold a sign-up request open until the proxy gave up — which is the spinner,
+# not a bug in the form. Ten seconds is longer than any working send.
+EMAIL_TIMEOUT = float(os.environ.get('EMAIL_TIMEOUT') or '10')
 GOOGLE_CLIENT_ID = os.environ.get('GOOGLE_CLIENT_ID', '')
 # Emails quote a link back to the site; on Render the frontend lives on another
 # host, so this is the browser origin rather than the API's own.
@@ -245,6 +252,36 @@ EXPOSING_RATE_LIMITS = (os.environ.get('EXPOSING_RATE_LIMITS') or '1') == '1'
 # Demo escape hatch: shows the one-time login code in the UI when no mail
 # provider is configured. Off by default; never enable for a real launch.
 EXPOSING_OTP_VISIBLE = os.environ.get('EXPOSING_OTP_VISIBLE', '0') == '1'
+
+# Hosted platforms keep a log, not a file, and that log is the only way to learn
+# what a "server could not finish that request" screenshot actually was. stdout,
+# and every line carries the request id the client was handed back.
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'filters': {'request_id': {'()': 'apps.common.middleware.RequestIdFilter'}},
+    'formatters': {
+        'request': {'format': '%(asctime)s %(levelname)s [%(request_id)s] %(name)s: %(message)s'},
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'request',
+            'filters': ['request_id'],
+            'stream': 'ext://sys.stdout',
+        },
+    },
+    'root': {'handlers': ['console'], 'level': 'WARNING'},
+    'loggers': {
+        # Ours: failed requests, slow requests, swallowed mail failures.
+        'apps': {'handlers': ['console'], 'level': 'INFO', 'propagate': False},
+        'exposing': {'handlers': ['console'], 'level': 'INFO', 'propagate': False},
+        # The traceback for a 500. RequestIdMiddleware already writes the one-line
+        # summary of every 4xx, so this stays at ERROR rather than saying it twice.
+        'django.request': {'handlers': ['console'], 'level': 'ERROR', 'propagate': False},
+        'django.security': {'handlers': ['console'], 'level': 'WARNING', 'propagate': False},
+    },
+}
 
 LANGUAGE_CODE = 'en-us'
 TIME_ZONE = 'UTC'

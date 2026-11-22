@@ -12,7 +12,7 @@ import puppeteer from 'puppeteer-core';
 const BASE = 'http://localhost:3000';
 const OUT = 'D:/social_medial/.qa';
 const CHROME = 'C:/Program Files/Google/Chrome/Application/chrome.exe';
-const DEMO = { username: 'sita', password: 'exposing-demo-1' };
+const DEMO = { username: 'sita', email: 'sita@demo.test', password: 'exposing-demo-1' };
 
 const results = [];
 const ok = (name, pass, detail = '') => {
@@ -105,7 +105,7 @@ async function settle(page, ms = 6000) {
 const d = await newPage({ width: 1440, height: 900 });
 await goto(d, '/');
 await d.evaluate(() => localStorage.setItem('exposing-theme', 'dark'));
-await signIn(d, DEMO.username, DEMO.password);
+await signIn(d, DEMO.email, DEMO.password);
 await goto(d, '/');
 await d.waitForSelector('article.post', { timeout: 20000 }).catch(() => {});
 await settle(d);

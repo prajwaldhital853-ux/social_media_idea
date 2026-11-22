@@ -14,16 +14,16 @@ type Step =
 
 const GOOGLE_KEY = 'exposing-google';
 /** The account seed_demo fills with posts, chats, reels and listings. */
-const DEMO = { identifier: 'sita', password: 'exposing-demo-1' };
+const DEMO = { email: 'sita@demo.test', password: 'exposing-demo-1' };
 /** What the server locks for when the third password is wrong. */
 const LOCK_SECONDS = 5 * 60;
 
 const mmss = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 
 export default function ModernLogin() {
-  const { db, t, feature, ready, login, signin, verifyCode, resendCode, googleSignIn, showToast } = useApp();
+  const { db, t, feature, ready, waking, login, signin, verifyCode, resendCode, googleSignIn, showToast } = useApp();
   const router = useRouter();
-  const [identifier, setIdentifier] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [step, setStep] = useState<Step>({ kind: 'form' });
   const [error, setError] = useState('');
@@ -63,6 +63,15 @@ export default function ModernLogin() {
   const triesLeft = (n: number) => t(n === 1 ? 'codeTryOne' : 'codeTriesLeft', { n });
   const attemptsLeftText = (n: number) => t(n === 1 ? 'attemptLeftOne' : 'attemptsLeft', { n });
 
+  /**
+   * A failure that came from the server's own bug is the one message worth
+   * quoting back with its handle: that id is the line in the log, and the person
+   * staring at it cannot read the log.
+   */
+  const withRef = (res: AuthResult) => (res.requestId && res.status >= 500 && res.detail
+    ? `${res.detail} (ref ${res.requestId})`
+    : res.detail);
+
   /** Any answer that carries a challenge means the session is not live yet. */
   const afterAuth = (res: AuthResult) => {
     if (res.ok && res.user) {
@@ -87,9 +96,24 @@ export default function ModernLogin() {
       setLockedFor(secs === null || secs <= 0 ? 0 : Math.min(secs, LOCK_SECONDS));
       return;
     }
+    // The password was right and the address was never confirmed, which the old
+    // build answered with a box that said nothing useful. Say which it is, then
+    // hand over the code it just sent — with the resend the server offers.
+    if (res.emailNotVerified && res.challenge) {
+      setError('');
+      setNotice(t('emailNotVerified'));
+      setStep({
+        kind: 'code',
+        challenge: res.challenge,
+        expiresAt: res.expiresIn ? Date.now() + res.expiresIn * 1000 : undefined,
+        devCode: res.devCode,
+        hint: res.emailHint || email.trim(),
+      });
+      return;
+    }
     setError(res.attemptsLeft !== undefined && res.attemptsLeft > 0
-      ? `${res.detail} ${attemptsLeftText(res.attemptsLeft)}`
-      : res.detail || t('needIdentifier'));
+      ? `${withRef(res)} ${attemptsLeftText(res.attemptsLeft)}`
+      : withRef(res) || t('needEmail'));
   };
 
   const run = async (id: string, pass: string) => {
@@ -103,63 +127,75 @@ export default function ModernLogin() {
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!identifier.trim()) return setError(t('needIdentifier'));
+    const value = email.trim();
+    if (!value) return setError(t('needEmail'));
+    // Caught here rather than at the server so the box can say what it wants
+    // before a person spends one of their three password tries on a username.
+    if (!value.includes('@')) return setError(t('needEmailAt'));
     if (!password) return setError(t('e_nopass'));
     setError('');
     setNotice('');
 
     if (!API_ENABLED) {
-      const id = identifier.trim().toLowerCase().replace(/^@/, '');
-      const user = db.users.find(u => u.email.toLowerCase() === id || u.username.toLowerCase() === id) || db.users[0];
+      const id = value.toLowerCase();
+      const user = db.users.find(u => (u.email || '').toLowerCase() === id);
       if (!user) return setError(t('e_noacc'));
       login(user.id);
       return done(user.name || user.username);
     }
 
-    void run(identifier.trim(), password);
+    void run(value.toLowerCase(), password);
   };
 
   /** One tap, because a reviewer should not have to type a seeded password. */
   const useDemo = () => {
     setError('');
     setNotice('');
-    setIdentifier(DEMO.identifier);
+    setEmail(DEMO.email);
     setPassword(DEMO.password);
     if (!API_ENABLED) {
-      const user = db.users.find(u => u.username.toLowerCase() === DEMO.identifier) || db.users[0];
+      const user = db.users.find(u => (u.email || '').toLowerCase() === DEMO.email);
       if (!user) return setError(t('e_noacc'));
       login(user.id);
       return done(user.name || user.username);
     }
-    void run(DEMO.identifier, DEMO.password);
+    void run(DEMO.email, DEMO.password);
   };
 
   const confirmCode = async (code: string) => {
     if (step.kind !== 'code') return;
     setBusy(true);
-    const res = await verifyCode(step.challenge, code);
-    setBusy(false);
-    if (res.ok && res.user) return done(res.user.name || res.user.username);
-    if (res.ok && res.challenge) {
-      setStep({ ...step, challenge: res.challenge, expiresAt: res.expiresIn ? Date.now() + res.expiresIn * 1000 : step.expiresAt, devCode: res.devCode });
-      return;
+    try {
+      const res = await verifyCode(step.challenge, code);
+      if (res.ok && res.user) return done(res.user.name || res.user.username);
+      if (res.ok && res.challenge) {
+        setStep({ ...step, challenge: res.challenge, expiresAt: res.expiresIn ? Date.now() + res.expiresIn * 1000 : step.expiresAt, devCode: res.devCode });
+        return;
+      }
+      setError(res.attemptsLeft !== undefined && res.attemptsLeft > 0
+        ? `${withRef(res)} ${triesLeft(res.attemptsLeft)}`
+        : withRef(res) || t('wrongCode'));
+    } finally {
+      setBusy(false);
     }
-    setError(res.attemptsLeft !== undefined && res.attemptsLeft > 0
-      ? `${res.detail} ${triesLeft(res.attemptsLeft)}`
-      : res.detail || t('wrongCode'));
   };
 
   const resend = async () => {
     if (step.kind !== 'code') return;
-    const res = await resendCode(step.challenge);
-    if (res.error) return setError(res.error);
-    setStep({
-      ...step,
-      challenge: res.challenge || step.challenge,
-      expiresAt: res.expiresIn ? Date.now() + res.expiresIn * 1000 : undefined,
-      devCode: res.devCode,
-    });
-    setError('');
+    setBusy(true);
+    try {
+      const res = await resendCode(step.challenge);
+      if (res.error) return setError(res.error);
+      setStep({
+        ...step,
+        challenge: res.challenge || step.challenge,
+        expiresAt: res.expiresIn ? Date.now() + res.expiresIn * 1000 : undefined,
+        devCode: res.devCode,
+      });
+      setError('');
+    } finally {
+      setBusy(false);
+    }
   };
 
   const google = async () => {
@@ -192,13 +228,14 @@ export default function ModernLogin() {
     ? ready && (!!db.settings.googleClientId || feature('googleLogin') || feature('googleDemo'))
     : !!db.settings.googleClientId || feature('googleLogin') || feature('googleDemo');
   const googleLabel = db.settings.googleClientId ? t('google') : t('demoGoogle');
-  const canSubmit = identifier.trim().length > 0 && password.length > 0 && !busy;
+  const canSubmit = email.trim().length > 0 && password.length > 0 && !busy;
 
   return (
     <div className="login-container">
       <div className="login-content">
         <BrandLogo height={64} className="login-brand" href="/" />
         <h1 className="login-title">{t('loginTitle')}</h1>
+        {waking ? <p className="auth-notice" role="status">{t('waking')}</p> : null}
 
         {step.kind === 'form' && lockedFor === null ? <>
           {showGoogle && (
@@ -217,12 +254,12 @@ export default function ModernLogin() {
           <form onSubmit={submit} noValidate>
             <input
               className="login-input"
-              type="text"
-              name="exposing-identifier"
-              autoComplete="username"
-              placeholder={t('identifier')}
-              value={identifier}
-              onChange={e => setIdentifier(e.target.value)}
+              type="email"
+              name="exposing-email"
+              autoComplete="email"
+              placeholder={t('email')}
+              value={email}
+              onChange={e => setEmail(e.target.value)}
             />
             <input
               className="login-input"
@@ -246,21 +283,24 @@ export default function ModernLogin() {
         </> : null}
 
         {step.kind === 'code' ? (
-          <AuthCode
-            title={t('codeTitle')}
-            detail={t('codeDetail')}
-            hint={step.hint ? t('codeSentTo', { email: step.hint }) : undefined}
-            expiresAt={step.expiresAt}
-            devCode={step.devCode}
-            error={error}
-            busy={busy}
-            submitLabel={t('confirm')}
-            resendLabel={t('resendCode')}
-            backLabel={t('backToLogin')}
-            onCode={confirmCode}
-            onResend={resend}
-            onBack={() => { setStep({ kind: 'form' }); setError(''); }}
-          />
+          <>
+            {notice ? <p className="auth-notice" role="status">{notice}</p> : null}
+            <AuthCode
+              title={t('codeTitle')}
+              detail={t('codeDetail')}
+              hint={step.hint ? t('codeSentTo', { email: step.hint }) : undefined}
+              expiresAt={step.expiresAt}
+              devCode={step.devCode}
+              error={error}
+              busy={busy}
+              submitLabel={t('confirm')}
+              resendLabel={t('resendCode')}
+              backLabel={t('backToLogin')}
+              onCode={confirmCode}
+              onResend={resend}
+              onBack={() => { setStep({ kind: 'form' }); setError(''); setNotice(''); }}
+            />
+          </>
         ) : null}
 
         {lockedFor !== null ? (

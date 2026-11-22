@@ -6,6 +6,7 @@ from django.conf import settings
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.core.validators import validate_email
+from django.db import IntegrityError, transaction
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes, authentication_classes
@@ -19,7 +20,7 @@ from .auth import (
     clear_auth_cookies, decode_token, hash_code, set_auth_cookies,
 )
 from .models import DeviceTrust, EmailOTP, RefreshSession, User
-from .tasks import send_otp_email
+from .tasks import deliver_otp_email
 
 LOCK_THRESHOLD = 3
 # A cooloff, not a lockout that needs a rescue email: it expires by itself.
@@ -28,6 +29,15 @@ OTP_MINUTES = 10
 OTP_MAX_ATTEMPTS = 5
 
 logger = logging.getLogger(__name__)
+
+
+def _email(value):
+    """The one way this file reads an address off the wire.
+
+    Signup, sign-in and unlock all have to agree on it: 'me@X.com ' from one form
+    and 'me@x.com' from the next is the account that 'disappeared'.
+    """
+    return (value or '').strip().lower()
 
 
 def _device_id(request):
@@ -48,10 +58,10 @@ def _make_otp(user, purpose, device_id=''):
         expires_at=timezone.now() + timedelta(minutes=OTP_MINUTES),
     )
     try:
-        send_otp_email.delay(user.email, code, purpose)
+        deliver_otp_email(user.email, code, purpose)
     except Exception:
-        # The code is already stored, so a broker or mail provider that is down
-        # costs an email, never a sign-in.
+        # The code is already stored, so a broker, mail provider or exhausted
+        # process that is down costs an email, never a sign-in.
         logger.exception('Could not queue the %s code for %s', purpose, user.username)
     return otp, code
 
@@ -91,7 +101,7 @@ def signup(request):
     enforce(f'signup:{client_ip(request)}', 3, 3600)
     data = request.data
     username = (data.get('username') or '').strip().lower()
-    email = (data.get('email') or '').strip().lower()
+    email = _email(data.get('email'))
     password = data.get('password') or ''
     name = (data.get('name') or '').strip()
     google = data.get('google') or {}
@@ -114,34 +124,41 @@ def signup(request):
     country = (data.get('country') or '').strip()[:80]
     if not dob or not country:
         return Response({'detail': 'Date of birth and country are required.'}, status=400)
-    user = User.objects.create_user(
-        username=username, email=email, password=password or None,
-        first_name=name.split()[0] if name else '', last_name=' '.join(name.split()[1:]) if name else '',
-        date_of_birth=dob, country=country, city=(data.get('city') or '').strip()[:80],
-        provider='google' if google else 'email',
-    )
-    if google:
-        user.email_verified = True
-        user.save(update_fields=['email_verified'])
-    Profile.objects.update_or_create(
-        user=user,
-        defaults={
-            'display_name': name or username,
-            'province': (data.get('province') or '').strip()[:80],
-            'location': (data.get('city') or '').strip()[:120],
-        },
-    )
     device_id = _device_id(request)
-    if not google:
-        otp, code = _make_otp(user, 'verify', device_id)
-    # A Google address is already proved by the identity provider, so that account
-    # opens now. An emailed address is not, so the body carries only the challenge:
-    # handing out cookies here would give every unverified signup a live session.
+    # The account, its profile and its wallet either all exist or none of them do.
+    # Written across three commits, a request that died in the middle left an
+    # address that claimed to be taken while no usable member stood behind it.
+    try:
+        with transaction.atomic():
+            user = User.objects.create_user(
+                username=username, email=email, password=password if not google else None,
+                first_name=name.split()[0] if name else '', last_name=' '.join(name.split()[1:]) if name else '',
+                date_of_birth=dob, country=country, city=(data.get('city') or '').strip()[:80],
+                provider='google' if google else 'email',
+            )
+            if google:
+                # A Google address is already proved by the identity provider.
+                user.email_verified = True
+                user.save(update_fields=['email_verified'])
+            Profile.objects.update_or_create(
+                user=user,
+                defaults={
+                    'display_name': name or username,
+                    'province': (data.get('province') or '').strip()[:80],
+                    'location': (data.get('city') or '').strip()[:120],
+                },
+            )
+    except IntegrityError:
+        # Two tabs, one address: the exists() checks above both said no.
+        return Response({'detail': 'An account with that email already exists.'}, status=400)
     if google:
         _trust_device(user, device_id)
         resp = Response({'user': {'id': user.pk, 'username': user.username, 'email': user.email}},
                         status=status.HTTP_201_CREATED)
         return set_auth_cookies(resp, user, device_id)
+    otp, code = _make_otp(user, 'verify', device_id)
+    # An emailed address is not proved yet, so the body carries only the challenge:
+    # handing out cookies here would give every unverified signup a live session.
     return Response(_otp_response(otp, code), status=status.HTTP_201_CREATED)
 
 
@@ -155,12 +172,18 @@ def login(request):
     # minute a household behind one router, or anyone who mistypes twice and
     # reloads, gets refused before the lock has anything to say.
     enforce(f'login-ip:{ip}', 10, 60)
-    identifier = (request.data.get('username') or request.data.get('email') or '').strip().lower()
-    if not identifier:
-        return Response({'detail': 'Enter your email or username.'}, status=400)
-    enforce(f'login-id:{identifier}', 10, 60)
+    # Email and a password, nothing else. A handle is public, other members can
+    # read it off a profile, and it is changeable — accepting it here meant two
+    # different strings could reach two different rows, and the wrong-password
+    # answer never says which one it tried.
+    email = _email(request.data.get('email'))
+    if not email:
+        return Response({'detail': 'Enter your email address.'}, status=400)
+    if '@' not in email:
+        return Response({'detail': 'Sign in with your email address, not your username.'}, status=400)
+    enforce(f'login-id:{email}', 10, 60)
     password = request.data.get('password') or ''
-    user = User.objects.filter(username=identifier).first() or User.objects.filter(email=identifier).first()
+    user = User.objects.filter(email=email).order_by('id').first()
     if not user:
         return Response({'detail': 'No account matches those credentials.'}, status=401)
     if user.is_suspended:
@@ -190,6 +213,15 @@ def login(request):
             'detail': 'Wrong password.', 'attempts_left': LOCK_THRESHOLD - user.failed_attempts,
         }, status=401)
     device_id = _device_id(request)
+    if not user.email_verified:
+        # The password is right and the account is real; it was simply never
+        # confirmed. Say which of the three it is, and hand back a live code with
+        # the resend path, instead of letting this look like a wrong password.
+        otp, code = _make_otp(user, 'verify', device_id)
+        return Response({
+            'detail': 'That email address is not verified yet. We sent a new code to it.',
+            'email_not_verified': True, 'email_hint': user.email, **_otp_response(otp, code),
+        }, status=status.HTTP_403_FORBIDDEN)
     trusted = bool(device_id) and DeviceTrust.objects.filter(user=user, device_id=device_id).exists()
     if trusted or not _two_step(user):
         if device_id:
@@ -288,10 +320,11 @@ def logout(request):
 @permission_classes([AllowAny])
 @authentication_classes([])
 def unlock_request(request):
-    identifier = (request.data.get('email') or request.data.get('username') or '').strip().lower()
-    enforce(f'unlock:{identifier}', 3, 600)
-    # Sign-in accepts either handle, so unlocking has to accept the same two.
-    user = User.objects.filter(email=identifier).first() or User.objects.filter(username=identifier).first()
+    email = _email(request.data.get('email'))
+    enforce(f'unlock:{email}', 3, 600)
+    if not email or '@' not in email:
+        return Response({'detail': 'Enter the email address you signed up with.'}, status=400)
+    user = User.objects.filter(email=email).order_by('id').first()
     if not user:
         return Response({'detail': 'If that email exists, an unlock code is on its way.'})
     otp, code = _make_otp(user, 'unlock')
@@ -305,6 +338,52 @@ def unlock_confirm(request):
     return _verify_otp(request, force_purpose='unlock')
 
 
+GOOGLE_CERTS_URL = 'https://www.googleapis.com/oauth2/v3/certs'
+GOOGLE_CERTS_TTL = 3600
+
+
+def _google_claims(token, client_id):
+    """Verified claims from a Google ID token, or None.
+
+    Google's keys are cached and read out of that cache rather than fetched again
+    by a client library: this used to make two HTTPS calls per sign-in and the
+    second had no timeout, so Google being slow was indistinguishable from the
+    button doing nothing. A `kid` missing from the cache means the key rotated,
+    which earns exactly one refetch.
+    """
+    import json
+    import urllib.request
+
+    import jwt as pyjwt
+    from django.core.cache import cache
+    from jwt import PyJWK
+
+    def fetch():
+        with urllib.request.urlopen(GOOGLE_CERTS_URL, timeout=5) as response:
+            keys = json.load(response)
+        cache.set('google-jwks', keys, GOOGLE_CERTS_TTL)
+        return keys
+
+    try:
+        kid = pyjwt.get_unverified_header(token).get('kid', '')
+        keys = cache.get('google-jwks') or fetch()
+        jwk = next((k for k in keys.get('keys', []) if k.get('kid') == kid), None)
+        if jwk is None:
+            keys = fetch()
+            jwk = next((k for k in keys.get('keys', []) if k.get('kid') == kid), None)
+        if jwk is None:
+            return None
+        return pyjwt.decode(
+            token, PyJWK(jwk).key, algorithms=['RS256'],
+            audience=client_id, issuer='https://accounts.google.com',
+        )
+    except Exception:
+        # A token we cannot check is a refusal, never a login. What went wrong is
+        # in the log, which the visitor cannot read and the request id points at.
+        logger.exception('Google token verification failed')
+        return None
+
+
 @api_view(['POST'])
 @permission_classes([AllowAny])
 @authentication_classes([])
@@ -313,34 +392,23 @@ def google(request):
     data = request.data
     client_id = getattr(settings, 'GOOGLE_CLIENT_ID', '')
     if client_id:
-        import urllib.request
-        import json as _json
-        from django.core.cache import cache
-        certs = cache.get('google-jwks')
-        if not certs:
-            with urllib.request.urlopen('https://www.googleapis.com/oauth2/v3/certs', timeout=5) as r:
-                certs = _json.load(r)
-            cache.set('google-jwks', certs, 3600)
-        import jwt as pyjwt
-        from jwt import PyJWKClient
-        try:
-            claims = pyjwt.decode(
-                data.get('id_token'), PyJWKClient('https://www.googleapis.com/oauth2/v3/certs').get_signing_key_from_jwt(data.get('id_token')).key,
-                algorithms=['RS256'], audience=client_id, issuer='https://accounts.google.com',
-            )
-        except Exception:
+        claims = _google_claims(data.get('id_token') or '', client_id)
+        if claims is None:
             return Response({'detail': 'Google token verification failed.'}, status=401)
-        email, name, sub = claims.get('email', ''), claims.get('name', ''), claims.get('sub', '')
+        email, name, sub = _email(claims.get('email')), (claims.get('name') or '').strip(), claims.get('sub', '')
     else:
         if not settings.DEBUG:
             # The demo branch believes whatever identity the client claims, so it exists
             # for local QA only — production must verify a real Google token.
             return Response({'detail': 'Google sign-in is not configured on this server.'}, status=503)
         demo = data.get('demo') or {}
-        email, name, sub = (demo.get('email') or '').lower(), demo.get('name') or '', demo.get('sub') or ''
+        email, name, sub = _email(demo.get('email')), (demo.get('name') or '').strip(), demo.get('sub') or ''
         if not email or not sub:
             return Response({'detail': 'Google sign-in is not configured on this server.'}, status=503)
-    user = User.objects.filter(email=email).first()
+    if not email:
+        # Blank would otherwise match the one row an admin left without an address.
+        return Response({'detail': 'Google did not give us an email address for this account.'}, status=400)
+    user = User.objects.filter(email=email).order_by('id').first()
     device_id = _device_id(request)
     if user:
         if user.provider != 'google':

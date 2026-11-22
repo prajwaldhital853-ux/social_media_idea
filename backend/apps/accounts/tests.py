@@ -2,10 +2,12 @@ import itertools
 from datetime import timedelta
 
 from django.core.cache import cache
-from django.test import TestCase, override_settings
+from django.db import connections
+from django.test import TestCase, TransactionTestCase, override_settings
 from django.utils import timezone
 from rest_framework.test import APIClient
 
+from apps.accounts.management.commands.seed_demo import Command
 from apps.accounts.models import DeviceTrust, EmailOTP, RefreshSession, User
 from apps.common.testutils import auth_client, make_user
 
@@ -135,7 +137,7 @@ class LoginLockoutTests(TestCase):
 
     def login(self, password, device='dev-lockme', client=None):
         return (client or self.client).post(
-            '/api/auth/login/', {'username': 'lockme', 'password': password, 'device_id': device}, format='json',
+            '/api/auth/login/', {'email': self.user.email, 'password': password, 'device_id': device}, format='json',
         )
 
     def test_new_device_requires_otp_then_trusted(self):
@@ -185,11 +187,43 @@ class LoginLockoutTests(TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertIn('challenge', resp.data)
 
-    def test_unlock_request_accepts_username(self):
-        # Sign-in takes either handle, so the unlock form must not demand the email.
+    def test_unlock_request_needs_the_email(self):
+        # Sign-in is email-only now, so the unlock form must not promise a way in
+        # through a handle that the password box no longer accepts.
         resp = self.client.post('/api/auth/unlock/', {'email': self.user.username}, format='json')
+        self.assertEqual(resp.status_code, 400)
+        resp = self.client.post('/api/auth/unlock/', {'email': self.user.email}, format='json')
         self.assertEqual(resp.status_code, 200)
         self.assertIn('challenge', resp.data)
+
+    def test_username_is_not_a_way_in(self):
+        body = {'username': 'lockme', 'password': 'Test-Pass-9271', 'device_id': 'dev-lockme'}
+        resp = self.client.post('/api/auth/login/', body, format='json')
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn('email', resp.data['detail'].lower())
+        # A handle is public and changeable, so it must not reach an account even
+        # when somebody else has registered it as their email.
+        resp = self.client.post('/api/auth/login/', {'email': 'lockme', 'password': 'Test-Pass-9271'}, format='json')
+        self.assertEqual(resp.status_code, 400)
+
+    def test_unverified_email_gets_the_message_and_a_new_code(self):
+        User.objects.filter(pk=self.user.pk).update(email_verified=False)
+        resp = self.login('Test-Pass-9271')
+        self.assertEqual(resp.status_code, 403)
+        self.assertTrue(resp.data['email_not_verified'])
+        self.assertIn('not verified', resp.data['detail'])
+        self.assertEqual(resp.data['email_hint'], self.user.email)
+        self.assertIn('dev_code', resp.data)
+        # The password was right, so none of the lock budget was spent on it.
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.failed_attempts, 0)
+        # And the code it sent works as the way in.
+        resp = self.client.post('/api/auth/otp/', {
+            'challenge': resp.data['challenge'], 'code': resp.data['dev_code'], 'device_id': 'dev-lockme',
+        }, format='json')
+        self.assertEqual(resp.status_code, 200)
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.email_verified)
 
     def test_login_ip_rate_limit(self):
         ip = fresh_ip()
@@ -225,7 +259,7 @@ class SessionTests(TestCase):
         self.user = make_user('sessionuser')
         self.client = APIClient()
         self.client.credentials(HTTP_X_FORWARDED_FOR=fresh_ip())
-        resp = self.client.post('/api/auth/login/', {'username': 'sessionuser', 'password': 'Test-Pass-9271', 'device_id': 'dev-s'}, format='json')
+        resp = self.client.post('/api/auth/login/', {'email': 'sessionuser@test.local', 'password': 'Test-Pass-9271', 'device_id': 'dev-s'}, format='json')
         self.client.post('/api/auth/otp/', {'challenge': resp.data['challenge'], 'code': resp.data['dev_code'], 'device_id': 'dev-s'}, format='json')
         self.client.credentials(HTTP_X_CSRF_TOKEN=self.client.cookies['exposing_csrf'].value)
 
@@ -270,6 +304,123 @@ class SessionTests(TestCase):
         self.assertEqual(user.provider, 'google')
         resp = client.post('/api/auth/google/', {'demo': {'email': 'g@test.local', 'name': 'G User', 'sub': 'gsub1'}, 'device_id': 'dev-g'}, format='json')
         self.assertIn(resp.status_code, (200, 202))
+
+
+@override_settings(DEBUG=True)
+class EmailSignInTests(TestCase):
+    """Sign up, leave, come back: the exact path that reported "my account is gone"."""
+
+    def setUp(self):
+        cache.clear()
+        self.client = APIClient()
+        self.client.credentials(HTTP_X_FORWARDED_FOR=fresh_ip())
+
+    def join(self, username):
+        """Create the account and confirm the address, which is what makes a member."""
+        resp = self.client.post('/api/auth/signup/', signup_payload(username), format='json')
+        self.assertEqual(resp.status_code, 201, resp.data)
+        verified = self.client.post('/api/auth/otp/', {
+            'challenge': resp.data['challenge'], 'code': resp.data['dev_code'], 'device_id': f'dev-{username}',
+        }, format='json')
+        self.assertEqual(verified.status_code, 200, verified.data)
+        self.client.credentials(HTTP_X_CSRF_TOKEN=self.client.cookies['exposing_csrf'].value)
+        return verified
+
+    def leave(self):
+        self.assertEqual(self.client.post('/api/auth/logout/').status_code, 200)
+        self.assertEqual(self.client.get('/api/auth/me/').status_code, 401)
+
+    def test_signup_logout_login_round_trip(self):
+        self.join('walkin')
+        self.assertEqual(self.client.get('/api/auth/me/').data['username'], 'walkin')
+        self.leave()
+        resp = self.client.post('/api/auth/login/', {
+            'email': 'walkin@test.local', 'password': 'Test-Pass-9271', 'device_id': 'dev-walkin',
+        }, format='json')
+        self.assertEqual(resp.status_code, 200, resp.data)
+        self.assertTrue(User.objects.filter(username='walkin', email='walkin@test.local').exists())
+        self.client.credentials(HTTP_X_CSRF_TOKEN=self.client.cookies['exposing_csrf'].value)
+        self.assertEqual(self.client.get('/api/auth/me/').data['username'], 'walkin')
+
+    def test_the_address_opens_the_account_however_it_is_typed(self):
+        # Signup trims, the browser may not, and the row is stored lowercase whatever
+        # happened to it: ' X@Y.com ' and 'x@y.com' have to be one person.
+        resp = self.client.post('/api/auth/signup/',
+                                signup_payload('padded', email=' Padded@Test.Local '), format='json')
+        self.assertEqual(resp.status_code, 201, resp.data)
+        self.client.post('/api/auth/otp/', {
+            'challenge': resp.data['challenge'], 'code': resp.data['dev_code'], 'device_id': 'dev-padded',
+        }, format='json')
+        self.assertEqual(User.objects.get(username='padded').email, 'padded@test.local')
+        self.client.credentials(HTTP_X_FORWARDED_FOR=fresh_ip())
+        resp = self.client.post('/api/auth/login/', {
+            'email': ' PADDED@test.local ', 'password': 'Test-Pass-9271', 'device_id': 'dev-padded',
+        }, format='json')
+        self.assertEqual(resp.status_code, 200, resp.data)
+
+    def test_the_password_needs_no_other_field_to_be_the_right_one(self):
+        self.join('hashing')
+        self.leave()
+        wrong = self.client.post('/api/auth/login/', {
+            'email': 'hashing@test.local', 'password': 'Test-Pass-927', 'device_id': 'dev-hashing',
+        }, format='json')
+        self.assertEqual(wrong.status_code, 401)
+        self.assertEqual(wrong.data['attempts_left'], 2)
+        # The same box, the same email, one character apart: hashing and checking are
+        # symmetric, so the only thing that changed is the password.
+        right = self.client.post('/api/auth/login/', {
+            'email': 'hashing@test.local', 'password': 'Test-Pass-9271', 'device_id': 'dev-hashing',
+        }, format='json')
+        self.assertEqual(right.status_code, 200, right.data)
+
+
+@override_settings(DEBUG=True)
+class AccountSurvivesARestartTests(TransactionTestCase):
+    """A deploy hands the app a new process over the same database.
+
+    ``TestCase`` keeps every test inside a transaction that is rolled back, which is
+    the opposite of what the report needs proved: that the signup was committed.
+    This one really closes the connection and comes back through the front door.
+    """
+
+    def setUp(self):
+        cache.clear()
+        self.client = APIClient()
+        self.client.credentials(HTTP_X_FORWARDED_FOR=fresh_ip())
+
+    def test_account_still_exists_after_the_process_reconnects(self):
+        resp = self.client.post('/api/auth/signup/', signup_payload('keeper'), format='json')
+        self.assertEqual(resp.status_code, 201, resp.data)
+        self.client.post('/api/auth/otp/', {
+            'challenge': resp.data['challenge'], 'code': resp.data['dev_code'], 'device_id': 'dev-keeper',
+        }, format='json')
+        connections.close_all()
+        user = User.objects.filter(email='keeper@test.local').first()
+        self.assertIsNotNone(user, 'the account did not outlive the request that made it')
+        self.assertTrue(user.check_password('Test-Pass-9271'))
+        self.assertTrue(hasattr(user, 'profile'))
+        self.assertTrue(hasattr(user, 'wallet'))
+        client = APIClient()
+        client.credentials(HTTP_X_FORWARDED_FOR=fresh_ip())
+        resp = client.post('/api/auth/login/', {
+            'email': 'keeper@test.local', 'password': 'Test-Pass-9271', 'device_id': 'dev-keeper',
+        }, format='json')
+        self.assertEqual(resp.status_code, 200, resp.data)
+
+
+class PurgeSparesRealAccountsTests(TransactionTestCase):
+    """The seeder is a deploy step, so its delete needs a rule instead of a scope."""
+
+    def setUp(self):
+        self.member = make_user('member')
+        self.cast = make_user('cast', seeded=True)
+
+    def test_purge_deletes_only_accounts_the_seeder_owns(self):
+        Command().purge()
+        self.assertTrue(User.objects.filter(username='member').exists())
+        self.assertFalse(User.objects.filter(username='cast').exists())
+        # A member nobody deleted keeps the address they signed up with.
+        self.assertEqual(User.objects.get(username='member').email, 'member@test.local')
 
 
 class GoogleDemoNeedsDebugTests(TestCase):

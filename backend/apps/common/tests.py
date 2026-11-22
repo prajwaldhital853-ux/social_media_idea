@@ -2,10 +2,14 @@ import os
 import shutil
 import tempfile
 from decimal import Decimal
+from unittest import mock
+
+from django.conf import settings
 
 from django.http import Http404
-from django.test import RequestFactory, TestCase, override_settings
+from django.test import Client, RequestFactory, TestCase, override_settings
 
+from apps.common.mail import send_off_request
 from apps.common.media import serve_media
 from apps.common.testutils import auth_client, make_user
 from apps.follows.models import Follow
@@ -170,3 +174,94 @@ class MediaServingTests(TestCase):
         with override_settings(MEDIA_ROOT=self.root):
             with self.assertRaises(Http404):
                 serve_media(RequestFactory().get('/media/x'), '../../exposing/settings.py')
+
+
+class RequestIdTests(TestCase):
+    """A report of "the server could not finish that request" has to name the
+    line in the log it came from, or the next hour is spent guessing."""
+
+    def test_every_answer_carries_one(self):
+        self.assertTrue(self.client.get('/api/meta/')['X-Request-Id'])
+
+    def test_an_id_that_arrived_is_the_id_that_goes_back(self):
+        resp = self.client.get('/api/meta/', HTTP_X_REQUEST_ID='render-trace-7f3a')
+        self.assertEqual(resp['X-Request-Id'], 'render-trace-7f3a')
+
+    def test_junk_in_that_header_is_ignored_not_reflected(self):
+        sent = ('<script>alert(1)</script>' + '\n') * 10
+        got = self.client.get('/api/meta/', HTTP_X_REQUEST_ID=sent)['X-Request-Id']
+        self.assertNotIn('<', got)
+        self.assertTrue(len(got) <= 64)
+
+    def test_an_api_error_names_its_request_in_the_body(self):
+        resp = self.client.get('/api/sync/')
+        self.assertEqual(resp.status_code, 401)
+        self.assertEqual(resp.data['request_id'], resp['X-Request-Id'])
+
+    def test_a_crash_answers_with_json_an_id_and_no_html(self):
+        # DEBUG off (as in a deploy) is when handler500 is the one answering.
+        client = Client(raise_request_exception=False)
+        with mock.patch('apps.common.health.probe', side_effect=RuntimeError('boom')):
+            resp = client.get('/api/health/')
+        self.assertEqual(resp.status_code, 500)
+        self.assertEqual(resp['Content-Type'], 'application/json')
+        self.assertTrue(resp.json()['request_id'])
+        self.assertIn('server', resp.json()['detail'].lower())
+
+
+class HealthTests(TestCase):
+    """What the client polls to tell a sleeping server from a broken one, and
+    what an operator reads to learn which database the accounts are really in."""
+
+    def test_answers_signed_out(self):
+        resp = self.client.get('/api/health/')
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data['status'], 'ok')
+
+    def test_names_the_database_instead_of_leaving_it_to_be_guessed(self):
+        conf = settings.DATABASES['default']
+        self.assertEqual(self.client.get('/api/health/').data['database'],
+                         {'ok': True, 'engine': conf['ENGINE'].rsplit('.', 1)[-1], 'name': conf['NAME']})
+
+    def test_says_whether_mail_goes_anywhere_and_who_eats_the_task(self):
+        data = self.client.get('/api/health/').data
+        # Tests swap in the locmem backend, so what is asserted is that a reader
+        # can tell a provider from a sink — not which one this process happens to
+        # be holding.
+        self.assertTrue(data['email']['backend'].endswith('EmailBackend'))
+        self.assertFalse(data['email']['delivered'])
+        self.assertTrue(data['worker']['eager'])
+        self.assertIn('backend', data['cache'])
+
+    def test_never_throttled(self):
+        # A client retries this while it waits; a rate limit here would turn a
+        # cold start into a wall.
+        codes = {self.client.get('/api/health/').status_code for _ in range(130)}
+        self.assertEqual(codes, {200})
+
+    def test_a_dead_database_is_reported_not_raised(self):
+        with mock.patch('apps.common.health.connection') as conn:
+            conn.cursor.side_effect = RuntimeError('down')
+            resp = self.client.get('/api/health/')
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data['status'], 'degraded')
+        self.assertFalse(resp.data['database']['ok'])
+
+
+class MailDeliveryTests(TestCase):
+    """The rule these two tests exist to keep: a request never waits on a mail
+    provider. A slow SMTP used to look exactly like a sign-up that never ended."""
+
+    @override_settings(CELERY_TASK_ALWAYS_EAGER=False)
+    def test_a_worker_gets_the_queue(self):
+        task = mock.Mock()
+        send_off_request(task, 'a@b.test', '123456', 'verify')
+        task.delay.assert_called_once_with('a@b.test', '123456', 'verify')
+
+    @override_settings(CELERY_TASK_ALWAYS_EAGER=True)
+    def test_without_a_worker_the_send_leaves_the_request(self):
+        task = mock.Mock()
+        with mock.patch('apps.common.mail.threading.Thread') as thread:
+            send_off_request(task, 'a@b.test', '123456', 'verify')
+        thread.return_value.start.assert_called_once_with()
+        task.delay.assert_not_called()

@@ -2,8 +2,7 @@
 
 import { useMemo } from 'react';
 import { useApp } from './AppContext';
-import { idOf } from './dto';
-import { inboxFragment, useList } from './lists';
+import { inboxListDef, useList } from './lists';
 import { Message, User } from './types';
 
 export interface Conversation {
@@ -22,7 +21,7 @@ export function useInbox(enabled = true): { conversations: Conversation[]; inbox
 
   const inbox = useList(
     'inbox',
-    { path: '/messages/inbox/', frag: inboxFragment(me?.id || ''), ids: rows => rows.map(row => idOf(row.user && row.user.id)) },
+    inboxListDef(me?.id || ''),
     undefined,
     serverMode && !!me && enabled,
   );

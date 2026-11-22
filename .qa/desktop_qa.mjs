@@ -10,10 +10,12 @@ import puppeteer from 'puppeteer-core';
 import { writeFileSync } from 'node:fs';
 import { retryWrite } from './shots.mjs';
 
-const BASE = 'http://localhost:3000';
-const OUT = 'D:/social_medial/.qa';
+// A second checkout runs its own pair of servers, so the suite has to be pointed
+// at them instead of assumed to belong to the one on :3000.
+const BASE = process.env.QA_BASE || 'http://localhost:3000';
+const OUT = process.env.QA_OUT || 'D:/social_medial/.qa';
 const CHROME = 'C:/Program Files/Google/Chrome/Application/chrome.exe';
-const DEMO = { username: 'sita', password: 'exposing-demo-1' };
+const DEMO = { username: 'sita', email: 'sita@demo.test', password: 'exposing-demo-1' };
 
 const results = [];
 const ok = (name, pass, detail = '') => {
@@ -117,7 +119,7 @@ const firstPaint = await d.evaluate(() => ({
 ok('desktop: opens in dark mode by default', firstPaint.theme === 'dark' && !firstPaint.stored, JSON.stringify(firstPaint));
 ok('desktop: the page field is the soft canvas color', rgb(firstPaint.bodyBg) === 'rgb(16,17,20)', firstPaint.bodyBg);
 
-await signIn(d, DEMO.username, DEMO.password);
+await signIn(d, DEMO.email, DEMO.password);
 await goto(d, '/');
 await d.waitForSelector('.suggest-rail', { timeout: 15000 }).catch(() => {});
 
@@ -388,7 +390,7 @@ await m.evaluate(() => localStorage.setItem('exposing-theme', 'light'));
 await m.reload({ waitUntil: 'domcontentloaded' });
 await sleep(600);
 await m.evaluate(() => localStorage.setItem('exposing-device', `qa-mobile-${Math.random().toString(36).slice(2, 10)}`));
-await setInput(m, 0, DEMO.username);
+await setInput(m, 0, DEMO.email);
 await setInput(m, 1, DEMO.password);
 await m.evaluate(() => document.querySelector('.login-content form button.login-submit')?.click());
 await m.waitForFunction(() => location.pathname === '/' || !!document.querySelector('.auth-code'), { timeout: 25000 }).catch(() => {});

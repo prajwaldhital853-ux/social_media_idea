@@ -7,13 +7,13 @@ import { getDb, save, emptyDb } from './storage';
 import { hydrateVideoSrcs } from './videoStore';
 import { THEME_KEY, LANG_KEY, uid, ageFromDob, DAY } from './utils';
 import { I18N, TranslationKey } from './i18n';
-import { api, API_ENABLED, ApiError } from './api';
+import { api, API_ENABLED, ApiError, onWakeChange } from './api';
 import { merge as applyFragment, Fragment } from './store';
 import {
   idOf, at, mapComment, mapFollow, mapMe, mapMessage, mapNotification, mapPerson, mapPost, mapPromotion,
   mapReport, mapSettings, mediaPayload, profilePatch, reactionsOfPost, toPostPayload, toProfilePayload,
 } from './dto';
-import { bindListCache, forgetLists, listingsFragment, notificationsFragment, postsFragment, pushListRow, refreshList } from './lists';
+import { bindListCache, forgetLists, inboxListDef, listingsFragment, notificationsFragment, postsFragment, pushListRow, refreshList } from './lists';
 
 type Target = 'post' | 'comment' | 'media';
 
@@ -78,13 +78,16 @@ interface AppContextType {
   showToast: (msg: string) => void;
   /** Session bootstrap has finished (signed in or anonymous). */
   ready: boolean;
+  /** The API did not answer and is being waited on — say so instead of spinning. */
+  waking: boolean;
   /** True while the live Django API drives the cache. */
   serverMode: boolean;
   /** Re-pull /api/sync/: session, graph edges, saves, wallet and unread counters. */
   resync: () => Promise<void>;
   /** Apply a server fragment onto the cache without a round-trip. */
   merge: (frag: Fragment) => void;
-  signin: (identifier: string, password: string) => Promise<AuthResult>;
+  /** Email and a password, the only pair this server accepts. */
+  signin: (email: string, password: string) => Promise<AuthResult>;
   signupAccount: (payload: SignupPayload) => Promise<AuthResult>;
   verifyCode: (challenge: string | number, code: string) => Promise<AuthResult>;
   resendCode: (challenge: string | number) => Promise<CodeResult>;
@@ -134,6 +137,8 @@ export interface AuthResult {
   expiresIn?: number;
   emailHint?: string;
   newDevice?: boolean;
+  /** Right password, address never confirmed: the code box is the way in. */
+  emailNotVerified?: boolean;
   needsVerify?: boolean;
   needsSignup?: boolean;
   prefill?: { email: string; name: string; google_sub: string };
@@ -144,6 +149,8 @@ export interface AuthResult {
   attemptsLeft?: number;
   detail?: string;
   errors?: Record<string, string[]>;
+  /** The server's handle for a failed call. Quoting it finds the log line. */
+  requestId?: string;
 }
 
 export interface CodeResult {
@@ -175,6 +182,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [db, setDb] = useState<Database>(() => (API_ENABLED ? emptyDb() : getDb()));
   const [mounted, setMounted] = useState(false);
   const [ready, setReady] = useState(!API_ENABLED);
+  const [waking, setWaking] = useState(false);
   const [serverMode, setServerMode] = useState(API_ENABLED);
   const [theme, setTheme] = useState<ThemeMode>('light');
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -191,6 +199,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const merge = useCallback((frag: Fragment) => setDb(cur => applyFragment(cur, frag)), []);
 
   useEffect(() => bindListCache(frag => setDb(cur => applyFragment(cur, frag))), []);
+
+  useEffect(() => onWakeChange(setWaking), []);
 
   useEffect(() => {
     setDrawerOpen(false);
@@ -436,11 +446,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
         status: err.status,
         detail: err.message,
         errors: err.fieldErrors,
+        requestId: err.requestId || undefined,
         challenge: err.data?.challenge ? idOf(err.data.challenge) : undefined,
         devCode: err.data?.dev_code,
         expiresIn: err.data?.expires_in ? Number(err.data.expires_in) : undefined,
         emailHint: err.data?.email_hint,
         newDevice: !!err.data?.new_device,
+        emailNotVerified: !!err.data?.email_not_verified,
         locked: !!err.data?.locked,
         lockedUntil: at(err.data?.locked_until),
         retryIn: err.data?.retry_in === undefined ? undefined : Number(err.data.retry_in),
@@ -486,9 +498,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     };
   };
 
-  const signin = async (identifier: string, password: string): Promise<AuthResult> => {
+  const signin = async (email: string, password: string): Promise<AuthResult> => {
     try {
-      return await finishAuth(await api.post('/api/auth/login/', { username: identifier, password, device_id: api.deviceId() }));
+      return await finishAuth(await api.post('/api/auth/login/', { email, password, device_id: api.deviceId() }));
     } catch (err) {
       return authResult(err);
     }
@@ -1092,7 +1104,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!API_ENABLED) return;
     try {
       await api.post(`/api/messages/${username}/read/`, {});
-      forgetLists('inbox');
+      // The unread dot rides on the inbox row, so the row has to be re-read —
+      // in place. Dropping the whole list here re-armed the column's first-load
+      // skeleton on every receipt.
+      refreshList('inbox', inboxListDef(self.id));
     } catch {}
     void pullBadges();
   }, [pullBadges]);
@@ -1254,7 +1269,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         closeCreateChooser: () => setCreateChooserOpen(false),
         feedTab, setFeedTab,
         toast, showToast,
-        ready, serverMode, resync, merge,
+        ready, waking, serverMode, resync, merge,
         signin, signupAccount, verifyCode, resendCode, googleSignIn,
         updateProfile, loadPerson, loadEntity,
       }}
