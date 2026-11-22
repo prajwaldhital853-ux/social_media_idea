@@ -1,4 +1,5 @@
 from django.db import IntegrityError, transaction
+from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from rest_framework import serializers, status
 from rest_framework.decorators import api_view, permission_classes
@@ -10,7 +11,7 @@ from apps.common.pagination import KeysetPagination
 from apps.notifications.services import email_activity, notify
 from apps.profiles.models import Profile
 
-from .models import Follow
+from .models import Block, Follow
 
 
 class FollowUserSerializer(serializers.ModelSerializer):
@@ -30,6 +31,10 @@ def follow(request):
     target = get_object_or_404(User, username=request.data.get('username'))
     if target.pk == request.user.pk:
         return Response({'detail': 'You cannot follow yourself.'}, status=400)
+    if Block.objects.filter(
+        Q(blocker=request.user, blocked=target) | Q(blocker=target, blocked=request.user)
+    ).exists():
+        return Response({'detail': 'This account cannot be followed.'}, status=403)
     profile = getattr(target, 'profile', None)
     private = bool(profile and profile.is_private)
     # A POST on an edge that already exists is a stale client, not a violation:
@@ -59,9 +64,44 @@ def follow(request):
 def unfollow(request, username):
     target = get_object_or_404(User, username=username)
     deleted, _ = Follow.objects.filter(follower=request.user, followee=target).delete()
-    if not deleted:
-        return Response({'detail': 'No follow edge to remove.'}, status=404)
-    return Response({'detail': 'Removed.'})
+    # Same reasoning as a repeat follow: an edge already gone is a stale client,
+    # not a failure, and a 404 here bounces an honest unfollow tap into a toast.
+    return Response({'detail': 'Removed.' if deleted else 'Nothing to remove.', 'removed': bool(deleted)})
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def block(request):
+    """Close the door on one account. Blocking is not a report and is not silent:
+    the blocker's own lists stop carrying the person in both directions."""
+    target = get_object_or_404(User, username=request.data.get('username'))
+    if target.pk == request.user.pk:
+        return Response({'detail': 'You cannot block yourself.'}, status=400)
+    edge, created = Block.objects.get_or_create(blocker=request.user, blocked=target)
+    # A block that left the follow edges standing would keep showing the blocked
+    # person under Following, and keep the blocker visible in their followers.
+    Follow.objects.filter(
+        Q(follower=request.user, followee=target) | Q(follower=target, followee=request.user)
+    ).delete()
+    return Response(
+        {'status': 'blocked', 'created': created},
+        status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
+    )
+
+
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated])
+def unblock(request, username):
+    target = get_object_or_404(User, username=username)
+    deleted, _ = Block.objects.filter(blocker=request.user, blocked=target).delete()
+    return Response({'detail': 'Unblocked.' if deleted else 'Nothing to remove.', 'removed': bool(deleted)})
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def blocked(request):
+    edges = Block.objects.filter(blocker=request.user).select_related('blocked__profile')
+    return Response({'results': FollowUserSerializer([e.blocked for e in edges], many=True).data})
 
 
 @api_view(['GET'])
@@ -150,4 +190,6 @@ def state(request, username):
     return Response({
         'state': edge.status if edge else ('follows_me' if incoming else 'none'),
         'follows_me': incoming,
+        'blocked': Block.objects.filter(blocker=request.user, blocked=target).exists(),
+        'blocked_me': Block.objects.filter(blocker=target, blocked=request.user).exists(),
     })

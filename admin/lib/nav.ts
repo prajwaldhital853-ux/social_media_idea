@@ -30,11 +30,28 @@ export const NAV: NavGroup[] = [
     ],
   },
   {
+    id: 'moderation',
+    label: 'Moderation',
+    items: [
+      { href: '/reports', label: 'Report queue', icon: 'flag', permission: 'reports' },
+      { href: '/content', label: 'Takedown shelf', icon: 'shelf', permission: 'reports' },
+      { href: '/policy', label: 'Platform rules', icon: 'rule', permission: 'reports' },
+      { href: '/notices', label: 'Public notices', icon: 'mega', permission: 'notices' },
+    ],
+  },
+  {
+    id: 'people',
+    label: 'People',
+    items: [
+      { href: '/people', label: 'User directory', icon: 'users', permission: 'users' },
+    ],
+  },
+  {
     id: 'console',
     label: 'Console',
     items: [
-      { href: '/access', label: 'Staff and access', icon: 'users', permission: 'staff_view' },
-      { href: '/me', label: 'My seat', icon: 'seat', permission: null },
+      { href: '/access', label: 'Staff and access', icon: 'seat', permission: 'staff_view' },
+      { href: '/me', label: 'My seat', icon: 'key', permission: null },
     ],
   },
 ];

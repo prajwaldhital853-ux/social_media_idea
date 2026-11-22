@@ -223,6 +223,11 @@ def staff_update(request, username):
         staff.user.is_staff = False
         staff.user.save(update_fields=['is_staff'])
         RefreshSession.objects.filter(user=staff.user).update(revoked_at=timezone.now())
+    if staff.is_enabled and not staff.user.is_staff:
+        # The mirror of it: a seat handed back has to reach the door again, or
+        # the console says "can sign in again" over a door still shut.
+        staff.user.is_staff = True
+        staff.user.save(update_fields=['is_staff'])
     record(caller.user, 'update_staff', staff.user.username, ', '.join(fields))
     return Response(_row(staff))
 

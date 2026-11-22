@@ -144,6 +144,8 @@ export function mapPost(row: any): Post {
     audience: row.audience === 'followers' ? 'followers' : 'public',
     likes: amount(row.like_count),
     comments: amount(row.comment_count),
+    shares: amount(row.share_count),
+    views: amount(row.views),
     reactionKinds: row.reaction_kinds || undefined,
     category: row.category || undefined,
     promoted: !!row.promoted,
@@ -162,6 +164,7 @@ export function mapComment(row: any): Comment {
     status: row.status === 'removed' ? 'removed' : 'live',
     likes: amount(row.like_count),
     replies: amount(row.reply_count),
+    isPostAuthor: !!row.is_post_author,
   };
 }
 

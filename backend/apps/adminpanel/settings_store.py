@@ -24,9 +24,19 @@ DEFAULTS = {
                              'Raises an alert when this many seats lock inside an hour.', 'safety'),
     'alert_autohide_day': (10, 'int', 'Auto-hides a day that looks like a wave',
                            'Raises an alert when moderation hides this much content in 24 hours.', 'safety'),
+    # The wording a suspension email ends with. Contract 6.4 promises the person
+    # an appeal route, and 6.6 makes these editable from the dashboard; the
+    # address is the platform's own no-reply domain, not a placeholder to fill in.
+    'contact_email': ('support@exposing.app', 'str', 'Contact email for enforcement notices',
+                      'Printed at the foot of a suspension or warning email.', 'platform'),
+    'contact_phone': ('', 'str', 'Contact phone for enforcement notices',
+                      'Left out of the email when blank.', 'platform'),
+    'contact_form': ('', 'str', 'Support form link',
+                     'The link at the bottom of an enforcement email, instead of the site root.', 'platform'),
 }
 
-GROUPS = {'safety': 'Safety and audit', 'payments': 'Coins and payments'}
+GROUPS = {'safety': 'Safety and audit', 'payments': 'Coins and payments',
+          'platform': 'Platform settings'}
 
 
 def _coerce(raw, kind, fallback):

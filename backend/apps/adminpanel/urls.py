@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import views_overview, views_session, views_staff
+from . import views_overview, views_people, views_review, views_session, views_staff
 
 urlpatterns = [
     path('admin/session/', views_session.admin_session),
@@ -15,4 +15,24 @@ urlpatterns = [
     path('admin/staff/<str:username>/', views_staff.staff_update),
     path('admin/staff/<str:username>/revoke/', views_staff.staff_revoke),
     path('admin/staff/<str:username>/reset-two-factor/', views_staff.staff_reset_two_factor),
+    path('admin/review/', views_review.review_queue),
+    path('admin/review/<int:pk>/decide/', views_review.review_decide),
+    path('admin/content/', views_review.content_shelf),
+    path('admin/content/<str:kind>/<int:pk>/', views_review.content_action),
+    path('admin/policy/', views_review.policy_lists),
+    path('admin/policy/terms/', views_review.term_create),
+    path('admin/policy/terms/<int:pk>/', views_review.term_update),
+    path('admin/policy/categories/', views_review.category_create),
+    path('admin/policy/categories/<int:pk>/', views_review.category_update),
+    path('admin/notices/', views_review.notice_list),
+    path('admin/notices/<int:pk>/withdraw/', views_review.notice_withdraw),
+    path('notices/<str:kind>/<int:pk>/', views_review.public_notices),
+    path('admin/people/', views_people.people_directory),
+    path('admin/people/<str:username>/', views_people.person_detail),
+    path('admin/people/<str:username>/suspend/', views_people.person_suspend),
+    path('admin/people/<str:username>/reinstate/', views_people.person_reinstate),
+    path('admin/people/<str:username>/verify/', views_people.person_verify),
+    path('admin/people/<str:username>/warn/', views_people.person_warn),
+    path('admin/people/<str:username>/clear-flags/', views_people.person_clear_flags),
+    path('admin/people/<str:username>/delete/', views_people.person_delete),
 ]

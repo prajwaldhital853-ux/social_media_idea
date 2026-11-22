@@ -28,6 +28,11 @@ class Post(models.Model):
     category = models.CharField(max_length=80, blank=True)
     like_count = models.PositiveIntegerField(default=0)
     comment_count = models.PositiveIntegerField(default=0)
+    # A share is counted where it happens: the client has already handed the link
+    # to somebody by the time it tells us, so this is a tally, not a transaction.
+    share_count = models.PositiveIntegerField(default=0)
+    # A reel is watched, not read, so its reach is counted separately from likes.
+    views = models.PositiveIntegerField(default=0)
     edited = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

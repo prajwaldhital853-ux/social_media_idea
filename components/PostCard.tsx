@@ -94,7 +94,7 @@ function FeedFollow({ author }: { author: User }) {
 
 export default function PostCard({ post, author, featured }: PostCardProps) {
   const router = useRouter();
-  const { db, me, t, deletePost, toggleSave, isSaved, openComposer, activePromo, promoEligible, showToast, reactionCount } = useApp();
+  const { db, me, t, deletePost, toggleSave, isSaved, sharePost, openComposer, activePromo, promoEligible, showToast, reactionCount } = useApp();
   const [menuOpen, setMenuOpen] = useState(false);
   const [showComments, setShowComments] = useState(false);
   const [reporting, setReporting] = useState(false);
@@ -110,6 +110,10 @@ export default function PostCard({ post, author, featured }: PostCardProps) {
   const comments = db.comments
     .filter(c => c.pid === post.id && c.status === 'live')
     .sort((a, b) => b.ts - a.ts);
+
+  /** The card counts comments before the panel is ever opened, so it reads the
+   *  server's aggregate when there is one and only falls back to cached rows. */
+  const commentCount = post.comments ?? comments.length;
 
   /** Media-level likes fold into the card count: server sums in API mode, reaction rows in demo. */
   const mediaLikes = post.media?.some(m => m.likes !== undefined)
@@ -127,18 +131,27 @@ export default function PostCard({ post, author, featured }: PostCardProps) {
     e?.preventDefault();
     e?.stopPropagation();
     const url = `${window.location.origin}/post/${post.id}`;
+    let handed = false;
     try {
       if (navigator.share && !copyOnly) {
         await navigator.share({ title: `${author.name} on Exposing`, text: post.text.slice(0, 140), url });
-        return;
+        handed = true;
+      } else {
+        await navigator.clipboard.writeText(url);
+        handed = true;
+        showToast(t('linkCopied'));
       }
-    } catch { /* fall through to clipboard */ }
-    try {
-      await navigator.clipboard.writeText(url);
-      showToast(t('linkCopied'));
     } catch {
-      showToast(url);
+      // The reader closed the share sheet, so nothing was handed over and nothing is counted.
+      try {
+        await navigator.clipboard.writeText(url);
+        handed = true;
+        showToast(t('linkCopied'));
+      } catch {
+        showToast(url);
+      }
     }
+    if (handed) void sharePost(post.id);
   };
 
   const media = (post.media || []).filter(m => m.src || m.gen);
@@ -282,11 +295,12 @@ export default function PostCard({ post, author, featured }: PostCardProps) {
           onClick={e => { e.preventDefault(); if (featured) document.querySelector<HTMLInputElement>('.comments-inline input')?.focus(); else setShowComments(v => !v); }}
         >
           {IC.comment}
-          <span>{comments.length > 0 ? compact(comments.length) : ''}</span>
+          <span>{commentCount > 0 ? compact(commentCount) : ''}</span>
         </button>
 
         <button type="button" className="action-btn" aria-label="Share post" onClick={handleShare}>
           {IC.share}
+          <span>{(post.shares ?? 0) > 0 ? compact(post.shares ?? 0) : ''}</span>
         </button>
 
         <button

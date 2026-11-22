@@ -210,3 +210,103 @@ class AdminAlert(models.Model):
 
     def __str__(self):
         return f'{self.kind} ({self.status})'
+
+
+class PolicyTerm(models.Model):
+    """A word or a thing this platform will not carry, and who said so.
+
+    Two kinds on one table because they are managed the same way and read by the
+    same screen: a blocked word is matched against text, a prohibited item is a
+    line a moderator quotes when deciding a listing. Both are stored lowercase
+    because a list that distinguishes `Firearm` from `firearm` quietly stops
+    matching half of what it is supposed to.
+    """
+
+    class Kind(models.TextChoices):
+        WORD = 'word', 'Blocked word'
+        ITEM = 'item', 'Prohibited item'
+
+    kind = models.CharField(max_length=8, choices=Kind.choices, default=Kind.WORD)
+    text = models.CharField(max_length=80)
+    note = models.CharField(max_length=200, blank=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='policy_terms_written',
+    )
+
+    class Meta:
+        ordering = ['kind', 'text']
+        constraints = [
+            models.UniqueConstraint(fields=['kind', 'text'], name='policy_term_once'),
+        ]
+
+    def __str__(self):
+        return f'{self.kind}: {self.text}'
+
+
+class PolicyCategory(models.Model):
+    """The marketplace's shelf labels, in a table so the list is not a deploy.
+
+    `Listing.category` in the main app is free text, which is why a category can
+    be spelled four ways on the marketplace today. This is the vocabulary the
+    console offers and checks against; the rows are ordered because a person
+    browsing sells by what is at the top of the list.
+    """
+
+    name = models.CharField(max_length=80, unique=True)
+    is_active = models.BooleanField(default=True)
+    sort_order = models.PositiveSmallIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='policy_categories_written',
+    )
+
+    class Meta:
+        ordering = ['sort_order', 'name']
+
+    def __str__(self):
+        return self.name
+
+
+class PublicNotice(models.Model):
+    """A moderation outcome the community is told about, not only the person it
+    was done to.
+
+    Kept as its own row rather than a notification: a private warning disappears
+    into the bell, while this is a statement that stays attached to the content
+    or the account it is about, and can be withdrawn — which is its own audited
+    decision.
+    """
+
+    class Target(models.TextChoices):
+        POST = 'post', 'Post'
+        COMMENT = 'comment', 'Comment'
+        LISTING = 'listing', 'Listing'
+        USER = 'user', 'Account'
+
+    target_type = models.CharField(max_length=10, choices=Target.choices)
+    target_id = models.CharField(max_length=64)
+    about = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='public_notices',
+    )
+    text = models.CharField(max_length=240)
+    reason = models.CharField(max_length=120, blank=True)
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name='notices_posted',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    is_live = models.BooleanField(default=True)
+    withdrawn_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['target_type', 'target_id'], name='notice_on_content'),
+            models.Index(fields=['is_live', '-created_at'], name='notice_live_newest'),
+        ]
+
+    def __str__(self):
+        return f'notice {self.target_type}:{self.target_id}'

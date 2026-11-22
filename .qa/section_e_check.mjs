@@ -1,7 +1,7 @@
 import puppeteer from 'puppeteer-core';
 import { retryWrite } from './shots.mjs';
 const EXE = 'C:/Program Files/Google/Chrome/Application/chrome.exe';
-const BASE = 'http://localhost:3000';
+const BASE = process.env.QA_BASE || 'http://localhost:3000';
 const PASS = 'exposing-demo-1';
 const MODE = (process.env.MODE || 'api').toLowerCase();
 const sleep = ms => new Promise(r => setTimeout(r, ms));

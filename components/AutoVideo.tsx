@@ -12,6 +12,12 @@ interface AutoVideoProps {
   cover?: boolean;
   preload?: 'metadata' | 'auto' | 'none';
   onOpen?: () => void;
+  /** Playback speed. Absent means 1x, and a change lands on the running clip. */
+  rate?: number;
+  /** A hold on the surface, used for the reel menu. Suppresses the play toggle. */
+  onLongPress?: () => void;
+  /** True while the decoder has run dry, so the page can cover it with a skeleton. */
+  onBuffering?: (waiting: boolean) => void;
 }
 
 function formatTime(seconds: number) {
@@ -26,7 +32,7 @@ const PAUSE_SVG = <svg viewBox="0 0 24 24" width="26" height="26" fill="currentC
 const SOUND_SVG = <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9H4zm11.5 3c0-1.77-1-3.29-2.5-4.03v8.06c1.5-.74 2.5-2.26 2.5-4.03zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z" /></svg>;
 const MUTED_SVG = <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9H4zm12.5 3l2.1-2.1 1.4 1.4L18 13.4l2 2-1.4 1.4-2.1-2.1-2.1 2.1-1.4-1.4 2.1-2-2.1-2.1 1.4-1.4 2.1 2.1z" /></svg>;
 
-export default function AutoVideo({ src, dur, active = true, observe = false, loop = false, seek = false, cover = false, preload = 'metadata', onOpen }: AutoVideoProps) {
+export default function AutoVideo({ src, dur, active = true, observe = false, loop = false, seek = false, cover = false, preload = 'metadata', onOpen, rate, onLongPress, onBuffering }: AutoVideoProps) {
   const video = useRef<HTMLVideoElement>(null);
   const wrap = useRef<HTMLDivElement>(null);
   const [playing, setPlaying] = useState(false);
@@ -44,6 +50,8 @@ export default function AutoVideo({ src, dur, active = true, observe = false, lo
   const lastTap = useRef<{ t: number; zone: 'left' | 'right' } | null>(null);
   const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const badgeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const held = useRef(false);
 
   const attemptPlay = useCallback(() => {
     const el = video.current;
@@ -111,12 +119,17 @@ export default function AutoVideo({ src, dur, active = true, observe = false, lo
     const onPause = () => setPlaying(false);
     const onEnd = () => setPlaying(false);
     const onReady = () => { if (wantPlay.current && el.paused) attemptPlay(); };
+    const onWaiting = () => onBuffering?.(true);
+    const onResumed = () => onBuffering?.(false);
     el.addEventListener('timeupdate', onTime);
     el.addEventListener('loadedmetadata', onMeta);
     el.addEventListener('loadeddata', onReady);
     el.addEventListener('play', onPlay);
     el.addEventListener('pause', onPause);
     el.addEventListener('ended', onEnd);
+    el.addEventListener('waiting', onWaiting);
+    el.addEventListener('playing', onResumed);
+    el.addEventListener('canplay', onResumed);
     return () => {
       el.removeEventListener('timeupdate', onTime);
       el.removeEventListener('loadedmetadata', onMeta);
@@ -124,13 +137,24 @@ export default function AutoVideo({ src, dur, active = true, observe = false, lo
       el.removeEventListener('play', onPlay);
       el.removeEventListener('pause', onPause);
       el.removeEventListener('ended', onEnd);
+      el.removeEventListener('waiting', onWaiting);
+      el.removeEventListener('playing', onResumed);
+      el.removeEventListener('canplay', onResumed);
     };
-  }, [src, dur, attemptPlay]);
+  }, [src, dur, attemptPlay, onBuffering]);
+
+  // A rate chosen on one reel is the shelf's rate, so it has to land on a clip
+  // that is already running rather than only on the next one to start.
+  useEffect(() => {
+    const el = video.current;
+    if (el) el.playbackRate = rate || 1;
+  }, [rate, src]);
 
   useEffect(() => () => {
     if (tapTimer.current) clearTimeout(tapTimer.current);
     if (flashTimer.current) clearTimeout(flashTimer.current);
     if (badgeTimer.current) clearTimeout(badgeTimer.current);
+    if (holdTimer.current) clearTimeout(holdTimer.current);
   }, []);
 
   const showFlash = (kind: 'play' | 'pause') => {
@@ -167,6 +191,8 @@ export default function AutoVideo({ src, dur, active = true, observe = false, lo
   };
 
   const onTap = (e: React.MouseEvent) => {
+    // A hold opened the menu; the click that follows it is not a play toggle.
+    if (held.current) return;
     if (onOpen) { onOpen(); return; }
     if (!seek) { togglePlay(); return; }
     const rect = wrap.current?.getBoundingClientRect();
@@ -207,7 +233,29 @@ export default function AutoVideo({ src, dur, active = true, observe = false, lo
   const progress = total > 0 ? Math.min(100, (current / total) * 100) : 0;
 
   return (
-    <div className={`auto-video ${cover ? 'cover' : ''}`} ref={wrap} onClick={onTap}>
+    <div
+      className={`auto-video ${cover ? 'cover' : ''}`}
+      ref={wrap}
+      onClick={onTap}
+      onPointerDown={e => {
+        held.current = false;
+        if (holdTimer.current) clearTimeout(holdTimer.current);
+        if (e.button !== 0 || !onLongPress) return;
+        const origin = { x: e.clientX, y: e.clientY };
+        holdTimer.current = setTimeout(() => { held.current = true; onLongPress(); }, 500);
+        const drag = (ev: PointerEvent) => {
+          if (Math.hypot(ev.clientX - origin.x, ev.clientY - origin.y) > 12) {
+            if (holdTimer.current) clearTimeout(holdTimer.current);
+            holdTimer.current = null;
+            window.removeEventListener('pointermove', drag);
+          }
+        };
+        window.addEventListener('pointermove', drag);
+        window.addEventListener('pointerup', () => window.removeEventListener('pointermove', drag), { once: true });
+      }}
+      onPointerUp={() => { if (holdTimer.current) clearTimeout(holdTimer.current); holdTimer.current = null; }}
+      onPointerCancel={() => { if (holdTimer.current) clearTimeout(holdTimer.current); holdTimer.current = null; }}
+    >
       <video ref={video} src={src} playsInline loop={loop} preload={preload} muted={muted} />
       {flash && <span className={`av-flash ${flash}`} aria-hidden="true">{flash === 'play' ? PLAY_SVG : PAUSE_SVG}</span>}
       {badge && (

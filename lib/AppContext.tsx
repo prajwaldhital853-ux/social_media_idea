@@ -43,6 +43,13 @@ interface AppContextType {
   reactionMix: (targetType: Target, targetId: string) => { kind: ReactionKind; n: number }[];
   toggleSave: (pid: string) => Promise<void>;
   isSaved: (pid: string) => boolean;
+  sharePost: (pid: string) => Promise<void>;
+  /** One reel watched. Fire-and-forget: a refused counter must never spoil playback. */
+  countView: (pid: string) => Promise<void>;
+  blockUser: (targetId: string) => Promise<void>;
+  unblockUser: (targetId: string) => Promise<void>;
+  isBlocked: (targetId: string) => boolean;
+  blockedIds: () => string[];
   toggleListingSave: (lid: string) => Promise<void>;
   isListingSaved: (lid: string) => boolean;
   notify: (uid: string, kind: NotificationKind, text: string, href?: string, actor?: string) => void;
@@ -295,6 +302,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         promotions: (payload.promotions || []).map(mapPromotion),
       }),
       meId: self.id,
+      blocks: (payload.blocks || []).map(idOf),
       settings: mapSettings(payload.config || prev.settings),
       unread: payload.unread,
       serverTime: serverNow,
@@ -978,6 +986,88 @@ export function AppProvider({ children }: { children: ReactNode }) {
     showToast(saved ? t('unsave') : t('saved'));
   };
 
+  /** Shares and views are tallies on one post, so they move without a row rewrite. */
+  const bumpTally = (pid: string, field: 'shares' | 'views', delta: number) =>
+    setDb(prev => ({ ...prev, posts: prev.posts.map(p => (p.id === pid ? { ...p, [field]: (p[field] ?? 0) + delta } : p)) }));
+
+  const settleTally = (pid: string, field: 'shares' | 'views', value: unknown) => {
+    if (typeof value !== 'number') return;
+    setDb(prev => ({ ...prev, posts: prev.posts.map(p => (p.id === pid ? { ...p, [field]: value } : p)) }));
+  };
+
+  const sharePost = async (pid: string) => {
+    // The link has already left the app by the time this is called, so a refused
+    // POST is a lost tally and nothing the reader should be told about.
+    bumpTally(pid, 'shares', 1);
+    if (!API_ENABLED) return;
+    try {
+      const data = await api.post<any>(`/api/posts/${pid}/share/`, {});
+      settleTally(pid, 'shares', data?.share_count);
+    } catch { /* counted locally; the server will agree on the next read */ }
+  };
+
+  const countView = async (pid: string) => {
+    bumpTally(pid, 'views', 1);
+    if (!API_ENABLED) return;
+    try {
+      const data = await api.post<any>(`/api/posts/${pid}/view/`, {});
+      settleTally(pid, 'views', data?.views);
+    } catch { /* a reel still plays when its counter refuses */ }
+  };
+
+  const blockedIds = () => db.blocks || [];
+  const isBlocked = (targetId: string) => (db.blocks || []).includes(targetId);
+
+  const blockUser = async (targetId: string) => {
+    const self = currentMe();
+    if (!self || self.id === targetId) return;
+    const before = dbRef.current.blocks || [];
+    setDb(prev => ({ ...prev, blocks: [...before.filter(id => id !== targetId), targetId] }));
+    if (API_ENABLED) {
+      const username = usernameOf(targetId);
+      if (!username) return;
+      try {
+        await api.post('/api/blocks/', { username });
+      } catch (err) {
+        setDb(prev => ({ ...prev, blocks: before }));
+        showToast(errText(err, 'Could not block.'));
+        return;
+      }
+    }
+    // A block severs the follow in both directions, and the feed is built from
+    // that graph — so the shelves that show their work are dropped, not patched.
+    setDb(prev => ({
+      ...prev,
+      follows: prev.follows.filter(f => !(
+        (f.follower === self.id && f.following === targetId) || (f.follower === targetId && f.following === self.id)
+      )),
+    }));
+    forgetLists('feed');
+    forgetLists('reels');
+    forgetLists('posts');
+    showToast('Blocked. Their posts are out of your feed.');
+  };
+
+  const unblockUser = async (targetId: string) => {
+    const before = dbRef.current.blocks || [];
+    setDb(prev => ({ ...prev, blocks: before.filter(id => id !== targetId) }));
+    if (API_ENABLED) {
+      const username = usernameOf(targetId);
+      if (!username) return;
+      try {
+        await api.del(`/api/blocks/${username}/`);
+      } catch (err) {
+        setDb(prev => ({ ...prev, blocks: before }));
+        showToast(errText(err, 'Could not unblock.'));
+        return;
+      }
+    }
+    forgetLists('feed');
+    forgetLists('reels');
+    forgetLists('posts');
+    showToast('Unblocked.');
+  };
+
   const isListingSaved = (lid: string) => {
     const self = currentMe();
     return !!self && (db.listingSaves || []).some(s => s.uid === self.id && s.lid === lid);
@@ -1283,6 +1373,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         addPost, updatePost, deletePost, addComment, deleteComment,
         toggleFollow, isFollowing, followState, incomingRequests, acceptRequest, declineRequest, mutualIds,
         react, myReaction, reactionCount, reactionMix, toggleSave, isSaved, toggleListingSave, isListingSaved,
+        sharePost, countView, blockUser, unblockUser, isBlocked, blockedIds,
         notify, markAllRead, markRead, sendMessage, markThreadRead, addReport, logAudit,
         requestPromotion, cancelPromotion, activePromo, promoEligible,
         updateLang, login, logout, isAuthenticated,

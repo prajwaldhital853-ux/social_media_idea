@@ -12,8 +12,8 @@ import puppeteer from 'puppeteer-core';
 import { writeFileSync } from 'node:fs';
 import { retryWrite } from './shots.mjs';
 
-const BASE = 'http://localhost:3000';
-const API = 'http://127.0.0.1:8001/api';
+const BASE = process.env.QA_BASE || 'http://localhost:3000';
+const API = (process.env.QA_API || 'http://127.0.0.1:8001') + '/api';
 const OUT = 'D:/social_medial/.qa';
 const CHROME = 'C:/Program Files/Google/Chrome/Application/chrome.exe';
 const PASS = 'exposing-demo-1';

@@ -12,7 +12,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from apps.accounts.models import User
-from apps.follows.models import Follow
+from apps.follows.models import Block, Follow
 from apps.messages.models import Message
 from apps.notifications.models import Notification
 from apps.promotions.models import Promotion
@@ -112,10 +112,19 @@ def sync(request):
     ]
     graph_ids = {edge.follower_id for edge in edges} | {edge.followee_id for edge in edges}
 
+    # Both sides of every block the viewer is party to: a stranger who blocked you
+    # is not a suggestion, and someone you blocked is not either. The client only
+    # needs its own side, since that is the list it can lift.
+    my_blocks = list(Block.objects.filter(blocker=user).values_list('blocked_id', flat=True)[:EDGE_LIMIT])
+    block_ids = set(my_blocks) | set(
+        Block.objects.filter(blocked=user).values_list('blocker_id', flat=True)[:EDGE_LIMIT]
+    )
+
     following_ids = [row['following'] for row in edge_rows if row['status'] == Follow.Status.ACCEPTED]
     suggested = (
         User.objects.exclude(pk=user.pk)
         .exclude(pk__in=following_ids)
+        .exclude(pk__in=block_ids)
         .exclude(pk__in=[row['follower'] for row in edge_rows if row['status'] == Follow.Status.PENDING])
         .select_related('profile')
         .annotate(followers_count=Count('followers', filter=Q(followers__status='accepted'), distinct=True))
@@ -128,6 +137,7 @@ def sync(request):
         card['role'] = _role(row)
         suggestion_rows.append(card)
     graph_ids |= {card['id'] for card in suggestion_rows}
+    graph_ids |= set(my_blocks)
 
     wallet = Wallet.objects.filter(user=user).first()
     saves = list(SavedPost.objects.filter(user=user).values_list('post_id', flat=True)[:GRAPH_LIMIT])
@@ -146,6 +156,7 @@ def sync(request):
         'people': _cards(graph_ids),
         'suggestions': suggestion_rows,
         'follows': edge_rows,
+        'blocks': my_blocks,
         'saves': {'posts': saves, 'listings': listing_saves},
         'promotions': [
             {

@@ -1,11 +1,13 @@
 from django.core.cache import cache
+from django.db.models import Q
 from django.test import TestCase, TransactionTestCase
 from rest_framework.test import APIClient
 
 from apps.accounts.models import User
 from apps.common.testutils import auth_client, make_user, run_threads
-from apps.follows.models import Follow
+from apps.follows.models import Block, Follow
 from apps.notifications.models import Notification
+from apps.posts.models import Post
 
 
 class FollowTests(TestCase):
@@ -110,7 +112,8 @@ class FollowTests(TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertFalse(Follow.objects.filter(follower=self.a, followee=self.b).exists())
         resp = self.ca.delete('/api/follows/followb/')
-        self.assertEqual(resp.status_code, 404)
+        self.assertEqual(resp.status_code, 200)
+        self.assertFalse(resp.data['removed'])
 
 
 class FollowConcurrencyTests(TransactionTestCase):
@@ -128,3 +131,58 @@ class FollowConcurrencyTests(TransactionTestCase):
         codes = run_threads(follow, clients)
         self.assertEqual(codes.count(201), 1)
         self.assertEqual(Follow.objects.filter(follower=self.a, followee=self.b).count(), 1)
+
+class BlockTests(TestCase):
+    def setUp(self):
+        cache.clear()
+        self.a = make_user('blocka')
+        self.b = make_user('blockb')
+        self.ca = auth_client(self.a)
+        self.cb = auth_client(self.b)
+        self.a_post = Post.objects.create(author=self.a, text='what a posted', audience='public')
+        self.b_post = Post.objects.create(author=self.b, text='what b posted', audience='public')
+
+    def test_blocking_severs_the_follow_in_both_directions(self):
+        Follow.objects.create(follower=self.a, followee=self.b, status='accepted')
+        Follow.objects.create(follower=self.b, followee=self.a, status='accepted')
+        resp = self.ca.post('/api/blocks/', {'username': 'blockb'}, format='json')
+        self.assertEqual(resp.status_code, 201)
+        self.assertEqual(Follow.objects.filter(Q(follower=self.a, followee=self.b) |
+                                               Q(follower=self.b, followee=self.a)).count(), 0)
+
+    def test_a_block_hides_their_posts_from_both_of_you(self):
+        self.ca.post('/api/blocks/', {'username': 'blockb'}, format='json')
+        ids = [row['id'] for row in self.ca.get('/api/feed/').data['results']]
+        self.assertNotIn(self.b_post.pk, ids)
+        # The blocked person loses the blocker's public posts too, without being told why.
+        ids = [row['id'] for row in self.cb.get('/api/feed/').data['results']]
+        self.assertNotIn(self.a_post.pk, ids)
+
+    def test_a_blocked_author_cannot_be_reached_or_followed(self):
+        self.ca.post('/api/blocks/', {'username': 'blockb'}, format='json')
+        self.assertEqual(self.cb.get(f'/api/posts/{self.a_post.pk}/').status_code, 404)
+        self.assertEqual(self.cb.post('/api/follows/', {'username': 'blocka'}, format='json').status_code, 403)
+
+    def test_blocking_yourself_is_refused_and_repeat_blocking_settles(self):
+        self.assertEqual(self.ca.post('/api/blocks/', {'username': 'blocka'}, format='json').status_code, 400)
+        self.ca.post('/api/blocks/', {'username': 'blockb'}, format='json')
+        resp = self.ca.post('/api/blocks/', {'username': 'blockb'}, format='json')
+        self.assertEqual(resp.status_code, 200)
+        self.assertFalse(resp.data['created'])
+        self.assertEqual(Block.objects.filter(blocker=self.a).count(), 1)
+
+    def test_the_block_list_and_state_answer_to_the_blocker(self):
+        self.ca.post('/api/blocks/', {'username': 'blockb'}, format='json')
+        self.assertEqual([row['username'] for row in self.ca.get('/api/follows/blocked/').data['results']], ['blockb'])
+        self.assertTrue(self.ca.get('/api/follows/state/blockb/').data['blocked'])
+        # The blocked person is not told they are blocked, so their own state stays clean.
+        b_state = self.cb.get('/api/follows/state/blocka/').data
+        self.assertFalse(b_state['blocked'])
+        self.assertTrue(b_state['blocked_me'])
+
+    def test_unblocking_is_idempotent_and_brings_the_posts_back(self):
+        self.ca.post('/api/blocks/', {'username': 'blockb'}, format='json')
+        self.assertEqual(self.ca.delete('/api/blocks/blockb/').status_code, 200)
+        self.assertEqual(self.ca.delete('/api/blocks/blockb/').status_code, 200)
+        ids = [row['id'] for row in self.ca.get('/api/feed/').data['results']]
+        self.assertIn(self.b_post.pk, ids)

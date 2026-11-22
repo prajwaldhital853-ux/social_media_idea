@@ -115,6 +115,54 @@ class FeedKeysetTests(TestCase):
         self.assertEqual(len(APIClient().get('/api/feed/?following=1').data['results']), 0)
 
 
+class ShareCountTests(TestCase):
+    def setUp(self):
+        cache.clear()
+        self.author = make_user('shareauthor')
+        self.fan = make_user('sharefan')
+        self.public = Post.objects.create(author=self.author, text='shareable', audience='public')
+        self.hidden = Post.objects.create(author=self.author, text='private', audience='followers')
+
+    def test_a_share_raises_the_tally_and_the_card_reports_it(self):
+        client = auth_client(self.fan)
+        self.assertEqual(client.get('/api/posts/').data['results'][0]['share_count'], 0)
+        resp = client.post(f'/api/posts/{self.public.pk}/share/')
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data['share_count'], 1)
+        self.assertEqual(Post.objects.get(pk=self.public.pk).share_count, 1)
+        client.post(f'/api/posts/{self.public.pk}/share/')
+        self.assertEqual(Post.objects.get(pk=self.public.pk).share_count, 2)
+
+    def test_a_guest_can_share_a_public_post(self):
+        self.assertEqual(APIClient().post(f'/api/posts/{self.public.pk}/share/').status_code, 200)
+
+    def test_sharing_something_you_cannot_read_is_a_404(self):
+        resp = APIClient().post(f'/api/posts/{self.hidden.pk}/share/')
+        self.assertEqual(resp.status_code, 404)
+        self.assertEqual(Post.objects.get(pk=self.hidden.pk).share_count, 0)
+
+
+class ShareConcurrencyTests(TransactionTestCase):
+    """Threads get their own database connection, so this needs committed rows."""
+
+    def setUp(self):
+        cache.clear()
+        self.author = make_user('shareconcauthor')
+        self.fan = make_user('shareconcfan')
+        self.post = Post.objects.create(author=self.author, text='viral', audience='public')
+
+    def test_twenty_sharers_at_once_all_count(self):
+        clients = [auth_client(self.fan) for _ in range(20)]
+
+        def hit(item):
+            client, _ = item
+            return client.post(f'/api/posts/{self.post.pk}/share/').status_code
+
+        codes = run_threads(hit, list(zip(clients, range(20))), workers=10)
+        self.assertEqual(codes, [200] * 20)
+        self.assertEqual(Post.objects.get(pk=self.post.pk).share_count, 20)
+
+
 class PostConcurrencyTests(TransactionTestCase):
     def setUp(self):
         cache.clear()
@@ -130,3 +178,67 @@ class PostConcurrencyTests(TransactionTestCase):
         codes = run_threads(create, list(zip(clients, range(20))), workers=10)
         self.assertEqual(codes, [201] * 20)
         self.assertEqual(Post.objects.filter(author=self.author).count(), 20)
+
+
+class ReelViewTests(TestCase):
+    def setUp(self):
+        cache.clear()
+        self.author = make_user('viewauthor')
+        self.fan = make_user('viewfan')
+        self.reels = []
+        for i, n in enumerate([5, 40, 15]):
+            post = Post.objects.create(author=self.author, text=f'reel {i}', audience='public')
+            PostMedia.objects.create(post=post, kind='video', url='https://x.test/a.mp4', position=0)
+            post.views = n
+            post.save(update_fields=['views'])
+            self.reels.append(post)
+        self.photo = Post.objects.create(author=self.author, text='a photo post', audience='public')
+        PostMedia.objects.create(post=self.photo, kind='image', url='https://x.test/a.jpg', position=0)
+        self.hidden = Post.objects.create(author=self.author, text='backroom', audience='followers')
+        self.cc = auth_client(self.fan)
+
+    def _ids(self, url):
+        return [row['id'] for row in self.cc.get(url).data['results']]
+
+    def test_a_watched_reel_counts_and_reports_the_total(self):
+        resp = self.cc.post(f'/api/posts/{self.reels[0].pk}/view/')
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data['views'], 6)
+        self.cc.post(f'/api/posts/{self.reels[0].pk}/view/')
+        self.assertEqual(Post.objects.get(pk=self.reels[0].pk).views, 7)
+
+    def test_most_views_sorts_the_reel_shelf_and_skips_photo_posts(self):
+        ids = self._ids('/api/posts/?media=video&order=views')
+        self.assertEqual(ids, [self.reels[1].pk, self.reels[2].pk, self.reels[0].pk])
+        self.assertNotIn(self.photo.pk, ids)
+
+    def test_latest_and_oldest_are_two_walks_of_the_same_shelf(self):
+        latest = self._ids('/api/posts/?media=video&order=latest')
+        self.assertEqual(latest, list(reversed(self._ids('/api/posts/?media=video&order=oldest'))))
+
+    def test_the_views_page_walks_a_cursor_of_counts(self):
+        # Twelve reels, so the most-viewed shelf has to break into a second page
+        # and the cursor has to carry a count instead of a timestamp.
+        for i in range(9):
+            post = Post.objects.create(author=self.author, text=f'more {i}', audience='public')
+            PostMedia.objects.create(post=post, kind='video', url='https://x.test/b.mp4', position=0)
+            post.views = 100 + i
+            post.save(update_fields=['views'])
+        first = self.cc.get('/api/posts/?media=video&order=views').data
+        self.assertEqual(len(first['results']), 10)
+        self.assertTrue(first['has_more'])
+        second = self.cc.get(f'/api/posts/?media=video&order=views&cursor={first["next_cursor"]}').data
+        rows = first['results'] + second['results']
+        self.assertEqual(len(second['results']), 2)
+        self.assertEqual(len({row['id'] for row in rows}), 12)
+        counts = [row['views'] for row in rows]
+        self.assertEqual(counts, sorted(counts, reverse=True))
+
+    def test_counting_a_view_you_cannot_watch_is_a_404(self):
+        self.assertEqual(APIClient().post(f'/api/posts/{self.hidden.pk}/view/').status_code, 404)
+        self.assertEqual(Post.objects.get(pk=self.hidden.pk).views, 0)
+
+    def test_the_card_carries_its_own_tally(self):
+        row = self.cc.get(f'/api/posts/{self.reels[0].pk}/').data
+        self.assertEqual(row['views'], 5)
+        self.assertEqual(row['share_count'], 0)

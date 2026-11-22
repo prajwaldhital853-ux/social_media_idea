@@ -9,7 +9,10 @@ from rest_framework.response import Response
 
 def encode_cursor(obj, field='created_at'):
     value = getattr(obj, field)
-    payload = json.dumps([value.isoformat(), obj.pk], separators=(',', ':'))
+    # A datetime walks the feed; a count walks the most-viewed shelf. The cursor
+    # carries whichever the list is sorted by, and JSON keeps the two apart.
+    raw = value.isoformat() if hasattr(value, 'isoformat') else value
+    payload = json.dumps([raw, obj.pk], separators=(',', ':'))
     return base64.urlsafe_b64encode(payload.encode()).decode().rstrip('=')
 
 
@@ -19,7 +22,7 @@ def decode_cursor(raw):
     try:
         padded = raw + '=' * (-len(raw) % 4)
         ts, pk = json.loads(base64.urlsafe_b64decode(padded))
-        return parse_datetime(ts), int(pk)
+        return (ts if isinstance(ts, (int, float)) else parse_datetime(ts)), int(pk)
     except (ValueError, TypeError):
         return None
 

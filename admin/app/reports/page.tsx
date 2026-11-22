@@ -1,0 +1,284 @@
+'use client';
+
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import ConsoleShell from '@/components/ConsoleShell';
+import ContentCard from '@/components/ContentCard';
+import DecisionBar from '@/components/Decision';
+import { api } from '@/lib/api';
+import { num } from '@/lib/format';
+import { IC } from '@/lib/icons';
+import { ago } from '@/lib/time';
+import { useSession } from '@/lib/session';
+import { ContentKind, Decision as Verb, Outcome, PersonRef, QueuePage, QueueRow } from '@/lib/types';
+
+const TARGETS = [
+  { id: '', label: 'Anything reported' },
+  { id: 'post', label: 'Posts' },
+  { id: 'comment', label: 'Comments' },
+  { id: 'listing', label: 'Listings' },
+  { id: 'user', label: 'Accounts' },
+];
+
+const STATES = [
+  { id: 'open', label: 'Waiting for a decision' },
+  { id: 'resolved', label: 'Handled' },
+  { id: 'dismissed', label: 'Dismissed' },
+  { id: 'all', label: 'Every report' },
+];
+
+const TITLED = (text: string) => text ? text.charAt(0).toUpperCase() + text.slice(1) : text;
+
+const TALLY: { kind: ContentKind; label: string }[] = [
+  { kind: 'post', label: 'posts' },
+  { kind: 'comment', label: 'comments' },
+  { kind: 'listing', label: 'listings' },
+  { kind: 'user', label: 'accounts' },
+];
+
+const tally = (facets: QueuePage['facets'], kind: ContentKind) => facets.by_target[kind] || 0;
+
+export default function ReportsPage() {
+  const { noteGate } = useSession();
+  const [rows, setRows] = useState<QueueRow[] | null>(null);
+  const [facets, setFacets] = useState<QueuePage['facets'] | null>(null);
+  const [cursor, setCursor] = useState<string | null>(null);
+  const [q, setQ] = useState('');
+  const [target, setTarget] = useState('');
+  const [state, setState] = useState('open');
+  const [banner, setBanner] = useState<{ kind: 'ok' | 'bad'; text: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+  // The search box answers every keystroke, so three requests for one word can
+  // land in any order, and the one that arrives last is not the one that was
+  // typed last. Each call takes a number and only the newest may paint the queue.
+  const seq = useRef(0);
+
+  const fetchPage = useCallback(async (after: string | null) => {
+    const params = new URLSearchParams();
+    params.set('status', state);
+    if (target) params.set('target', target);
+    if (q.trim()) params.set('q', q.trim());
+    if (after) params.set('cursor', after);
+    return api<QueuePage>(`admin/review/?${params}`);
+  }, [q, state, target]);
+
+  const load = useCallback(async () => {
+    const mine = seq.current + 1;
+    seq.current = mine;
+    setBusy(true);
+    try {
+      const page = await fetchPage(null);
+      if (seq.current !== mine) return;
+      setRows(page.results);
+      setFacets(page.facets);
+      setCursor(page.next_cursor);
+    } catch (err) {
+      if (seq.current !== mine) return;
+      if (!noteGate(err)) setBanner({ kind: 'bad', text: (err as Error).message });
+    } finally {
+      if (seq.current === mine) setBusy(false);
+    }
+  }, [fetchPage, noteGate]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const older = async () => {
+    if (!cursor) return;
+    const mine = seq.current + 1;
+    seq.current = mine;
+    setBusy(true);
+    try {
+      const page = await fetchPage(cursor);
+      // A search typed while this was in flight owns the queue now, so its answer
+      // is the one that gets painted and these older rows are dropped.
+      if (seq.current !== mine) return;
+      setRows(list => [...(list || []), ...page.results]);
+      setCursor(page.next_cursor);
+      setFacets(page.facets);
+    } catch (err) {
+      if (seq.current !== mine) return;
+      if (!noteGate(err)) setBanner({ kind: 'bad', text: (err as Error).message });
+    } finally {
+      if (seq.current === mine) setBusy(false);
+    }
+  };
+
+  /**
+   * Reports arrive one per person, but a decision is made about a post. Grouping
+   * the page by target is what turns "14 rows" into "4 things to decide" and
+   * gives the whole pile one set of buttons.
+   */
+  const cases = useMemo(() => {
+    const byTarget = new Map<string, QueueRow[]>();
+    (rows || []).forEach(row => {
+      const bucket = byTarget.get(row.target);
+      if (bucket) bucket.push(row);
+      else byTarget.set(row.target, [row]);
+    });
+    return Array.from(byTarget.values());
+  }, [rows]);
+
+  const decide = (rep: QueueRow, verb: Verb, reason: string, notice: string) =>
+    api<Outcome>(`admin/review/${rep.id}/decide/`, {
+      method: 'POST',
+      body: { action: verb, reason, notice },
+    });
+
+  const handled = (out: Outcome) => {
+    setBanner({ kind: 'ok', text: out.detail });
+    load();
+  };
+
+  return (
+    <ConsoleShell
+      title="Report queue"
+      subtitle="What people have flagged, the thing itself beside it, and one decision that speaks for every report on it."
+      actions={(
+        <button type="button" className={`btn ghost${busy ? ' spinning' : ''}`} onClick={() => load()} title="Reload the queue">
+          {IC.refresh}<span>Refresh</span>
+        </button>
+      )}
+    >
+      <div className="toolbar">
+        <label className="search">
+          {IC.search}
+          <input
+            value={q} onChange={event => setQ(event.target.value)}
+            placeholder="Search by reporter, reason or target id" aria-label="Search reports"
+          />
+        </label>
+        <select value={target} onChange={event => setTarget(event.target.value)} aria-label="Filter by what was reported">
+          {TARGETS.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}
+        </select>
+        <select value={state} onChange={event => setState(event.target.value)} aria-label="Filter by report status">
+          {STATES.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}
+        </select>
+        <span className="toolbar-count">
+          {rows === null ? '…' : `${cases.length} thing${cases.length === 1 ? '' : 's'} to look at`}
+        </span>
+      </div>
+
+      {banner && (
+        <p className={`banner banner-${banner.kind}`} role="status">
+          {banner.kind === 'ok' ? IC.check : IC.alert}<span>{banner.text}</span>
+        </p>
+      )}
+
+      {facets && (
+        <p className="facets">
+          <b>{num(facets.open)}</b> reports waiting for a decision
+          <span className="dot"/>
+          {TALLY.map(item => (
+            <span key={item.kind}>{num(tally(facets, item.kind))} {item.label}</span>
+          ))}
+          <span className="dot"/>
+          <span>the feed hides a post at {facets.auto_hide_at} different reporters</span>
+        </p>
+      )}
+
+      {rows === null ? (
+        <div className="skeleton-stack">
+          <div className="skeleton"/><div className="skeleton"/><div className="skeleton skeleton-short"/>
+        </div>
+      ) : cases.length === 0 ? (
+        <section className="panel empty">
+          <h2>Nothing here</h2>
+          <p>
+            {state === 'open'
+              ? 'No report is waiting on this seat. New ones arrive the moment someone taps Report.'
+              : 'No report matches this view. Try widening the filter.'}
+          </p>
+        </section>
+      ) : (
+        <div className="cases">
+          {cases.map(bucket => <Case key={bucket[0].target} bucket={bucket} onDone={handled} decide={decide}/>)}
+        </div>
+      )}
+
+      {cursor && (
+        <button type="button" className="btn ghost wide" disabled={busy} onClick={older}>
+          {IC.go}<span>Show older reports</span>
+        </button>
+      )}
+    </ConsoleShell>
+  );
+}
+
+function Case({ bucket, decide, onDone }: {
+  bucket: QueueRow[];
+  decide: (rep: QueueRow, verb: Verb, reason: string, notice: string) => Promise<Outcome>;
+  onDone: (out: Outcome) => void;
+}) {
+  const [showWho, setShowWho] = useState(false);
+  const rep = bucket[0];
+  const open = rep.pile.open;
+  const distinct: PersonRef[] = [];
+  bucket.forEach(row => {
+    if (row.reporter && !distinct.some(who => who.username === row.reporter!.username)) distinct.push(row.reporter);
+  });
+
+  return (
+    <section className="case" data-case={rep.target}>
+      <header className="case-head">
+        <span className={`pile${open > 0 ? ' open' : ' shut'}`}>
+          {IC.flag}
+          <b>{open}</b>
+          <em>open of {rep.pile.reports}</em>
+        </span>
+        <span className="case-why">
+          {rep.pile.reasons.length === 0
+            ? <em>No reason given</em>
+            : rep.pile.reasons.map(entry => (
+              <span key={entry.reason} className="chip">{TITLED(entry.reason)} × {entry.n}</span>
+            ))}
+        </span>
+        <span className="case-side">
+          {rep.campaigns > 0 && (
+            <span className="pill warn" title="Taking it down stops these and refunds the days they never ran">
+              {IC.coin}<span>{rep.campaigns} campaign running</span>
+            </span>
+          )}
+          <span className="case-age">last report {ago(rep.created_at)}</span>
+        </span>
+      </header>
+
+      <ContentCard content={rep.content} matched={rep.matches}/>
+
+      {rep.missing && (
+        <p className="note row">
+          {IC.alert}
+          <span>
+            This target was deleted after it was reported. Dismiss the reports so they stop
+            counting, or leave them — there is nothing left to take down.
+          </span>
+        </p>
+      )}
+
+      <div className="case-who">
+        <button type="button" className="link" onClick={() => setShowWho(!showWho)} aria-expanded={showWho}>
+          {distinct.length} reporter{distinct.length === 1 ? '' : 's'} {showWho ? '▲' : '▼'}
+        </button>
+        {showWho && (
+          <ul className="reporters">
+            {bucket.map(row => (
+              <li key={row.id}>
+                <b>@{row.reporter ? row.reporter.username : 'deleted account'}</b>
+                <span>{TITLED(row.reason)}</span>
+                {row.details && <em>{row.details}</em>}
+                <span className="when">{ago(row.created_at)}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      <DecisionBar
+        actions={rep.actions}
+        permission={rep.permission}
+        run={(verb, reason, notice) => decide(rep, verb, reason, notice)}
+        onDone={onDone}
+      />
+    </section>
+  );
+}
