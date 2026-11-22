@@ -115,7 +115,7 @@
     {
       "name": "desktop: picking a thread opens it beside the inbox, not over it",
       "pass": true,
-      "detail": "{\"path\":\"/messages/own282435\",\"chat\":true,\"bubbles\":10,\"compose\":true,\"backHidden\":true,\"stillListed\":10,\"activeRow\":true}"
+      "detail": "{\"path\":\"/messages/arjun\",\"chat\":true,\"bubbles\":10,\"compose\":true,\"backHidden\":true,\"stillListed\":10,\"activeRow\":true}"
     },
     {
       "name": "desktop: the thread hides the mobile back button on desktop",
@@ -140,17 +140,17 @@
     {
       "name": "mobile: the inbox stays a single column with no thread pane",
       "pass": true,
-      "detail": "{\"rows\":10,\"mainHidden\":true,\"topbarHidden\":true,\"search\":true,\"head\":true,\"waitedMs\":393}"
+      "detail": "{\"rows\":10,\"mainHidden\":true,\"topbarHidden\":true,\"search\":true,\"head\":true,\"waitedMs\":659}"
     },
     {
       "name": "mobile: a thread is still full width with its back button",
       "pass": true,
-      "detail": "{\"path\":\"/messages/own282435\",\"chatW\":390,\"sideHidden\":true,\"backShown\":true,\"compose\":true}"
+      "detail": "{\"path\":\"/messages/arjun\",\"chatW\":390,\"sideHidden\":true,\"backShown\":true,\"compose\":true}"
     },
     {
       "name": "mobile: the feed keeps its own sheet and loads posts",
       "pass": true,
-      "detail": "{\"bg\":\"rgb(255, 255, 255)\",\"posts\":10,\"waitedMs\":234}"
+      "detail": "{\"bg\":\"rgb(255, 255, 255)\",\"posts\":10,\"waitedMs\":322}"
     },
     {
       "name": "mobile: the For you / Following band thins on scroll without losing its place",

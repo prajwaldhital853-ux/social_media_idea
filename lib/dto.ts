@@ -216,6 +216,7 @@ export function mapMessage(row: any, meId: string, otherId: string): Message {
     text: row.text || '',
     ts: at(row.created_at),
     read: !!row.read_at,
+    status: row.status || undefined,
   };
 }
 

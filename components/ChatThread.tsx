@@ -57,6 +57,18 @@ export default function ChatThread({ other }: { other: User }) {
     void markThreadRead(other.username);
   }, [meId, other, markThreadRead]);
 
+  // Receipts and replies arrive while the thread sits open: a quiet poll of the
+  // newest page refreshes the ticks without ever touching the scroll anchor.
+  const reloadRef = useRef(stream.reload);
+  reloadRef.current = stream.reload;
+  useEffect(() => {
+    if (!serverMode || !meId) return;
+    const id = setInterval(() => {
+      if (document.visibilityState === 'visible') void reloadRef.current();
+    }, 6000);
+    return () => clearInterval(id);
+  }, [serverMode, meId]);
+
   // Only a new message — or a different conversation — pulls the reader to the
   // foot of the thread; rows added above stay exactly where they were.
   const newest = thread.length ? thread[thread.length - 1].id : '';
@@ -86,7 +98,9 @@ export default function ChatThread({ other }: { other: User }) {
 
   const todayStart = dayStart(Date.now());
   let lastDay = 0;
-  const opening = serverMode && !stream.loaded;
+  // The skeleton is only for a thread with nothing cached yet; a poll reload
+  // passes through loaded=false and must not blank a thread already on screen.
+  const opening = serverMode && !stream.loaded && thread.length === 0;
 
   return (
     <div className="chat-view">
@@ -132,6 +146,8 @@ export default function ChatThread({ other }: { other: User }) {
           const separator = day !== lastDay;
           lastDay = day;
           const mine = m.from === me?.id;
+          // Rows without a server status (seeded or pre-upgrade) read off `read`.
+          const receipt = mine ? m.status || (m.read ? 'read' : 'delivered') : null;
           return (
             <div key={m.id} className="chat-turn">
               {separator && (
@@ -147,7 +163,7 @@ export default function ChatThread({ other }: { other: User }) {
                   <p>{m.text}</p>
                   <span className="chat-meta">
                     {ago(m.ts, lang)}
-                    {mine && <span className={`chat-receipt ${m.read ? 'read' : ''}`}>{m.read ? '✓✓' : '✓'}</span>}
+                    {receipt && <span className={`chat-receipt ${receipt}`}>{receipt === 'sent' ? '✓' : '✓✓'}</span>}
                   </span>
                 </div>
               </div>

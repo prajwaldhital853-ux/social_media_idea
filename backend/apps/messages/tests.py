@@ -77,6 +77,30 @@ class MessageTests(TestCase):
         resp = self.ca.post('/api/messages/msgb/', {'text': 'x' * 2001}, format='json')
         self.assertEqual(resp.status_code, 400)
 
+    def test_receipt_walks_sent_delivered_read(self):
+        resp = self.ca.post('/api/messages/msgb/', {'text': 'ticks'}, format='json')
+        self.assertEqual(resp.status_code, 201)
+        self.assertEqual(resp.data['status'], 'sent')
+        # The sender's own view of the thread still shows the message as sent.
+        seen = self.ca.get('/api/messages/msgb/').data['results'][-1]
+        self.assertEqual(seen['status'], 'sent')
+        # The recipient listing the inbox proves delivery; opening the thread proves a read.
+        self.cb.get('/api/messages/inbox/')
+        delivered = self.ca.get('/api/messages/msgb/').data['results'][-1]
+        self.assertEqual(delivered['status'], 'delivered')
+        self.cb.post('/api/messages/msga/read/')
+        read = self.ca.get('/api/messages/msgb/').data['results'][-1]
+        self.assertEqual(read['status'], 'read')
+        # A reader who jumps straight to the thread without an inbox first is
+        # still delivered-and-read in one step, never stuck behind.
+        self.ca.post('/api/messages/msgb/', {'text': 'again'}, format='json')
+        self.cb.get('/api/messages/msga/')
+        row = self.ca.get('/api/messages/msgb/').data['results'][-1]
+        self.assertEqual(row['status'], 'delivered')
+        self.cb.post('/api/messages/msga/read/')
+        row = self.ca.get('/api/messages/msgb/').data['results'][-1]
+        self.assertEqual(row['status'], 'read')
+
 
 class MessageConcurrencyTests(TransactionTestCase):
     def setUp(self):

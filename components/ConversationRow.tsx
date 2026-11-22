@@ -19,6 +19,8 @@ interface ConversationRowProps {
  */
 export default function ConversationRow({ c, active, avatarSize = 52, onOpen }: ConversationRowProps) {
   const { db, me, t } = useApp();
+  const last = c.last;
+  const receipt = last && last.from === me?.id ? last.status || (last.read ? 'read' : 'delivered') : null;
 
   return (
     <button
@@ -35,6 +37,7 @@ export default function ConversationRow({ c, active, avatarSize = 52, onOpen }: 
         </span>
         <span className={`inbox-row-preview ${c.last ? '' : 'hint'}`}>
           {c.last ? `${c.last.from === me?.id ? `${t('you')}: ` : ''}${c.last.text}` : t('mutualHint')}
+          {receipt && <span className={`chat-receipt ${receipt}`}>{receipt === 'sent' ? '✓' : '✓✓'}</span>}
         </span>
       </span>
       {c.unread > 0 && <span className="inbox-badge">{c.unread}</span>}

@@ -144,6 +144,8 @@ export interface Message {
   text: string;
   ts: number;
   read: boolean;
+  /** Receipt on my own messages: sent -> delivered -> read. Older rows without one read off `read`. */
+  status?: 'sent' | 'delivered' | 'read';
   /** Only the inbox answers this: how many messages are still unread in the thread. */
   unread?: number;
 }

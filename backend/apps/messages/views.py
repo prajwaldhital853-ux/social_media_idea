@@ -18,15 +18,30 @@ from .models import Conversation, Message
 
 class MessageSerializer(serializers.ModelSerializer):
     sender_username = serializers.CharField(source='sender.username', read_only=True)
+    status = serializers.SerializerMethodField()
 
     class Meta:
         model = Message
-        fields = ['id', 'conversation', 'sender', 'sender_username', 'text', 'read_at', 'created_at']
+        fields = ['id', 'conversation', 'sender', 'sender_username', 'text', 'status', 'read_at', 'created_at']
         read_only_fields = ['id', 'conversation', 'sender', 'read_at', 'created_at']
+
+    def get_status(self, obj):
+        # One of three receipt states: left my client, reached the recipient's,
+        # seen by them. Anything past sent renders as a double tick.
+        if obj.read_at:
+            return 'read'
+        if obj.delivered_at:
+            return 'delivered'
+        return 'sent'
 
 
 def _other(conversation, user):
     return conversation.participants.exclude(pk=user.pk).select_related('profile').first()
+
+
+def _mark_delivered(conversation, reader):
+    """Anything the reader just fetched was proven to have reached their device."""
+    return conversation.messages.exclude(sender=reader).filter(delivered_at__isnull=True).update(delivered_at=timezone.now())
 
 
 def _get_or_create_conversation(user, other):
@@ -57,6 +72,7 @@ def inbox(request):
     results = []
     for conversation in rows:
         other = _other(conversation, request.user)
+        _mark_delivered(conversation, request.user)
         last = conversation.messages.order_by('-created_at').first()
         unread = conversation.messages.filter(sender=other, read_at__isnull=True).count() if other else 0
         results.append({
@@ -110,6 +126,9 @@ def thread(request, username):
     has_more = len(rows) > 10
     rows = rows[:10]
     rows.reverse()
+    # Fetching the thread proves delivery of everything addressed to the reader,
+    # including the older pages this page did not carry.
+    _mark_delivered(conversation, request.user)
     from apps.common.pagination import encode_cursor
     return Response({
         'conversation': conversation.pk,
@@ -126,5 +145,6 @@ def mark_read(request, username):
     conversation = Conversation.objects.filter(participants=request.user).filter(participants=other).first()
     if not conversation:
         return Response({'read': 0})
+    _mark_delivered(conversation, request.user)
     count = conversation.messages.filter(sender=other, read_at__isnull=True).update(read_at=timezone.now())
     return Response({'read': count})

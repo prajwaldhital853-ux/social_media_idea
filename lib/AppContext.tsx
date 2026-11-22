@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback, ReactNode, Dispatch, SetStateAction } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { Database, Follow, User, Post, Comment, ThemeMode, ReactionKind, NotificationKind, FeatureFlags, Promotion } from './types';
+import { Database, Follow, User, Post, Comment, ThemeMode, ReactionKind, NotificationKind, FeatureFlags, Promotion, Message } from './types';
 import { getDb, save, emptyDb } from './storage';
 import { hydrateVideoSrcs } from './videoStore';
 import { THEME_KEY, LANG_KEY, uid, ageFromDob, DAY } from './utils';
@@ -933,16 +933,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const body = text.trim();
     if (!self || !body) return;
     if (!API_ENABLED) {
+      const id = uid();
+      const sent: Message = { id, from: self.id, to, text: body, ts: Date.now(), read: false, status: 'sent' };
       setDb(prev => ({
         ...prev,
-        messages: [...prev.messages, { id: uid(), from: self.id, to, text: body, ts: Date.now(), read: false }],
+        // A receipt still waiting from an earlier session was delivered long ago.
+        messages: [...prev.messages.map(m => (m.from === self.id && m.status === 'sent' ? { ...m, status: 'delivered' as const } : m)), sent],
         notifications: [{ id: uid(), uid: to, kind: 'message', actor: self.id, text: 'sent you a message', href: `/messages/${self.username}`, ts: Date.now(), read: false }, ...prev.notifications]
       }));
+      setTimeout(() => setDb(prev => ({
+        ...prev,
+        messages: prev.messages.map(m => (m.id === id && m.status === 'sent' ? { ...m, status: 'delivered' as const } : m)),
+      })), 1500);
       return;
     }
     const username = usernameOf(to);
     if (!username) return;
-    const optimistic = { id: uid(), from: self.id, to, text: body, ts: Date.now(), read: false };
+    const optimistic = { id: uid(), from: self.id, to, text: body, ts: Date.now(), read: false, status: 'sent' as const };
     setDb(prev => ({ ...prev, messages: [...prev.messages, optimistic] }));
     try {
       const row = await api.post<any>(`/api/messages/${username}/`, { text: body });
