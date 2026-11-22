@@ -14,6 +14,8 @@ from django.utils import timezone
 from apps.accounts.auth import decode_token
 from apps.accounts.models import User
 
+from .presence import mark_watching, stop_watching
+
 
 def _cookie_user(scope):
     raw = ''
@@ -56,12 +58,17 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         lo, hi = sorted((self.user.pk, self.other.pk))
         self.group = f'chat.{lo}.{hi}'
         await self.channel_layer.group_add(self.group, self.channel_name)
+        # The socket is a watcher too: while one is open the reader is here, and
+        # a message that lands on this screen needs no bell to announce it.
+        await asyncio.to_thread(mark_watching, self.user.pk, self.other.pk)
         await self.accept()
         await self.send_json({'kind': 'ready', 'thread': username})
 
     async def disconnect(self, code):
         if getattr(self, 'group', None):
             await self.channel_layer.group_discard(self.group, self.channel_name)
+        if getattr(self, 'other', None):
+            await asyncio.to_thread(stop_watching, self.user.pk, self.other.pk)
         held = self.sockets_per_user.get(getattr(self, 'user', None) and self.user.pk)
         if held is not None:
             if held <= 1:

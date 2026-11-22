@@ -221,7 +221,7 @@ check('coin request created', s == 201, str(b))
 req_id = b['id']
 s, b, _ = alice.get('/wallet/')
 balance_before = b['balance']
-s, b, _ = staff.post('/auth/login/', {'username': 'sita', 'password': 'exposing-demo-1', 'device_id': f'dev-staff-{RUN}'})
+s, b, _ = staff.post('/auth/login/', {'email': 'sita@demo.test', 'password': 'exposing-demo-1', 'device_id': f'dev-staff-{RUN}'})
 if s == 202:
     s, b, _ = staff.post('/auth/otp/', {'challenge': b['challenge'], 'code': b['dev_code'], 'device_id': f'dev-staff-{RUN}'})
 check('staff login', s == 200, str(b))
@@ -270,7 +270,7 @@ check('dismiss report', s == 200, str(b))
 signup(dave, f'dave{RUN}')
 s, b, _ = staff.post(f'/moderation/users/dave{RUN}/suspend/', {'days': 1, 'reason': 'smoke suspend'})
 check('suspend user', s == 200, str(b))
-s, b, _ = dave.post('/auth/login/', {'username': f'dave{RUN}', 'password': 'Smoke-Pass-9271', 'device_id': f'dev-dave{RUN}'})
+s, b, _ = dave.post('/auth/login/', {'email': f'dave{RUN}@smoke.test', 'password': 'Smoke-Pass-9271', 'device_id': f'dev-dave{RUN}'})
 check('suspended login blocked 403', s == 403, str(b))
 s, b, _ = staff.post(f'/moderation/users/dave{RUN}/reinstate/')
 check('reinstate user', s == 200, str(b))
@@ -281,28 +281,28 @@ check('audit log records actions', len(b['results']) >= 2, str(b)[:150])
 erin = Client(f'10.77.{OCT}.10')
 signup(erin, f'erin{RUN}')
 for i in range(3):
-    s, b, _ = erin.post('/auth/login/', {'username': f'erin{RUN}', 'password': 'wrong-password', 'device_id': f'dev-erin{RUN}'})
+    s, b, _ = erin.post('/auth/login/', {'email': f'erin{RUN}@smoke.test', 'password': 'wrong-password', 'device_id': f'dev-erin{RUN}'})
 check('3rd wrong password locks 423', s == 423 and b.get('locked'), f'{s} {b}')
 challenge, code = b.get('challenge'), b.get('dev_code')
-s, b, _ = erin.post('/auth/login/', {'username': f'erin{RUN}', 'password': 'Smoke-Pass-9271', 'device_id': f'dev-erin{RUN}'})
+s, b, _ = erin.post('/auth/login/', {'email': f'erin{RUN}@smoke.test', 'password': 'Smoke-Pass-9271', 'device_id': f'dev-erin{RUN}'})
 check('locked even with right password', s == 423, str(s))
 s, b, _ = erin.post('/auth/unlock/confirm/', {'challenge': challenge, 'code': code})
 check('unlock via OTP', s == 200, str(b))
-s, b, _ = erin.post('/auth/login/', {'username': f'erin{RUN}', 'password': 'Smoke-Pass-9271', 'device_id': f'dev-erin{RUN}'})
+s, b, _ = erin.post('/auth/login/', {'email': f'erin{RUN}@smoke.test', 'password': 'Smoke-Pass-9271', 'device_id': f'dev-erin{RUN}'})
 if s == 202:
     s, b, _ = erin.post('/auth/otp/', {'challenge': b['challenge'], 'code': b['dev_code'], 'device_id': f'dev-erin{RUN}'})
 check('login after unlock', s == 200, str(b))
 
 # --- new device challenge + trusted device ---
 dave2 = Client(f'10.77.{OCT}.6')
-s, b, _ = dave2.post('/auth/login/', {'username': f'erin{RUN}', 'password': 'Smoke-Pass-9271', 'device_id': 'brand-new-device'})
+s, b, _ = dave2.post('/auth/login/', {'email': f'erin{RUN}@smoke.test', 'password': 'Smoke-Pass-9271', 'device_id': 'brand-new-device'})
 check('new device 202 challenge', s == 202 and b.get('new_device'), f'{s} {b}')
 ch2, code2 = b.get('challenge'), b.get('dev_code')
 s, b, _ = dave2.post('/auth/otp/', {'challenge': ch2, 'code': '000000' if code2 != '000000' else '111111'})
 check('wrong OTP rejected', s == 400 and 'attempts_left' in b, str(b))
 s, b, _ = dave2.post('/auth/otp/', {'challenge': ch2, 'code': code2, 'device_id': 'brand-new-device'})
 check('OTP verify logs in', s == 200, str(b))
-s, b, _ = dave2.post('/auth/login/', {'username': f'erin{RUN}', 'password': 'Smoke-Pass-9271', 'device_id': 'brand-new-device'})
+s, b, _ = dave2.post('/auth/login/', {'email': f'erin{RUN}@smoke.test', 'password': 'Smoke-Pass-9271', 'device_id': 'brand-new-device'})
 check('trusted device skips OTP', s == 200, f'{s} {b}')
 
 # --- refresh rotation + logout revocation ---
@@ -330,7 +330,7 @@ else:
     s, b, _ = rl.post('/auth/signup/', {'username': f'rlx{RUN}', 'email': f'rlx{RUN}@smoke.test', 'password': 'Smoke-Pass-9271', 'dob': '1995-01-01', 'country': 'Nepal'})
     check('4th signup throttled', s == 429, str(s))
     lr = Client(f'10.77.{OCT}.8')
-    logins = [lr.post('/auth/login/', {'username': 'nobody', 'password': 'x'}) for _ in range(11)]
+    logins = [lr.post('/auth/login/', {'email': 'nobody@smoke.test', 'password': 'x'}) for _ in range(11)]
     codes = [s for s, _b, _h in logins]
     check('login IP limit 10/min then 429', codes[:10] == [401] * 10 and codes[10] == 429, str(codes))
     check('the throttle refuses in human words', 'Too many attempts' in (logins[10][1].get('detail') or ''), str(logins[10][1])[:160])

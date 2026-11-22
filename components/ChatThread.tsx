@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Avatar from './Avatar';
 import VerifiedBadge from './VerifiedBadge';
 import { useApp } from '@/lib/AppContext';
+import { api } from '@/lib/api';
 import { IC } from '@/lib/icons';
 import { ago } from '@/lib/utils';
 import { pushListRow, threadFragment, useList } from '@/lib/lists';
@@ -55,28 +56,140 @@ export default function ChatThread({ other }: { other: User }) {
 
   // Opening the thread is the read receipt — for every message in it, not just
   // the page this screen loaded, so the server decides what the receipt covers.
+  // Keyed on the handle, never on the `other` object: marking read refreshes
+  // the inbox, the inbox rebuilds every person card in the cache, and a new
+  // object for the same person would fire this effect again forever.
+  const otherName = other.username;
   useEffect(() => {
     if (!meId) return;
-    void markThreadRead(other.username);
-  }, [meId, other, markThreadRead]);
+    void markThreadRead(otherName);
+  }, [meId, otherName, markThreadRead]);
 
-  // Receipts and replies arrive while the thread sits open: a quiet poll of the
-  // newest page refreshes the ticks without ever touching the scroll anchor.
+  // Receipts and replies arrive while the thread sits open. The poll is the last
+  // of the three wires and runs only while neither live one is holding the
+  // thread, so a quiet conversation costs a page now and then, not a tick.
   const reloadRef = useRef(stream.reload);
   reloadRef.current = stream.reload;
+  const wires = useRef({ stream: false, socket: false });
   useEffect(() => {
     if (!serverMode || !meId) return;
     const id = setInterval(() => {
-      if (document.visibilityState === 'visible') void reloadRef.current();
-    }, 6000);
+      if (document.visibilityState !== 'visible') return;
+      if (wires.current.stream || wires.current.socket) return;
+      void reloadRef.current();
+    }, 5000);
     return () => clearInterval(id);
   }, [serverMode, meId]);
 
-  // The live wire for this thread: incoming messages, typing and read receipts
-  // land instantly instead of waiting for the poll. Same cookie auth as the
-  // REST API, same first-party proxy, exponential reconnect when it drops.
+  // Three frames, one shape, two wires: whatever arrives lands the same way no
+  // matter which transport carried it, because both are trusted and neither alone.
   const markReadRef = useRef(markThreadRead);
   markReadRef.current = markThreadRead;
+  const typingFade = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const sink = useRef({
+    message: (_row: any) => {},
+    receipt: (_state: 'delivered' | 'read') => {},
+    typing: () => {},
+  });
+
+  sink.current.message = (row: any) => {
+    if (!meId) return;
+    const mapped = mapMessage(row, meId, otherId);
+    setDb(prev => applyFragment(prev, { messages: [mapped] }));
+    pushListRow(`thread:${otherId}`, undefined, mapped.id);
+    // The inbox holds a row for anybody the thread has a message for — including
+    // the person written to for the first time a second ago, whose conversation
+    // did not exist when the column was read.
+    pushListRow('inbox', undefined, otherId);
+    // The thread is open, so an incoming row is read as it lands.
+    // force is required: dbRef still holds the pre-message db here.
+    if (mapped.from !== meId) void markReadRef.current(other.username, { force: true });
+  };
+
+  sink.current.receipt = state => {
+    const rank = { sent: 0, delivered: 1, read: 2 };
+    setDb(prev => ({
+      ...prev,
+      messages: prev.messages.map(m => {
+        if (!meId || m.from !== meId || m.to !== otherId) return m;
+        const now = rank[m.status || (m.read ? 'read' : 'sent')];
+        if (rank[state] <= now) return m;
+        return { ...m, status: state, read: state === 'read' ? true : m.read };
+      }),
+    }));
+  };
+
+  sink.current.typing = () => {
+    setTyping(true);
+    if (typingFade.current) clearTimeout(typingFade.current);
+    typingFade.current = setTimeout(() => setTyping(false), 3000);
+  };
+
+  // The event stream is the wire every proxy carries: the same first-party
+  // request as the rest of the API, one row a second after it is written.
+  useEffect(() => {
+    if (!serverMode || !meId || !otherId) return;
+    let es: EventSource | null = null;
+    let stopped = false;
+    let again: ReturnType<typeof setTimeout> | null = null;
+    let delay = 2000;
+    // Kept across a drop: the server resumes the thread from this row, so a
+    // stream that blinked for two seconds does not skip the message in between.
+    let lastId = '';
+
+    const open = () => {
+      if (stopped || es || document.visibilityState !== 'visible') return;
+      es = new EventSource(
+        `/api/messages/${other.username}/stream/${lastId ? `?last_event_id=${encodeURIComponent(lastId)}` : ''}`,
+      );
+      const source = es;
+      source.addEventListener('open', () => {
+        delay = 2000;
+        wires.current.stream = true;
+      });
+      source.addEventListener('chat', ev => {
+        const event = ev as MessageEvent;
+        if (event.lastEventId) lastId = event.lastEventId;
+        try { sink.current.message(JSON.parse(event.data).message); } catch { /* a frame that is not a row is not a message */ }
+      });
+      source.addEventListener('receipt', ev => {
+        try { sink.current.receipt(JSON.parse((ev as MessageEvent).data).state); } catch { /* ignore */ }
+      });
+      source.addEventListener('typing', () => sink.current.typing());
+      source.addEventListener('error', () => {
+        if (es !== source) return;
+        source.close();
+        es = null;
+        wires.current.stream = false;
+        if (stopped) return;
+        again = setTimeout(open, delay);
+        delay = Math.min(delay * 2, 30000);
+      });
+    };
+
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') {
+        if (es) { es.close(); es = null; }
+        wires.current.stream = false;
+      } else {
+        open();
+      }
+    };
+
+    open();
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      stopped = true;
+      if (again) clearTimeout(again);
+      if (es) es.close();
+      wires.current.stream = false;
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [serverMode, meId, otherId, other.username]);
+
+  // The socket is the faster wire where a proxy carries the upgrade. Three
+  // handshakes that never complete is a hop that will never make one, so it stops
+  // trying rather than filling the server log all day — the stream has the thread.
   const wsRef = useRef<WebSocket | null>(null);
   const typingSent = useRef(0);
   useEffect(() => {
@@ -86,7 +199,6 @@ export default function ChatThread({ other }: { other: User }) {
     let attempts = 0;
     let reconnect: ReturnType<typeof setTimeout> | null = null;
     let heartbeat: ReturnType<typeof setInterval> | null = null;
-    let typingTimer: ReturnType<typeof setTimeout> | null = null;
     let lastSeen = Date.now();
 
     const connect = () => {
@@ -97,35 +209,22 @@ export default function ChatThread({ other }: { other: User }) {
       ws.onopen = () => {
         attempts = 0;
         lastSeen = Date.now();
+        wires.current.socket = true;
       };
       ws.onmessage = ev => {
         lastSeen = Date.now();
         let data: any;
         try { data = JSON.parse(ev.data); } catch { return; }
-        if (data.kind === 'message') {
-          const mapped = mapMessage(data.message, meId, otherId);
-          setDb(prev => applyFragment(prev, { messages: [mapped] }));
-          pushListRow(`thread:${otherId}`, undefined, mapped.id);
-          // The thread is open, so an incoming row is read as it lands.
-          // force is required: dbRef still holds the pre-message db here.
-          if (mapped.from !== meId) void markReadRef.current(other.username, { force: true });
-        } else if (data.kind === 'typing') {
-          setTyping(true);
-          if (typingTimer) clearTimeout(typingTimer);
-          typingTimer = setTimeout(() => setTyping(false), 3000);
-        } else if (data.kind === 'read') {
-          setDb(prev => ({
-            ...prev,
-            messages: prev.messages.map(m => (m.from === meId && m.to === otherId && m.status !== 'read'
-              ? { ...m, status: 'read' as const, read: true }
-              : m)),
-          }));
-        }
+        if (data.kind === 'message') sink.current.message(data.message);
+        else if (data.kind === 'typing') sink.current.typing();
+        else if (data.kind === 'read') sink.current.receipt('read');
       };
       ws.onclose = () => {
+        wires.current.socket = false;
         if (stopped) return;
         if (socket === ws) { socket = null; wsRef.current = null; }
         attempts += 1;
+        if (attempts >= 3) return;
         reconnect = setTimeout(connect, Math.min(1000 * 2 ** attempts, 15000));
       };
     };
@@ -141,13 +240,17 @@ export default function ChatThread({ other }: { other: User }) {
     connect();
     return () => {
       stopped = true;
+      wires.current.socket = false;
       if (reconnect) clearTimeout(reconnect);
       if (heartbeat) clearInterval(heartbeat);
-      if (typingTimer) clearTimeout(typingTimer);
       if (socket) { socket.onclose = null; socket.close(); }
       wsRef.current = null;
     };
-  }, [serverMode, meId, otherId, other.username, setDb]);
+  }, [serverMode, meId, otherId, other.username]);
+
+  useEffect(() => () => {
+    if (typingFade.current) clearTimeout(typingFade.current);
+  }, []);
 
   // Only a new message — or a different conversation — pulls the reader to the
   // foot of the thread; rows added above stay exactly where they were.
@@ -176,13 +279,20 @@ export default function ChatThread({ other }: { other: User }) {
     inputRef.current?.focus();
   };
 
-  // Typing is a tell, not a telegraph: at most one frame every two seconds.
+  // Typing is a tell, not a telegraph: at most one frame every two seconds, and
+  // only down a wire that is already answering. A dead socket gets no POST — the
+  // request would only be a second thing failing while the thread is quiet.
   const noteTyping = () => {
+    if (Date.now() - typingSent.current < 2000) return;
     const ws = wsRef.current;
-    if (ws && ws.readyState === WebSocket.OPEN && Date.now() - typingSent.current > 2000) {
+    if (ws && ws.readyState === WebSocket.OPEN) {
       typingSent.current = Date.now();
       ws.send(JSON.stringify({ type: 'typing' }));
+      return;
     }
+    if (!wires.current.stream) return;
+    typingSent.current = Date.now();
+    void api.post(`/api/messages/${other.username}/typing/`, {}).catch(() => {});
   };
 
   const todayStart = dayStart(Date.now());

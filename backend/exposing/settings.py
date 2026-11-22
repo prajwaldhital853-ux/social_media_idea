@@ -85,6 +85,9 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    # First so the id is already stamped when a later middleware short-circuits a
+    # request with a 403 or a 400.
+    'apps.common.middleware.RequestIdMiddleware',
     'apps.common.middleware.ApiSlashMiddleware',
     'django.middleware.security.SecurityMiddleware',
     # Hosted platforms give the app one port and no web server, so Django has to
@@ -131,6 +134,9 @@ WS_ORIGINS = _env_list('DJANGO_WS_ORIGINS', 'http://localhost:3000,http://127.0.
 # Realtime budgets: per-user concurrent sockets/streams and SSE pacing. Kept as
 # settings so tests can tighten time without patching module globals.
 SSE_INTERVAL = float(os.environ.get('EXPOSING_SSE_INTERVAL') or '2')
+# A thread is the one screen where two seconds reads as late: somebody is
+# waiting for a reply. Costs one indexed query a second per open thread.
+CHAT_SSE_INTERVAL = float(os.environ.get('EXPOSING_CHAT_SSE_INTERVAL') or '1')
 SSE_MAX_LIFE = float(os.environ.get('EXPOSING_SSE_MAX_LIFE') or '3300')
 SSE_STREAMS_PER_USER = int(os.environ.get('EXPOSING_SSE_STREAMS') or '3')
 WS_SOCKETS_PER_USER = int(os.environ.get('EXPOSING_WS_SOCKETS') or '8')
@@ -215,6 +221,10 @@ CELERY_BEAT_SCHEDULE = {
 # raises ImproperlyConfigured the moment an import path is blank.
 EMAIL_BACKEND = os.environ.get('EMAIL_BACKEND') or 'django.core.mail.backends.console.EmailBackend'
 DEFAULT_EMAIL_BACKEND = EMAIL_BACKEND
+# Python opens a socket with no deadline, so one unreachable SMTP host was enough
+# to hold a sign-up request open until the proxy gave up — which is the spinner,
+# not a bug in the form. Ten seconds is longer than any working send.
+EMAIL_TIMEOUT = float(os.environ.get('EMAIL_TIMEOUT') or '10')
 GOOGLE_CLIENT_ID = os.environ.get('GOOGLE_CLIENT_ID', '')
 # Emails quote a link back to the site; on Render the frontend lives on another
 # host, so this is the browser origin rather than the API's own.
@@ -246,6 +256,36 @@ EXPOSING_RATE_LIMITS = (os.environ.get('EXPOSING_RATE_LIMITS') or '1') == '1'
 # provider is configured. Off by default; never enable for a real launch.
 EXPOSING_OTP_VISIBLE = os.environ.get('EXPOSING_OTP_VISIBLE', '0') == '1'
 
+# Hosted platforms keep a log, not a file, and that log is the only way to learn
+# what a "server could not finish that request" screenshot actually was. stdout,
+# and every line carries the request id the client was handed back.
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'filters': {'request_id': {'()': 'apps.common.middleware.RequestIdFilter'}},
+    'formatters': {
+        'request': {'format': '%(asctime)s %(levelname)s [%(request_id)s] %(name)s: %(message)s'},
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'request',
+            'filters': ['request_id'],
+            'stream': 'ext://sys.stdout',
+        },
+    },
+    'root': {'handlers': ['console'], 'level': 'WARNING'},
+    'loggers': {
+        # Ours: failed requests, slow requests, swallowed mail failures.
+        'apps': {'handlers': ['console'], 'level': 'INFO', 'propagate': False},
+        'exposing': {'handlers': ['console'], 'level': 'INFO', 'propagate': False},
+        # The traceback for a 500. RequestIdMiddleware already writes the one-line
+        # summary of every 4xx, so this stays at ERROR rather than saying it twice.
+        'django.request': {'handlers': ['console'], 'level': 'ERROR', 'propagate': False},
+        'django.security': {'handlers': ['console'], 'level': 'WARNING', 'propagate': False},
+    },
+}
+
 LANGUAGE_CODE = 'en-us'
 TIME_ZONE = 'UTC'
 USE_I18N = True
@@ -265,6 +305,17 @@ MEDIA_ROOT = Path(os.environ.get('MEDIA_DISK') or '') if os.environ.get('MEDIA_D
 SERVE_MEDIA = (os.environ.get('DJANGO_SERVE_MEDIA') or '1') == '1'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+# See apps/common/hashing.py: Django's own default work factor costs 3.4s per
+# sign-in on this CPU, and sign-in is the first thing every visitor does. The
+# second entry still verifies the hashes the old default wrote.
+PASSWORD_HASHERS = [
+    'apps.common.hashing.WorkFactorPasswordHasher',
+    'django.contrib.auth.hashers.PBKDF2PasswordHasher',
+    'django.contrib.auth.hashers.PBKDF2SHA1PasswordHasher',
+    'django.contrib.auth.hashers.Argon2PasswordHasher',
+    'django.contrib.auth.hashers.BCryptSHA256PasswordHasher',
+    'django.contrib.auth.hashers.ScryptPasswordHasher',
+]
 import sys
 if "test" in sys.argv:
     PASSWORD_HASHERS = ["django.contrib.auth.hashers.MD5PasswordHasher"]

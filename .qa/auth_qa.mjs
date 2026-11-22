@@ -9,8 +9,12 @@ import puppeteer from 'puppeteer-core';
 import fs from 'node:fs';
 import { retryWrite } from './shots.mjs';
 
+// A second checkout runs its own pair of servers, so the suite has to be pointed
+// at them instead of assumed to belong to the one on :3000.
 const BASE = process.env.QA_BASE || 'http://localhost:3000';
-const OUT = 'D:/social_medial/.qa';
+const OUT = process.env.QA_OUT || 'D:/social_medial/.qa';
+// The Django origin, for the few fixtures this suite seeds without a browser.
+const API = process.env.QA_API || 'http://127.0.0.1:8001';
 const CHROME = 'C:/Program Files/Google/Chrome/Application/chrome.exe';
 
 const results = [];
@@ -255,14 +259,14 @@ const loginShape = await d.evaluate(() => {
     overflow: document.documentElement.scrollWidth > window.innerWidth + 1,
   };
 });
-ok('desktop: sign-in card shows identifier + password with real autofill hints',
+ok('desktop: sign-in card shows email + password with real autofill hints',
   loginShape.title === 'Sign in to Exposing' && loginShape.inputs.length === 2
-  && loginShape.inputs[0].autocomplete === 'username' && loginShape.inputs[1].type === 'password',
+  && loginShape.inputs[0].autocomplete === 'email' && loginShape.inputs[1].type === 'password',
   JSON.stringify({ title: loginShape.title, inputs: loginShape.inputs }));
 ok('desktop: only a Google button this server can finish is offered',
   loginShape.google === 'Continue with a demo Google account', String(loginShape.google));
 ok('desktop: sign-in offers the demo account and no unlock detour',
-  loginShape.legal.length === 4 && /sita · exposing-demo-1/.test(loginShape.demo || '')
+  loginShape.legal.length === 4 && /sita@demo\.test · exposing-demo-1/.test(loginShape.demo || '')
   && loginShape.unlock.length === 0, JSON.stringify(loginShape).slice(0, 200));
 ok('desktop: submit starts disabled and the card fits without sideways scroll',
   loginShape.submitDisabled === true && !loginShape.overflow,
@@ -279,7 +283,7 @@ const halfState = await d.evaluate(() => ({
 ok('desktop: the button waits for both fields instead of firing an empty request',
   halfState.disabled === true && halfState.errors === 0, JSON.stringify(halfState));
 
-await setInput(d, 0, 'no.such.user.zzz');
+await setInput(d, 0, 'no.such.user.zzz@test.local');
 await setInput(d, 1, 'whatever-1');
 await submitLogin(d);
 const unknown = await loginError(d, 'No account matches');
@@ -399,7 +403,7 @@ await logout(d);
 await goto(d, '/login');
 await d.waitForSelector('.login-content', { timeout: 20000 });
 const badPassword = async () => {
-  await setInput(d, 0, QA.username);
+  await setInput(d, 0, QA.email);
   await setInput(d, 1, 'wrong-password-zz');
   await submitLogin(d);
   return loginError(d, 'Wrong password');
@@ -413,7 +417,7 @@ ok('desktop: the last try before lock reads in the singular',
   second === 'Wrong password. 1 attempt left before the account locks.', second);
 await shot(d, 'auth-desktop-attempts');
 
-await setInput(d, 0, QA.username);
+await setInput(d, 0, QA.email);
 await setInput(d, 1, 'wrong-password-zz');
 await submitLogin(d);
 const locked = await lockedCard(d);
@@ -433,13 +437,63 @@ ok('desktop: the cooloff counts down while the visitor waits',
 watchLogin(d);
 await goto(d, '/login');
 await d.waitForSelector('.login-content form', { timeout: 10000 }).catch(() => {});
-const armed = await armLogin(d, QA.username, QA.password);
+const armed = await armLogin(d, QA.email, QA.password);
 await submitLogin(d);
 const still = await lockedCard(d);
 ok('desktop: the right password is still refused while the cooloff runs',
   still.title === 'Account locked' && /^[1-5]:\d\d$/.test(still.time),
   JSON.stringify({ armed, ...still, logins: await loginTrail(d) }));
 ok('desktop: a locked sign-in never opens a session', (await apiMe(d)).status === 401);
+
+// ---- an address that was never confirmed ----
+// Signup 201s without a session, so a person can close the tab mid-verification and
+// come back days later. That path used to answer with a password complaint or a
+// silent dead end; it has to name the real problem and hand over the code again.
+const UNVERIFIED = {
+  username: `qau${RUN}`, email: `qau${RUN}@demo.test`, password: 'Exposing-qa-9271',
+  name: 'QA Unverified', dob: '1996-04-02', country: 'Nepal', device_id: `dev-u${RUN}`,
+};
+const seededUnverified = await fetch(`${API}/api/auth/signup/`, {
+  method: 'POST',
+  // A browser through the proxy is one address to Django, and signup is capped
+  // per hour; the fixture asks for its own budget instead of spending the suite's.
+  headers: { 'content-type': 'application/json', 'x-forwarded-for': `10.88.${(Date.now() % 200) + 1}.7` },
+  body: JSON.stringify(UNVERIFIED),
+}).then(r => r.json().catch(() => ({})));
+ok('setup: an account exists whose email was never confirmed',
+  !!seededUnverified.challenge, JSON.stringify(seededUnverified).slice(0, 120));
+
+await goto(d, '/login');
+await d.waitForSelector('.login-content form', { timeout: 10000 }).catch(() => {});
+await armLogin(d, UNVERIFIED.email, UNVERIFIED.password);
+await submitLogin(d);
+await d.waitForSelector('.auth-code', { timeout: 20000 }).catch(() => {});
+await sleep(600);
+const unverified = await d.evaluate(() => ({
+  notice: document.querySelector('.auth-notice')?.textContent || '',
+  title: document.querySelector('.auth-code-title')?.textContent || '',
+  wrongPassword: (document.querySelector('.signup-error')?.textContent || '').includes('Wrong password'),
+}));
+ok('desktop: an unverified address is named, not mistaken for a wrong password',
+  unverified.notice === 'That email address is not verified yet, so it cannot sign in. We just sent a fresh code to it.'
+  && unverified.title === 'Confirm it is you' && !unverified.wrongPassword,
+  JSON.stringify(unverified).slice(0, 220));
+const unverifiedDev = await textOf(d, '.auth-code-dev');
+await d.evaluate(() => { [...document.querySelectorAll('.auth-code-link')].find(b => b.textContent.includes('Resend'))?.click(); });
+await d.waitForFunction(prev => (document.querySelector('.auth-code-dev')?.textContent || '') !== prev,
+  { timeout: 20000, polling: 250 }, unverifiedDev).catch(() => {});
+const unverifiedResent = await codeCard(d, 12000);
+ok('desktop: that card resends the confirmation code',
+  unverifiedResent.links.some(l => l.startsWith('Resend code')) && /\d{6}/.test(unverifiedResent.dev)
+  && unverifiedResent.dev !== unverifiedDev,
+  JSON.stringify({ links: unverifiedResent.links, was: unverifiedDev, now: unverifiedResent.dev }));
+await d.evaluate(() => { [...document.querySelectorAll('.auth-code-link')].find(b => b.textContent.includes('Back'))?.click(); });
+await sleep(800);
+const backOut = await apiMe(d);
+ok('desktop: walking away from the unverified card leaves nobody signed in',
+  backOut.status === 401 && await d.evaluate(() => !!document.querySelector('.login-content form')),
+  JSON.stringify({ me: backOut.status, form: await d.evaluate(() => !!document.querySelector('.login-content form')) }));
+await shot(d, 'auth-desktop-unverified');
 
 // ---- Google hand-off: new identity -> signup, known identity -> device code ----
 await logout(d);
@@ -490,7 +544,7 @@ if (googlePath === '/signup') {
 await logout(d);
 
 // ---- refresh + CSRF after rotation ----
-await signIn(d, 'sita', DEMO_PASSWORD);
+await signIn(d, 'sita@demo.test', DEMO_PASSWORD);
 await sleep(400);
 const refreshed = await d.evaluate(async () => {
   const res = await fetch('/api/auth/refresh/', { method: 'POST', credentials: 'same-origin' });
@@ -536,7 +590,7 @@ ok('desktop: the language choice survives navigation',
 ok('desktop: the demo chip is offered in Nepali too',
   !!nepali.demo && nepali.demo.includes('डेमो'), String(nepali.demo));
 
-await setInput(d, 0, QA.username);
+await setInput(d, 0, QA.email);
 await setInput(d, 1, 'wrong-password-zz');
 await submitLogin(d);
 const nepaliLock = await lockedCard(d);

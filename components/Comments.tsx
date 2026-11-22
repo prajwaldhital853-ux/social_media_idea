@@ -422,7 +422,9 @@ export default function Comments({ postId, onClose, mediaIndex }: { postId: stri
         </form>
       ) : (
         <div className="comments-compose">
-          <Link href="/login" onClick={closeLayerWithoutBack}>Sign in to comment</Link>
+          {/* Not onClick={closeLayerWithoutBack}: the click event would arrive as
+              the layer count, and the counter would stop being a number. */}
+          <Link href="/login" onClick={() => closeLayerWithoutBack()}>Sign in to comment</Link>
         </div>
       )}
     </div>

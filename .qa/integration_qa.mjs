@@ -8,10 +8,12 @@
 import puppeteer from 'puppeteer-core';
 import { retryWrite } from './shots.mjs';
 
+// A second checkout runs its own pair of servers, so the suite has to be pointed
+// at them instead of assumed to belong to the one on :3000.
 const BASE = process.env.QA_BASE || 'http://localhost:3000';
-const OUT = 'D:/social_medial/.qa';
+const OUT = process.env.QA_OUT || 'D:/social_medial/.qa';
 const CHROME = 'C:/Program Files/Google/Chrome/Application/chrome.exe';
-const DEMO = { username: 'sita', password: 'exposing-demo-1' };
+const DEMO = { username: 'sita', email: 'sita@demo.test', password: 'exposing-demo-1' };
 
 const results = [];
 const ok = (name, pass, detail = '') => {
@@ -138,7 +140,7 @@ async function walk(page, sel, rounds = 8) {
 const d = await newPage({ width: 1440, height: 900 });
 
 // ---------------------------------------------------------------- sign in ----
-const landed = await signIn(d, DEMO.username, DEMO.password);
+const landed = await signIn(d, DEMO.email, DEMO.password);
 ok('desktop: the demo account signs in against /api/auth/', landed === '/', landed);
 const session = await api(d, '/api/sync/');
 ok('desktop: the session is the account that signed in', session.body?.me?.username === DEMO.username,
@@ -343,18 +345,27 @@ const seeded = await d.evaluate(async ([peer]) => {
 ok('desktop: twelve messages land on the thread endpoint', seeded.sent === 12, JSON.stringify(seeded));
 await goto(d, '/messages');
 await waitFor(d, '.inbox-row');
-const inboxTop = await textOf(d, '.inbox-row');
+// Mutuals no one has written to yet sit in a band above the threads, so "leads
+// with" means the first row that is a thread — the band lives in its own section.
+const inboxRows = await d.$$eval('.inbox-row', els => els.map(el => ({
+  text: (el.textContent || '').trim(),
+  band: !!el.closest('.inbox-suggested'),
+})));
+const firstThread = (inboxRows.find(r => !r.band) || {}).text || '';
+const inboxTop = inboxRows[0] ? inboxRows[0].text : '';
 // The row shows the display name, which need not contain the username.
-ok('desktop: the inbox leads with the conversation just written',
-  inboxTop.toLowerCase().includes(String(peerName).toLowerCase()), inboxTop.slice(0, 60));
+ok('desktop: the inbox leads its threads with the conversation just written',
+  firstThread.toLowerCase().includes(String(peerName).toLowerCase()),
+  `first thread row: ${firstThread.slice(0, 50)} | top row: ${inboxTop.slice(0, 50)}`);
 await goto(d, `/messages/${chatPeer}`);
 await waitFor(d, '.chat-bubble');
 await sleep(600);
 const firstPageBubbles = await count(d, '.chat-bubble');
 const olderBtn = await count(d, '.chat-older-btn');
+const lastBubble = await d.$$eval('.chat-bubble', els => (els[els.length - 1]?.textContent || '').trim());
 ok('desktop: the thread opens on the newest keyset page',
-  firstPageBubbles > 0 && firstPageBubbles <= 10 && olderBtn === 1,
-  `${firstPageBubbles} bubbles, load-more ${olderBtn}`);
+  olderBtn === 1 && firstPageBubbles >= 10 && firstPageBubbles <= 24 && lastBubble.includes('intg older 11'),
+  `${firstPageBubbles} bubbles, load-more ${olderBtn}, tail "${lastBubble.slice(-24)}"`);
 const scrollBefore = await d.evaluate(() => {
   const el = document.querySelector('.chat-thread');
   return el.scrollHeight - el.scrollTop;
@@ -415,7 +426,7 @@ await shot(d, 'intg-desktop-saved');
 
 // ------------------------------------------------------------------ mobile ----
 const m = await newPage({ width: 390, height: 844 }, true);
-await signIn(m, DEMO.username, DEMO.password);
+await signIn(m, DEMO.email, DEMO.password);
 await goto(m, '/');
 const mFeedFirst = await waitFor(m, 'article.post');
 const mFeedWalked = await walk(m, 'article.post');

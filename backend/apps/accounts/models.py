@@ -12,6 +12,9 @@ class User(AbstractUser):
     locked_until = models.DateTimeField(null=True, blank=True)
     suspended_until = models.DateTimeField(null=True, blank=True)
     suspend_reason = models.CharField(max_length=200, blank=True)
+    # Stamped by seed_demo on every account it owns. The purge in that command may
+    # delete only these rows, which is what makes it survivable as a deploy step.
+    seeded = models.BooleanField(default=False)
 
     @property
     def is_locked(self):
@@ -22,6 +25,14 @@ class User(AbstractUser):
     def is_suspended(self):
         from django.utils import timezone
         return bool(self.suspended_until and self.suspended_until > timezone.now())
+
+    def save(self, *args, **kwargs):
+        # One shape for the address, everywhere. Signup already trims and lowercases;
+        # an admin edit or a scripted import does not, and an account stored as
+        # "Foo@Gmail.com" answering to "foo@gmail.com" is indistinguishable from a
+        # deleted one.
+        self.email = (self.email or '').strip().lower()
+        super().save(*args, **kwargs)
 
 
 class RefreshSession(models.Model):

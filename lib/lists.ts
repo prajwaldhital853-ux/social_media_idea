@@ -31,10 +31,12 @@ export interface ListState {
   loaded: boolean;
   done: boolean;
   loading: boolean;
+  /** A re-read of page one while the previous rows stay on screen. */
+  refreshing: boolean;
   error: string | null;
 }
 
-const IDLE: ListState = { ids: [], cursor: null, loaded: false, done: false, loading: false, error: null };
+const IDLE: ListState = { ids: [], cursor: null, loaded: false, done: false, loading: false, refreshing: false, error: null };
 
 const states = new Map<string, ListState>();
 const listeners = new Set<() => void>();
@@ -86,11 +88,15 @@ function apiPath(path: string): string {
   return `/api${path.startsWith('/') ? path : `/${path}`}`;
 }
 
-async function fetchPage(key: string, def: ListDef, query: Query | undefined, cursor: string | null): Promise<void> {
+async function fetchPage(key: string, def: ListDef, query: Query | undefined, cursor: string | null, refresh = false): Promise<void> {
   // A demo build has no server of its own: fetching anyway would merge real
   // rows into the seeded cache and hand screens people the demo never had.
-  if (!API_ENABLED || snapshot(key).loading) return;
-  set(key, { loading: true, error: null });
+  const before = snapshot(key);
+  if (!API_ENABLED || before.loading || before.refreshing) return;
+  // A refresh is deliberately not a `loading` transition: `loading` is what
+  // every screen reads to decide whether to show a skeleton, and re-running
+  // the first page has to leave the rows already on screen alone.
+  set(key, refresh ? { refreshing: true, error: null } : { loading: true, error: null });
   try {
     const page = await api.get<{ results: any[]; next_cursor: string | null; has_more: boolean }>(
       apiPath(def.path),
@@ -101,14 +107,21 @@ async function fetchPage(key: string, def: ListDef, query: Query | undefined, cu
     const ids = (def.ids || (r => r.map(row => idOf(row.id))))(rows);
     const prev = snapshot(key).ids;
     set(key, {
+      // A refresh answers with page one, so it replaces; a later page appends.
       ids: cursor ? [...prev, ...ids.filter(id => !prev.includes(id))] : ids,
       cursor: page.next_cursor || null,
       done: !page.has_more,
       loaded: true,
       loading: false,
+      refreshing: false,
     });
   } catch (err: any) {
-    set(key, { loading: false, loaded: true, done: true, error: err?.message || 'Could not load this list.' });
+    const message = err?.message || 'Could not load this list.';
+    // Rows that are already on screen outlive a failed re-read; only a list
+    // that never answered at all is entitled to swap itself for an error line.
+    set(key, before.ids.length
+      ? { loading: false, refreshing: false, loaded: true, error: message }
+      : { loading: false, refreshing: false, loaded: true, done: true, error: message });
   }
 }
 
@@ -122,13 +135,12 @@ function loadAt(sk: string, def: ListDef, query: Query | undefined): Promise<voi
 }
 
 function refreshAt(sk: string, def: ListDef, query: Query | undefined): Promise<void> {
-  set(sk, { loaded: false, done: false, cursor: null, ids: [] });
-  return fetchPage(sk, def, query, null);
+  return fetchPage(sk, def, query, null, true);
 }
 
 function loadMoreAt(sk: string, def: ListDef, query: Query | undefined): Promise<void> {
   const state = snapshot(sk);
-  if (!state.loaded || state.loading || state.done || !state.cursor) return Promise.resolve();
+  if (!state.loaded || state.loading || state.refreshing || state.done || !state.cursor) return Promise.resolve();
   return fetchPage(sk, def, query, state.cursor);
 }
 
@@ -136,7 +148,7 @@ export function loadList(key: string, def: ListDef, query?: Query): Promise<void
   return loadAt(stateKey(key, query), def, query);
 }
 
-/** Reload from the first page, dropping the cursor but keeping cached entities. */
+/** Re-read page one in place: the rows on screen stay until the answer lands. */
 export function refreshList(key: string, def: ListDef, query?: Query): Promise<void> {
   return refreshAt(stateKey(key, query), def, query);
 }
@@ -260,6 +272,19 @@ export function inboxFragment(meId: string): (rows: any[]) => Fragment {
     })),
     users: cards(rows, row => row.user),
   });
+}
+
+/**
+ * The inbox def in one place: the messages screen reads through it, and the
+ * read receipt refreshes through it. Two copies would drift, and a def that
+ * names the rows differently than the screen does yields an empty list.
+ */
+export function inboxListDef(meId: string): ListDef {
+  return {
+    path: '/messages/inbox/',
+    frag: inboxFragment(meId),
+    ids: rows => rows.map(row => idOf(row.user && row.user.id)),
+  };
 }
 
 export function listingsFragment(rows: any[]): Fragment {

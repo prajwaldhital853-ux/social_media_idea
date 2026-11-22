@@ -6,7 +6,7 @@ from django.utils import timezone
 from urllib.parse import quote
 
 from asgiref.sync import sync_to_async
-from apps.notifications import views as nv
+from apps.common import stream as streams
 from apps.accounts.auth import issue_access
 from apps.common.testutils import auth_client, make_user
 from apps.messages.models import Conversation, Message
@@ -109,11 +109,11 @@ class NotificationStreamTests(TestCase):
         self.assertEqual(second.status_code, 429)
         # Draining runs the stream out to its max-life close and frees the slot.
         await self._drain(first)
-        self.assertIsNone(nv._streams.get(self.a.pk))
+        self.assertEqual(streams.held(self.a.pk), 0)
         third = await client.get('/api/notifications/stream/')
         self.assertEqual(third.status_code, 200)
         await self._drain(third)
-        self.assertIsNone(nv._streams.get(self.a.pk))
+        self.assertEqual(streams.held(self.a.pk), 0)
 
     @override_settings(SSE_INTERVAL=0.05, SSE_MAX_LIFE=0.2)
     async def test_last_event_id_replays_missed_rows(self):
