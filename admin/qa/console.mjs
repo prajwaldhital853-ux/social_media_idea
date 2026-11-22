@@ -79,8 +79,27 @@ const retryWrite = async run => {
 };
 
 const shot = async (page, name) => retryWrite(() => page.screenshot({ path: path.join(OUT, `${name}.png`) }));
-const text = (page, selector) => page.$eval(selector, node => node.textContent.trim());
-const many = (page, selector) => page.$$eval(selector, nodes => nodes.map(n => n.textContent.trim()));
+
+/**
+ * Every screen ships as server-rendered HTML and is hydrated a beat later, and a
+ * list repaints after each write. The node a read or a type just found can be
+ * replaced under it mid-call, which surfaces as a detached-node error rather
+ * than a wrong answer — so try the same call again against the fresh tree.
+ */
+async function again(run) {
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    try {
+      return await run();
+    } catch (err) {
+      if (!/detached|No element found/.test(err.message)) throw err;
+      await new Promise(resolve => setTimeout(resolve, 400));
+    }
+  }
+  return run();
+}
+
+const text = (page, selector) => again(() => page.$eval(selector, node => node.textContent.trim()));
+const many = (page, selector) => again(() => page.$$eval(selector, nodes => nodes.map(n => n.textContent.trim())));
 
 /** Click the one element under `selector` whose text contains `needle`. */
 async function clickText(page, selector, needle) {
@@ -96,12 +115,14 @@ async function clickText(page, selector, needle) {
 }
 
 const clearAndType = async (page, selector, value) => {
-  await page.click(selector);
-  await page.keyboard.down('Control');
-  await page.keyboard.press('KeyA');
-  await page.keyboard.up('Control');
-  await page.keyboard.press('Backspace');
-  await page.type(selector, value);
+  await again(async () => {
+    await page.click(selector);
+    await page.keyboard.down('Control');
+    await page.keyboard.press('KeyA');
+    await page.keyboard.up('Control');
+    await page.keyboard.press('Backspace');
+    await page.type(selector, value);
+  });
 };
 
 /** Green banner, and specifically the one this action wrote. */
@@ -141,9 +162,18 @@ async function until(page, selector, needle) {
 }
 
 /** The text a node reads on screen, span boundaries and all. */
-const lineText = (page, selector) => page.$eval(selector, node => (node.children.length
+const lineText = (page, selector) => again(() => page.$eval(selector, node => (node.children.length
   ? [...node.children].map(part => part.textContent.replace(/\s+/g, ' ').trim()).join(' ')
-  : node.textContent).trim());
+  : node.textContent).trim()));
+
+/**
+ * A row a delete just removed. The green banner answers before the refetch that
+ * rebuilds the list lands, so counting rows the instant it appears still shows
+ * the deleted one — wait for the node itself to leave the page.
+ */
+async function waitGone(page, selector) {
+  await page.waitForFunction(sel => !document.querySelector(sel), { timeout: 40000 }, selector);
+}
 
 /**
  * A filter select fires its own request the moment it changes, and the search box
@@ -249,7 +279,19 @@ async function dismissCodes(page) {
  */
 async function seatSignIn(page, username, secret) {
   await page.goto(`${BASE}/login`, { waitUntil: 'domcontentloaded' });
-  await page.waitForSelector('input[autocomplete="username"]', { visible: true });
+  // A seat switched off and back on inside its own thirty-minute window holds a
+  // cookie the server takes seriously again, so this route walks the browser home
+  // instead of showing the door. Give that redirect a moment to land, then decide
+  // which page this actually is — reading the form while it is being replaced is
+  // how the suite used to type a username into nothing.
+  const live = await page.waitForSelector('.side-signout', { timeout: 5000 })
+    .then(() => true, () => false);
+  if (live) {
+    await clickText(page, '.side-signout', 'Sign out');
+    await page.waitForSelector('input[autocomplete="username"]', { timeout: 40000 });
+  } else {
+    await page.waitForSelector('input[autocomplete="username"]', { timeout: 40000 });
+  }
   await clearAndType(page, 'input[autocomplete="username"]', username);
   await clearAndType(page, 'input[type="password"]', PASSWORD);
   await page.click('button[type="submit"]');
@@ -703,6 +745,7 @@ try {
 
   await clickText(owner, '.term[data-term="firearms"] .term-acts button', 'Remove');
   const termGone = await expectBanner(owner, 'off the list');
+  await waitGone(owner, '.panel[data-list="item"] .term[data-term="firearms"]');
   const itemsLeft = await many(owner, '.panel[data-list="item"] .term-text');
   ok('taking one off the list asks first and then really removes it',
     termGone.includes('firearms') && !itemsLeft.includes('firearms'), `${termGone} — ${itemsLeft.length} left`);

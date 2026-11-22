@@ -149,6 +149,26 @@ class SeatGrantTests(RbacTestCase):
         self.assertEqual(response.status_code, 403)
         self.assertEqual(response.data['code'], 'staff_disabled')
 
+    def test_a_seat_handed_back_reaches_the_sign_in_door_again(self):
+        # Switching a seat off clears is_staff, so switching it back on has to put
+        # it back — otherwise the roster says "can sign in again" over a shut door.
+        StaffAccount.objects.create(user=self.admin, role=StaffAccount.Role.ADMIN)
+        StaffAccount.objects.create(user=self.mod, role=StaffAccount.Role.MODERATOR)
+        admin = self.session('desk_admin')
+        self.session('night_mod')
+        admin.post(f'{STAFF_URL}night_mod/', {'is_enabled': False}, format='json')
+        self.mod.refresh_from_db()
+        self.assertFalse(self.mod.is_staff)
+
+        back = admin.post(f'{STAFF_URL}night_mod/', {'is_enabled': True}, format='json')
+        self.assertEqual(back.status_code, 200)
+        self.mod.refresh_from_db()
+        self.assertTrue(self.mod.is_staff)
+
+        door = APIClient().post(LOGIN_URL, {'username': 'night_mod', 'password': PASSWORD}, format='json')
+        self.assertEqual(door.status_code, 202, door.data)
+        self.assertEqual(door.data['code'], 'two_factor_required')
+
     def test_the_last_superadmin_seat_cannot_be_switched_off(self):
         StaffAccount.objects.create(user=self.owner, role=StaffAccount.Role.SUPERADMIN)
         owner = self.session('client_owner')
