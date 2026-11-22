@@ -1,4 +1,5 @@
 import puppeteer from 'puppeteer-core';
+import { retryWrite } from './shots.mjs';
 const EXE = 'C:/Program Files/Google/Chrome/Application/chrome.exe';
 const BASE = 'http://localhost:3000';
 const PASS = 'exposing-demo-1';
@@ -49,7 +50,7 @@ await sleep(1200);
 // 1. no @handle in any post card header
 const handles = await page.evaluate(() => [...document.querySelectorAll('article.post .post-handle')].length);
 ok('feed cards show no @username', handles === 0, `${handles} handles`);
-await page.screenshot({ path: `${OUT}/a-feed-no-handle.png` });
+await retryWrite(() => page.screenshot({ path: `${OUT}/a-feed-no-handle.png` }));
 
 // 2. follow text only on non-followed authors; clicking hides it immediately and persists
 const before = await page.evaluate(() => [...document.querySelectorAll('article.post')].slice(0, 12).map(a => ({
@@ -90,7 +91,7 @@ if (target) {
   // A public follow confirms silently (the toast is reserved for requests), so
   // only the text itself has to disappear.
   ok('tap hides the follow text immediately', after.probe === '(hidden)', JSON.stringify({ clicked: hit?.name, toast, after: after.probe }));
-  await page.screenshot({ path: `${OUT}/a-follow-tapped.png` });
+  await retryWrite(() => page.screenshot({ path: `${OUT}/a-follow-tapped.png` }));
   await goto('/');
   await sleep(1800);
   const fresh = await page.evaluate(href => {
@@ -115,7 +116,7 @@ const gap = await page.evaluate(() => {
   return { gapPx: Math.round(g.getBoundingClientRect().left - f.getBoundingClientRect().right), ml: getComputedStyle(g).marginLeft };
 });
 ok('followers/following chips have the wider desktop gap', !!gap && gap.gapPx >= 20, JSON.stringify(gap));
-await page.screenshot({ path: `${OUT}/a-profile-stats-gap.png` });
+await retryWrite(() => page.screenshot({ path: `${OUT}/a-profile-stats-gap.png` }));
 
 console.log(`== ${results.filter(Boolean).length}/${results.length} section A checks ==`);
 await browser.close();

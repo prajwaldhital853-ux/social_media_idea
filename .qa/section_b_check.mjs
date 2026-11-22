@@ -1,4 +1,5 @@
 import puppeteer from 'puppeteer-core';
+import { retryWrite } from './shots.mjs';
 const EXE = 'C:/Program Files/Google/Chrome/Application/chrome.exe';
 const BASE = 'http://localhost:3000';
 const PASS = 'exposing-demo-1';
@@ -56,7 +57,7 @@ const icon = await page.evaluate(() => {
 });
 ok('mobile action icons are 28px', !!icon && icon.svg === 28, JSON.stringify(icon));
 ok('mobile action buttons have taller hit targets', !!icon && icon.btnH >= 48, `height ${icon?.btnH}`);
-await page.screenshot({ path: `${OUT}/b-mobile-feed-top.png` });
+await retryWrite(() => page.screenshot({ path: `${OUT}/b-mobile-feed-top.png` }));
 
 // 2. media heights on mobile
 const mosaic = await page.evaluate(() => {
@@ -85,7 +86,7 @@ ok('mobile mixed mosaic is 440px tall', mixed.length === 0 || mixed.every(h => M
 // 3. a scrolled view for the record
 await page.evaluate(() => document.querySelectorAll('article.post')[1]?.scrollIntoView({ block: 'start' }));
 await sleep(700);
-await page.screenshot({ path: `${OUT}/b-mobile-feed-media.png` });
+await retryWrite(() => page.screenshot({ path: `${OUT}/b-mobile-feed-media.png` }));
 
 // 4. desktop is untouched: same checks at 1440px
 await page.setViewport({ width: 1440, height: 900 });
@@ -107,7 +108,7 @@ const desk = await page.evaluate(() => {
 ok('desktop icons stay 24px', desk.svg === 24, `svg ${desk.svg}`);
 const dSingle = desk.mosaic.single || [];
 ok('desktop single image stays within 510px cap', dSingle.length === 0 || dSingle.every(h => h <= 512), JSON.stringify(desk.mosaic));
-await page.screenshot({ path: `${OUT}/b-desktop-feed.png` });
+await retryWrite(() => page.screenshot({ path: `${OUT}/b-desktop-feed.png` }));
 
 console.log(`== ${results.filter(Boolean).length}/${results.length} section B checks ==`);
 await browser.close();

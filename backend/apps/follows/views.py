@@ -32,6 +32,9 @@ def follow(request):
         return Response({'detail': 'You cannot follow yourself.'}, status=400)
     profile = getattr(target, 'profile', None)
     private = bool(profile and profile.is_private)
+    # A POST on an edge that already exists is a stale client, not a violation:
+    # a double-tap, another device, or a sync window that dropped the row. It
+    # answers with the true state so the button settles instead of erroring.
     try:
         with transaction.atomic():
             edge, created = Follow.objects.get_or_create(
@@ -39,14 +42,16 @@ def follow(request):
                 defaults={'status': Follow.Status.PENDING if private else Follow.Status.ACCEPTED},
             )
     except IntegrityError:
-        return Response({'detail': 'Already following or requested.'}, status=400)
-    if not created:
-        return Response({'detail': 'Already following or requested.', 'status': edge.status}, status=400)
-    kind = 'follow_request' if private else 'follow'
-    verb = 'requested to follow you' if private else 'started following you'
-    notify(target, request.user, kind, f'{request.user.username} {verb}.', 'user', request.user.pk)
-    email_activity(target, request.user, kind)
-    return Response({'status': edge.status}, status=status.HTTP_201_CREATED)
+        edge = Follow.objects.filter(follower=request.user, followee=target).first()
+        if edge is None:
+            return Response({'detail': 'Could not follow. Try again.'}, status=500)
+        created = False
+    if created:
+        kind = 'follow_request' if private else 'follow'
+        verb = 'requested to follow you' if private else 'started following you'
+        notify(target, request.user, kind, f'{request.user.username} {verb}.', 'user', request.user.pk)
+        email_activity(target, request.user, kind)
+    return Response({'status': edge.status, 'created': created}, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
 
 
 @api_view(['DELETE'])

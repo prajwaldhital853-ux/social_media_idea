@@ -26,9 +26,15 @@ class FollowTests(TestCase):
         resp = self.ca.post('/api/follows/', {'username': 'followa'}, format='json')
         self.assertEqual(resp.status_code, 400)
         self.ca.post('/api/follows/', {'username': 'followb'}, format='json')
+        # A stale client repeating the POST (double-tap, another device, a sync
+        # window that dropped the row) reads the true state instead of an error,
+        # and the target is not notified a second time.
         resp = self.ca.post('/api/follows/', {'username': 'followb'}, format='json')
-        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data['status'], 'accepted')
+        self.assertEqual(resp.data['created'], False)
         self.assertEqual(Follow.objects.filter(follower=self.a, followee=self.b).count(), 1)
+        self.assertEqual(Notification.objects.filter(recipient=self.b, kind='follow').count(), 1)
 
     def test_private_follow_pending_accept_decline(self):
         self.b.profile.is_private = True

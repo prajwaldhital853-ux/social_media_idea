@@ -23,6 +23,10 @@ from .api import person
 from .config import client_config
 
 GRAPH_LIMIT = 400
+# The follow graph has to be complete for state correctness, not just fresh:
+# an edge truncated out of this window renders a Follow button that the server
+# then refuses, so the window per user is wider than any seeded roster.
+EDGE_LIMIT = 1000
 
 
 def _role(user):
@@ -94,7 +98,7 @@ def sync(request):
     user = request.user
     edges = (
         Follow.objects.filter(Q(follower=user) | Q(followee=user))
-        .order_by('-created_at')[:GRAPH_LIMIT]
+        .order_by('-created_at')[:EDGE_LIMIT]
     )
     edge_rows = [
         {

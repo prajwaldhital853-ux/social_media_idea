@@ -10,6 +10,7 @@
  */
 import puppeteer from 'puppeteer-core';
 import { writeFileSync } from 'node:fs';
+import { retryWrite } from './shots.mjs';
 
 const BASE = 'http://localhost:3000';
 const API = 'http://127.0.0.1:8001/api';
@@ -48,7 +49,7 @@ page.on('response', r => {
 });
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
-const shot = name => page.screenshot({ path: `${OUT}/${name}.png` });
+const shot = name => retryWrite(() => page.screenshot({ path: `${OUT}/${name}.png` }));
 const goto = async path => {
   await page.goto(BASE + path, { waitUntil: 'domcontentloaded', timeout: 45000 });
   await sleep(900);
@@ -76,7 +77,7 @@ async function makePhoto(name, size = 400) {
   await p.setViewport({ width: size, height: size, deviceScaleFactor: 1 });
   await p.setContent('<body style="margin:0;background:linear-gradient(135deg,#B63740,#FDA041 45%,#1F6F78)"></body>');
   await sleep(200);
-  await p.screenshot({ path: `${OUT}/${name}.png` });
+  await retryWrite(() => p.screenshot({ path: `${OUT}/${name}.png` }));
   await p.close();
   return `${OUT}/${name}.png`;
 }
@@ -121,6 +122,9 @@ async function signIn(identifier) {
 await signIn('sita');
 await goto('/u/sita');
 await page.waitForSelector('.profile-view', { timeout: 20000 });
+// The header paints after the route settles, so a zero-width chip means the page
+// is still streaming rather than a missing button.
+await page.waitForFunction(() => Math.round(document.querySelector('.profile-avatar-open')?.getBoundingClientRect().width || 0) > 0, { timeout: 15000 }).catch(() => {});
 
 const chip = await page.evaluate(() => Math.round(document.querySelector('.profile-avatar-open')?.getBoundingClientRect().width || 0));
 await page.evaluate(() => document.querySelector('.profile-avatar-open')?.click());
@@ -253,8 +257,9 @@ await shot('verify-84-about-after');
 // ===== #82 — changing the photo is announced by its own post =====
 await clickText('.profile-actions', 'Edit profile');
 await page.waitForSelector('.edit-profile-modal', { timeout: 5000 }).catch(() => {});
-const avatarInput = await page.$('.edit-profile-modal input[type="file"]');
-await avatarInput.uploadFile(await makePhoto('verify-82-photo'));
+const avatarInput = await page.waitForSelector('.edit-profile-modal input[type="file"]', { timeout: 8000 }).catch(() => null);
+ok('82: the profile editor offers a photo picker', !!avatarInput);
+await avatarInput?.uploadFile(await makePhoto('verify-82-photo'));
 await sleep(900);
 await page.evaluate(() => document.querySelector('.edit-profile-modal button.promote-submit')?.click());
 await page.waitForFunction(() => !document.querySelector('.edit-profile-modal'), { timeout: 15000 }).catch(() => {});
@@ -535,6 +540,6 @@ ok('no console or HTTP errors during the batch pass', errors.length === 0, error
 
 const failed = results.filter(r => !r.pass);
 console.log(`\n${results.length - failed.length}/${results.length} batch checks passed`);
-writeFileSync(`${OUT}/batch-verify-results.json`, JSON.stringify(results, null, 2));
+await retryWrite(() => writeFileSync(`${OUT}/batch-verify-results.json`, JSON.stringify(results, null, 2)));
 await browser.close();
 process.exit(failed.length ? 1 : 0);

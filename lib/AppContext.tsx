@@ -768,41 +768,50 @@ export function AppProvider({ children }: { children: ReactNode }) {
     follows: prev.follows.filter(f => !(f.follower === followerId && f.following === followingId))
   }));
 
+  const followInFlight = useRef<Set<string>>(new Set());
   const toggleFollow = async (targetId: string) => {
-    const self = currentMe();
-    if (!self || self.id === targetId) return;
-    const username = usernameOf(targetId);
-    if (API_ENABLED && !username) return;
-    const existing = edgeOf(self.id, targetId);
-    if (existing) {
-      dropEdge(self.id, targetId);
+    // One network round per tap: a rapid second tap on the same author must
+    // not read the not-yet-rendered edge and turn the follow into an unfollow.
+    if (followInFlight.current.has(targetId)) return;
+    followInFlight.current.add(targetId);
+    try {
+      const self = currentMe();
+      if (!self || self.id === targetId) return;
+      const username = usernameOf(targetId);
+      if (API_ENABLED && !username) return;
+      const existing = edgeOf(self.id, targetId);
+      if (existing) {
+        dropEdge(self.id, targetId);
+        if (API_ENABLED) {
+          try {
+            await api.del(`/api/follows/${username}/`);
+          } catch (err) {
+            putEdge(existing);
+            showToast(errText(err, 'Could not update follow.'));
+            return;
+          }
+        }
+        if (existing.status === 'pending') showToast('Follow request cancelled.');
+        return;
+      }
+      const target = dbRef.current.users.find(u => u.id === targetId);
+      const pending = !!target?.private;
+      putEdge({ follower: self.id, following: targetId, ts: Date.now(), status: pending ? 'pending' : 'accepted' });
+      notify(targetId, 'follow', pending ? 'requested to follow you' : 'started following you', pending ? `/u/${self.username}/followers` : `/u/${self.username}`, self.username);
       if (API_ENABLED) {
         try {
-          await api.del(`/api/follows/${username}/`);
+          const data = await api.post<any>('/api/follows/', { username });
+          putEdge({ follower: self.id, following: targetId, ts: at(data?.created_at) || Date.now(), status: data?.status === 'pending' ? 'pending' : 'accepted' });
         } catch (err) {
-          putEdge(existing);
-          showToast(errText(err, 'Could not update follow.'));
+          dropEdge(self.id, targetId);
+          showToast(errText(err, 'Could not follow.'));
           return;
         }
       }
-      if (existing.status === 'pending') showToast('Follow request cancelled.');
-      return;
+      if (pending) showToast('Follow request sent.');
+    } finally {
+      followInFlight.current.delete(targetId);
     }
-    const target = dbRef.current.users.find(u => u.id === targetId);
-    const pending = !!target?.private;
-    putEdge({ follower: self.id, following: targetId, ts: Date.now(), status: pending ? 'pending' : 'accepted' });
-    notify(targetId, 'follow', pending ? 'requested to follow you' : 'started following you', pending ? `/u/${self.username}/followers` : `/u/${self.username}`, self.username);
-    if (API_ENABLED) {
-      try {
-        const data = await api.post<any>('/api/follows/', { username });
-        putEdge({ follower: self.id, following: targetId, ts: at(data?.created_at) || Date.now(), status: data?.status === 'pending' ? 'pending' : 'accepted' });
-      } catch (err) {
-        dropEdge(self.id, targetId);
-        showToast(errText(err, 'Could not follow.'));
-        return;
-      }
-    }
-    if (pending) showToast('Follow request sent.');
   };
 
   const requestEdge = (followerId: string) => {

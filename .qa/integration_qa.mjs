@@ -6,6 +6,7 @@
  * hydration and server counters are checked as shipped rather than as mocked.
  */
 import puppeteer from 'puppeteer-core';
+import { retryWrite } from './shots.mjs';
 
 const BASE = 'http://localhost:3000';
 const OUT = 'D:/social_medial/.qa';
@@ -46,7 +47,7 @@ async function newPage(viewport, mobile = false) {
 }
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
-const shot = (page, name) => page.screenshot({ path: `${OUT}/${name}.png` });
+const shot = (page, name) => retryWrite(() => page.screenshot({ path: `${OUT}/${name}.png` }));
 const url = page => page.evaluate(() => location.pathname);
 const textOf = (page, sel) => page.$eval(sel, el => el.textContent.trim()).catch(() => '');
 const count = (page, sel) => page.$$eval(sel, els => els.length).catch(() => 0);
@@ -430,5 +431,5 @@ const failed = results.filter(r => !r.pass);
 console.log(`\n${results.length - failed.length}/${results.length} integration checks green.`);
 if (errors.length) console.log('console/network noise:\n' + [...new Set(errors)].slice(0, 25).join('\n'));
 const { writeFileSync } = await import('node:fs');
-writeFileSync(`${OUT}/integration-results.json`, JSON.stringify({ results, errors: [...new Set(errors)] }, null, 2));
+await retryWrite(() => writeFileSync(`${OUT}/integration-results.json`, JSON.stringify({ results, errors: [...new Set(errors)] }, null, 2)));
 process.exit(failed.length ? 1 : 0);

@@ -50,6 +50,11 @@
     "detail": "[{\"label\":\"City\",\"href\":\"\"},{\"label\":\"Joined\",\"href\":\"\"},{\"label\":\"Date of birth\",\"href\":\"\"},{\"label\":\"Phone number\",\"href\":\"tel:+977984000000\"},{\"label\":\"Website\",\"href\":\"https://sita.example.com/\"},{\"label\":\"Newsletter\",\"href\":\"https://sita.example.com/news\"},{\"label\":\"Posts\",\"href\":\"\"},{\"label\":\"Followers\",\"href\":\"\"},{\"label\":\"Following\",\"href\":\"\"}]"
   },
   {
+    "name": "82: the profile editor offers a photo picker",
+    "pass": true,
+    "detail": ""
+  },
+  {
     "name": "82: a new profile photo publishes its own update post",
     "pass": true,
     "detail": "{\"path\":\"/u/sita\",\"activity\":\"updated their profile photo\",\"name\":\"Sita Karki\",\"hasImage\":true}"
@@ -57,7 +62,7 @@
   {
     "name": "83: the count row reads as three bold numbers",
     "pass": true,
-    "detail": "[{\"label\":\"58 Posts\",\"bold\":800,\"size\":19,\"href\":null},{\"label\":\"20 Followers\",\"bold\":800,\"size\":19,\"href\":\"/u/sita/followers\"},{\"label\":\"3 Following\",\"bold\":800,\"size\":19,\"href\":\"/u/sita/following\"}]"
+    "detail": "[{\"label\":\"62 Posts\",\"bold\":800,\"size\":19,\"href\":null},{\"label\":\"20 Followers\",\"bold\":800,\"size\":19,\"href\":\"/u/sita/followers\"},{\"label\":\"3 Following\",\"bold\":800,\"size\":19,\"href\":\"/u/sita/following\"}]"
   },
   {
     "name": "83: Followers opens its own list page",
@@ -67,7 +72,7 @@
   {
     "name": "83: the followers list arrives with rows, not an empty shell",
     "pass": true,
-    "detail": "{\"path\":\"/u/sita/followers\",\"rows\":21,\"title\":\"\"}"
+    "detail": "{\"path\":\"/u/sita/followers\",\"rows\":11,\"title\":\"\"}"
   },
   {
     "name": "83: another account shows Follow and Message side by side",
@@ -102,7 +107,7 @@
   {
     "name": "88: a post hands a crawler its own title, picture and card",
     "pass": true,
-    "detail": "{\"title\":\"Sita Karki — Exposing\",\"desc\":\"See this photo on Exposing.\",\"image\":\"http://localhost:3000/media/uploads/cc97a9e382b47686c894de85.png\",\"type\":\"article\",\"card\":\"summary_large_image\"}"
+    "detail": "{\"title\":\"Sita Karki — Exposing\",\"desc\":\"See this photo on Exposing.\",\"image\":\"http://localhost:3000/media/uploads/a28b953fbf3a71da9cc05528.png\",\"type\":\"article\",\"card\":\"summary_large_image\"}"
   },
   {
     "name": "88: a profile names the account and its handle",

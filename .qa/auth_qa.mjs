@@ -7,6 +7,7 @@
  */
 import puppeteer from 'puppeteer-core';
 import fs from 'node:fs';
+import { retryWrite } from './shots.mjs';
 
 const BASE = 'http://localhost:3000';
 const OUT = 'D:/social_medial/.qa';
@@ -52,7 +53,7 @@ async function newPage(viewport, mobile = false) {
 }
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
-const shot = (page, name) => page.screenshot({ path: `${OUT}/${name}.png` });
+const shot = (page, name) => retryWrite(() => page.screenshot({ path: `${OUT}/${name}.png` }));
 
 async function goto(page, path) {
   await page.goto(BASE + path, { waitUntil: 'domcontentloaded', timeout: 45000 });
@@ -584,7 +585,7 @@ const unexpected = errors.filter(e => !/abort|ERR_|favicon|\.ico|DevTools/.test(
 ok('integration: the auth pass produced no unexpected console, page or HTTP errors',
   unexpected.length === 0, unexpected.slice(0, 6).join(' | '));
 
-fs.writeFileSync(`${OUT}/auth-results.json`, JSON.stringify(results, null, 2));
+await retryWrite(() => fs.writeFileSync(`${OUT}/auth-results.json`, JSON.stringify(results, null, 2)));
 const passed = results.filter(r => r.pass).length;
 console.log(`\n${passed}/${results.length} auth assertions passed`);
 await browser.close();

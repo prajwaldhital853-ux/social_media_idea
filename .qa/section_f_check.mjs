@@ -1,4 +1,5 @@
 import puppeteer from 'puppeteer-core';
+import { retryWrite } from './shots.mjs';
 import net from 'node:net';
 
 const EXE = 'C:/Program Files/Google/Chrome/Application/chrome.exe';
@@ -206,7 +207,7 @@ if (read) {
   });
   ok('live red tick is colored like the read ticks', colors.read && colors.read !== colors.sentOrDelivered, JSON.stringify(colors));
 }
-await A.page.screenshot({ path: `${OUT}/f-live-thread.png` });
+await retryWrite(() => A.page.screenshot({ path: `${OUT}/f-live-thread.png` }));
 
 // SSE: a follow from B must reach A's badge and tray without a reload.
 const badge = () => A.page.evaluate(() => {
@@ -266,13 +267,16 @@ const sseNow = await A.page.evaluate(() => ({ ...window.__sse, es: undefined }))
 ok('SSE pushes the follow to A badge without reload', grew, `badge ${before} -> ${late.length ? late.join(',') : 'live'}  [sse: ${JSON.stringify(sseNow)}]${bState ? `  [b: ${bState}]` : ''}`);
 
 await A.page.evaluate(() => document.querySelectorAll('.topbar-slot')[1]?.querySelector('button')?.click());
-await sleep(900);
+// The tray fills from its own fetch; a fixed sleep reads it mid-flight when the
+// machine is busy and reports an empty bell that never was.
+await A.page.waitForSelector('.notif-row', { timeout: 8000 }).catch(() => {});
+await sleep(300);
 const row = await A.page.evaluate(() => {
   const rows = [...document.querySelectorAll('.notif-row')];
   return rows.length ? (rows[0].textContent || '').trim() : null;
 });
 ok('bell tray head shows the realtime row', !!row && /follow|requested|asked to follow/i.test(row), JSON.stringify((row || '').slice(0, 70)));
-await A.page.screenshot({ path: `${OUT}/f-sse-row.png` });
+await retryWrite(() => A.page.screenshot({ path: `${OUT}/f-sse-row.png` }));
 
 await A.browser.close();
 await B.browser.close();

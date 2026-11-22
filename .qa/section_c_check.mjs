@@ -1,4 +1,5 @@
 import puppeteer from 'puppeteer-core';
+import { retryWrite } from './shots.mjs';
 const EXE = 'C:/Program Files/Google/Chrome/Application/chrome.exe';
 const BASE = 'http://localhost:3000';
 const PASS = 'exposing-demo-1';
@@ -64,7 +65,7 @@ ok('reacted cards show the emoji mix next to the like count',
 ok('unreacted cards keep the "be first" line and no mix',
    cards.some(c => c.first) ? cards.filter(c => c.first).every(c => c.arts === 0) : 'none-zero',
    `zero-count cards: ${cards.filter(c => c.first).length}`);
-await page.screenshot({ path: `${OUT}/c-feed-mix.png` });
+await retryWrite(() => page.screenshot({ path: `${OUT}/c-feed-mix.png` }));
 
 // 2. a quick tap adds sita's like and bumps the count
 const probe = await page.evaluate(() => {
@@ -109,7 +110,7 @@ const reel = await page.evaluate(() => {
   return { arts: s?.querySelectorAll('.reaction-mix .reaction-art').length || 0, span: trigger?.querySelector('span:not(.reaction-mix)')?.textContent?.trim() || '' };
 });
 ok('reels rail shows the reaction mix with its count', reel.arts >= 1 && /^\d/.test(reel.span), JSON.stringify(reel));
-await page.screenshot({ path: `${OUT}/c-reels-mix.png` });
+await retryWrite(() => page.screenshot({ path: `${OUT}/c-reels-mix.png` }));
 
 // 4. media page: reacting to a photo shows its own mix
 const mediaTarget = await page.evaluate(() => {

@@ -1,4 +1,5 @@
 import puppeteer from 'puppeteer-core';
+import { retryWrite } from './shots.mjs';
 const EXE = 'C:/Program Files/Google/Chrome/Application/chrome.exe';
 const BASE = 'http://localhost:3000';
 const PASS = 'exposing-demo-1';
@@ -67,7 +68,7 @@ if (rowInfo.exists) {
 }
 ok('bell panel opens', panelOpen, '');
 ok('clicking a notification row performs it (navigates)', !!nav1, `landed ${nav1 || (after1 ? JSON.stringify(after1) : '(stayed on feed)')}`);
-await page.screenshot({ path: `${OUT}/d-notif-row-open.png` });
+await retryWrite(() => page.screenshot({ path: `${OUT}/d-notif-row-open.png` }));
 
 // 2. in-panel tab switch survives: open panel, click Unread, panel stays and tab activates
 await goto('/');
@@ -98,7 +99,7 @@ if (convoInfo) {
   after2 = await page.evaluate(() => ({ path: location.pathname, panel: !!document.querySelector('.topbar-panel') }));
 }
 ok('messages panel: clicking a conversation opens the thread', !!nav2, `landed ${nav2 || (after2 ? JSON.stringify(after2) : '(stayed)')}`);
-await page.screenshot({ path: `${OUT}/d-convo-open.png` });
+await retryWrite(() => page.screenshot({ path: `${OUT}/d-convo-open.png` }));
 
 // 4. outside click still dismisses
 await goto('/');

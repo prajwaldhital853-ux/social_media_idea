@@ -1,5 +1,6 @@
 import puppeteer from 'puppeteer-core';
 import fs from 'node:fs';
+import { retryWrite } from './shots.mjs';
 
 const OUT = 'D:/social_medial/.qa';
 const CHROME = 'C:/Program Files/Google/Chrome/Application/chrome.exe';
@@ -25,7 +26,34 @@ async function newPage(viewport, mobile = false) {
   return page;
 }
 const sleep = ms => new Promise(r => setTimeout(r, ms));
-const shot = (page, name) => page.screenshot({ path: `${OUT}/${name}.png` });
+const capture = (run, name) => retryWrite(() => run({ path: `${OUT}/${name}.png` }));
+const shot = (page, name) => capture(cfg => page.screenshot(cfg), name);
+/** A seek needs both taps inside the player's 320ms window. Two awaited
+ *  mouse.click calls leave that gap to node's event loop, which stalls when the
+ *  machine is thrashing and silently degrades the gesture into two pause taps —
+ *  so dispatch the pair from one browser task and read the outcome in the same
+ *  task that sees the badge, because it self-hides after 760ms. The point comes
+ *  from the player's own box and elementFromPoint keeps the real hit test, so a
+ *  layout shift or an overlay in the way still fails. */
+const doubleTapSeek = (page, dir) => page.evaluate(async dir => {
+  const box = document.querySelector('.reel-slide .auto-video')?.getBoundingClientRect();
+  if (!box?.width) throw new Error('no reel player on screen');
+  const x = Math.round(box.left + box.width * (dir === 'right' ? 0.75 : 0.25));
+  const y = Math.round(box.top + box.height * 0.45);
+  const vid = document.querySelector('.reel-slide video');
+  const el = document.elementFromPoint(x, y);
+  if (!el?.closest('.auto-video')) return { t: vid?.currentTime, dur: vid?.duration, badge: false, miss: el?.className || 'nothing' };
+  const tap = () => el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window, clientX: x, clientY: y }));
+  tap();
+  await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+  tap();
+  const deadline = performance.now() + 900;
+  for (;;) {
+    if (document.querySelector(`.av-seek.${dir}`)) return { t: vid.currentTime, dur: vid.duration, badge: true };
+    if (performance.now() > deadline) return { t: vid.currentTime, dur: vid.duration, badge: false };
+    await new Promise(r => requestAnimationFrame(r));
+  }
+}, dir);
 async function goto(page, path) {
   await page.goto('http://localhost:3000' + path, { waitUntil: 'domcontentloaded', timeout: 45000 });
   await page.waitForSelector('.post, .create-post-page, .search-view, .login-card, .login-container, .modern-login, .reels-page, .media-page, .profile-view, .profile-missing, .wallet-body, .settings-body, .notif-view, .inbox-view, .chat-view, .market-view, .admin-view, .legal-doc, .signup-container, .saved-list, .empty-state, .feed-empty, .people-page, .listing-page, .people-page-list', { timeout: 30000 }).catch(() => {});
@@ -187,7 +215,7 @@ const mixInfo = await d.evaluate(el => {
 }, mix);
 ok('desktop: p_mix stack n5, 5 cells, +3', mixInfo.cls.includes('stack n5') && mixInfo.cells === 5 && mixInfo.more === '+3', JSON.stringify(mixInfo));
 ok('desktop: mixed video is paused preview', mixInfo.preview && mixInfo.previewPaused);
-await mix.asElement().screenshot({ path: `${OUT}/desktop-mosaic.png` });
+await capture(cfg => mix.asElement().screenshot(cfg), 'desktop-mosaic');
 
 // Single video: autoplay WITH SOUND, pauses off-screen
 await scrollPost(d, 'Rain over New Road');
@@ -811,20 +839,12 @@ ok('desktop: reels preload=auto buffers next clip', pre.preload === 'auto' && pr
 await shot(d, 'desktop-reels');
 // double-tap right = +10s
 const t0 = await d.evaluate(() => document.querySelector('.reel-slide video').currentTime);
-await d.mouse.click(800, 450);
-await sleep(90);
-await d.mouse.click(800, 450);
-await sleep(350);
-const seekR = await d.evaluate(() => { const v = document.querySelector('.reel-slide video'); return { t: v.currentTime, dur: v.duration, badge: !!document.querySelector('.av-seek.right') }; });
+const seekR = await doubleTapSeek(d, 'right');
 ok('desktop: double-tap right seeks +10s with badge', (seekR.t >= Math.min(seekR.dur, t0 + 10) - 0.4 || seekR.t < t0) && seekR.badge, JSON.stringify({ t0, ...seekR, note: 'short clip clamps to end / loops' }));
 await shot(d, 'desktop-reels-seek');
 await sleep(600);
 const t1 = await d.evaluate(() => document.querySelector('.reel-slide video').currentTime);
-await d.mouse.click(480, 450);
-await sleep(90);
-await d.mouse.click(480, 450);
-await sleep(350);
-const seekL = await d.evaluate(() => ({ t: document.querySelector('.reel-slide video').currentTime, badge: !!document.querySelector('.av-seek.left') }));
+const seekL = await doubleTapSeek(d, 'left');
 ok('desktop: double-tap left seeks -10s with badge', (seekL.t < t1 || seekL.t === 0) && seekL.badge, JSON.stringify({ t1, ...seekL }));
 await sleep(600);
 // single tap pauses / resumes
@@ -1973,11 +1993,7 @@ ok('mobile: tray pick stores the reel reaction', await m.evaluate(() => {
 }));
 await shot(m, 'mobile-reels-reacted');
 const mt0 = await m.evaluate(() => document.querySelector('.reel-slide video').currentTime);
-await m.touchscreen.tap(300, 400);
-await sleep(90);
-await m.touchscreen.tap(300, 400);
-await sleep(350);
-const mSeekR = await m.evaluate(() => { const v = document.querySelector('.reel-slide video'); return { t: v.currentTime, dur: v.duration, badge: !!document.querySelector('.av-seek.right') }; });
+const mSeekR = await doubleTapSeek(m, 'right');
 ok('mobile: double-tap right seeks +10s', (mSeekR.t >= Math.min(mSeekR.dur, mt0 + 10) - 0.4 || mSeekR.t < mt0) && mSeekR.badge, JSON.stringify({ mt0, ...mSeekR }));
 await sleep(500);
 await m.evaluate(() => document.querySelector('.reel-rail-item button[aria-label="Comment on this reel"]').click());
@@ -2299,5 +2315,5 @@ console.log('\nResource/console errors (informational):');
 [...new Set(errors)].slice(0, 12).forEach(e => console.log('  ' + e));
 const failed = results.filter(r => !r.pass);
 console.log(`\n==== ${results.length - failed.length}/${results.length} passed ====`);
-fs.writeFileSync(`${OUT}/results.json`, JSON.stringify({ results, errors }, null, 2));
+await retryWrite(() => fs.writeFileSync(`${OUT}/results.json`, JSON.stringify({ results, errors }, null, 2)));
 process.exit(failed.length ? 1 : 0);

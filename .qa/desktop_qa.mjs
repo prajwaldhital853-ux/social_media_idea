@@ -8,6 +8,7 @@
  */
 import puppeteer from 'puppeteer-core';
 import { writeFileSync } from 'node:fs';
+import { retryWrite } from './shots.mjs';
 
 const BASE = 'http://localhost:3000';
 const OUT = 'D:/social_medial/.qa';
@@ -48,7 +49,7 @@ async function newPage(viewport, mobile = false, context = browser) {
 }
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
-const shot = (page, name) => page.screenshot({ path: `${OUT}/${name}.png` });
+const shot = (page, name) => retryWrite(() => page.screenshot({ path: `${OUT}/${name}.png` }));
 const textOf = (page, sel) => page.$eval(sel, el => el.textContent.trim()).catch(() => '');
 const count = (page, sel) => page.$$eval(sel, els => els.length).catch(() => 0);
 
@@ -502,11 +503,11 @@ await shot(g, 'ss9-desktop-guest-popover');
 
 ok('no console or HTTP errors during the run', errors.length === 0, errors.slice(0, 6).join(' | '));
 
-writeFileSync(`${OUT}/desktop-results.json`, JSON.stringify({
+await retryWrite(() => writeFileSync(`${OUT}/desktop-results.json`, JSON.stringify({
   passed: results.filter(r => r.pass).length,
   failed: results.filter(r => !r.pass).length,
   results,
   errors
-}, null, 2));
+}, null, 2)));
 console.log(`\n${results.filter(r => r.pass).length}/${results.length} checks passed`);
 await browser.close();

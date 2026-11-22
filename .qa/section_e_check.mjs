@@ -1,4 +1,5 @@
 import puppeteer from 'puppeteer-core';
+import { retryWrite } from './shots.mjs';
 const EXE = 'C:/Program Files/Google/Chrome/Application/chrome.exe';
 const BASE = 'http://localhost:3000';
 const PASS = 'exposing-demo-1';
@@ -83,7 +84,7 @@ if (MODE === 'api') {
   await sendFromCompose(A.page);
   const sent = await waitReceipt(A.page, 'sent', 5000);
   ok('API: my message starts as a single gray tick', !!sent && sent.text === '✓', JSON.stringify(sent));
-  await A.page.screenshot({ path: `${OUT}/e-sent.png` });
+  await retryWrite(() => A.page.screenshot({ path: `${OUT}/e-sent.png` }));
 
   // The recipient's inbox fetch is the delivery proof.
   await signIn(B.page, 'arjun');
@@ -91,7 +92,7 @@ if (MODE === 'api') {
   await sleep(1500);
   const delivered = await waitReceipt(A.page, 'delivered', 12000);
   ok('API: recipient inbox flips it to double gray (live poll, no reload)', !!delivered && delivered.text === '✓✓', JSON.stringify(delivered));
-  await A.page.screenshot({ path: `${OUT}/e-delivered.png` });
+  await retryWrite(() => A.page.screenshot({ path: `${OUT}/e-delivered.png` }));
 
   // Opening the thread is the read proof.
   await goto(B.page, '/messages/sita');
@@ -106,7 +107,7 @@ if (MODE === 'api') {
     });
     ok('API: read tick is a different (red) color from the gray ones', colors.read && colors.read !== colors.delivered, JSON.stringify(colors));
   }
-  await A.page.screenshot({ path: `${OUT}/e-read.png` });
+  await retryWrite(() => A.page.screenshot({ path: `${OUT}/e-read.png` }));
 
   await goto(A.page, '/messages');
   await A.page.waitForSelector('.inbox-row', { timeout: 10000 }).catch(() => {});
@@ -117,7 +118,7 @@ if (MODE === 'api') {
     return { preview: row?.querySelector('.inbox-row-preview')?.textContent?.trim().slice(0, 60) || null, span: span ? { cls: span.className, text: span.textContent } : null };
   });
   ok('API: inbox "You:" preview carries the receipt tick', !!preview.span && preview.span.text === '✓✓', JSON.stringify(preview));
-  await A.page.screenshot({ path: `${OUT}/e-inbox.png` });
+  await retryWrite(() => A.page.screenshot({ path: `${OUT}/e-inbox.png` }));
   await A.browser.close();
   await B.browser.close();
 } else {
@@ -132,14 +133,14 @@ if (MODE === 'api') {
   await sleep(800);
   const seeded = await lastReceipt(A.page);
   ok('demo: seeded read message shows the red double tick', !!seeded && seeded.cls.includes('read') && seeded.text === '✓✓', JSON.stringify(seeded));
-  await A.page.screenshot({ path: `${OUT}/e-demo-seeded.png` });
+  await retryWrite(() => A.page.screenshot({ path: `${OUT}/e-demo-seeded.png` }));
 
   await sendFromCompose(A.page);
   const sent = await waitReceipt(A.page, 'sent', 4000);
   ok('demo: a fresh send starts as a single gray tick', !!sent && sent.text === '✓', JSON.stringify(sent));
   const delivered = await waitReceipt(A.page, 'delivered', 4000);
   ok('demo: the delivery receipt lands on its own', !!delivered && delivered.text === '✓✓', JSON.stringify(delivered));
-  await A.page.screenshot({ path: `${OUT}/e-demo-delivered.png` });
+  await retryWrite(() => A.page.screenshot({ path: `${OUT}/e-demo-delivered.png` }));
 
   await goto(A.page, '/messages');
   await sleep(900);
@@ -149,7 +150,7 @@ if (MODE === 'api') {
     return span ? { cls: span.className, text: span.textContent } : null;
   });
   ok('demo: inbox "You:" preview carries the receipt tick', !!preview && preview.text === '✓✓', JSON.stringify(preview));
-  await A.page.screenshot({ path: `${OUT}/e-demo-inbox.png` });
+  await retryWrite(() => A.page.screenshot({ path: `${OUT}/e-demo-inbox.png` }));
   await A.browser.close();
 }
 
