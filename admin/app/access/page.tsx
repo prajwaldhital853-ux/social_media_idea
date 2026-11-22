@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ConsoleShell from '@/components/ConsoleShell';
 import { api } from '@/lib/api';
 import { IC } from '@/lib/icons';
@@ -30,16 +30,24 @@ export default function AccessPage() {
   const [banner, setBanner] = useState<Banner | null>(null);
   const [busy, setBusy] = useState(false);
   const [granting, setGranting] = useState(false);
+  // The search box answers every keystroke, so three requests for one word can
+  // land in any order, and the one that arrives last is not the one that was
+  // typed last. Each call takes a number and only the newest may paint the roster.
+  const seq = useRef(0);
 
   const load = useCallback(async () => {
+    const mine = seq.current + 1;
+    seq.current = mine;
     const params = new URLSearchParams();
     if (q.trim()) params.set('q', q.trim());
     if (state !== 'all') params.set('status', state);
     const tail = params.toString();
     try {
       const data = await api<{ results: Seat[] }>(`admin/staff/${tail ? `?${tail}` : ''}`);
+      if (seq.current !== mine) return;
       setSeats(data.results);
     } catch (err) {
+      if (seq.current !== mine) return;
       if (!noteGate(err)) setBanner({ kind: 'bad', text: (err as Error).message });
     }
   }, [q, state, noteGate]);

@@ -10,8 +10,10 @@
  * Two browser contexts, not two tabs: the console's cookies live on the origin, so
  * a Client seat and a Moderator seat can only be watched side by side apart.
  *
- *   backend/.venv/Scripts/python.exe admin/qa/reset.py    # seats back to first run
- *   node admin/qa/console.mjs                             # from the repository root
+ *   backend/.venv/Scripts/python.exe admin/qa/reset.py          # seats back to first run
+ *   backend/.venv/Scripts/python.exe admin/qa/review_seed.py    # the pile section 7 decides
+ *   backend/.venv/Scripts/python.exe admin/qa/people_seed.py    # the accounts section 8 acts on
+ *   node admin/qa/console.mjs                                   # from the repository root
  */
 import crypto from 'node:crypto';
 import fs from 'node:fs';
@@ -1080,6 +1082,463 @@ try {
   ok('the audit names the moderator who decided, not the Client who was watching',
     Boolean(modRecord) && /^Reports dismissed by moddemo/.test(modRecord.decision),
     modRecord ? modRecord.decision.slice(0, 90) : `rows: ${auditRows.map(row => `${row.target} ${row.decision}`).join(' / ')}`);
+
+  // ── 8. user management and enforcement (contract 6.4) ──────────────────────
+  /*
+   * The six accounts below are made by admin/qa/people_seed.py and belong to this
+   * walkthrough alone, so every claim is about an account the run just changed —
+   * never about how many suspended or verified accounts the demo database happens
+   * to be holding at the time.
+   */
+  const MEMBER = 'qa_member';     // signed up with Google, starts with no tick
+  const FLAGGED = 'qa_flagged';   // a real pile, a lockout, warning emails turned off
+  const BARRED = 'qa_barred';     // suspended for days, then handed back
+  const FOREVER = 'qa_forever';   // suspended for good, then handed back
+  const WALLETED = 'qa_walleted'; // holds the coins a deletion refuses
+  const GONER = 'qa_goner';       // owes nothing, and is deleted by this run
+  const SEARCH = '.search input';
+  const STATE_CHIP = '.toolbar select[aria-label="Filter by state"]';
+  const PROVIDER_CHIP = '.toolbar select[aria-label="Filter by sign-up method"]';
+  const REASON = '.person.open .ask textarea[name="reason"]';
+  const WARN_BOX = '.person.open .ask textarea[name="warn_text"]';
+  const DAYS = '.person.open .ask input[aria-label="Days of suspension"]';
+  const TYPED = '.person.open .ask input[aria-label="Type the username to confirm"]';
+  const CONFIRM = '.person.open .ask-actions button';
+  const CANCEL = '.person.open .ask-actions button:nth-child(2)';
+  const verbAt = verb => `.person.open .verbs button[data-verb="${verb}"]`;
+
+  const TICK_WHY = 'console QA sample - confirmed the shop behind this profile in person';
+  const WARN_TEXT = 'console QA sample - second warning about your comments to other members.';
+  const SUSPEND_WHY = 'console QA sample - three upheld reports this month, barred until you appeal';
+  const FOREVER_WHY = 'console QA sample - selling prohibited items from a re-opened account';
+  const CLEAR_WHY = 'console QA sample - the pile was one dispute, not spam';
+  const DELETE_WHY = 'console QA sample - created for this walkthrough and used for nothing else';
+  const MOD_WHY = 'console QA sample - the moderator seat holds the pen again';
+
+  const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+  const listed = page => page.$$eval('.person', nodes => nodes.map(node => node.dataset.person));
+  /** The screen and the server have to agree about who is listed before the screen is believed. */
+  async function peopleShown(page, params) {
+    let dom = [];
+    let want = [];
+    for (let attempt = 0; attempt < 80; attempt += 1) {
+      const call = await statusOf(page, `/api/admin/people/?${params}`);
+      want = (call.body.results || []).map(row => row.username);
+      dom = await listed(page);
+      if (sameSet(dom, want)) return dom;
+      await sleep(300);
+    }
+    throw new Error(`the directory never settled on ${params || 'the first page'}`
+      + ` — screen ${dom.join(',')} / server ${want.join(',')}`);
+  }
+  const pillsOf = (page, username) => page.$$eval('.person', (nodes, name) => {
+    const read = node => (node.children.length
+      ? [...node.children].map(part => part.textContent).join(' ') : node.textContent)
+      .replace(/\s+/g, ' ').trim();
+    const row = nodes.find(node => node.dataset.person === name);
+    return row ? [...row.querySelectorAll('.person-flags .pill, .person-flags .pile')].map(read) : [];
+  }, username);
+  const pillWaiting = async (page, username, needle) => {
+    for (let attempt = 0; attempt < 80; attempt += 1) {
+      const hit = (await pillsOf(page, username)).find(pill => pill.includes(needle));
+      if (hit) return hit;
+      await sleep(300);
+    }
+    return '';
+  };
+  const pillGone = async (page, username, needle) => {
+    for (let attempt = 0; attempt < 80; attempt += 1) {
+      if (!(await pillsOf(page, username)).some(pill => pill.includes(needle))) return true;
+      await sleep(300);
+    }
+    return false;
+  };
+  /** Expand one account, and fail with the sentence the card answered if it will not open. */
+  async function openPerson(page, username) {
+    await page.waitForFunction(name => [...document.querySelectorAll('.person')]
+      .some(node => node.dataset.person === name), { timeout: 40000 }, username);
+    await page.evaluate(name => {
+      const row = [...document.querySelectorAll('.person')].find(node => node.dataset.person === name);
+      if (!row.className.includes('open')) row.querySelector('.person-id').click();
+    }, username);
+    const ready = await page.waitForFunction(() => (document.querySelector('.person.open .person-body .facts')
+      ? 'open' : document.querySelector('.person .card-error') ? 'error' : false), { timeout: 40000 });
+    if (await ready.jsonValue() !== 'open') throw new Error(`the card for ${username} answered: ${await text(page, '.person .card-error')}`);
+  }
+  const heldBack = (page, selector) => page.$eval(selector, node => node.disabled);
+  const askBox = page => page.waitForSelector('.person.open .ask', { timeout: 40000 });
+  /** A refusal this card raises itself is painted inside the ask box, not on the page banner. */
+  const badAsk = async (page, needle) => {
+    await page.waitForFunction(want => [...document.querySelectorAll('.person.open .ask .card-error')]
+      .some(node => node.textContent.includes(want)), { timeout: 40000 }, needle);
+    return lineText(page, '.person.open .ask .card-error');
+  };
+  const rowGone = (page, username) => page.waitForFunction(name => ![...document.querySelectorAll('.person')]
+    .some(node => node.dataset.person === name), { timeout: 40000 }, username);
+
+  // 8.1 the directory, and how each account first reached the platform ────────
+  await owner.bringToFront();
+  await owner.goto(`${BASE}/people`, { waitUntil: 'domcontentloaded' });
+  await owner.waitForSelector(SEARCH, { timeout: 40000 });
+  const firstPage = await peopleShown(owner, '');
+  const door = (await statusOf(owner, '/api/admin/people/')).body;
+  ok('the directory opens ten accounts at a time and hands a cursor for the rest',
+    firstPage.length === 10 && door.next_cursor && door.facets.total > 10,
+    `${firstPage.length} of ${door.facets.total} accounts`);
+
+  const facetLine = await lineText(owner, '.facets');
+  ok('the line above it counts the four things a seat filters on',
+    /\d+ accounts/.test(facetLine) && /flagged at 3\+ reporters/.test(facetLine)
+      && /sign-in locked/.test(facetLine) && /\d+ verified/.test(facetLine),
+    facetLine.replace(/\s+/g, ' ').slice(0, 150));
+
+  await clearAndType(owner, SEARCH, MEMBER);
+  ok('one account is found by its username',
+    (await peopleShown(owner, `q=${MEMBER}`)).join() === MEMBER, MEMBER);
+  await clearAndType(owner, SEARCH, '@example.test');
+  const byMail = await peopleShown(owner, 'q=%40example.test');
+  ok('and by the address it signed up with',
+    byMail.length > 1 && byMail.includes(MEMBER), `${byMail.length} accounts on that domain`);
+
+  await clearAndType(owner, SEARCH, 'qa_');
+  await peopleShown(owner, 'q=qa_');
+  await pick(owner, PROVIDER_CHIP, 'apple', 'provider=apple');
+  const byApple = await peopleShown(owner, 'q=qa_&provider=apple');
+  ok('a method nobody used answers with an empty list, not with everyone',
+    byApple.length === 0 && (await text(owner, '.panel.empty h2')) === 'Nobody matches this view',
+    'no account signed up with Apple');
+  await pick(owner, PROVIDER_CHIP, 'google', 'provider=google');
+  const byGoogle = await peopleShown(owner, 'q=qa_&provider=google');
+  await pick(owner, PROVIDER_CHIP, 'facebook', 'provider=facebook');
+  const byFacebook = await peopleShown(owner, 'q=qa_&provider=facebook');
+  ok('the sign-up method is on the row itself, so a seat sees how they arrived',
+    byGoogle.join() === MEMBER && byFacebook.join() === WALLETED
+      && (await pillWaiting(owner, WALLETED, 'Facebook')) === 'Facebook',
+    `${MEMBER} via Google, ${WALLETED} via Facebook`);
+  await pick(owner, PROVIDER_CHIP, 'all', 'q=qa_');
+  await peopleShown(owner, 'q=qa_');
+
+  await clearAndType(owner, SEARCH, FLAGGED);
+  const flaggedOn = await peopleShown(owner, `q=${FLAGGED}`);
+  const pile = (await statusOf(owner, `/api/admin/people/?q=${FLAGGED}`)).body.results[0];
+  const pilePill = await pillWaiting(owner, FLAGGED, 'against');
+  ok('the flag is the pile the queue already counted, in the seat’s own words',
+    flaggedOn.join() === FLAGGED && pile.flags.reporters >= pile.flags.auto_hide_at
+      && pilePill === `${pile.flags.on_account + pile.flags.on_content} reports against ${pile.flags.reporters} reporters`,
+    pilePill);
+  const lockPill = await pillWaiting(owner, FLAGGED, 'failed sign-ins');
+  ok('a sign-in lockout and the account’s own email choice are on the same row',
+    lockPill === `${pile.failed_attempts} failed sign-ins, locked`
+      && (await pillsOf(owner, FLAGGED)).includes('warning emails off'),
+    `${lockPill} | warning emails off`);
+  await shot(owner, 'people-1-directory');
+
+  // 8.2 verifying an account by hand ─────────────────────────────────────────
+  await clearAndType(owner, SEARCH, MEMBER);
+  await peopleShown(owner, `q=${MEMBER}`);
+  await openPerson(owner, MEMBER);
+  ok('the tick button already says which way it is going to move it',
+    (await until(owner, verbAt('verify'), 'Give the verified tick')).includes('Give the verified tick'));
+  await tap(owner, verbAt('verify'));
+  await askBox(owner);
+  ok('putting a tick on asks for the reason before it lets the button through',
+    await heldBack(owner, CONFIRM) === true, 'Confirm is disabled while the reason is blank');
+  await clearAndType(owner, REASON, TICK_WHY);
+  const ticked = await answered(owner, CONFIRM, 'Confirm', `admin/people/${MEMBER}/verify/`);
+  const tickBanner = await expectBanner(owner, 'is verified');
+  ok('one sentence is enough, and the tick lands on the account it names',
+    ticked.status === 200 && tickBanner.includes(`@${MEMBER}`), tickBanner);
+  ok('and repaints the row the seat is looking at',
+    (await until(owner, '.person.open .person-name', '✓')).includes('✓'), 'the grey tick is on the name');
+  const tickRecord = (await statusOf(owner, `/api/admin/people/${MEMBER}/`)).body;
+  ok('the record names the seat that signed it and keeps why it was worth one',
+    tickRecord.person.verified === true && tickRecord.audit[0].action === 'verify_user'
+      && tickRecord.audit[0].actor === OWNER && tickRecord.audit[0].detail.includes(TICK_WHY),
+    `${tickRecord.audit[0].action} by ${tickRecord.audit[0].actor}`);
+  const tickTwice = await postOf(owner, `/api/admin/people/${MEMBER}/verify/`, { verified: true, reason: TICK_WHY });
+  ok('asking the same account for the tick twice is refused, not counted twice',
+    tickTwice.status === 400 && /already on/.test(tickTwice.body.detail), `${tickTwice.status} ${tickTwice.body.detail}`);
+  ok('and the button now reads as the way round it will go next',
+    (await until(owner, verbAt('verify'), 'Take the tick off')).includes('Take the tick off'));
+  await shot(owner, 'people-2-verified');
+
+  // 8.3 a direct warning, sent by a Moderator ────────────────────────────────
+  await mod.bringToFront();
+  await mod.goto(`${BASE}/people`, { waitUntil: 'domcontentloaded' });
+  await mod.waitForSelector(SEARCH, { timeout: 40000 });
+  await clearAndType(mod, SEARCH, FLAGGED);
+  await peopleShown(mod, `q=${FLAGGED}`);
+  await openPerson(mod, FLAGGED);
+  await tap(mod, verbAt('warn'));
+  await askBox(mod);
+  ok('a warning with no words in it cannot be sent',
+    await heldBack(mod, CONFIRM) === true, 'Confirm is disabled while the box is empty');
+  await clearAndType(mod, WARN_BOX, WARN_TEXT);
+  const warnSent = await answered(mod, CONFIRM, 'Confirm', `admin/people/${FLAGGED}/warn/`);
+  const warnBanner = await expectBanner(mod, 'was warned in the app');
+  ok('the warning goes to their bell, and the screen says out loud it was kept out of their inbox',
+    warnSent.status === 200 && warnSent.body.opted_out === true
+      && warnBanner.includes('turned warning emails off'), warnBanner);
+  ok('and the words are on the account record the next seat reads',
+    (await until(mod, '.person.open .person-record', WARN_TEXT.slice(0, 40))).includes(WARN_TEXT.slice(0, 40)));
+  const warnRecord = (await statusOf(mod, `/api/admin/people/${FLAGGED}/`)).body;
+  ok('with the seat that sent it written next to them',
+    warnRecord.warnings[0].text === WARN_TEXT && warnRecord.warnings[0].actor === SEAT
+      && warnRecord.audit[0].action === 'warn_user', `@${warnRecord.warnings[0].actor}`);
+  await shot(mod, 'people-3-warned');
+
+  // 8.4 clearing a spam flag ─────────────────────────────────────────────────
+  await owner.bringToFront();
+  await owner.goto(`${BASE}/people`, { waitUntil: 'domcontentloaded' });
+  await owner.waitForSelector(SEARCH, { timeout: 40000 });
+  await clearAndType(owner, SEARCH, FLAGGED);
+  await peopleShown(owner, `q=${FLAGGED}`);
+  await openPerson(owner, FLAGGED);
+  await tap(owner, verbAt('clear_flags'));
+  await askBox(owner);
+  ok('closing a pile also needs the reason the audit row keeps',
+    await heldBack(owner, CONFIRM) === true, 'Confirm is disabled while the reason is blank');
+  await clearAndType(owner, REASON, CLEAR_WHY);
+  const cleared = await answered(owner, CONFIRM, 'Confirm', `admin/people/${FLAGGED}/clear-flags/`);
+  const clearBanner = await expectBanner(owner, 'open report(s) closed');
+  ok('one click closes the whole pile — on the account and on its content — and the lockout too',
+    cleared.status === 200 && cleared.body.reports_closed === pile.flags.on_account + pile.flags.on_content
+      && /login lockout cleared/.test(clearBanner), clearBanner);
+  ok('and it admits what it did not do: a takedown somebody decided stays decided',
+    cleared.body.held_posts === 0 && clearBanner.includes('Nothing of theirs is held'),
+    clearBanner.slice(-60));
+  const clearedRow = (await statusOf(owner, `/api/admin/people/${FLAGGED}/`)).body.person;
+  ok('with the lockout column actually cleared, not just hidden',
+    clearedRow.locked_until === null && clearedRow.failed_attempts === 0
+      && clearedRow.flags.on_account + clearedRow.flags.on_content === 0,
+    `${clearedRow.failed_attempts} failed sign-ins, ${clearedRow.flags.on_account + clearedRow.flags.on_content} open reports`);
+  ok('the flag and the lockout pills leave the row with it',
+    (await pillGone(owner, FLAGGED, 'reports against')) && (await pillGone(owner, FLAGGED, 'failed sign-ins'))
+      && (await pillWaiting(owner, FLAGGED, 'In good standing')) === 'In good standing', 'back to good standing');
+  await pick(owner, STATE_CHIP, 'flagged', 'status=flagged');
+  const stillFlagged = await peopleShown(owner, `q=${FLAGGED}&status=flagged`);
+  ok('the flagged filter no longer lists the account it just cleared',
+    stillFlagged.length === 0, 'the pile is gone from the state chip too');
+  await pick(owner, STATE_CHIP, 'all', 'q=qa_flagged');
+  ok('and switching back to Everyone finds it again, because clearing flags is not deleting',
+    (await peopleShown(owner, `q=${FLAGGED}`)).join() === FLAGGED, FLAGGED);
+  await shot(owner, 'people-4-flags-cleared');
+
+  // 8.5 a suspension with an end, and handing the account back ───────────────
+  await clearAndType(owner, SEARCH, BARRED);
+  await peopleShown(owner, `q=${BARRED}`);
+  await openPerson(owner, BARRED);
+  await tap(owner, verbAt('suspend'));
+  await askBox(owner);
+  const kinds = await owner.$$eval('.person.open .suspend-kind select option',
+    nodes => nodes.map(node => node.textContent.trim()));
+  ok('a bar is asked as a number of days, an end date, or no end at all',
+    kinds.length === 3 && /permanent/i.test(kinds[2]), kinds.join(' | '));
+  ok('and it will not bar anyone without the sentence their email carries',
+    await heldBack(owner, CONFIRM) === true, 'Confirm is disabled while the reason is blank');
+  await clearAndType(owner, REASON, SUSPEND_WHY);
+  await clearAndType(owner, DAYS, '30');
+  await answered(owner, CONFIRM, 'Confirm', `admin/people/${BARRED}/suspend/`);
+  const barBanner = await expectBanner(owner, 'open session(s) cannot be renewed');
+  ok('a dated bar signs them out at once and says where the mail went',
+    new RegExp(`^Suspended until \\d+ \\w+ \\d{4}\\. \\d+ open session\\(s\\) cannot be renewed\\. An email went to ${BARRED}@example\\.test\\.$`).test(barBanner),
+    barBanner);
+  const barDetail = (await statusOf(owner, `/api/admin/people/${BARRED}/`)).body;
+  const barPill = await pillWaiting(owner, BARRED, 'Suspended to');
+  ok('the date on the row is the date the server wrote, and it is still counting down',
+    barPill.includes(barDetail.person.suspension.until.slice(0, 10))
+      && barDetail.person.suspension.days_left > 20 && barDetail.person.suspension.reason === SUSPEND_WHY,
+    `${barPill}, ${barDetail.person.suspension.days_left} days left`);
+  ok('a bar is a bar and not a deletion: the purse and the content are untouched',
+    barDetail.holdings.balance === '0.00' && barDetail.audit[0].action === 'suspend_user'
+      && barDetail.audit[0].actor === OWNER, `${barDetail.holdings.posts} posts still theirs`);
+  await tap(owner, verbAt('reinstate'));
+  const lifted = await expectBanner(owner, 'The suspension is lifted');
+  ok('reinstating is one click with no form in front of it',
+    lifted.includes('sign in again right now') && !(await owner.$('.person.open .ask')), lifted);
+  ok('the row drops back to good standing and hands the Suspend button to the seat',
+    (await pillWaiting(owner, BARRED, 'In good standing')) === 'In good standing'
+      && (await until(owner, verbAt('suspend'), 'Suspend')).includes('Suspend')
+      && !(await owner.$(verbAt('reinstate'))), 'the bar is off, in both directions');
+  await shot(owner, 'people-5-suspended');
+
+  // 8.6 a suspension with no end ─────────────────────────────────────────────
+  await clearAndType(owner, SEARCH, FOREVER);
+  await peopleShown(owner, `q=${FOREVER}`);
+  await openPerson(owner, FOREVER);
+  await tap(owner, verbAt('suspend'));
+  await askBox(owner);
+  await owner.select('.person.open .suspend-kind select', 'permanent');
+  const foreverNote = await see(owner, '.person.open .suspend-kind .fineprint');
+  ok('choosing no end says what it really is: the same column set far ahead',
+    /reinstate/.test(foreverNote) && /not deleting/.test(foreverNote), foreverNote.replace(/\s+/g, ' ').slice(0, 110));
+  await clearAndType(owner, REASON, FOREVER_WHY);
+  const barredGood = await answered(owner, CONFIRM, 'Confirm', `admin/people/${FOREVER}/suspend/`);
+  const foreverBanner = await expectBanner(owner, 'Suspended for good');
+  ok('a permanent bar is written, mailed and said in one sentence',
+    /^Suspended for good\. \d+ open session\(s\) cannot be renewed\. An email went to/.test(foreverBanner)
+      && barredGood.body.permanent === true, foreverBanner);
+  const foreverDetail = (await statusOf(owner, `/api/admin/people/${FOREVER}/`)).body;
+  ok('and it has no end coming round, so only a reinstate can lift it',
+    (await pillWaiting(owner, FOREVER, 'Suspended for good')) === 'Suspended for good'
+      && foreverDetail.person.suspension.permanent === true
+      && foreverDetail.person.suspension.days_left === null, 'no date, no countdown');
+  const facetAfter = await until(owner, '.facets', 'suspended for good');
+  ok('the directory counts it apart from the bars that end on their own',
+    /\d+ suspended for good/.test(facetAfter), facetAfter.replace(/\s+/g, ' ').slice(0, 150));
+  await tap(owner, verbAt('reinstate'));
+  ok('and the same one-click reinstate takes that bar off too',
+    (await pillWaiting(owner, FOREVER, 'In good standing')) === 'In good standing', 'lifted, with no date to wait for');
+  const afterForever = (await statusOf(owner, `/api/admin/people/${FOREVER}/`)).body;
+  ok('with nothing left half-set: one column, and it is empty',
+    afterForever.person.suspension === null
+      && afterForever.audit.some(entry => entry.action === 'reinstate_user'), 'no second flag anywhere');
+
+  // 8.7 what a deletion refuses, and why ─────────────────────────────────────
+  await clearAndType(owner, SEARCH, WALLETED);
+  await peopleShown(owner, `q=${WALLETED}`);
+  await openPerson(owner, WALLETED);
+  const purseFacts = await lineText(owner, '.person.open .person-side .facts');
+  ok('the card says up front what a deletion would take',
+    purseFacts.includes('250.00 coins') && purseFacts.includes('Running campaigns')
+      && purseFacts.includes('Payment proofs waiting') && purseFacts.includes('Content'),
+    purseFacts.replace(/\s+/g, ' ').slice(0, 130));
+  await tap(owner, verbAt('delete'));
+  await askBox(owner);
+  const guardNote = (await many(owner, '.person.open .ask .note.row')).map(l => l.replace(/\s+/g, ' ')).join(' | ');
+  ok('and warns in the box that the wallet has to be settled first',
+    guardNote.includes('wallet with the ledger in it') && guardNote.includes('refused while a campaign runs'),
+    guardNote.slice(0, 150));
+  await clearAndType(owner, REASON, DELETE_WHY);
+  ok('a reason alone does not open the button', await heldBack(owner, CONFIRM) === true, 'name still missing');
+  await clearAndType(owner, TYPED, 'not-the-username');
+  ok('nor does a name typed wrongly', await heldBack(owner, CONFIRM) === true, 'Confirm still disabled');
+  await clearAndType(owner, TYPED, WALLETED);
+  ok('only the exact username opens it', await heldBack(owner, CONFIRM) === false, 'Confirm enabled');
+  await tap(owner, CONFIRM);
+  const heldMail = await badAsk(owner, 'wallet still holds');
+  ok('and the server still refuses while the purse holds coins, naming the screen that empties it',
+    heldMail.includes('250.00') && heldMail.includes('Coins and payments'), heldMail);
+  const purseStill = (await statusOf(owner, `/api/admin/people/${WALLETED}/`)).body;
+  ok('the account is left there to be settled properly, not half-deleted',
+    purseStill.holdings.balance === '250.00' && purseStill.person.is_active === true,
+    `${purseStill.holdings.balance} coins still on it`);
+  await tap(owner, CANCEL);
+
+  // 8.8 deleting an account that owes nothing ────────────────────────────────
+  await clearAndType(owner, SEARCH, GONER);
+  await peopleShown(owner, `q=${GONER}`);
+  await openPerson(owner, GONER);
+  const taking = await lineText(owner, '.person.open .person-side .facts');
+  ok('the same card on an empty purse lists what goes with it',
+    taking.includes('0.00 coins') && taking.includes('1 posts, 1 comments'),
+    taking.replace(/\s+/g, ' ').slice(0, 130));
+  await tap(owner, verbAt('delete'));
+  await askBox(owner);
+  await clearAndType(owner, REASON, DELETE_WHY);
+  await clearAndType(owner, TYPED, GONER);
+  const destroyed = await answered(owner, CONFIRM, 'Confirm', `admin/people/${GONER}/delete/`);
+  const goneBanner = await expectBanner(owner, 'is deleted');
+  ok('nothing owed, name typed, and the account is destroyed with what it posted',
+    destroyed.status === 200 && goneBanner.includes('1 post(s)') && goneBanner.includes('1 comment(s)')
+      && goneBanner.includes('cannot be undone'), goneBanner);
+  await rowGone(owner, GONER);
+  const afterGone = await statusOf(owner, `/api/admin/people/${GONER}/`);
+  ok('the row leaves the directory and the username answers 404 afterwards',
+    afterGone.status === 404 && /not an account/.test(afterGone.body.detail), `HTTP ${afterGone.status}`);
+  await shot(owner, 'people-6-deleted');
+
+  // 8.9 nobody locks the door they are standing behind ───────────────────────
+  await clearAndType(owner, SEARCH, OWNER);
+  await peopleShown(owner, `q=${OWNER}`);
+  await openPerson(owner, OWNER);
+  ok('the account you are signed in with is marked as such, and every action on it is off',
+    (await pillsOf(owner, OWNER)).includes('You')
+      && (await owner.$$eval('.person.open .verbs button', nodes => nodes.map(node => node.disabled))).length >= 4
+      && (await owner.$$eval('.person.open .verbs button', nodes => nodes.every(node => node.disabled))),
+    'the Client cannot suspend themselves from their own seat');
+  ok('with the reason printed where the buttons would have done the damage',
+    (await see(owner, '.person.open .person-side .note.row')).includes('signed in with'),
+    'the card says why the buttons are dead');
+  const selfBar = await postOf(owner, `/api/admin/people/${OWNER}/suspend/`, { days: 1, reason: 'lock myself out' });
+  ok('and the endpoint refuses it too, so a hand-typed request cannot lock the Client out either',
+    selfBar.status === 400 && /signed in with/.test(selfBar.body.detail), `${selfBar.status} ${selfBar.body.detail}`);
+
+  // 8.10 the pen for acting on an account is its own screen ──────────────────
+  await owner.bringToFront();
+  await owner.goto(`${BASE}/access`, { waitUntil: 'domcontentloaded' });
+  await owner.waitForSelector('.search input', { timeout: 40000 });
+  await clearAndType(owner, '.search input', SEAT);
+  await openSeat(owner, SEAT);
+  for (const screen of ['Suspend, reinstate, verify, delete', 'Private warnings to users']) {
+    for (let cycle = 0; cycle < 2; cycle += 1) {
+      await clickText(owner, '.seat-keys button.key', screen);
+    }
+  }
+  await clickText(owner, '.key-actions button', 'Save screens');
+  await expectBanner(owner, 'Saved');
+  const stripped = (await statusOf(owner, `/api/admin/staff/?q=${SEAT}`)).body.results[0];
+  ok('the Client can hand a seat the whole directory and take the pen off it',
+    stripped.denied_keys.includes('user_actions') && stripped.denied_keys.includes('warnings')
+      && stripped.permissions.includes('users'), `denied ${stripped.denied_keys.join(', ')}`);
+
+  await mod.bringToFront();
+  await mod.goto(`${BASE}/people`, { waitUntil: 'domcontentloaded' });
+  await mod.waitForSelector(SEARCH, { timeout: 40000 });
+  await clearAndType(mod, SEARCH, BARRED);
+  await peopleShown(mod, `q=${BARRED}`);
+  await openPerson(mod, BARRED);
+  const penless = await see(mod, '.person.open .person-side .note');
+  ok('a seat that reads everybody and signs nobody is told so on the card',
+    penless.includes('holds neither'), penless.replace(/\s+/g, ' ').slice(0, 120));
+  const deadButtons = await mod.$$eval('.person.open .verbs button', nodes => nodes.length);
+  ok('and gets no buttons at all, rather than six dead ones to click',
+    deadButtons === 0, `${deadButtons} verbs offered`);
+  const penlessBar = await postOf(mod, `/api/admin/people/${BARRED}/suspend/`, { days: 2, reason: 'no pen' });
+  const penlessWarn = await postOf(mod, `/api/admin/people/${BARRED}/warn/`, { text: 'no pen', reason: '' });
+  ok('the endpoints answer which screen is missing, so the seat knows what to ask for',
+    penlessBar.status === 403 && penlessBar.body.permission === 'user_actions'
+      && penlessWarn.status === 403 && penlessWarn.body.permission === 'warnings',
+    `${penlessBar.body.permission} / ${penlessWarn.body.permission}`);
+  ok('while reading an account stays open, because that is a different key',
+    (await statusOf(mod, `/api/admin/people/${BARRED}/`)).status === 200, 'the directory still reads');
+  await shot(mod, 'people-7-no-pen');
+
+  await owner.bringToFront();
+  await clickText(owner, '.seat-keys button.key', 'Suspend, reinstate, verify, delete');
+  await clickText(owner, '.seat-keys button.key', 'Private warnings to users');
+  await clickText(owner, '.key-actions button', 'Save screens');
+  await expectBanner(owner, 'Saved');
+  const handed = (await statusOf(owner, `/api/admin/staff/?q=${SEAT}`)).body.results[0];
+  ok('giving it back is one click each, with no new code anywhere',
+    !handed.denied_keys.includes('user_actions') && !handed.denied_keys.includes('warnings')
+      && handed.permissions.includes('user_actions') && handed.permissions.includes('warnings'),
+    `denied ${handed.denied_keys.join(', ') || 'none'}`);
+
+  await mod.bringToFront();
+  await mod.goto(`${BASE}/people`, { waitUntil: 'domcontentloaded' });
+  await mod.waitForSelector(SEARCH, { timeout: 40000 });
+  await clearAndType(mod, SEARCH, BARRED);
+  await peopleShown(mod, `q=${BARRED}`);
+  await openPerson(mod, BARRED);
+  await tap(mod, verbAt('suspend'));
+  await askBox(mod);
+  await clearAndType(mod, REASON, MOD_WHY);
+  await clearAndType(mod, DAYS, '1');
+  const byMod = await answered(mod, CONFIRM, 'Confirm', `admin/people/${BARRED}/suspend/`);
+  const modBanner = await expectBanner(mod, 'open session(s) cannot be renewed');
+  ok('the seat that was handed the pen signs a member out for a day',
+    byMod.status === 200 && /^Suspended until \d+ \w+ \d{4}\./.test(modBanner)
+      && modBanner.includes(`${BARRED}@example.test`), modBanner);
+  await tap(mod, verbAt('reinstate'));
+  const modLifted = await expectBanner(mod, 'The suspension is lifted');
+  const modAudit = (await statusOf(mod, `/api/admin/people/${BARRED}/`)).body.audit;
+  ok('and the audit row says the Moderator did it, not the Client who was watching',
+    modLifted.includes('sign in again right now') && modAudit[0].actor === SEAT
+      && modAudit[0].action === 'reinstate_user'
+      && modAudit.some(entry => entry.actor === SEAT && entry.action === 'suspend_user'),
+    `${modAudit[0].action} by ${modAudit[0].actor}`);
+  await shot(mod, 'people-8-moderator-decides');
 } catch (err) {
   ok('the walkthrough completed', false, `${err.message}`);
   await shot(owner, 'crash-owner').catch(() => undefined);

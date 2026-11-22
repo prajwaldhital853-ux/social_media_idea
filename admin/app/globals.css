@@ -203,6 +203,8 @@ em { font-style: normal; }
 .role-superadmin { background: var(--brand); color: #fff; }
 .role-admin { background: #23272E; color: #fff; }
 .role-moderator { background: var(--tint); color: var(--muted); }
+/* The directory lists members too, and a member holds no seat at all. */
+.role-user { background: transparent; color: var(--muted); border: 1px dashed #c9cfd8; }
 
 .pill {
   display: inline-flex;
@@ -567,10 +569,13 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, .btn:focus-vi
 .banner-bad { color: #8a090b; background: var(--red-tint); }
 
 /* ── roster ────────────────────────────────────────────── */
+/* The staff roster and the user directory are the same shape: a row that reads
+   at a glance, opening into the verbs a seat may use on it. One set of rules,
+   `.person*` named beside `.seat*`, so the two screens cannot drift apart. */
 
-.roster { display: flex; flex-direction: column; gap: 10px; }
+.roster, .people { display: flex; flex-direction: column; gap: 10px; }
 
-.seat {
+.seat, .person {
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--paper);
@@ -580,10 +585,10 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, .btn:focus-vi
   animation: rise 0.26s var(--ease) both;
 }
 
-.seat:hover { border-color: #d5dae1; }
-.seat.open { border-color: #cfd5de; box-shadow: 0 8px 26px rgba(10, 12, 16, 0.09); }
+.seat:hover, .person:hover { border-color: #d5dae1; }
+.seat.open, .person.open { border-color: #cfd5de; box-shadow: 0 8px 26px rgba(10, 12, 16, 0.09); }
 
-.seat-head {
+.seat-head, .person-head {
   display: flex;
   align-items: center;
   gap: 14px;
@@ -591,7 +596,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, .btn:focus-vi
   flex-wrap: wrap;
 }
 
-.seat-id {
+.seat-id, .person-id {
   display: flex;
   align-items: center;
   gap: 11px;
@@ -602,14 +607,15 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, .btn:focus-vi
   min-width: 210px;
 }
 
-.seat-name { display: flex; flex-direction: column; }
-.seat-name b { font-size: 14px; }
-.seat-name em { color: var(--muted); font-size: 12px; }
+.seat-name, .person-name { display: flex; flex-direction: column; }
+.seat-name b, .person-name b { font-size: 14px; }
+.seat-name em, .person-name em { color: var(--muted); font-size: 12px; }
+.person-name .verified { margin-left: 5px; }
 
-.seat-flags { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
-.seat-meta { display: flex; gap: 14px; margin-left: auto; color: var(--muted); font-size: 12px; white-space: nowrap; }
+.seat-flags, .person-flags { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+.seat-meta, .person-meta { display: flex; gap: 14px; margin-left: auto; color: var(--muted); font-size: 12px; white-space: nowrap; }
 
-.seat-body {
+.seat-body, .person-body {
   display: grid;
   grid-template-columns: 260px minmax(0, 1fr);
   gap: 18px;
@@ -619,10 +625,16 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, .btn:focus-vi
   animation: unfold 0.22s var(--ease) both;
 }
 
-.seat-side { display: flex; flex-direction: column; gap: 9px; }
-.seat-side .btn { justify-content: flex-start; }
-.seat-keys { min-width: 0; }
-.seat-keys h3, .seat-side h3 { font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
+.seat-side, .person-side { display: flex; flex-direction: column; gap: 9px; }
+.seat-side .btn, .person-side .btn { justify-content: flex-start; }
+.seat-keys, .person-record { min-width: 0; }
+.seat-keys h3, .seat-side h3, .person-side h3, .person-record h3 { font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
+
+.person-side .verbs { flex-direction: column; align-items: stretch; }
+.person-side .ask { grid-column: auto; }
+
+.suspend-kind { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; }
+.suspend-kind .field { margin: 0; }
 
 .key-groups { display: flex; flex-direction: column; gap: 14px; margin-top: 6px; }
 .key-group-label { display: block; margin-bottom: 5px; font-size: 11.5px; font-weight: 700; color: var(--muted); }

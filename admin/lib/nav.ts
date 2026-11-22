@@ -40,11 +40,18 @@ export const NAV: NavGroup[] = [
     ],
   },
   {
+    id: 'people',
+    label: 'People',
+    items: [
+      { href: '/people', label: 'User directory', icon: 'users', permission: 'users' },
+    ],
+  },
+  {
     id: 'console',
     label: 'Console',
     items: [
-      { href: '/access', label: 'Staff and access', icon: 'users', permission: 'staff_view' },
-      { href: '/me', label: 'My seat', icon: 'seat', permission: null },
+      { href: '/access', label: 'Staff and access', icon: 'seat', permission: 'staff_view' },
+      { href: '/me', label: 'My seat', icon: 'key', permission: null },
     ],
   },
 ];

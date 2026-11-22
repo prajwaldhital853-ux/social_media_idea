@@ -368,3 +368,172 @@ export interface PolicyPage {
 }
 
 export interface NoticePage extends Page<NoticeRow> {}
+
+/** --- contract 6.4: user management and enforcement ------------------------- */
+
+/** A seat's role plus the one answer the roster does not have: plain members. */
+export type AccountRole = Role | 'user';
+
+export interface Suspension {
+  until: string;
+  permanent: boolean;
+  reason: string;
+  /** null only for a permanent bar, where there is no date to count down to. */
+  days_left: number | null;
+}
+
+export interface SeatBrief {
+  role: Role;
+  is_enabled: boolean;
+  enrolled: boolean;
+  permissions: string[];
+}
+
+/** The pile read the way the directory shows it: on the account, and on its content. */
+export interface FlagPile {
+  on_account: number;
+  on_content: number;
+  reporters: number;
+  auto_hide_at: number;
+}
+
+export interface PersonRow {
+  id: number;
+  username: string;
+  name: string;
+  email: string;
+  bio: string;
+  avatar_url: string;
+  verified: boolean;
+  is_private: boolean;
+  /** Their own setting: false means a warning reaches the bell but not the inbox. */
+  notify_email: boolean;
+  provider: string;
+  provider_label: string;
+  email_verified: boolean;
+  role: AccountRole;
+  seat: SeatBrief | null;
+  country: string;
+  city: string;
+  joined: string;
+  coins: string;
+  posts: number;
+  followers: number;
+  is_active: boolean;
+  suspension: Suspension | null;
+  locked_until: string | null;
+  failed_attempts: number;
+  flags: FlagPile;
+}
+
+export interface PeopleFacets {
+  total: number;
+  shown: number | null;
+  suspended: number;
+  permanent: number;
+  locked: number;
+  verified: number;
+  deactivated: number;
+  flagged: number;
+  by_provider: Record<string, number>;
+  auto_hide_at: number;
+}
+
+/** Which pens this seat holds, so the screen draws buttons or the reason it has none. */
+export interface PersonVerbs {
+  actions: boolean;
+  warn: boolean;
+}
+
+export interface PersonPage extends Page<PersonRow> {
+  facets: PeopleFacets;
+  can: PersonVerbs;
+}
+
+/** What is still running on an account — the list a deletion has to clear first. */
+export interface Holdings {
+  campaigns: number;
+  pending_requests: number;
+  balance: string;
+  posts: number;
+  comments: number;
+  listings: number;
+}
+
+export interface LedgerMove {
+  id: number;
+  kind: string;
+  amount: string;
+  note: string;
+  created_at: string;
+}
+
+export interface ContentPileRow {
+  target: string;
+  state: string;
+  open: number;
+  reporters: number;
+}
+
+export interface ReportBrief {
+  id: number;
+  reason: string;
+  details: string;
+  status: string;
+  created_at: string;
+  reporter: PersonRef | null;
+}
+
+export interface WarningBrief {
+  text: string;
+  actor: string | null;
+  created_at: string;
+}
+
+export interface NoticeBrief {
+  id: number;
+  target: string;
+  text: string;
+  reason: string;
+  is_live: boolean;
+  created_at: string;
+  actor: string | null;
+}
+
+export interface AuditBrief {
+  id: number;
+  action: string;
+  actor: string | null;
+  detail: string;
+  created_at: string;
+}
+
+export interface PersonDetail {
+  person: PersonRow;
+  holdings: Holdings;
+  ledger: LedgerMove[];
+  reports: ReportBrief[];
+  content: ContentPileRow[];
+  warnings: WarningBrief[];
+  notices: NoticeBrief[];
+  audit: AuditBrief[];
+  can: PersonVerbs;
+}
+
+/** The server's answer to one verb, including what the guards refused. */
+export interface PersonOutcome {
+  action: string;
+  username: string;
+  detail: string;
+  person?: PersonRow;
+  suspension?: Suspension | null;
+  permanent?: boolean;
+  verified?: boolean;
+  emailed?: { to: string; subject: string } | null;
+  opted_out?: boolean;
+  sessions_revoked?: number;
+  reports_closed?: number;
+  held_posts?: number;
+  holdings?: Holdings;
+}
+

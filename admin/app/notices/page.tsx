@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import ConsoleShell from '@/components/ConsoleShell';
 import { api } from '@/lib/api';
 import { IC } from '@/lib/icons';
@@ -24,6 +24,10 @@ export default function NoticesPage() {
   const [target, setTarget] = useState('');
   const [banner, setBanner] = useState<{ kind: 'ok' | 'bad'; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
+  // The search box answers every keystroke, so three requests for one word can
+  // land in any order, and the one that arrives last is not the one that was
+  // typed last. Each call takes a number and only the newest may paint the list.
+  const seq = useRef(0);
 
   const fetchPage = useCallback(async (after: string | null) => {
     const params = new URLSearchParams();
@@ -34,15 +38,19 @@ export default function NoticesPage() {
   }, [q, target]);
 
   const load = useCallback(async () => {
+    const mine = seq.current + 1;
+    seq.current = mine;
     setBusy(true);
     try {
       const page = await fetchPage(null);
+      if (seq.current !== mine) return;
       setRows(page.results);
       setCursor(page.next_cursor);
     } catch (err) {
+      if (seq.current !== mine) return;
       if (!noteGate(err)) setBanner({ kind: 'bad', text: (err as Error).message });
     } finally {
-      setBusy(false);
+      if (seq.current === mine) setBusy(false);
     }
   }, [fetchPage, noteGate]);
 
@@ -52,15 +60,21 @@ export default function NoticesPage() {
 
   const older = async () => {
     if (!cursor) return;
+    const mine = seq.current + 1;
+    seq.current = mine;
     setBusy(true);
     try {
       const page = await fetchPage(cursor);
+      // A search typed while this was in flight owns the list now, so its answer
+      // is the one that gets painted and these older rows are dropped.
+      if (seq.current !== mine) return;
       setRows(list => [...(list || []), ...page.results]);
       setCursor(page.next_cursor);
     } catch (err) {
+      if (seq.current !== mine) return;
       if (!noteGate(err)) setBanner({ kind: 'bad', text: (err as Error).message });
     } finally {
-      setBusy(false);
+      if (seq.current === mine) setBusy(false);
     }
   };
 

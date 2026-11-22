@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import ConsoleShell from '@/components/ConsoleShell';
 import ContentCard from '@/components/ContentCard';
 import DecisionBar from '@/components/Decision';
@@ -55,6 +55,10 @@ export default function ContentPage() {
   const [cursor, setCursor] = useState<string | null>(null);
   const [banner, setBanner] = useState<{ kind: 'ok' | 'bad'; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
+  // The search box answers every keystroke, so three requests for one word can
+  // land in any order, and the one that arrives last is not the one that was
+  // typed last. Each call takes a number and only the newest may paint the shelf.
+  const seq = useRef(0);
 
   const fetchPage = useCallback(async (after: string | null) => {
     const params = new URLSearchParams();
@@ -66,16 +70,20 @@ export default function ContentPage() {
   }, [q, state, type]);
 
   const load = useCallback(async () => {
+    const mine = seq.current + 1;
+    seq.current = mine;
     setBusy(true);
     try {
       const page = await fetchPage(null);
+      if (seq.current !== mine) return;
       setRows(page.results);
       setCounts(page.counts);
       setCursor(page.next_cursor);
     } catch (err) {
+      if (seq.current !== mine) return;
       if (!noteGate(err)) setBanner({ kind: 'bad', text: (err as Error).message });
     } finally {
-      setBusy(false);
+      if (seq.current === mine) setBusy(false);
     }
   }, [fetchPage, noteGate]);
 
@@ -85,16 +93,22 @@ export default function ContentPage() {
 
   const older = async () => {
     if (!cursor) return;
+    const mine = seq.current + 1;
+    seq.current = mine;
     setBusy(true);
     try {
       const page = await fetchPage(cursor);
+      // A search typed while this was in flight owns the shelf now, so its answer
+      // is the one that gets painted and these older rows are dropped.
+      if (seq.current !== mine) return;
       setRows(list => [...(list || []), ...page.results]);
       setCursor(page.next_cursor);
       setCounts(page.counts);
     } catch (err) {
+      if (seq.current !== mine) return;
       if (!noteGate(err)) setBanner({ kind: 'bad', text: (err as Error).message });
     } finally {
-      setBusy(false);
+      if (seq.current === mine) setBusy(false);
     }
   };
 
