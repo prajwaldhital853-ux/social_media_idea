@@ -47,6 +47,13 @@ export const NAV: NavGroup[] = [
     ],
   },
   {
+    id: 'platform',
+    label: 'Platform',
+    items: [
+      { href: '/welcome', label: 'First-load wording', icon: 'chat', permission: 'welcome_text' },
+    ],
+  },
+  {
     id: 'console',
     label: 'Console',
     items: [

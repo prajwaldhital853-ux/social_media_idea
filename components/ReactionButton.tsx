@@ -60,8 +60,7 @@ export default function ReactionButton({ targetType, targetId, small, kinds, ext
       if (openOnClick) { if (position) setPosition(null); else open(); return; }
       react(targetType, targetId, mine || list[0].kind); setPosition(null);
     }}>
-      {mine ? <ReactionIcon kind={mine} /> : IC.thumb}
-      {showMix && count > 0 && <span className="reaction-mix">{mix.slice(0, 3).map(m => <ReactionIcon key={m.kind} kind={m.kind} />)}</span>}
+      {showMix && mix.length ? <span className="reaction-mix">{mix.slice(0, 3).map(m => <ReactionIcon key={m.kind} kind={m.kind} />)}</span> : mine && mine !== 'like' ? <ReactionIcon kind={mine} /> : IC.thumb}
       <span>{count > 0 ? compact(count) : emptyLabel}</span>
     </button>
     {position && createPortal(<div ref={picker} className="reaction-tray" role="dialog" aria-label="Choose reaction" style={{ ...position, width: trayWidth }} onClick={e => e.stopPropagation()}>

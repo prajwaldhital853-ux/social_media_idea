@@ -126,6 +126,13 @@ export const REACTIONS: { kind: ReactionKind; emoji: string; label: string }[] =
 export const reactionMeta = (kind: ReactionKind) =>
   REACTIONS.find(r => r.kind === kind) || REACTIONS[0];
 
+// A summary reads as Facebook's when Like leads it, so the order lives in the
+// table above rather than in whatever the counter happened to sort first.
+export const reactionRank = (kind: ReactionKind) => {
+  const i = REACTIONS.findIndex(r => r.kind === kind);
+  return i < 0 ? REACTIONS.length : i;
+};
+
 export const resizeImage = (file: File, max = 1280): Promise<string> => {
   return new Promise((res, rej) => {
     const url = URL.createObjectURL(file);

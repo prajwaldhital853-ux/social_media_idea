@@ -235,6 +235,19 @@ def _notice(kind, row, actor, reason, text):
     return notice_row(notice)
 
 
+def attach(kind, target_id, actor, reason, text):
+    """Put a notice on one target with no report and no decision behind it.
+
+    The queue writes a notice as half of a verdict; a false-information claim
+    nobody reported needs the same sentence over the same content, so both paths
+    end in this row rather than in two shapes of it.
+    """
+    row = row_for(kind, target_id)
+    if row is None:
+        raise ValueError(f'There is no {kind} {target_id} to put a notice on.')
+    return _notice(kind, row, actor, reason, text)
+
+
 def notice_row(notice):
     return {
         'id': notice.pk,

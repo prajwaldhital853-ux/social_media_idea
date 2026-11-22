@@ -33,6 +33,14 @@ DEFAULTS = {
                       'Left out of the email when blank.', 'platform'),
     'contact_form': ('', 'str', 'Support form link',
                      'The link at the bottom of an enforcement email, instead of the site root.', 'platform'),
+    # Contract 6.6: the wording a visitor reads the first time the site loads. The
+    # Client has seven days to supply it, so the platform ships with its own line
+    # rather than an empty box, and a box cleared on purpose falls back to it.
+    'welcome_message': ('Welcome to Exposing — show what you are making, and see what everyone '
+                        'else is making.', 'str', 'Welcome message',
+                        'The sentence on the card a visitor sees first.', 'platform'),
+    'tagline': ('Expose the work.', 'str', 'Tagline',
+                'The short line under the welcome message and in the page title.', 'platform'),
 }
 
 GROUPS = {'safety': 'Safety and audit', 'payments': 'Coins and payments',
