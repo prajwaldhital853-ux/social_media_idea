@@ -47,6 +47,24 @@ export const NAV: NavGroup[] = [
     ],
   },
   {
+    id: 'money',
+    label: 'Money',
+    items: [
+      { href: '/coins', label: 'Coin requests', icon: 'coin', permission: 'coins_view' },
+      { href: '/ledger', label: 'Coin ledger', icon: 'disk', permission: 'coin_ledger' },
+      { href: '/pricing', label: 'Coin pricing', icon: 'qr', permission: 'coin_settings' },
+    ],
+  },
+  {
+    id: 'reach',
+    label: 'Reach',
+    items: [
+      { href: '/promotions', label: 'Paid campaigns', icon: 'target', permission: 'promotions_view' },
+      { href: '/packages', label: 'Campaign packages', icon: 'store', permission: 'promotion_packages' },
+      { href: '/algorithm', label: 'Reach controls', icon: 'sliders', permission: 'promotion_algorithm' },
+    ],
+  },
+  {
     id: 'platform',
     label: 'Platform',
     items: [
@@ -67,6 +85,16 @@ export function navFor(permissions: string[], role: string): NavGroup[] {
   const holds = (key: string | null) => role === 'superadmin' || !key || permissions.includes(key);
   return NAV.map(group => ({ ...group, items: group.items.filter(item => holds(item.permission)) }))
             .filter(group => group.items.length > 0);
+}
+
+/** The two words above a screen: which group it sits in, and its own name. */
+export function crumbsFor(pathname: string): string[] {
+  const clean = (pathname || '/').replace(/\/$/, '') || '/';
+  for (const group of NAV) {
+    const hit = group.items.find(item => clean === item.href || clean.startsWith(`${item.href}/`));
+    if (hit) return [group.label, hit.label];
+  }
+  return [];
 }
 
 export function requires(pathname: string): string | null {

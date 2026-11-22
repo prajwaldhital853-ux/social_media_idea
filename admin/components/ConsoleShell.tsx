@@ -3,7 +3,7 @@
 import { ReactNode, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
-import { navFor, requires } from '@/lib/nav';
+import { crumbsFor, navFor, requires } from '@/lib/nav';
 import { IC } from '@/lib/icons';
 import { left } from '@/lib/time';
 import { useSession } from '@/lib/session';
@@ -15,6 +15,7 @@ export default function ConsoleShell({
   const pathname = usePathname();
   const { status, session, lapsed, error, verify, signOut, busy, can } = useSession();
   const [tick, setTick] = useState(0);
+  const [jump, setJump] = useState('');
 
   useEffect(() => {
     if (status === 'out') router.replace('/login');
@@ -32,10 +33,12 @@ export default function ConsoleShell({
       <div className="console">
         <aside className="side" aria-hidden="true" />
         <div className="console-main">
-          <div className="skeleton-stack">
-            <div className="skeleton skeleton-title" />
-            <div className="skeleton" />
-            <div className="skeleton skeleton-short" />
+          <div className="console-body">
+            <div className="skeleton-stack">
+              <div className="skeleton skeleton-title" />
+              <div className="skeleton" />
+              <div className="skeleton skeleton-short" />
+            </div>
           </div>
         </div>
       </div>
@@ -46,7 +49,18 @@ export default function ConsoleShell({
 
   const needed = requires(pathname);
   const blocked = !!needed && !can(needed);
+  const crumb = crumbsFor(pathname);
   void tick;
+
+  // Twenty-odd screens is too many to find by scrolling, and a staff member who
+  // knows the word they need should not have to know where it lives.
+  const want = jump.trim().toLowerCase();
+  const groups = navFor(session.permissions, session.role)
+    .map(group => ({ ...group, items: want
+      ? group.items.filter(item => item.label.toLowerCase().includes(want)
+          || item.href.includes(want) || group.label.toLowerCase().includes(want))
+      : group.items }))
+    .filter(group => group.items.length > 0);
 
   return (
     <div className="console">
@@ -60,7 +74,7 @@ export default function ConsoleShell({
         </Link>
 
         <nav className="side-nav">
-          {navFor(session.permissions, session.role).map(group => (
+          {groups.map(group => (
             <div key={group.id} className="side-group">
               <span className="side-group-label">{group.label}</span>
               {group.items.map(item => (
@@ -72,13 +86,16 @@ export default function ConsoleShell({
               ))}
             </div>
           ))}
+          {groups.length === 0 && <p className="note">No screen is called “{jump.trim()}”.</p>}
         </nav>
 
         <div className="side-foot">
           <div className="side-seat">
-            <span className={`role-chip role-${session.role}`}>{session.role}</span>
-            <b>{session.user.name}</b>
-            <em>@{session.user.username}</em>
+            <span className="avatar blank">{session.user.name.slice(0, 1).toUpperCase()}</span>
+            <span>
+              <b>{session.user.name}</b>
+              <em>@{session.user.username} · {session.role}</em>
+            </span>
           </div>
           <button type="button" className="side-signout" onClick={() => signOut().then(() => router.replace('/login'))}>
             {IC.logout}<span>Sign out</span>
@@ -87,27 +104,46 @@ export default function ConsoleShell({
       </aside>
 
       <div className="console-main">
+        <div className="bar">
+          <label className="bar-query">
+            {IC.search}
+            <input
+              value={jump} onChange={event => setJump(event.target.value)}
+              placeholder="Jump to a screen" aria-label="Jump to a screen"
+            />
+          </label>
+          <span className="bar-spacer" />
+          <span className="window-meter" title="Your second factor is good for 30 minutes">
+            {IC.lock}<span>{left(session.admin_expires_at)}</span>
+          </span>
+        </div>
+
         <header className="console-head">
-          <div>
-            <h1>{title}</h1>
-            {subtitle && <p>{subtitle}</p>}
-          </div>
-          <div className="console-head-right">
-            <span className="window-meter" title="Your second factor is good for 30 minutes">
-              {IC.lock}<span>{left(session.admin_expires_at)}</span>
-            </span>
-            {actions}
+          <p className="crumb">
+            <Link href="/">Exposing</Link>
+            {crumb.map((part, index) => (
+              <span key={part}>{IC.chevron}<b>{part}</b></span>
+            ))}
+          </p>
+          <div className="console-head-row">
+            <div>
+              <h1>{title}</h1>
+              {subtitle && <p>{subtitle}</p>}
+            </div>
+            <div className="console-head-right">{actions}</div>
           </div>
         </header>
 
-        {blocked ? (
-          <section className="panel blocked">
-            <span className="blocked-icon">{IC.lock}</span>
-            <h2>Not on your seat</h2>
-            <p>This screen needs a permission your role does not hold. A Superadmin or Admin can grant it from Staff and access.</p>
-            <Link className="btn ghost" href="/me">{IC.key}See what you can open</Link>
-          </section>
-        ) : children}
+        <div className="console-body">
+          {blocked ? (
+            <section className="panel blocked">
+              <span className="blocked-icon">{IC.lock}</span>
+              <h2>Not on your seat</h2>
+              <p>This screen needs a permission your role does not hold. A Superadmin or Admin can grant it from Staff and access.</p>
+              <Link className="btn ghost" href="/me">{IC.key}See what you can open</Link>
+            </section>
+          ) : children}
+        </div>
       </div>
 
       {lapsed && <CodePrompt onDone={() => undefined} verify={verify} signOut={signOut} busy={busy} error={error}/>}

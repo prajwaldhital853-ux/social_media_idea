@@ -563,3 +563,207 @@ export interface WelcomeDesk {
   card: WelcomeCard;
   detail?: string;
 }
+
+/** Contract 6.7 — what a Coin costs, where the rupees go, and how long a proof lives. */
+export interface CoinPricing {
+  coin_price: string | number;
+  min_purchase: number;
+  bank: { name: string; account: string; holder: string; qr: string };
+  proof_days: number;
+}
+
+export interface CoinAsk {
+  id: number;
+  card: PersonRef;
+  coins: number;
+  amount: string;
+  method: string;
+  reference: string;
+  status: 'pending' | 'approved' | 'rejected';
+  status_label: string;
+  has_proof: boolean;
+  created_at: string;
+  reviewed_at: string | null;
+  took: string | null;
+  age_hours: number;
+  asked?: boolean;
+  review?: {
+    action: 'approve' | 'reject' | 'proof';
+    label: string;
+    reason: string;
+    coins_credited: number;
+    by: string | null;
+    at: string;
+  };
+}
+
+export interface CoinPage extends Page<CoinAsk> {
+  counts: { pending: number; approved: number; rejected: number; every: number };
+  held: { coins: number; rupees: string };
+  proofs_deleted: number;
+  retention_days: number;
+  can_review: boolean;
+  pricing: CoinPricing;
+}
+
+export interface CoinDetail {
+  request: CoinAsk;
+  asks: { action: string; reason: string; by: string | null; at: string }[];
+}
+
+export interface ProofLink {
+  href: string;
+  expires_in: number;
+}
+
+/** One row of the wallet's own history — this console can add to it and nothing else. */
+export interface LedgerRow {
+  id: number;
+  username: string;
+  card: PersonRef;
+  kind: 'credit' | 'debit';
+  amount: string;
+  note: string;
+  created_at: string;
+  balance: string;
+  currency: string;
+}
+
+export interface LedgerPage extends Page<LedgerRow> {
+  totals: { credited: string; debited: string; entries: number };
+}
+
+/** A knob on a settings desk, typed by the server so the box knows what it holds. */
+export interface SettingLine {
+  key: string;
+  value: string | number;
+  default: string | number;
+  set: boolean;
+  type: 'int' | 'dec' | 'bool' | 'str';
+  label: string;
+  help: string;
+  group: string;
+  by: string | null;
+  at: string | null;
+}
+
+export interface CoinDesk {
+  lines: SettingLine[];
+  pricing: CoinPricing;
+  counts: { held: number };
+  detail?: string;
+}
+
+/** --- contract 6.8: promotions, packages and the reach dials ------------------ */
+
+export interface PromoPackage {
+  id: string;
+  name: string;
+  coins: number;
+  days: number | null;
+  reach_max: number;
+  reach: string;
+}
+
+/** One decision on one campaign. A campaign is paused and resumed more than once,
+ *  so the desk reads the whole trail rather than a status column. */
+export interface PromoMark {
+  action: 'approve' | 'reject' | 'pause' | 'resume' | 'stop';
+  label: string;
+  reason: string;
+  coins_refunded: string;
+  choice: 'refunded' | 'withheld' | null;
+  by: string | null;
+  at: string;
+}
+
+export type PromoState = 'draft' | 'active' | 'paused' | 'ended';
+
+export interface PromoRow {
+  id: number;
+  owner: string;
+  card: ContentPreview | null;
+  target: { type: ContentKind; id: string; state: string; text: string };
+  status: PromoState;
+  status_label: string;
+  running: boolean;
+  sign_off: string;
+  sign_off_label: string;
+  delivery: string;
+  category: string;
+  targeting: { age_min: number; age_max: number; country: string; city: string };
+  package: PromoPackage | null;
+  coins: string;
+  impressions: number;
+  clicks: number;
+  created_at: string;
+  ends_at: string | null;
+  age_hours: number;
+  left_hours: number | null;
+  refund_reject: string;
+  refund_stop: string;
+  pile: Pile;
+  today: number;
+  review?: PromoMark;
+  took?: string;
+}
+
+export interface PromoPage extends Page<PromoRow> {
+  counts: {
+    waiting: number; live: number; paused: number; ended: number; every: number; reserved: string;
+  };
+  state: string;
+  can_review: boolean;
+  controls: { caps: { daily: number; repeat: number; gap: number }; floor: number; global_pause: boolean };
+  packages: PromoPackage[];
+}
+
+export interface PromoBrief {
+  id: number;
+  reason: string;
+  details: string;
+  status: string;
+  created_at: string;
+  reporter: PersonRef | null;
+}
+
+export interface PromoDetail {
+  campaign: PromoRow;
+  reviews: PromoMark[];
+  reports: PromoBrief[];
+  target_state: string;
+}
+
+export interface PackageDesk {
+  packages: PromoPackage[];
+  shipped: PromoPackage[];
+  is_edited: boolean;
+  bought: Record<string, number>;
+  detail?: string;
+  errors?: string[];
+}
+
+export interface AlgorithmDesk {
+  lines: SettingLine[];
+  weights: Record<string, number>;
+  floor: number;
+  caps: { daily: number; repeat: number; gap: number };
+  global_pause: boolean;
+  packages: PromoPackage[];
+  shipped: boolean;
+  running: number;
+  started_today: number;
+  detail?: string;
+  changed?: string[];
+  errors?: string[];
+}
+
+/** What the member site is told, with nobody signed in. */
+export interface ReachConfig {
+  weights: Record<string, number>;
+  floor: number;
+  caps: { daily: number; repeat: number; gap: number };
+  global_pause: boolean;
+  packages: PromoPackage[];
+  packages_edited: boolean;
+}

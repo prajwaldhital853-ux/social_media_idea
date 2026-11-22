@@ -272,8 +272,10 @@ class ThresholdTests(TestCase):
         self.assertFalse(settings_store.cached()['alert_report_pile']['set'])
 
     def test_a_name_nobody_owns_is_refused(self):
+        """A settings screen cannot invent a knob, and `coin_price` is one now."""
+        self.assertEqual(settings_store.get('coin_price'), Decimal('10'))
         with self.assertRaises(ValueError):
-            settings_store.write(None, {'coin_price': 1})
+            settings_store.write(None, {'alert_the_internet_is_down': 1})
 
     def test_the_picture_shows_which_knobs_have_been_turned(self):
         settings_store.write(None, {'alert_storage_gb': '12'})

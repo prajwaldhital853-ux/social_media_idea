@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import ConsoleShell from '@/components/ConsoleShell';
+import { Act, Chips, More } from '@/components/List';
 import { api } from '@/lib/api';
 import { num } from '@/lib/format';
 import { IC } from '@/lib/icons';
@@ -13,10 +14,10 @@ import {
 
 const STATES = [
   { id: 'all', label: 'Everyone' },
-  { id: 'suspended', label: 'Suspended right now' },
-  { id: 'flagged', label: 'Flagged by reports' },
-  { id: 'locked', label: 'Locked out of sign-in' },
-  { id: 'verified', label: 'Holds the tick' },
+  { id: 'suspended', label: 'Suspended' },
+  { id: 'flagged', label: 'Flagged' },
+  { id: 'locked', label: 'Sign-in locked' },
+  { id: 'verified', label: 'Verified' },
   { id: 'unverified', label: 'No tick' },
   { id: 'inactive', label: 'Deactivated' },
 ];
@@ -83,6 +84,10 @@ export default function PeoplePage() {
   const [verbs, setVerbs] = useState<PersonVerbs>({ actions: false, warn: false });
   const [cursor, setCursor] = useState<string | null>(null);
   const [open, setOpen] = useState<string | null>(null);
+  // The pen icons at the end of a row do not act on the spot — they open the
+  // account with that one ask already written, so the reason and the audit row
+  // are still typed by a person who can see who they are about to bar.
+  const [askFor, setAskFor] = useState<Verb | null>(null);
   const [banner, setBanner] = useState<{ kind: 'ok' | 'bad'; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
   // The search box answers every keystroke, so three requests for one word can
@@ -146,8 +151,18 @@ export default function PeoplePage() {
   const done = (out: PersonOutcome) => {
     setBanner({ kind: 'ok', text: out.detail });
     // The account no longer exists, so the open card has nothing left to show.
-    if (out.action === 'delete') setOpen(null);
+    if (out.action === 'delete') { setOpen(null); setAskFor(null); }
     load();
+  };
+
+  const toggle = (username: string) => {
+    setOpen(current => (current === username ? null : username));
+    setAskFor(null);
+  };
+
+  const actOn = (username: string, verb: Verb) => {
+    setOpen(username);
+    setAskFor(verb);
   };
 
   return (
@@ -160,21 +175,34 @@ export default function PeoplePage() {
         </button>
       )}
     >
+      <Chips
+        label="Filter by state" value={state} onPick={setState}
+        chips={STATES.map(item => ({
+          ...item,
+          n: facets === null ? null
+            : item.id === 'all' ? facets.total
+              : item.id === 'suspended' ? facets.suspended
+                : item.id === 'flagged' ? facets.flagged
+                  : item.id === 'locked' ? facets.locked
+                    : item.id === 'verified' ? facets.verified
+                      : item.id === 'inactive' ? facets.deactivated : null,
+        }))}
+      />
+
       <div className="toolbar">
         <label className="search">
           {IC.search}
           <input
             value={q} onChange={event => setQ(event.target.value)}
-            placeholder="Search username, name or email" aria-label="Search users"
+            placeholder="Search by name, email or username" aria-label="Search users"
           />
         </label>
-        <select value={state} onChange={event => setState(event.target.value)} aria-label="Filter by state">
-          {STATES.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}
-        </select>
         <select value={provider} onChange={event => setProvider(event.target.value)} aria-label="Filter by sign-up method">
           {PROVIDERS.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}
         </select>
-        <span className="toolbar-count">{rows === null ? '…' : `${rows.length} shown`}</span>
+        <span className="toolbar-count">
+          Accounts: <b>{facets === null ? '…' : num(facets.total)}</b>
+        </span>
       </div>
 
       {facets && (
@@ -208,94 +236,143 @@ export default function PeoplePage() {
           </p>
         </section>
       ) : (
-        <div className="people">
-          {rows.map(row => (
-            <PersonCard
-              key={row.id} row={row} verbs={verbs} mine={row.username === session?.user.username}
-              opens={open === row.username} onToggle={() => setOpen(open === row.username ? null : row.username)}
-              onDone={done} noteGate={noteGate}
-            />
-          ))}
+        <div className="grid-wrap">
+          <table className="grid">
+            <thead>
+              <tr>
+                <th>Username</th>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Seat</th>
+                <th>Signed up</th>
+                <th className="num">Posts</th>
+                <th className="num">Followers</th>
+                <th className="num">Coins</th>
+                <th>Standing</th>
+                <th>Access</th>
+                <th aria-label="Actions" />
+              </tr>
+            </thead>
+            {rows.map(row => (
+              <PersonRowView
+                key={row.id} row={row} verbs={verbs} mine={row.username === session?.user.username}
+                opens={open === row.username} askFor={open === row.username ? askFor : null}
+                onToggle={() => toggle(row.username)} onAct={verb => actOn(row.username, verb)}
+                onDone={out => { done(out); if (out.action !== 'delete') setAskFor(null); }}
+                noteGate={noteGate}
+              />
+            ))}
+          </table>
         </div>
       )}
 
-      {cursor && (
-        <button type="button" className="btn ghost wide" disabled={busy} onClick={older}>
-          {IC.go}<span>Show more accounts</span>
-        </button>
-      )}
+      <More hasMore={!!cursor} busy={busy} onMore={older} label="Load more accounts" />
     </ConsoleShell>
   );
 }
 
-function PersonCard({
-  row, verbs, mine, opens, onToggle, onDone, noteGate,
+function PersonRowView({
+  row, verbs, mine, opens, askFor, onToggle, onAct, onDone, noteGate,
 }: {
   row: PersonRow;
   verbs: PersonVerbs;
   mine: boolean;
   opens: boolean;
+  askFor: Verb | null;
   onToggle: () => void;
+  onAct: (verb: Verb) => void;
   onDone: (out: PersonOutcome) => void;
   noteGate: (err: unknown) => boolean;
 }) {
   const holding = row.flags.on_account + row.flags.on_content;
+  const barred = !!row.suspension;
+  const offered: Verb[] = ['warn', barred ? 'reinstate' : 'suspend', 'delete'];
+
   return (
-    <section className={`person${opens ? ' open' : ''}`} data-person={row.username}>
-      <header className="person-head">
-        <button type="button" className="person-id" onClick={onToggle} aria-expanded={opens}>
-          <span className={`role-chip role-${row.role}`}>
-            {ROLE_LABEL[row.role] || row.role}
-          </span>
+    <tbody className={`person${opens ? ' open' : ''}`} data-person={row.username}>
+      <tr className={`grid-row${opens ? ' open' : ''}`}>
+        <td>
+          <button type="button" className="person-id" onClick={onToggle} aria-expanded={opens}>
+            <span className="grid-caret">{IC.chevron}</span>
+            <span className="id">@{row.username}</span>
+          </button>
+        </td>
+        <td className="strong">
           <span className="person-name">
-            <b>{row.name}{row.verified && <span className="verified" title="Verified by staff">✓</span>}</b>
-            <em>@{row.username} · {row.email || 'no email'} · joined {ago(row.joined)}</em>
+            {row.name}
+            {row.verified && <span className="verified" title="Verified by staff">✓</span>}
           </span>
-        </button>
-
-        <div className="person-flags">
-          <span className="pill mute" title="How this account first reached the platform">{row.provider_label}</span>
-          {!row.email_verified && <span className="pill warn">email unverified</span>}
-          {row.suspension ? (
-            <span className="pill dead" title={row.suspension.reason || undefined}>
-              {IC.lock}<span>{row.suspension.permanent ? 'Suspended for good' : `Suspended to ${row.suspension.until.slice(0, 10)}`}</span>
-            </span>
-          ) : <span className="pill good">In good standing</span>}
-          {row.locked_until && Date.parse(row.locked_until) > Date.now() && (
-            <span className="pill warn">{row.failed_attempts} failed sign-ins, locked</span>
-          )}
-          {holding > 0 && (
-            <span className={`pile ${holding >= row.flags.auto_hide_at ? 'open' : ''}`}
-                  title={`${row.flags.reporters} distinct reporters`}>
-              {holding} report{holding === 1 ? '' : 's'} against {row.flags.reporters} reporter{row.flags.reporters === 1 ? '' : 's'}
-            </span>
-          )}
-          {!row.notify_email && <span className="pill mute">warning emails off</span>}
-          {mine && <span className="pill mute">You</span>}
-        </div>
-
-        <div className="person-meta">
-          <span>{num(row.posts)} posts</span>
-          <span>{num(row.followers)} followers</span>
-          <span title="Wallet balance">{row.coins} coins</span>
-        </div>
-      </header>
-
+        </td>
+        <td className="dim wrap">{row.email || '—'}</td>
+        <td>{ROLE_LABEL[row.role] || row.role}</td>
+        <td className="dim">joined {ago(row.joined)}</td>
+        <td className="num">{num(row.posts)}</td>
+        <td className="num">{num(row.followers)}</td>
+        <td className="num" title="Wallet balance">{row.coins}</td>
+        <td>
+          <div className="person-flags">
+            <span className="pill mute" title="How this account first reached the platform">{row.provider_label}</span>
+            {!row.email_verified && <span className="pill warn">email unverified</span>}
+            {barred ? (
+              <span className="pill dead" title={row.suspension!.reason || undefined}>
+                {IC.lock}<span>{row.suspension!.permanent ? 'Suspended for good' : `Suspended to ${row.suspension!.until.slice(0, 10)}`}</span>
+              </span>
+            ) : <span className="pill good">In good standing</span>}
+            {row.locked_until && Date.parse(row.locked_until) > Date.now() && (
+              <span className="pill warn">{row.failed_attempts} failed sign-ins, locked</span>
+            )}
+            {holding > 0 && (
+              <span className={`pile ${holding >= row.flags.auto_hide_at ? 'open' : ''}`}
+                    title={`${row.flags.reporters} distinct reporters`}>
+                {holding} report{holding === 1 ? '' : 's'} against {row.flags.reporters} reporter{row.flags.reporters === 1 ? '' : 's'}
+              </span>
+            )}
+            {!row.notify_email && <span className="pill mute">warning emails off</span>}
+            {mine && <span className="pill mute">You</span>}
+          </div>
+        </td>
+        <td>
+          <span className={`state ${verbs.actions || verbs.warn ? 'good' : 'mute'}`}>
+            {verbs.actions ? 'Full' : verbs.warn ? 'Warn only' : 'View only'}
+          </span>
+        </td>
+        <td>
+          <div className="grid-acts">
+            <Act icon="eye" label={opens ? 'Close this account' : 'Open this account'} onClick={onToggle} />
+            {offered.map(verb => (
+              <Act
+                key={verb}
+                icon={verb === 'warn' ? 'pen' : verb === 'delete' ? 'trash' : barred ? 'check' : 'lock'}
+                label={SPEC[verb].label}
+                tone={verb === 'delete' ? 'dead' : undefined}
+                disabled={!mine && !(verb === 'warn' ? verbs.warn : verbs.actions)}
+                onClick={() => onAct(verb)}
+              />
+            ))}
+          </div>
+        </td>
+      </tr>
       {opens && (
-        <PersonDetailCard
-          username={row.username} verbs={verbs} mine={mine} onDone={onDone} noteGate={noteGate}
-        />
+        <tr className="grid-detail">
+          <td colSpan={11}>
+            <PersonDetailCard
+              username={row.username} verbs={verbs} mine={mine} askFor={askFor}
+              onDone={onDone} noteGate={noteGate}
+            />
+          </td>
+        </tr>
       )}
-    </section>
+    </tbody>
   );
 }
 
 function PersonDetailCard({
-  username, verbs, mine, onDone, noteGate,
+  username, verbs, mine, askFor, onDone, noteGate,
 }: {
   username: string;
   verbs: PersonVerbs;
   mine: boolean;
+  askFor: Verb | null;
   onDone: (out: PersonOutcome) => void;
   noteGate: (err: unknown) => boolean;
 }) {
@@ -344,7 +421,7 @@ function PersonDetailCard({
               return (
                 <VerbButton
                   key={verb} verb={verb} person={person} allowed={needs && !mine}
-                  detail={detail}
+                  detail={detail} opened={askFor === verb}
                   onDone={out => { onDone(out); reload(); }}
                   noteGate={noteGate}
                 />
@@ -437,12 +514,13 @@ function PersonDetailCard({
 }
 
 function VerbButton({
-  verb, person, allowed, detail, onDone, noteGate,
+  verb, person, allowed, detail, opened, onDone, noteGate,
 }: {
   verb: Verb;
   person: PersonRow;
   allowed: boolean;
   detail: PersonDetail;
+  opened: boolean;
   onDone: (out: PersonOutcome) => void;
   noteGate: (err: unknown) => boolean;
 }) {
@@ -455,6 +533,12 @@ function VerbButton({
   const [confirm, setConfirm] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // A pen clicked at the end of the row means "this one", so the ask opens
+  // itself with the reason box already under the cursor.
+  useEffect(() => {
+    if (opened) { setForm(true); setError(null); }
+  }, [opened]);
 
   const spec = SPEC[verb];
   const label = verb === 'verify'

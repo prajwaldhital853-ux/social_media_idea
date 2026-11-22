@@ -1,6 +1,7 @@
 from django.urls import path
 
-from . import views_overview, views_people, views_review, views_session, views_staff, views_welcome
+from . import (views_coins, views_overview, views_people, views_promotions, views_review, views_session,
+               views_staff, views_welcome)
 
 urlpatterns = [
     path('admin/session/', views_session.admin_session),
@@ -28,6 +29,19 @@ urlpatterns = [
     path('admin/notices/attach/', views_review.notice_create),
     path('admin/notices/<int:pk>/withdraw/', views_review.notice_withdraw),
     path('notices/<str:kind>/<int:pk>/', views_review.public_notices),
+    # Contract 6.7. The two receipt doors are named `receipt`, not `proof`, so that
+    # `/5/proof/` stays readable as the decision "ask for more proof" rather than
+    # being matched as a file route that only takes GET.
+    path('admin/coins/desk/', views_coins.coin_desk),
+    path('admin/coins/qr/', views_coins.coin_qr_upload),
+    path('admin/coins/ledger/', views_coins.coin_ledger),
+    path('admin/coins/ledger/adjust/', views_coins.coin_adjust),
+    path('admin/coins/<int:pk>/receipt/', views_coins.coin_proof),
+    path('admin/coins/<int:pk>/receipt-link/', views_coins.coin_proof_link),
+    path('admin/coins/<int:pk>/', views_coins.coin_detail),
+    path('admin/coins/', views_coins.coin_queue),
+    path('admin/coins/<int:pk>/<str:action>/', views_coins.coin_decide),
+    path('coins/pricing/', views_coins.coin_pricing_public),
     path('admin/people/', views_people.people_directory),
     path('admin/people/<str:username>/', views_people.person_detail),
     path('admin/people/<str:username>/suspend/', views_people.person_suspend),
@@ -38,4 +52,12 @@ urlpatterns = [
     path('admin/people/<str:username>/delete/', views_people.person_delete),
     path('admin/welcome/', views_welcome.welcome_desk),
     path('welcome/', views_welcome.welcome_public),
+    # Contract 6.8. `packages` and `algorithm` are literal segments, so they are
+    # listed before the id routes and stay readable as desks rather than campaigns.
+    path('admin/promotions/packages/', views_promotions.package_desk),
+    path('admin/promotions/algorithm/', views_promotions.algorithm_desk),
+    path('admin/promotions/<int:pk>/', views_promotions.promotion_detail),
+    path('admin/promotions/', views_promotions.promotion_queue),
+    path('admin/promotions/<int:pk>/<str:action>/', views_promotions.promotion_decide),
+    path('promotions/config/', views_promotions.promotion_config),
 ]

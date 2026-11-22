@@ -41,7 +41,23 @@ export async function api<T>(
     },
   };
   if (options.body !== undefined) init.body = JSON.stringify(options.body);
+  return send<T>(path, init);
+}
 
+/**
+ * Multipart writes — the payment QR is an image, and a JSON body cannot carry one.
+ * The browser sets the content type itself, so only the CSRF proof is added.
+ */
+export async function upload<T>(path: string, form: FormData): Promise<T> {
+  return send<T>(path, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { Accept: 'application/json', 'X-CSRF-Token': csrfToken() },
+    body: form,
+  });
+}
+
+async function send<T>(path: string, init: RequestInit): Promise<T> {
   const response = await fetch(`/api/${path.replace(/^\/+/, '')}`, init);
   const text = await response.text();
   const data = text ? safeParse(text) : {};

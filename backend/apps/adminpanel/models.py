@@ -310,3 +310,76 @@ class PublicNotice(models.Model):
 
     def __str__(self):
         return f'notice {self.target_type}:{self.target_id}'
+
+
+class CoinReview(models.Model):
+    """What the console did about a coin purchase, and why.
+
+    `wallet.CoinRequest` is the member site's table and holds only the payer's half
+    of the story, so the staff half — the sentence a rejection was made with, how
+    many coins were actually credited, which seat signed it — is kept here. One row
+    per action rather than a column per verdict, because a request can be asked for
+    more proof twice before anyone approves it, and overwriting the first ask would
+    lose the date the person was told.
+    """
+
+    class Action(models.TextChoices):
+        APPROVE = 'approve', 'Approved'
+        REJECT = 'reject', 'Rejected'
+        PROOF = 'proof', 'Asked for more proof'
+
+    request = models.ForeignKey('wallet.CoinRequest', on_delete=models.CASCADE, related_name='admin_reviews')
+    action = models.CharField(max_length=8, choices=Action.choices)
+    reason = models.CharField(max_length=240, blank=True)
+    coins_credited = models.PositiveIntegerField(default=0)
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name='coin_reviews_written',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [models.Index(fields=['request', '-created_at'], name='coin_review_recent')]
+
+    def __str__(self):
+        return f'{self.action} request {self.request_id}'
+
+
+class PromoReview(models.Model):
+    """What the console decided about one paid campaign, and what it cost.
+
+    `promotions.Promotion` is the member site's table and only holds the payer's
+    half of the story — the budget, the targeting, the counters. The staff half is
+    kept here: the sentence a rejection was made with, how many coins actually went
+    back, whether the Admin chose to refund or to withhold on a stop, and which seat
+    signed it. One row per action, because a campaign gets paused and resumed several
+    times before anyone ends it, and the last click is not the whole history.
+    """
+
+    class Action(models.TextChoices):
+        APPROVE = 'approve', 'Approved'
+        REJECT = 'reject', 'Rejected'
+        PAUSE = 'pause', 'Paused'
+        RESUME = 'resume', 'Resumed'
+        STOP = 'stop', 'Stopped'
+
+    class Choice(models.TextChoices):
+        CREDIT = 'credit', 'Refunded'
+        WITHHOLD = 'withhold', 'Withheld'
+
+    promotion = models.ForeignKey('promotions.Promotion', on_delete=models.CASCADE, related_name='admin_reviews')
+    action = models.CharField(max_length=8, choices=Action.choices)
+    reason = models.CharField(max_length=240, blank=True)
+    coins_refunded = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    choice = models.CharField(max_length=9, choices=Choice.choices, blank=True)
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name='promo_reviews_written',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [models.Index(fields=['promotion', '-created_at'], name='promo_review_recent')]
+
+    def __str__(self):
+        return f'{self.action} campaign {self.promotion_id}'

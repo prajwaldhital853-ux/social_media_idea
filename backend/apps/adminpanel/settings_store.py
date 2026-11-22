@@ -24,6 +24,54 @@ DEFAULTS = {
                              'Raises an alert when this many seats lock inside an hour.', 'safety'),
     'alert_autohide_day': (10, 'int', 'Auto-hides a day that looks like a wave',
                            'Raises an alert when moderation hides this much content in 24 hours.', 'safety'),
+    # Contract 6.7: the coin desk. A person pays in rupees and the platform decides
+    # what a Coin costs, what the smallest purchase is, and which bank account the
+    # money goes to — so all three are rows, not constants, and a price change does
+    # not need a deploy. The proof retention is a number too because deleting other
+    # people's payment screenshots on a schedule is a promise the contract makes.
+    'coin_price': (Decimal('10'), 'dec', 'Price of 1 Coin (NPR)',
+                   'What the site quotes for a single Coin when a person buys one.', 'payments'),
+    'coin_min_purchase': (100, 'int', 'Smallest coin purchase (Coins)',
+                          'The floor a coin purchase is quoted with. Coins, not rupees.', 'payments'),
+    'coin_bank_name': ('Nepal Bank Ltd', 'str', 'Bank',
+                       'Printed above the account number when a person goes to pay.', 'payments'),
+    'coin_bank_account': ('0120-4455-8891', 'str', 'Account number',
+                          'The account the rupees are sent to.', 'payments'),
+    'coin_bank_holder': ('Exposing Pvt Ltd', 'str', 'Account holder',
+                         'The name the payer is told to check the account against.', 'payments'),
+    'coin_qr_url': ('', 'str', 'Payment QR code',
+                    'The image a person scans instead of typing the account number.', 'payments'),
+    'coin_proof_days': (30, 'int', 'Keep a payment proof for (days)',
+                        'Payment screenshots are deleted this many days after the request is decided.',
+                        'payments'),
+    # Contract 6.8: what reaches whom. The site's feed used to hard-code these —
+    # three coins for a like, five for a save, two promotions a page — so a
+    # promotion that felt too aggressive was a pull request. Now they are rows, and
+    # `GET /api/promotions/config/` hands the same numbers to the feed every time it
+    # asks what to show.
+    'algo_weight_like': (3, 'int', 'Weight of a like', 'Points a past like on this category is worth.', 'promo'),
+    'algo_weight_comment': (4, 'int', 'Weight of a comment',
+                            'Points a past comment on this category is worth.', 'promo'),
+    'algo_weight_save': (5, 'int', 'Weight of a save', 'Points a saved post in this category is worth.', 'promo'),
+    'algo_weight_watch': (1, 'int', 'Weight of a reel watched',
+                         'Points a reel this person played is worth.', 'promo'),
+    'algo_relevance_floor': (2, 'int', 'Lowest score worth showing',
+                             'A campaign below this relevance is skipped instead of padded into the feed.',
+                             'promo'),
+    'promo_daily_cap': (2, 'int', 'Promotions per person per day',
+                        'How often one payer may appear in a feed in a day.', 'promo'),
+    'promo_repeat_limit': (3, 'int', 'Times one person may see a campaign',
+                           'Repeated impressions of the same campaign for the same person.', 'promo'),
+    'promo_organic_gap': (4, 'int', 'Ordinary posts between two promotions',
+                          'How much of the feed a person gets before the next paid card.', 'promo'),
+    'promo_global_pause': (False, 'bool', 'Pause every promotion',
+                           'Stops the platform showing paid content at all, without ending any campaign.',
+                           'promo'),
+    # The three packages the site sells, as they were shipped. Written here as JSON
+    # so a price, a run length or a reach promise is an edit and not a deploy; blank
+    # means the shipped catalog still stands.
+    'promo_packages': ('', 'str', 'Promotion packages (JSON)',
+                       'What a campaign costs, how long it runs and how far it reaches.', 'promo'),
     # The wording a suspension email ends with. Contract 6.4 promises the person
     # an appeal route, and 6.6 makes these editable from the dashboard; the
     # address is the platform's own no-reply domain, not a placeholder to fill in.
@@ -44,7 +92,7 @@ DEFAULTS = {
 }
 
 GROUPS = {'safety': 'Safety and audit', 'payments': 'Coins and payments',
-          'platform': 'Platform settings'}
+          'promo': 'Promotions and reach', 'platform': 'Platform settings'}
 
 
 def _coerce(raw, kind, fallback):
@@ -83,6 +131,32 @@ def cached(rows=None):
             'group': group,
         }
     return out
+
+
+def lines_group(group):
+    """Every knob in one group, with who last turned it and when.
+
+    The desks need the provenance printed beside the box: a price a stranger could
+    not tell apart from a price the Client set yesterday is a price nobody trusts.
+    """
+    values, rows = _cached_rows()
+    out = []
+    for key, item in values.items():
+        if item['group'] != group:
+            continue
+        row = rows.get(key)
+        out.append({
+            **item,
+            'by': row.updated_by.username if row is not None and row.updated_by else None,
+            'at': row.updated_at.isoformat() if row is not None else None,
+        })
+    return out
+
+
+def _cached_rows():
+    """(every knob at its typed value, the rows that override them) — read once per desk."""
+    current = cached()
+    return current, {row.key: row for row in AdminSetting.objects.filter(key__in=current)}
 
 
 def values():

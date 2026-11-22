@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import ConsoleShell from '@/components/ConsoleShell';
+import { Chips, More } from '@/components/List';
 import { api } from '@/lib/api';
 import { IC } from '@/lib/icons';
 import { ago, stamp } from '@/lib/time';
@@ -10,10 +11,10 @@ import { ContentKind, NoticePage, NoticeRow } from '@/lib/types';
 
 const TARGETS: { id: ContentKind | ''; label: string }[] = [
   { id: '', label: 'Every notice' },
-  { id: 'post', label: 'About a post' },
-  { id: 'comment', label: 'About a comment' },
-  { id: 'listing', label: 'About a listing' },
-  { id: 'user', label: 'About an account' },
+  { id: 'post', label: 'Posts' },
+  { id: 'comment', label: 'Comments' },
+  { id: 'listing', label: 'Listings' },
+  { id: 'user', label: 'Accounts' },
 ];
 
 const PEN: Record<string, string> = {
@@ -22,6 +23,14 @@ const PEN: Record<string, string> = {
   listing: 'Marketplace listing review',
   user: 'Report queue',
 };
+
+/** The desk asks for one thing at a time, so it names them the way a person would. */
+const DESK_KINDS: { id: ContentKind; label: string }[] = [
+  { id: 'post', label: 'A post' },
+  { id: 'comment', label: 'A comment' },
+  { id: 'listing', label: 'A listing' },
+  { id: 'user', label: 'An account' },
+];
 
 /**
  * The hand-written notice. A decision in the queue still writes one as a side
@@ -76,8 +85,8 @@ function AttachDesk({ busy, onDone }: {
           <label className="field">
             <span>What it goes on</span>
             <select value={kind} onChange={event => setKind(event.target.value)} aria-label="What the notice goes on">
-              {TARGETS.filter(item => item.id).map(item => (
-                <option key={item.id} value={item.id}>{item.label.replace('About a ', 'A ')}</option>
+              {DESK_KINDS.map(item => (
+                <option key={item.id} value={item.id}>{item.label}</option>
               ))}
             </select>
           </label>
@@ -216,6 +225,13 @@ export default function NoticesPage() {
         </button>
       )}
     >
+      <Chips
+        label="Filter by what it is about"
+        chips={TARGETS.map(item => ({ id: item.id, label: item.label }))}
+        value={target}
+        onPick={setTarget}
+      />
+
       <div className="toolbar">
         <label className="search">
           {IC.search}
@@ -224,10 +240,9 @@ export default function NoticesPage() {
             placeholder="Search the notice text, the person or the target id" aria-label="Search notices"
           />
         </label>
-        <select value={target} onChange={event => setTarget(event.target.value)} aria-label="Filter by what it is about">
-          {TARGETS.map(item => <option key={item.label} value={item.id}>{item.label}</option>)}
-        </select>
-        <span className="toolbar-count">{rows === null ? '…' : `${live} standing of ${rows.length} shown`}</span>
+        <span className="toolbar-count">
+          {rows === null ? '…' : `${live} standing of ${rows.length} shown`}
+        </span>
       </div>
 
       {banner && (
@@ -263,40 +278,53 @@ export default function NoticesPage() {
           </p>
         </section>
       ) : (
-        <div className="notices">
-          {rows.map(row => (
-            <article key={row.id} data-notice={row.id} data-target={row.target} className={`notice${row.is_live ? '' : ' gone'}`}>
-              <p className="notice-text">{row.text}</p>
-              <div className="notice-meta">
-                <span className="who">
-                  <span className="who-name">
-                    <b>@{row.about}</b>
-                    <em>{row.target}</em>
-                  </span>
-                </span>
-                <span>written by <b>{row.actor || 'the system'}</b> {ago(row.created_at)}</span>
-                <span title={stamp(row.created_at)}>{new Date(row.created_at).toLocaleDateString()}</span>
-                {row.is_live
-                  ? <span className="pill warn">Standing</span>
-                  : <span className="pill mute">Withdrawn {ago(row.withdrawn_at)}</span>}
-              </div>
-              {row.reason && <p className="notice-reason">Reason on file: {row.reason}</p>}
-              {row.is_live && (
-                <div className="notice-act">
-                  <button type="button" className="btn danger outline tiny" disabled={busy} onClick={() => withdraw(row)}>
-                    {IC.x}<span>Withdraw notice</span>
-                  </button>
-                </div>
-              )}
-            </article>
-          ))}
+        <div className="notices grid-wrap">
+          <table className="grid review">
+            <thead>
+              <tr>
+                <th style={{ width: '12%' }}>Target</th>
+                <th style={{ width: '36%' }}>What the community reads</th>
+                <th style={{ width: '11%' }}>About</th>
+                <th style={{ width: '19%' }}>Written</th>
+                <th style={{ width: '12%' }}>Standing</th>
+                <th style={{ width: '10%' }} aria-label="Actions"/>
+              </tr>
+            </thead>
+            {rows.map(row => (
+              <tbody key={row.id} data-notice={row.id} data-target={row.target} className={`notice${row.is_live ? '' : ' gone'}`}>
+                <tr className="grid-row">
+                  <td><span className="id">{row.target}</span></td>
+                  <td>
+                    <span className="notice-text" title={row.text}>{row.text}</span>
+                    {row.reason && <p className="notice-reason">Reason on file: {row.reason}</p>}
+                  </td>
+                  <td className="strong">@{row.about}</td>
+                  <td>
+                    <span className="notice-meta">
+                      <span>written by <b>{row.actor || 'the system'}</b> {ago(row.created_at)}</span>
+                      <span className="dim" title={stamp(row.created_at)}>{new Date(row.created_at).toLocaleDateString()}</span>
+                    </span>
+                  </td>
+                  <td>
+                    {row.is_live
+                      ? <span className="pill warn">Standing</span>
+                      : <span className="pill mute">Withdrawn {ago(row.withdrawn_at)}</span>}
+                  </td>
+                  <td><div className="grid-acts">
+                    {row.is_live && (
+                      <span className="notice-act">
+                        <button type="button" className="btn danger outline tiny" disabled={busy} onClick={() => withdraw(row)}>
+                          {IC.x}<span>Withdraw notice</span>
+                        </button>
+                      </span>
+                    )}
+                  </div></td>
+                </tr>
+              </tbody>
+            ))}
+          </table>
+          <More hasMore={!!cursor} busy={busy} onMore={older} label="Show older"/>
         </div>
-      )}
-
-      {cursor && (
-        <button type="button" className="btn ghost wide" disabled={busy} onClick={older}>
-          {IC.go}<span>Show older</span>
-        </button>
       )}
     </ConsoleShell>
   );
