@@ -1,9 +1,21 @@
+import asyncio
+import json
+import time
+
+from asgiref.sync import sync_to_async
+from django.conf import settings
+from django.core.serializers.json import DjangoJSONEncoder
+from django.db.models import Q
+from django.http import JsonResponse, StreamingHttpResponse
 from django.utils import timezone
+from django.utils.dateparse import parse_datetime
 from rest_framework import serializers
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from apps.accounts.auth import decode_token
+from apps.accounts.models import User
 from apps.common.api import person
 from apps.common.pagination import KeysetPagination
 from apps.messages.models import Message
@@ -58,3 +70,98 @@ def mark_read(request):
         qs = qs.filter(pk__in=ids)
     count = qs.update(read_at=timezone.now())
     return Response({'read': count})
+
+
+# One process, one bookkeeping table: the cap stops one account pinning every
+# stream slot. Multi-instance deploys move this into Redis alongside the
+# channel layer.
+_streams = {}
+
+
+def _stream_user(request):
+    """The same cookie the DRF views read; this endpoint is plain Django, not DRF."""
+    token = request.COOKIES.get('exposing_access')
+    if not token:
+        return None
+    try:
+        payload = decode_token(token, 'access')
+    except Exception:
+        return None
+    return User.objects.filter(pk=int(payload['sub']), is_active=True).first()
+
+
+def _since(user_pk, since_ts, since_pk, limit=50):
+    """Rows born after the cursor, oldest first. Re-stamped rows (a repeat
+    message from the same actor) carry a new created_at, so the cursor sees
+    them again even though their pk never moves."""
+    qs = Notification.objects.filter(recipient_id=user_pk).select_related('actor__profile')
+    if since_ts is None:
+        # No cursor means a first connect: the list page already holds the
+        # past, so the stream only carries what happens from here.
+        qs = qs.filter(created_at__gt=timezone.now())
+    else:
+        qs = qs.filter(Q(created_at__gt=since_ts) | Q(created_at=since_ts, pk__gt=since_pk))
+    rows = []
+    for row in qs.order_by('created_at', 'pk')[:limit]:
+        rows.append({
+            'event_id': f'{row.created_at.isoformat()}|{row.pk}',
+            'created_at': row.created_at,
+            'pk': row.pk,
+            'data': NotificationSerializer(row).data,
+        })
+    return rows
+
+
+async def _notification_events(user_pk, since_ts, interval, max_life, since_pk=0):
+    deadline = time.monotonic() + max_life
+    try:
+        yield 'retry: 4000\n\n'
+        while time.monotonic() < deadline:
+            await asyncio.sleep(interval)
+            rows = await sync_to_async(_since)(user_pk, since_ts, since_pk)
+            for row in rows:
+                since_ts, since_pk = row['created_at'], row['pk']
+                payload = json.dumps(row['data'], cls=DjangoJSONEncoder, separators=(',', ':'))
+                yield f"event: notification\nid: {row['event_id']}\ndata: {payload}\n\n"
+            if not rows:
+                yield ': keepalive\n\n'
+    finally:
+        held = _streams.get(user_pk, 1)
+        if held <= 1:
+            _streams.pop(user_pk, None)
+        else:
+            _streams[user_pk] = held - 1
+
+
+async def notification_stream(request):
+    user = await sync_to_async(_stream_user)(request)
+    if user is None:
+        return JsonResponse({'detail': 'Authentication required.'}, status=401)
+    if user.is_suspended:
+        return JsonResponse({'detail': 'Account suspended.'}, status=403)
+
+    raw = request.headers.get('Last-Event-ID') or request.GET.get('last_event_id') or ''
+    since_ts, since_pk = None, 0
+    if raw and '|' in raw:
+        iso, _, pk = raw.rpartition('|')
+        parsed = parse_datetime(iso)
+        # A cursor we cannot read falls back to first-connect semantics rather
+        # than an error: the client refetches the list page either way.
+        if parsed:
+            since_ts = parsed
+            try:
+                since_pk = int(pk)
+            except ValueError:
+                since_ts = None
+
+    if _streams.get(user.pk, 0) >= settings.SSE_STREAMS_PER_USER:
+        return JsonResponse({'detail': 'Too many live streams for this account. Close a tab and try again.'}, status=429)
+    _streams[user.pk] = _streams.get(user.pk, 0) + 1
+
+    response = StreamingHttpResponse(
+        _notification_events(user.pk, since_ts, settings.SSE_INTERVAL, settings.SSE_MAX_LIFE, since_pk),
+        content_type='text/event-stream',
+    )
+    response['Cache-Control'] = 'no-cache'
+    response['X-Accel-Buffering'] = 'no'
+    return response

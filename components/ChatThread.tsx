@@ -7,7 +7,9 @@ import VerifiedBadge from './VerifiedBadge';
 import { useApp } from '@/lib/AppContext';
 import { IC } from '@/lib/icons';
 import { ago } from '@/lib/utils';
-import { threadFragment, useList } from '@/lib/lists';
+import { pushListRow, threadFragment, useList } from '@/lib/lists';
+import { merge as applyFragment } from '@/lib/store';
+import { mapMessage } from '@/lib/dto';
 import { Message, User } from '@/lib/types';
 
 function dayStart(ts: number) {
@@ -23,9 +25,10 @@ function dayStart(ts: number) {
  */
 export default function ChatThread({ other }: { other: User }) {
   const router = useRouter();
-  const { db, me, t, markThreadRead, sendMessage, serverMode } = useApp();
+  const { db, me, t, setDb, markThreadRead, sendMessage, serverMode } = useApp();
   const lang = db.lang;
   const [text, setText] = useState('');
+  const [typing, setTyping] = useState(false);
   const threadRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const anchor = useRef<number | null>(null);
@@ -69,6 +72,82 @@ export default function ChatThread({ other }: { other: User }) {
     return () => clearInterval(id);
   }, [serverMode, meId]);
 
+  // The live wire for this thread: incoming messages, typing and read receipts
+  // land instantly instead of waiting for the poll. Same cookie auth as the
+  // REST API, same first-party proxy, exponential reconnect when it drops.
+  const markReadRef = useRef(markThreadRead);
+  markReadRef.current = markThreadRead;
+  const wsRef = useRef<WebSocket | null>(null);
+  const typingSent = useRef(0);
+  useEffect(() => {
+    if (!serverMode || !meId || !otherId) return;
+    let stopped = false;
+    let socket: WebSocket | null = null;
+    let attempts = 0;
+    let reconnect: ReturnType<typeof setTimeout> | null = null;
+    let heartbeat: ReturnType<typeof setInterval> | null = null;
+    let typingTimer: ReturnType<typeof setTimeout> | null = null;
+    let lastSeen = Date.now();
+
+    const connect = () => {
+      if (stopped || socket) return;
+      const ws = new WebSocket(`${location.origin.replace(/^http/, 'ws')}/ws/chat/${other.username}/`);
+      socket = ws;
+      wsRef.current = ws;
+      ws.onopen = () => {
+        attempts = 0;
+        lastSeen = Date.now();
+      };
+      ws.onmessage = ev => {
+        lastSeen = Date.now();
+        let data: any;
+        try { data = JSON.parse(ev.data); } catch { return; }
+        if (data.kind === 'message') {
+          const mapped = mapMessage(data.message, meId, otherId);
+          setDb(prev => applyFragment(prev, { messages: [mapped] }));
+          pushListRow(`thread:${otherId}`, undefined, mapped.id);
+          // The thread is open, so an incoming row is read as it lands.
+          if (mapped.from !== meId) void markReadRef.current(other.username);
+        } else if (data.kind === 'typing') {
+          setTyping(true);
+          if (typingTimer) clearTimeout(typingTimer);
+          typingTimer = setTimeout(() => setTyping(false), 3000);
+        } else if (data.kind === 'read') {
+          setDb(prev => ({
+            ...prev,
+            messages: prev.messages.map(m => (m.from === meId && m.to === otherId && m.status !== 'read'
+              ? { ...m, status: 'read' as const, read: true }
+              : m)),
+          }));
+        }
+      };
+      ws.onclose = () => {
+        if (stopped) return;
+        if (socket === ws) { socket = null; wsRef.current = null; }
+        attempts += 1;
+        reconnect = setTimeout(connect, Math.min(1000 * 2 ** attempts, 15000));
+      };
+    };
+
+    // A ping keeps the proxies from idling the socket out; the watchdog cuts
+    // off a peer that stopped answering, and onclose walks the backoff.
+    heartbeat = setInterval(() => {
+      if (!socket || socket.readyState !== WebSocket.OPEN) return;
+      socket.send(JSON.stringify({ type: 'ping' }));
+      if (Date.now() - lastSeen > 45000) socket.close();
+    }, 25000);
+
+    connect();
+    return () => {
+      stopped = true;
+      if (reconnect) clearTimeout(reconnect);
+      if (heartbeat) clearInterval(heartbeat);
+      if (typingTimer) clearTimeout(typingTimer);
+      if (socket) { socket.onclose = null; socket.close(); }
+      wsRef.current = null;
+    };
+  }, [serverMode, meId, otherId, other.username, setDb]);
+
   // Only a new message — or a different conversation — pulls the reader to the
   // foot of the thread; rows added above stay exactly where they were.
   const newest = thread.length ? thread[thread.length - 1].id : '';
@@ -94,6 +173,15 @@ export default function ChatThread({ other }: { other: User }) {
     void sendMessage(other.id, text);
     setText('');
     inputRef.current?.focus();
+  };
+
+  // Typing is a tell, not a telegraph: at most one frame every two seconds.
+  const noteTyping = () => {
+    const ws = wsRef.current;
+    if (ws && ws.readyState === WebSocket.OPEN && Date.now() - typingSent.current > 2000) {
+      typingSent.current = Date.now();
+      ws.send(JSON.stringify({ type: 'typing' }));
+    }
   };
 
   const todayStart = dayStart(Date.now());
@@ -176,7 +264,7 @@ export default function ChatThread({ other }: { other: User }) {
         <input
           ref={inputRef}
           value={text}
-          onChange={e => setText(e.target.value)}
+          onChange={e => { setText(e.target.value); noteTyping(); }}
           placeholder={t('typeMessage')}
           aria-label={t('typeMessage')}
           maxLength={2000}
@@ -184,6 +272,12 @@ export default function ChatThread({ other }: { other: User }) {
         />
         <button type="submit" className="chat-send" disabled={!text.trim()} aria-label={t('send')}>{IC.send}</button>
       </form>
+      {typing && (
+        <div className="chat-typing" aria-hidden="true">
+          <span /><span /><span />
+          <em>{t('typing')}</em>
+        </div>
+      )}
     </div>
   );
 }

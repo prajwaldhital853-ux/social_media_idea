@@ -14,6 +14,9 @@ const nextConfig = {
       // adds the trailing slash its URL map expects.
       { source: '/api/:path*', destination: `${API_ORIGIN}/api/:path*` },
       { source: '/media/:path*', destination: `${API_ORIGIN}/media/:path*` },
+      // The DM socket rides the same first-party proxy: a cross-origin
+      // WebSocket handshake would carry no cookies at all.
+      { source: '/ws/:path*', destination: `${API_ORIGIN}/ws/:path*` },
     ];
   },
 };

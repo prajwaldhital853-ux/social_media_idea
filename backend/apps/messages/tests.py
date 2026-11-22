@@ -1,10 +1,15 @@
+from asgiref.sync import async_to_sync, sync_to_async
+from channels.testing import WebsocketCommunicator
 from django.core.cache import cache
-from django.test import TestCase, TransactionTestCase
+from django.test import TestCase, TransactionTestCase, override_settings
 from django.utils import timezone
 
+from apps.accounts.auth import issue_access
 from apps.common.testutils import auth_client, make_user, run_threads
 from apps.follows.models import Follow
 from apps.messages.models import Conversation, Message
+
+from exposing.asgi import application
 
 
 class MessageTests(TestCase):
@@ -133,3 +138,110 @@ class MessageConcurrencyTests(TransactionTestCase):
         self.assertEqual(codes, [201] * 12)
         self.assertEqual(Conversation.objects.count(), 1)
         self.assertEqual(Message.objects.count(), 12)
+
+
+class ChatSocketTests(TransactionTestCase):
+    """The thread socket: cookie auth, caps, and the relay the REST views push to."""
+
+    # The origin validator was built with settings.WS_ORIGINS at import time, so
+    # tests speak the default browser origin instead of overriding the setting.
+    ORIGIN = (b'origin', b'http://localhost:3000')
+
+    def setUp(self):
+        cache.clear()
+        self.a = make_user('wsa')
+        self.b = make_user('wsb')
+        self.ca = auth_client(self.a)
+        self.cb = auth_client(self.b)
+
+    def _comm(self, user, username):
+        return WebsocketCommunicator(application, f'/ws/chat/{username}/', headers=[
+            self.ORIGIN,
+            (b'cookie', f'exposing_access={issue_access(user)}'.encode()),
+        ])
+
+    def test_unauthenticated_socket_is_rejected(self):
+        async def run():
+            comm = WebsocketCommunicator(application, '/ws/chat/wsb/', headers=[self.ORIGIN])
+            try:
+                connected, code = await comm.connect()
+                self.assertFalse(connected)
+                self.assertEqual(code, 4401)
+            finally:
+                await comm.disconnect()
+        async_to_sync(run)()
+
+    def test_self_and_missing_thread_are_rejected(self):
+        async def run():
+            comm = self._comm(self.a, 'wsa')
+            try:
+                connected, code = await comm.connect()
+                self.assertFalse(connected)
+                self.assertEqual(code, 4404)
+            finally:
+                await comm.disconnect()
+            comm = self._comm(self.a, 'nobody-here')
+            try:
+                connected, code = await comm.connect()
+                self.assertFalse(connected)
+                self.assertEqual(code, 4404)
+            finally:
+                await comm.disconnect()
+        async_to_sync(run)()
+
+    def test_socket_cap_per_user(self):
+        @override_settings(WS_SOCKETS_PER_USER=1)
+        async def run():
+            first = self._comm(self.a, 'wsb')
+            try:
+                connected, _ = await first.connect()
+                self.assertTrue(connected)
+                second = self._comm(self.a, 'wsb')
+                try:
+                    connected, code = await second.connect()
+                    self.assertFalse(connected)
+                    self.assertEqual(code, 4429)
+                finally:
+                    await second.disconnect()
+            finally:
+                await first.disconnect()
+        async_to_sync(run)()
+
+    def test_ping_typing_and_message_relay_with_read_receipt(self):
+        async def run():
+            comm_a = self._comm(self.a, 'wsb')
+            comm_b = self._comm(self.b, 'wsa')
+            try:
+                self.assertTrue((await comm_a.connect())[0])
+                self.assertTrue((await comm_b.connect())[0])
+                ready_a = await comm_a.receive_json_from(timeout=5)
+                ready_b = await comm_b.receive_json_from(timeout=5)
+                self.assertEqual(ready_a, {'kind': 'ready', 'thread': 'wsb'})
+                self.assertEqual(ready_b, {'kind': 'ready', 'thread': 'wsa'})
+
+                await comm_a.send_json_to({'type': 'ping'})
+                self.assertEqual(await comm_a.receive_json_from(timeout=5), {'kind': 'pong'})
+
+                await comm_a.send_json_to({'type': 'typing'})
+                typing = await comm_b.receive_json_from(timeout=5)
+                self.assertEqual(typing, {'kind': 'typing', 'by': 'wsa'})
+
+                # The REST send arrives on both wires; the client itself is sync
+                # code and must leave the event loop for its ORM queries.
+                resp = await sync_to_async(self.ca.post)('/api/messages/wsb/', {'text': 'over the wire'}, format='json')
+                self.assertEqual(resp.status_code, 201)
+                mine = await comm_a.receive_json_from(timeout=5)
+                theirs = await comm_b.receive_json_from(timeout=5)
+                self.assertEqual(mine['kind'], 'message')
+                self.assertEqual(mine['message']['status'], 'sent')
+                self.assertEqual(theirs['kind'], 'message')
+                self.assertEqual(theirs['message']['text'], 'over the wire')
+
+                await comm_b.send_json_to({'type': 'read'})
+                read = await comm_a.receive_json_from(timeout=5)
+                self.assertEqual(read['kind'], 'read')
+                self.assertEqual(read['read'], 1)
+            finally:
+                await comm_a.disconnect()
+                await comm_b.disconnect()
+        async_to_sync(run)()

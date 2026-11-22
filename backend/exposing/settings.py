@@ -55,6 +55,10 @@ DEBUG = os.environ.get('DJANGO_DEBUG', '1') == '1'
 ALLOWED_HOSTS = _env_list('DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1,.onrender.com')
 
 INSTALLED_APPS = [
+    # Daphne's runserver speaks both HTTP and WebSocket, so it must replace
+    # Django's own dev server — hence first in the list.
+    'daphne',
+    'channels',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -113,6 +117,22 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'exposing.wsgi.application'
+ASGI_APPLICATION = 'exposing.asgi.application'
+
+# One process, one copy of the layer: enough for DM threads and typing. When the
+# app ever runs as more than one instance, swap this for the Redis layer.
+CHANNEL_LAYERS = {'default': {'BACKEND': 'channels.layers.InMemoryChannelLayer'}}
+
+# A browser always sends Origin on a WebSocket handshake; anything not on this
+# list is rejected before auth even runs.
+WS_ORIGINS = _env_list('DJANGO_WS_ORIGINS', 'http://localhost:3000,http://127.0.0.1:3000')
+
+# Realtime budgets: per-user concurrent sockets/streams and SSE pacing. Kept as
+# settings so tests can tighten time without patching module globals.
+SSE_INTERVAL = float(os.environ.get('EXPOSING_SSE_INTERVAL') or '2')
+SSE_MAX_LIFE = float(os.environ.get('EXPOSING_SSE_MAX_LIFE') or '3300')
+SSE_STREAMS_PER_USER = int(os.environ.get('EXPOSING_SSE_STREAMS') or '3')
+WS_SOCKETS_PER_USER = int(os.environ.get('EXPOSING_WS_SOCKETS') or '8')
 
 DATABASES = {'default': _database()}
 

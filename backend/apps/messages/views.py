@@ -14,6 +14,7 @@ from apps.follows.models import Follow
 from apps.notifications.services import notify_latest
 
 from .models import Conversation, Message
+from .consumer import broadcast_message, broadcast_read
 
 
 class MessageSerializer(serializers.ModelSerializer):
@@ -113,6 +114,7 @@ def thread(request, username):
             message = Message.objects.create(conversation=conversation, sender=request.user, text=text)
             Conversation.objects.filter(pk=conversation.pk).update(last_message_at=message.created_at)
         notify_latest(other, request.user, 'message', f'{request.user.username} sent you a message.', 'user', request.user.pk)
+        broadcast_message(message, [request.user.pk, other.pk])
         return Response(MessageSerializer(message).data, status=status.HTTP_201_CREATED)
     conversation = Conversation.objects.filter(participants=request.user).filter(participants=other).first()
     if not conversation:
@@ -147,4 +149,6 @@ def mark_read(request, username):
         return Response({'read': 0})
     _mark_delivered(conversation, request.user)
     count = conversation.messages.filter(sender=other, read_at__isnull=True).update(read_at=timezone.now())
+    if count:
+        broadcast_read(request.user.pk, [request.user.pk, other.pk], count)
     return Response({'read': count})

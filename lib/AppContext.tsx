@@ -10,10 +10,10 @@ import { I18N, TranslationKey } from './i18n';
 import { api, API_ENABLED, ApiError } from './api';
 import { merge as applyFragment, Fragment } from './store';
 import {
-  idOf, at, mapComment, mapFollow, mapMe, mapMessage, mapPerson, mapPost, mapPromotion,
+  idOf, at, mapComment, mapFollow, mapMe, mapMessage, mapNotification, mapPerson, mapPost, mapPromotion,
   mapReport, mapSettings, mediaPayload, profilePatch, reactionsOfPost, toPostPayload, toProfilePayload,
 } from './dto';
-import { bindListCache, forgetLists, listingsFragment, postsFragment } from './lists';
+import { bindListCache, forgetLists, listingsFragment, notificationsFragment, postsFragment, pushListRow, refreshList } from './lists';
 
 type Target = 'post' | 'comment' | 'media';
 
@@ -320,6 +320,98 @@ export function AppProvider({ children }: { children: ReactNode }) {
       document.removeEventListener('visibilitychange', wake);
     };
   }, [serverMode, selfId, pathname, pullBadges]);
+
+  /**
+   * The bell's live line. Server-Sent Events push every new notification row;
+   * when the stream dies three times in a row the hook drops to HTTP polling
+   * with a growing interval, and keeps trying the stream again every minute.
+   * Hidden tabs close the socket entirely — nothing ships while nobody watches.
+   */
+  useEffect(() => {
+    if (!serverMode || !selfId) return;
+
+    const POLL_BASE = 15000;
+    const POLL_CAP = 300000;
+
+    let es: EventSource | null = null;
+    let errors = 0;
+    let stopped = false;
+    let pollTimer: ReturnType<typeof setTimeout> | null = null;
+    let pollDelay = POLL_BASE;
+    let lastEsAttempt = 0;
+
+    const absorb = (row: any) => {
+      if (!row || row.recipient !== Number(selfId)) return;
+      const mapped = mapNotification(row);
+      setDb(prev => applyFragment(prev, notificationsFragment([row])));
+      // The cache merges by id; the list's id order is what the popover renders.
+      pushListRow('notifications', undefined, mapped.id);
+      void pullBadges();
+    };
+
+    const refreshPage = () => {
+      void pullBadges();
+      // refreshList, not a bare fetch: the popover renders the list's id order,
+      // so the state has to be refilled, not just the cache beneath it.
+      void refreshList('notifications', { path: '/notifications/', frag: notificationsFragment });
+    };
+
+    const pollTick = () => {
+      if (stopped || document.visibilityState !== 'visible') return;
+      refreshPage();
+      pollDelay = Math.min(pollDelay * 2, POLL_CAP);
+      pollTimer = setTimeout(pollTick, pollDelay);
+      // The stream gets another chance while the polls carry on.
+      if (Date.now() - lastEsAttempt > 60000) open();
+    };
+
+    const startPolling = () => {
+      if (pollTimer || stopped) return;
+      pollDelay = POLL_BASE;
+      pollTimer = setTimeout(pollTick, 0);
+    };
+
+    const stopPolling = () => {
+      if (pollTimer) { clearTimeout(pollTimer); pollTimer = null; }
+    };
+
+    const open = () => {
+      if (stopped || es || document.visibilityState !== 'visible') return;
+      lastEsAttempt = Date.now();
+      const source = new EventSource('/api/notifications/stream/');
+      es = source;
+      source.addEventListener('open', () => { errors = 0; stopPolling(); });
+      source.addEventListener('notification', ev => absorb(JSON.parse((ev as MessageEvent).data)));
+      source.addEventListener('error', () => {
+        errors += 1;
+        if (errors >= 3 && es === source) {
+          source.close();
+          es = null;
+          startPolling();
+        }
+      });
+    };
+
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') {
+        if (es) { es.close(); es = null; }
+        stopPolling();
+      } else {
+        void pullBadges();
+        refreshPage();
+        open();
+      }
+    };
+
+    open();
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      stopped = true;
+      if (es) es.close();
+      stopPolling();
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [serverMode, selfId]);
 
   async function bootstrap() {
     try {
