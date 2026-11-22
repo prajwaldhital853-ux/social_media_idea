@@ -5,7 +5,7 @@ from django.urls import include, path, re_path
 from apps.common import sync, uploads
 from apps.common.config import client_config
 from apps.common.errors import server_error
-from apps.common.health import health
+from apps.common.health import health, ping
 from apps.common.media import serve_media
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
@@ -23,6 +23,7 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/meta/', client_meta),
     path('api/health/', health),
+    path('api/ping/', ping),
     path('api/sync/', sync.sync),
     path('api/uploads/', uploads.upload),
     path('api/', include('apps.accounts.urls')),

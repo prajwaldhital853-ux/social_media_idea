@@ -110,7 +110,10 @@ export function onWakeChange(listener: (waking: boolean) => void): () => void {
 
 function ping(): Promise<boolean> {
   const signal = typeof AbortSignal?.timeout === 'function' ? AbortSignal.timeout(PING_MS) : undefined;
-  return fetch('/api/health/', { credentials: 'same-origin', signal })
+  // /api/ping/ and not /api/health/: this runs every two seconds for up to a
+  // minute while a cold instance starts, and the deep probe reads the database,
+  // the cache and the disk on every one of those polls.
+  return fetch('/api/ping/', { credentials: 'same-origin', signal })
     .then(res => res.ok)
     .catch(() => false);
 }

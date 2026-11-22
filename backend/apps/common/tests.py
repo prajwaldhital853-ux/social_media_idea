@@ -6,8 +6,10 @@ from unittest import mock
 
 from django.conf import settings
 
+from django.db import connection
 from django.http import Http404
 from django.test import Client, RequestFactory, TestCase, override_settings
+from django.test.utils import CaptureQueriesContext
 
 from apps.common.mail import send_off_request
 from apps.common.media import serve_media
@@ -246,6 +248,35 @@ class HealthTests(TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.data['status'], 'degraded')
         self.assertFalse(resp.data['database']['ok'])
+
+
+class PingTests(TestCase):
+    """The keep-alive target: a cron fires at it every few minutes so the free
+    instance never sleeps, and the browser polls it while waiting out a cold start.
+    Both run unattended, so what matters is that it always answers and never costs
+    anything — a probe that leans on the database would put the cron's own load on
+    the service it is trying to keep awake."""
+
+    def test_answers_signed_out(self):
+        resp = self.client.get('/api/ping/')
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data, {'status': 'ok'})
+
+    def test_asks_the_database_for_nothing(self):
+        with CaptureQueriesContext(connection) as queries:
+            self.client.get('/api/ping/')
+        self.assertEqual(len(queries), 0)
+
+    def test_a_dead_database_does_not_stop_the_answer(self):
+        # /api/health/ goes degraded here; the cron must keep firing or the whole
+        # service falls asleep on top of the outage and stays down.
+        with mock.patch('apps.common.health._database', return_value={'ok': False, 'error': 'OperationalError'}):
+            self.assertEqual(self.client.get('/api/health/').data['status'], 'degraded')
+        self.assertEqual(self.client.get('/api/ping/').status_code, 200)
+
+    def test_never_throttled(self):
+        codes = {self.client.get('/api/ping/').status_code for _ in range(130)}
+        self.assertEqual(codes, {200})
 
 
 class MailDeliveryTests(TestCase):
