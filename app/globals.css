@@ -7364,8 +7364,21 @@ a.market-card { text-decoration: none; }
    after every tap until something else was touched. */
 @media (hover: none), (pointer: coarse) {
   .post:hover { background: transparent; }
+}
+@media (min-width: 1024px) {
   .shell.feed-page .post:hover { background: var(--card); }
 }
+
+/* Below the desktop sheet a post is the whole width of the screen, so its
+   photos are too: the inset used to leave a stripe of page colour down each
+   side of every multi-photo card, which read as the card not finishing. */
+@media (max-width: 768px) {
+  .post > .media-mosaic { margin: 4px -12px 2px; border: 0; border-radius: 0; }
+}
+@media (min-width: 769px) and (max-width: 1023px) {
+  .post > .media-mosaic { margin: 4px -16px 2px; border: 0; border-radius: 0; }
+}
+.post-featured > .media-mosaic { margin-bottom: 8px; }
 
 /* One line for the byline, with the menu pinned to the right end of it. The
    wrap was there so "at Bhrikutimandap" could breathe; what it actually cost
@@ -7427,6 +7440,10 @@ a.market-card { text-decoration: none; }
   font-variant-numeric: tabular-nums;
   pointer-events: none;
 }
+/* The frosted circle is a containing block of its own — backdrop-filter makes
+   it one — so the like count measures from the disc rather than the row, and
+   has to be pushed the row's own padding to land in the same band as the rest. */
+.reel-rail-item .reaction-trigger > span { bottom: -15px; }
 .reel-views { padding-bottom: 2px; }
 .reel-views > span { position: static; transform: none; width: auto; font-size: 11.5px; }
 

@@ -40,8 +40,10 @@ export function useBackClose(active: boolean, close: Closer) {
     // Defer the push so React StrictMode's probe mount/cleanup cycle in dev
     // cancels before touching history, keeping push/back perfectly paired.
     let pushed = false;
+    let path = '';
     const timer = setTimeout(() => {
       pushed = true;
+      path = location.pathname;
       stack.push(entry);
       history.pushState({ ...(history.state || {}), exposingLayer: stack.length }, '');
     }, 0);
@@ -63,6 +65,11 @@ export function useBackClose(active: boolean, close: Closer) {
       if (i >= 0) {
         stack.splice(i, 1);
         if (skipBack > 0) { skipBack--; return; }
+        // The app moved on its own — a link took the reader to another route
+        // while this layer was still up. The URL has already been rewritten by
+        // the time the tree unmounts, so backing here would cancel the trip the
+        // reader just asked for and drop them back on the page they left.
+        if (location.pathname !== path) return;
         swallow++;
         history.back();
       }

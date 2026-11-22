@@ -10,7 +10,7 @@ import puppeteer from 'puppeteer-core';
 import { writeFileSync } from 'node:fs';
 import { retryWrite } from './shots.mjs';
 
-const BASE = 'http://localhost:3000';
+const BASE = process.env.QA_BASE || 'http://localhost:3000';
 const OUT = 'D:/social_medial/.qa';
 const CHROME = 'C:/Program Files/Google/Chrome/Application/chrome.exe';
 const DEMO = { username: 'sita', password: 'exposing-demo-1' };
@@ -115,7 +115,9 @@ const firstPaint = await d.evaluate(() => ({
   bodyBg: getComputedStyle(document.body).backgroundColor
 }));
 ok('desktop: opens in dark mode by default', firstPaint.theme === 'dark' && !firstPaint.stored, JSON.stringify(firstPaint));
-ok('desktop: the page field is the soft canvas color', rgb(firstPaint.bodyBg) === 'rgb(16,17,20)', firstPaint.bodyBg);
+// Dark is a dark room: the field itself is off, and only the sheets a reader
+// touches carry any light. The old #101114 tint read as a grey haze on OLED.
+ok('desktop: the page field is pure black', rgb(firstPaint.bodyBg) === 'rgb(0,0,0)', firstPaint.bodyBg);
 
 await signIn(d, DEMO.username, DEMO.password);
 await goto(d, '/');
@@ -158,7 +160,7 @@ ok('desktop: no hairline between rail, feed and top bar',
    shell.railBorder === '0px' && shell.topbarBorder === '0px',
    `rail ${shell.railBorder} / topbar ${shell.topbarBorder}`);
 ok('desktop: the rail is the left sheet of the screen',
-   rgb(shell.railBg) === 'rgb(23,25,28)', shell.railBg);
+   rgb(shell.railBg) === 'rgb(0,0,0)', shell.railBg);
 ok('desktop: no sign in / sign up block inside the rail', !shell.railAuth);
 ok('desktop: the theme switch lives on the right of the top bar, and nowhere else',
    shell.themeInRight && !shell.toggleLeft && !shell.pageToggle,
@@ -218,7 +220,9 @@ const bellStyles = await styles(d, '[aria-label="Notifications"]', ['display']);
 ok('desktop: the bell in the top bar is a button, not a link',
    bellStyles === null || bellStyles.display !== 'none', JSON.stringify(bellStyles));
 await d.evaluate(() => document.querySelector('[aria-label="Notifications"]')?.click());
-await sleep(500);
+// The panel shell paints before the list pull lands, so a fixed sleep reads
+// an honest popover as an empty one. Wait for the first row, then measure.
+await d.waitForSelector('.topbar-panel .notif-row', { timeout: 8000 }).catch(() => {});
 const notifPanel = await d.evaluate(() => {
   const p = document.querySelector('.topbar-panel');
   if (!p) return null;

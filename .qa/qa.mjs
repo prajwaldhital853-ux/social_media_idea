@@ -2,7 +2,8 @@ import puppeteer from 'puppeteer-core';
 import fs from 'node:fs';
 import { retryWrite } from './shots.mjs';
 
-const OUT = 'D:/social_medial/.qa';
+const OUT = process.env.QA_OUT || 'D:/social_medial/.qa';
+const BASE = process.env.QA_BASE || 'http://localhost:3000';
 const CHROME = 'C:/Program Files/Google/Chrome/Application/chrome.exe';
 const results = [];
 const ok = (name, pass, detail = '') => { results.push({ name, pass: !!pass, detail }); console.log(`${pass ? 'PASS' : 'FAIL'}  ${name}${detail ? '  — ' + detail : ''}`); };
@@ -55,7 +56,7 @@ const doubleTapSeek = (page, dir) => page.evaluate(async dir => {
   }
 }, dir);
 async function goto(page, path) {
-  await page.goto('http://localhost:3000' + path, { waitUntil: 'domcontentloaded', timeout: 45000 });
+  await page.goto(BASE + path, { waitUntil: 'domcontentloaded', timeout: 45000 });
   await page.waitForSelector('.post, .create-post-page, .search-view, .login-card, .login-container, .modern-login, .reels-page, .media-page, .profile-view, .profile-missing, .wallet-body, .settings-body, .notif-view, .inbox-view, .chat-view, .market-view, .admin-view, .legal-doc, .signup-container, .saved-list, .empty-state, .feed-empty, .people-page, .listing-page, .people-page-list', { timeout: 30000 }).catch(() => {});
   await sleep(900);
   if (path === '/') await loadAllFeed(page);
@@ -155,7 +156,7 @@ ok('desktop: left menu + feed column + quiet right rail with inline suggestions'
   && layout.suggestRows >= 1 && layout.calmBg === 'rgba(0, 0, 0, 0)'
   && layout.calmGutter >= 16 && layout.calmGutter <= 48 && layout.rail, JSON.stringify(layout));
 
-await d.goto('http://localhost:3000/', { waitUntil: 'domcontentloaded', timeout: 45000 });
+await d.goto(BASE + '/', { waitUntil: 'domcontentloaded', timeout: 45000 });
 await d.waitForSelector('article.post', { timeout: 30000 });
 await sleep(600);
 const firstPage = await d.evaluate(() => document.querySelectorAll('article.post').length);
@@ -854,22 +855,48 @@ ok('desktop: single tap pauses reel', await d.evaluate(() => document.querySelec
 await d.mouse.click(640, 450);
 await sleep(600);
 ok('desktop: single tap resumes reel', await d.evaluate(() => !document.querySelector('.reel-slide video').paused));
-// rail actions: Like press opens the reaction tray
-const railBefore = await d.evaluate(() => {
+// rail actions: the Like is a tap-to-like button and the picker is a hold.
+const railTap = await d.evaluate(() => {
   const btn = document.querySelector('.reel-rail-item .reaction-trigger');
   const r = btn.getBoundingClientRect();
   btn.click();
-  return { label: btn.getAttribute('aria-label'), size: Math.round(r.width), labelBelow: btn.querySelector('span')?.textContent };
+  return { label: btn.getAttribute('aria-label'), size: Math.round(r.width), tray: !!document.querySelector('.reaction-tray') };
 });
 await sleep(450);
-const reelTray = await d.evaluate(() => {
+const railLiked = await d.evaluate(() => {
+  const db = JSON.parse(localStorage.getItem('exposing-demo-v1'));
+  const newest = db.posts.filter(p => p.media.some(m => m.type === 'video')).sort((a, b) => b.ts - a.ts)[0];
+  const btn = document.querySelector('.reel-rail-item .reaction-trigger');
+  return {
+    mine: db.reactions.filter(r => r.targetType === 'post' && r.targetId === newest?.id && r.uid === db.meId).map(r => r.kind),
+    reacted: btn.classList.contains('reacted'),
+    tray: !!document.querySelector('.reaction-tray'),
+  };
+});
+ok('desktop: reel Like tap likes and never opens the picker',
+   railTap.label === 'Like' && railTap.size === 42 && !railTap.tray && railLiked.reacted && railLiked.mine.includes('like'),
+   JSON.stringify({ railTap, railLiked }));
+await d.evaluate(() => document.querySelector('.reel-rail-item .reaction-trigger').click());
+await sleep(400);
+ok('desktop: a second reel Like tap unlikes', await d.evaluate(() => {
+  const db = JSON.parse(localStorage.getItem('exposing-demo-v1'));
+  const newest = db.posts.filter(p => p.media.some(m => m.type === 'video')).sort((a, b) => b.ts - a.ts)[0];
+  return !db.reactions.some(r => r.targetType === 'post' && r.targetId === newest?.id && r.uid === db.meId)
+    && !document.querySelector('.reel-rail-item .reaction-trigger').classList.contains('reacted');
+}));
+const reelTray = await d.evaluate(async () => {
+  const btn = document.querySelector('.reel-rail-item .reaction-trigger');
+  btn.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 }));
+  await new Promise(r => setTimeout(r, 620));
+  btn.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, button: 0 }));
+  await new Promise(r => setTimeout(r, 80));
   const tray = document.querySelector('.reaction-tray');
   if (!tray) return { open: false };
   const r = tray.getBoundingClientRect();
-  const btn = document.querySelector('.reel-rail-item .reaction-trigger').getBoundingClientRect();
-  return { open: true, kinds: [...tray.querySelectorAll('button')].map(b => b.getAttribute('aria-label')), inView: r.left >= 0 && r.right <= window.innerWidth && r.top >= 0, above: r.bottom <= btn.top + 2, z: getComputedStyle(tray).zIndex };
+  const b = btn.getBoundingClientRect();
+  return { open: true, kinds: [...tray.querySelectorAll('button')].map(x => x.getAttribute('aria-label')), inView: r.left >= 0 && r.right <= window.innerWidth && r.top >= 0, above: r.bottom <= b.top + 2, z: getComputedStyle(tray).zIndex };
 });
-ok('desktop: reel Like press opens reaction tray above the button', railBefore.label === 'Choose reaction' && railBefore.size === 46 && reelTray.open && reelTray.kinds.length >= 5 && reelTray.inView && reelTray.above && Number(reelTray.z) > 1200, JSON.stringify({ railBefore, reelTray }));
+ok('desktop: holding the reel Like opens reaction tray above the button', reelTray.open && reelTray.kinds.length >= 5 && reelTray.inView && reelTray.above && Number(reelTray.z) > 1200, JSON.stringify({ railTap, reelTray }));
 await shot(d, 'desktop-reels-tray');
 await d.evaluate(() => [...document.querySelectorAll('.reaction-tray button')].find(b => b.getAttribute('aria-label') === 'Love')?.click());
 await sleep(450);
@@ -947,7 +974,7 @@ ok('desktop: search finds Sita', await d.evaluate(() => document.body.textConten
 await shot(d, 'desktop-search');
 
 // 404 recovery page
-await d.goto('http://localhost:3000/this-route-does-not-exist', { waitUntil: 'domcontentloaded', timeout: 45000 });
+await d.goto(BASE + '/this-route-does-not-exist', { waitUntil: 'domcontentloaded', timeout: 45000 });
 await d.waitForSelector('.notfound-card', { timeout: 15000 });
 await sleep(500);
 const nf = await d.evaluate(() => {
@@ -1013,9 +1040,23 @@ const followed = await d.evaluate(uid => {
 ok('desktop: follow toggle persists', followed === !profInfo.followOn, `now following=${followed}`);
 await d.evaluate(() => document.querySelector('.profile-actions .follow-btn').click());
 await sleep(300);
-await clickBtnByText(d, '.tabs', '^media$');
+// Media split into two honest tabs: what moves and what does not.
+await clickBtnByText(d, '.tabs', '^photos$');
 await sleep(400);
-ok('desktop: profile media tab shows grid', await d.evaluate(() => !!document.querySelector('.profile-media-grid') || !!document.querySelector('.profile-view .feed-empty')));
+const photoTab = await d.evaluate(() => ({
+  grid: !!document.querySelector('.profile-media-grid') || !!document.querySelector('.profile-view .feed-empty'),
+  cells: document.querySelectorAll('.profile-media-grid .profile-media-cell').length,
+  reels: document.querySelectorAll('.profile-media-grid .reel-cell').length,
+}));
+ok('desktop: profile photos tab shows the still grid', photoTab.grid && photoTab.reels === 0, JSON.stringify(photoTab));
+await clickBtnByText(d, '.tabs', '^reels$');
+await sleep(400);
+const reelTab = await d.evaluate(() => ({
+  on: [...document.querySelectorAll('.tabs button')].some(b => /^reels$/i.test(b.textContent.trim()) && b.getAttribute('aria-selected') === 'true'),
+  cells: document.querySelectorAll('.profile-media-grid .profile-media-cell').length,
+  reels: document.querySelectorAll('.profile-media-grid .reel-cell').length,
+}));
+ok('desktop: profile reels tab shows only the moving cells', reelTab.on && reelTab.cells === reelTab.reels, JSON.stringify(reelTab));
 await clickBtnByText(d, '.tabs', '^about$');
 await sleep(400);
 const aboutInfo = await d.evaluate(() => ({
@@ -1346,7 +1387,7 @@ await d.keyboard.press('Escape');
 await sleep(350);
 
 // Windowed feed: 10 first, prefetch extends before the end, no skeleton at rest
-await d.goto('http://localhost:3000/', { waitUntil: 'domcontentloaded', timeout: 45000 });
+await d.goto(BASE + '/', { waitUntil: 'domcontentloaded', timeout: 45000 });
 await d.waitForSelector('article.post', { timeout: 20000 });
 await sleep(900);
 // The feed only shows live posts this reader may see, so count them by the same
@@ -1366,7 +1407,9 @@ const feedInit = await d.evaluate(() => {
   };
 });
 ok('desktop: feed renders first 10 posts only', feedInit.rendered === Math.min(10, feedInit.total) && !feedInit.skeleton, JSON.stringify(feedInit));
-await d.evaluate(() => window.scrollTo({ top: document.documentElement.scrollHeight * 0.6, behavior: 'instant' }));
+// Two screens short of the end: the prefetch band is 1200px and the cards are
+// tall now, so a fraction of the page would land outside it.
+await d.evaluate(() => window.scrollTo({ top: document.documentElement.scrollHeight - window.innerHeight * 2, behavior: 'instant' }));
 await sleep(700);
 const feedMid = await d.evaluate(() => ({ rendered: document.querySelectorAll('article.post').length, skeleton: !!document.querySelector('.feed-skeleton') }));
 ok('desktop: feed prefetches next batch before the end (no skeleton at normal scroll)', feedMid.rendered > feedInit.rendered && !feedMid.skeleton, JSON.stringify(feedMid));
@@ -1724,7 +1767,9 @@ const mMix = await m.evaluate(() => {
   const mo = a.querySelector('.media-mosaic');
   return { h: mo.clientHeight, more: mo.querySelector('.media-more')?.textContent };
 });
-ok('mobile: stack mosaic ~360px + 3 overlay', Math.abs(mMix.h - 360) <= 2 && mMix.more === '+3', JSON.stringify(mMix));
+// A thumb-high stack, not a stamp: the reader asked for the 3-4 photo cards to
+// grow on a phone, and 360px was the old stamp.
+ok('mobile: stack mosaic ~400px + 3 overlay', Math.abs(mMix.h - 400) <= 2 && mMix.more === '+3', JSON.stringify(mMix));
 
 // FAB opens the entry chooser
 await m.tap('.post-fab');
@@ -1876,7 +1921,7 @@ await goBack(m);
 ok('mobile: phone-back from media page returns to feed', await m.evaluate(() => location.pathname === '/' && !document.querySelector('.media-page')));
 
 // Post page keyboard: very first tap, no scroll needed (SS2)
-await m.goto('http://localhost:3000/post/p3', { waitUntil: 'domcontentloaded', timeout: 45000 });
+await m.goto(BASE + '/post/p3', { waitUntil: 'domcontentloaded', timeout: 45000 });
 await m.waitForSelector('.post-page-comments input', { timeout: 20000 });
 const preScroll = await m.evaluate(() => window.scrollY);
 await m.tap('.post-page-comments input');
@@ -1973,16 +2018,33 @@ const mReels = await m.evaluate(() => {
 ok('mobile: reels full-screen video feed, sound on, rail + caption', mReels.slides >= 2 && mReels.playing && mReels.muted === false && mReels.rail && mReels.meta, JSON.stringify(mReels));
 ok('mobile: reels keeps bottom nav visible above safe area', mReels.hasNav && mReels.navVisible && mReels.navTabs >= 4 && mReels.navAtBottom && mReels.pageLifted, JSON.stringify(mReels));
 await shot(m, 'mobile-reels');
-await m.evaluate(() => document.querySelector('.reel-rail-item .reaction-trigger').click());
+const reelMine = () => m.evaluate(() => {
+  const db = JSON.parse(localStorage.getItem('exposing-demo-v1'));
+  const newest = db.posts.filter(p => p.media.some(x => x.type === 'video')).sort((a, b) => b.ts - a.ts)[0];
+  return db.reactions.some(r => r.targetType === 'post' && r.targetId === newest?.id && r.uid === db.meId);
+});
+const mWasMine = await reelMine();
+const mTap = await m.evaluate(() => {
+  const btn = document.querySelector('.reel-rail-item .reaction-trigger');
+  btn.click();
+  return { tray: !!document.querySelector('.reaction-tray'), w: Math.round(btn.getBoundingClientRect().width) };
+});
 await sleep(500);
-const mTray = await m.evaluate(() => {
+ok('mobile: reel Like tap toggles the reaction and never opens the picker',
+   (await reelMine()) !== mWasMine && !mTap.tray && mTap.w === 42, JSON.stringify({ mWasMine, mTap }));
+const mTray = await m.evaluate(async () => {
+  const btn = document.querySelector('.reel-rail-item .reaction-trigger');
+  btn.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 }));
+  await new Promise(r => setTimeout(r, 620));
+  btn.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, button: 0 }));
+  await new Promise(r => setTimeout(r, 80));
   const t = document.querySelector('.reaction-tray');
   if (!t) return { open: false };
   const r = t.getBoundingClientRect();
-  const b = document.querySelector('.reel-rail-item .reaction-trigger').getBoundingClientRect();
+  const b = btn.getBoundingClientRect();
   return { open: true, kinds: t.querySelectorAll('button').length, inView: r.left >= 0 && r.right <= window.innerWidth && r.top >= 0 && r.bottom <= window.innerHeight, above: r.bottom <= b.top + 2 };
 });
-ok('mobile: reel Like tap opens reaction tray fully on screen', mTray.open && mTray.kinds >= 5 && mTray.inView && mTray.above, JSON.stringify(mTray));
+ok('mobile: holding the reel Like opens reaction tray fully on screen', mTray.open && mTray.kinds >= 5 && mTray.inView && mTray.above, JSON.stringify(mTray));
 await shot(m, 'mobile-reels-tray');
 await m.evaluate(() => [...document.querySelectorAll('.reaction-tray button')].find(b => b.getAttribute('aria-label') === 'Haha')?.click());
 await sleep(450);
@@ -2221,7 +2283,7 @@ await goto(m, '/admin');
 ok('mobile: non-staff blocked from admin', await m.evaluate(() => !!document.querySelector('.empty-state') && !document.querySelector('.admin-tabs')));
 
 // 404 recovery page on phone
-await m.goto('http://localhost:3000/this-route-does-not-exist', { waitUntil: 'domcontentloaded', timeout: 45000 });
+await m.goto(BASE + '/this-route-does-not-exist', { waitUntil: 'domcontentloaded', timeout: 45000 });
 await m.waitForSelector('.notfound-card', { timeout: 15000 });
 await sleep(500);
 const mnf = await m.evaluate(() => {

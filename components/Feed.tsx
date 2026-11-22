@@ -28,8 +28,12 @@ export default function Feed() {
 
   // The server has already chosen the rows; this pass only keeps staff/self
   // visibility honest for rows that were cached before something changed.
+  // Staff get the same deal the API gives them: the moderation view is the
+  // point, so a followers-only post from someone they do not follow is a row
+  // they are supposed to see, not one to filter back out.
+  const staff = isStaff();
   const serverPosts = cached.filter(p =>
-    (p.status === 'live' || me?.id === p.uid || isStaff()) && canSeePost(p, me?.id ?? null, db.follows, privates));
+    staff || ((p.status === 'live' || me?.id === p.uid) && canSeePost(p, me?.id ?? null, db.follows, privates)));
   const localPosts = db.posts
     .filter(p => (p.status === 'live' || me?.id === p.uid || isStaff()) && canSeePost(p, me?.id ?? null, db.follows, privates) && (tab !== 'following' || followingIds.has(p.uid)))
     .sort((a, b) => b.ts - a.ts);

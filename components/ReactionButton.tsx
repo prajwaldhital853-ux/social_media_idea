@@ -33,14 +33,20 @@ export default function ReactionButton({ targetType, targetId, small, kinds, ext
   useEffect(() => () => cancel(), []);
   useEffect(() => {
     if (!position) return;
+    const openedAt = performance.now();
     const outside = (e: PointerEvent) => { if (!picker.current?.contains(e.target as Node) && !button.current?.contains(e.target as Node)) setPosition(null); };
     const close = () => setPosition(null);
     const key = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopPropagation(); close(); button.current?.focus(); } };
+    // Focus scrolls the button into view, and with smooth scrolling that travel
+    // is still in flight when a keyboard-opened tray appears — so the first beat
+    // of scroll after opening is the app finishing the trip, not the reader
+    // leaving it.
+    const onScroll = () => { if (performance.now() - openedAt > 320) close(); };
     document.addEventListener('pointerdown', outside);
     document.addEventListener('keydown', key);
-    window.addEventListener('scroll', close, true);
+    window.addEventListener('scroll', onScroll, true);
     window.addEventListener('resize', close);
-    return () => { document.removeEventListener('pointerdown', outside); document.removeEventListener('keydown', key); window.removeEventListener('scroll', close, true); window.removeEventListener('resize', close); };
+    return () => { document.removeEventListener('pointerdown', outside); document.removeEventListener('keydown', key); window.removeEventListener('scroll', onScroll, true); window.removeEventListener('resize', close); };
   }, [position]);
   return <div className={`react-wrap ${small ? 'small' : ''}`}>
     <button ref={button} type="button" className={`action-btn reaction-trigger ${mine ? 'reacted' : ''}`} aria-label={openOnClick ? 'Choose reaction' : t(mine || 'like')} aria-pressed={!!mine} aria-haspopup="dialog" aria-expanded={!!position} title={openOnClick ? 'Tap to choose a reaction' : 'Press and hold for reactions'} onPointerDown={e => {

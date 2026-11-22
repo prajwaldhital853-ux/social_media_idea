@@ -9,7 +9,7 @@ import puppeteer from 'puppeteer-core';
 import fs from 'node:fs';
 import { retryWrite } from './shots.mjs';
 
-const BASE = 'http://localhost:3000';
+const BASE = process.env.QA_BASE || 'http://localhost:3000';
 const OUT = 'D:/social_medial/.qa';
 const CHROME = 'C:/Program Files/Google/Chrome/Application/chrome.exe';
 
