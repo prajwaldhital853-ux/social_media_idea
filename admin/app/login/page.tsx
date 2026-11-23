@@ -97,18 +97,13 @@ export default function LoginPage() {
   return (
     <main className="login">
       <section className="login-brand">
-        <span className="login-mark">{IC.shield}</span>
-        <h1>Exposing</h1>
-        <p className="login-kicker">admin console</p>
-        <p>
-          Client staff only. Every seat here signs in with a password <em>and</em> an
-          authenticator code, and each screen checks that proof again every thirty minutes.
-        </p>
-        <ul className="login-points">
-          <li>{IC.lock}<span>Second factor required for Superadmin, Admin and Moderator</span></li>
-          <li>{IC.key}<span>Moderator screens are opened one permission at a time</span></li>
-          <li>{IC.check}<span>Every grant, removal and sign-in is written to the audit log</span></li>
-        </ul>
+        <h1 className="login-lockup">
+          <img className="login-logo" src="/exposing-logo-dark.png" alt="Exposing" width={430} height={180} />
+          <span className="login-kicker">Admin console</span>
+        </h1>
+        <div className="login-brand-foot">
+          <p>Lost your phone or your codes? A Superadmin can reset your seat.</p>
+        </div>
       </section>
 
       <section className="login-side">

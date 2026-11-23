@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import Banner from '@/components/Banner';
 import ConsoleShell from '@/components/ConsoleShell';
 import { Chips } from '@/components/List';
 import { api } from '@/lib/api';
@@ -150,11 +151,7 @@ export default function AlertsScreen() {
         </>
       )}
     >
-      {banner && (
-        <p className={`banner banner-${banner.kind}`} role="status">
-          {banner.kind === 'ok' ? IC.check : IC.alert}<span>{banner.text}</span>
-        </p>
-      )}
+      <Banner banner={banner} />
 
       {!desk ? (
         <div className="skeleton-stack">
