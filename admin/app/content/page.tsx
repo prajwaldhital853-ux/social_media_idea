@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import ConsoleShell from '@/components/ConsoleShell';
-import ContentCard from '@/components/ContentCard';
+import ContentCard, { statePill } from '@/components/ContentCard';
 import DecisionBar from '@/components/Decision';
+import { Act, Chips, More } from '@/components/List';
 import { api } from '@/lib/api';
 import { num } from '@/lib/format';
 import { IC } from '@/lib/icons';
@@ -19,15 +20,18 @@ const TYPES: { id: ContentKind; label: string; key: string }[] = [
 
 const STATES = [
   { id: 'taken_down', label: 'Off the platform' },
-  { id: 'hidden', label: 'Hidden pending review' },
-  { id: 'removed', label: 'Taken down by staff' },
+  { id: 'hidden', label: 'Hidden' },
+  { id: 'removed', label: 'Taken down' },
   { id: 'live', label: 'Live' },
   { id: 'all', label: 'Everything' },
 ];
 
+const KIND_LABEL: Record<string, string> = {
+  post: 'Post', comment: 'Comment', listing: 'Listing', user: 'Account',
+};
+
 /** The raw status each app uses, read the way the shelf is actually organised. */
-const COUNT_LABEL: Record<string, string> = {
-  live: 'in the feed', active: 'live', hidden: 'hidden', removed: 'taken down',
+const COUNT_LABEL: Record<string, string> = {  live: 'in the feed', active: 'live', hidden: 'hidden', removed: 'taken down',
 };
 
 /** The audit action, said the way the shelf header says it. */
@@ -148,6 +152,17 @@ export default function ContentPage() {
         ))}
       </div>
 
+      <Chips
+        label="Filter by state"
+        chips={STATES.map(item => ({
+          id: item.id,
+          label: item.label,
+          n: counts && counts[item.id] !== undefined ? counts[item.id] : undefined,
+        }))}
+        value={state}
+        onPick={setState}
+      />
+
       <div className="toolbar">
         <label className="search">
           {IC.search}
@@ -157,10 +172,9 @@ export default function ContentPage() {
             aria-label="Search content"
           />
         </label>
-        <select value={state} onChange={event => setState(event.target.value)} aria-label="Filter by state">
-          {STATES.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}
-        </select>
-        <span className="toolbar-count">{rows === null ? '…' : `${rows.length} shown`}</span>
+        <span className="toolbar-count">
+          {rows === null ? '…' : <>On this shelf: <b>{rows.length}</b></>}
+        </span>
       </div>
 
       {counts && (
@@ -190,53 +204,127 @@ export default function ContentPage() {
           </p>
         </section>
       ) : (
-        <div className="cases">
-          {rows.map(row => (
-            <section key={row.target} className="case" data-case={row.target}>
-              <header className="case-head">
-                <span className="case-why">
-                  {row.pile.open > 0
-                    ? <span className="chip">{row.pile.open} open report{row.pile.open === 1 ? '' : 's'}</span>
-                    : <span className="chip">no open reports</span>}
-                  {row.campaigns > 0 && <span className="chip">{row.campaigns} campaign running</span>}
-                  {row.matches.length > 0 && <span className="chip">{row.matches.length} blocked-word hit</span>}
-                </span>
-                <span className="case-side">
-                  <span className="case-age">{ago(row.content.created_at)}</span>
-                </span>
-              </header>
-
-              <ContentCard content={row.content} matched={row.matches}/>
-
-              {row.decision && (
-                <p className="shelf-decision">
-                  <span className={`verb verb-${row.decision.action}`}>{DONE_LABEL[row.decision.action] || row.decision.action}</span>
-                  <span>
-                    by <b>{row.decision.actor || 'the system'}</b> {ago(row.decision.at)}
-                    <em title={stamp(row.decision.at)}>{row.decision.detail}</em>
-                  </span>
-                </p>
-              )}
-
-              <DecisionBar
-                actions={row.actions}
-                permission={row.permission}
-                run={(verb, reason, notice) => act(row, verb, reason, notice)}
-                onDone={handled}
-                footnote={state === 'taken_down'
-                  ? 'Restore puts it back exactly as it was; the author is told.'
-                  : undefined}
+        <div className="cases grid-wrap">
+          <table className="grid review">
+            <thead>
+              <tr>
+                <th style={{ width: '24%' }}>Target</th>
+                <th style={{ width: '7%' }}>Kind</th>
+                <th style={{ width: '13%' }}>Standing</th>
+                <th style={{ width: '21%' }}>Why it is here</th>
+                <th style={{ width: '17%' }}>Decided</th>
+                <th style={{ width: '11%' }}>Posted</th>
+                <th style={{ width: '7%' }} aria-label="Actions"/>
+              </tr>
+            </thead>
+            {rows.map(row => (
+              <ShelfCase
+                key={row.target} row={row} state={state}
+                onDone={handled} act={act}
               />
-            </section>
-          ))}
+            ))}
+          </table>
+          <More hasMore={!!cursor} busy={busy} onMore={older} label="Show older"/>
         </div>
       )}
-
-      {cursor && (
-        <button type="button" className="btn ghost wide" disabled={busy} onClick={older}>
-          {IC.go}<span>Show older</span>
-        </button>
-      )}
     </ConsoleShell>
+  );
+}
+
+/**
+ * One shelf row. The decision buttons and the content itself live underneath it,
+ * so the shelf can hold forty things on one screen and still let a seat read the
+ * post before deciding on it. The open state stays with the row's own key, so a
+ * decision repaints the row without folding it back up.
+ */
+function ShelfCase({ row, state, act, onDone }: {
+  row: ShelfRow;
+  state: string;
+  act: (row: ShelfRow, verb: Verb, reason: string, notice: string) => Promise<Outcome>;
+  onDone: (out: Outcome) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const chips = [
+    row.pile.open > 0 ? `${row.pile.open} open report${row.pile.open === 1 ? '' : 's'}` : null,
+    row.campaigns > 0 ? `${row.campaigns} campaign running` : null,
+    row.matches.length > 0 ? `${row.matches.length} blocked-word hit` : null,
+  ].filter(Boolean) as string[];
+  const line = row.content
+    ? [row.content.author ? `@${row.content.author.username}` : '', row.content.title || row.content.text || '']
+      .filter(Boolean).join(' — ')
+    : '';
+
+  return (
+    <tbody className={`case${open ? ' open' : ''}`} data-case={row.target}>
+      <tr className={`grid-row${open ? ' open' : ''}`}>
+        <td>
+          <button
+            type="button" className="case-id" aria-expanded={open}
+            onClick={() => setOpen(!open)}
+          >
+            <span className="grid-caret">{IC.chevron}</span>
+            <span className="case-name">
+              <span className="id">{row.target}</span>
+              <span className="case-line dim" title={line}>{line}</span>
+            </span>
+          </button>
+        </td>
+        <td className="strong">{KIND_LABEL[row.content.kind] || row.content.kind}</td>
+        <td>{statePill(row.content.state, row.content.kind)}</td>
+        <td><div className="case-why">
+          {chips.length === 0
+            ? <span className="dim">—</span>
+            : chips.map(entry => <span key={entry} className="chip">{entry}</span>)}
+        </div></td>
+        <td className="dim">
+          {row.decision
+            ? `${DONE_LABEL[row.decision.action] || row.decision.action} by ${row.decision.actor || 'the system'}`
+            : 'nothing yet'}
+        </td>
+        <td className="dim">{ago(row.content.created_at)}</td>
+        <td><div className="grid-acts">
+          <Act
+            icon="eye" label={open ? 'Close this row' : 'Open this row'}
+            onClick={() => setOpen(!open)}
+          />
+        </div></td>
+      </tr>
+
+      {open && (
+        <tr className="grid-detail">
+          <td colSpan={7}>
+            <div className="grid-body case-body">
+              <div>
+                <h3>The thing itself</h3>
+                <ContentCard content={row.content} matched={row.matches}/>
+                {row.decision && (
+                  <p className="shelf-decision">
+                    <span className={`verb verb-${row.decision.action}`}>
+                      {DONE_LABEL[row.decision.action] || row.decision.action}
+                    </span>
+                    <span>
+                      by <b>{row.decision.actor || 'the system'}</b> {ago(row.decision.at)}
+                      <em title={stamp(row.decision.at)}>{row.decision.detail}</em>
+                    </span>
+                  </p>
+                )}
+              </div>
+              <div>
+                <h3>Decide</h3>
+                <DecisionBar
+                  actions={row.actions}
+                  permission={row.permission}
+                  run={(verb, reason, notice) => act(row, verb, reason, notice)}
+                  onDone={onDone}
+                  footnote={state === 'taken_down'
+                    ? 'Restore puts it back exactly as it was; the author is told.'
+                    : undefined}
+                />
+              </div>
+            </div>
+          </td>
+        </tr>
+      )}
+    </tbody>
   );
 }

@@ -272,8 +272,10 @@ class ThresholdTests(TestCase):
         self.assertFalse(settings_store.cached()['alert_report_pile']['set'])
 
     def test_a_name_nobody_owns_is_refused(self):
+        """A settings screen cannot invent a knob, and `coin_price` is one now."""
+        self.assertEqual(settings_store.get('coin_price'), Decimal('10'))
         with self.assertRaises(ValueError):
-            settings_store.write(None, {'coin_price': 1})
+            settings_store.write(None, {'alert_the_internet_is_down': 1})
 
     def test_the_picture_shows_which_knobs_have_been_turned(self):
         settings_store.write(None, {'alert_storage_gb': '12'})
@@ -285,11 +287,27 @@ class ThresholdTests(TestCase):
 
 
 class AlertTests(TestCase):
+    """The conditions the site's own tables produce.
+
+    `scan()` here returns those only: the four outside reporters each raise an INFO
+    row until somebody wires a backup job or an uptime probe up to this console, and
+    `tests_watch` covers those. Reading them into these assertions would make every
+    "nothing is wrong" check say something is.
+    """
+
+    MEDIA = {'state': 'unknown', 'bytes': 0, 'files': 0, 'by_kind': {}, 'detail': ''}
+
     def setUp(self):
         cache.clear()
         self.now = timezone.now()
         self.member = member('pile_author')
         self.post = post(self.member)
+
+    def scan(self):
+        return [row for row in alerts.scan(self.now, media=self.MEDIA) if row.kind not in alerts.PULSES]
+
+    def trouble(self):
+        return AdminAlert.objects.exclude(kind__in=list(alerts.PULSES))
 
     def _pile(self, count):
         for index in range(count):
@@ -301,88 +319,92 @@ class AlertTests(TestCase):
 
     def test_a_report_pile_raises_one_alert_that_counts_up_rather_than_repeats(self):
         self._pile(3)
-        raised = alerts.scan(self.now, media={'state': 'unknown', 'bytes': 0, 'files': 0, 'by_kind': {}, 'detail': ''})
+        raised = self.scan()
         self.assertEqual([row.kind for row in raised], ['report_pile'])
-        self.assertEqual(AdminAlert.objects.count(), 1)
-        self.assertIn('3 open reports', AdminAlert.objects.get().title)
+        self.assertEqual(self.trouble().count(), 1)
+        self.assertIn('3 open reports', self.trouble().get().title)
 
-        alerts.scan(self.now, media={'state': 'unknown', 'bytes': 0, 'files': 0, 'by_kind': {}, 'detail': ''})
-        row = AdminAlert.objects.get()
-        self.assertEqual(AdminAlert.objects.count(), 1, 'one trouble is one row, however long it lasts')
+        self.scan()
+        row = self.trouble().get()
+        self.assertEqual(self.trouble().count(), 1, 'one trouble is one row, however long it lasts')
         self.assertEqual(row.occurrences, 2)
 
     def test_two_reporters_are_not_a_pile_until_the_threshold_says_so(self):
         self._pile(2)
-        self.assertEqual(alerts.scan(self.now, media={'state': 'unknown', 'bytes': 0, 'files': 0, 'by_kind': {}, 'detail': ''}), [])
+        self.assertEqual(self.scan(), [])
 
     def test_the_pile_threshold_is_a_setting_not_a_hard_code(self):
         self._pile(2)
         settings_store.write(None, {'alert_report_pile': 2})
-        raised = alerts.scan(self.now, media={'state': 'unknown', 'bytes': 0, 'files': 0, 'by_kind': {}, 'detail': ''})
-        self.assertEqual([row.kind for row in raised], ['report_pile'])
+        self.assertEqual([row.kind for row in self.scan()], ['report_pile'])
 
     def test_an_alert_clears_itself_when_the_reports_are_closed(self):
         self._pile(3)
-        alerts.scan(self.now, media={'state': 'unknown', 'bytes': 0, 'files': 0, 'by_kind': {}, 'detail': ''})
-        self.assertEqual(AdminAlert.objects.get().status, AdminAlert.Status.OPEN)
+        self.scan()
+        self.assertEqual(self.trouble().get().status, AdminAlert.Status.OPEN)
 
         Report.objects.update(status=Report.Status.DISMISSED)
-        alerts.scan(self.now, media={'state': 'unknown', 'bytes': 0, 'files': 0, 'by_kind': {}, 'detail': ''})
-        row = AdminAlert.objects.get()
+        self.scan()
+        row = self.trouble().get()
         self.assertEqual(row.status, AdminAlert.Status.RESOLVED)
         self.assertIsNotNone(row.resolved_at)
 
     def test_a_coin_queue_only_ages_past_the_wait_it_was_given(self):
         waiting = CoinRequest.objects.create(user=self.member, coins=100, amount=Decimal('1000'))
-        media = {'state': 'unknown', 'bytes': 0, 'files': 0, 'by_kind': {}, 'detail': ''}
         stamp(waiting, created_at=self.now - timedelta(hours=5))
-        self.assertEqual(alerts.scan(self.now, media=media), [], 'five hours is inside the 24 hour wait')
+        self.assertEqual(self.scan(), [], 'five hours is inside the 24 hour wait')
 
         settings_store.write(None, {'alert_coin_queue_hours': 2})
-        raised = alerts.scan(self.now, media=media)
-        self.assertEqual([row.kind for row in raised], ['coin_queue_ageing'])
-        self.assertIn('100 coins', AdminAlert.objects.get().detail)
+        self.assertEqual([row.kind for row in self.scan()], ['coin_queue_ageing'])
+        self.assertIn('100 coins', self.trouble().get().detail)
 
     def test_lockouts_alert_a_pattern_and_not_one_person_having_a_bad_morning(self):
-        media = {'state': 'unknown', 'bytes': 0, 'files': 0, 'by_kind': {}, 'detail': ''}
         first = StaffAccount.objects.create(user=member('locked1'), totp_locked_until=self.now + timedelta(minutes=9))
-        self.assertEqual(alerts.scan(self.now, media=media), [])
+        self.assertEqual(self.scan(), [])
 
         StaffAccount.objects.create(user=member('locked2'), totp_locked_until=self.now + timedelta(minutes=4))
-        raised = alerts.scan(self.now, media=media)
-        self.assertEqual([row.kind for row in raised], ['staff_lockouts'])
-        self.assertEqual(AdminAlert.objects.get().severity, AdminAlert.Severity.CRITICAL)
+        self.assertEqual([row.kind for row in self.scan()], ['staff_lockouts'])
+        self.assertEqual(self.trouble().get().severity, AdminAlert.Severity.CRITICAL)
 
         StaffAccount.objects.filter(pk=first.pk).update(totp_locked_until=None)
-        alerts.scan(self.now, media=media)
-        self.assertEqual(AdminAlert.objects.get().status, AdminAlert.Status.RESOLVED, 'one seat left is not a pattern')
+        self.scan()
+        self.assertEqual(self.trouble().get().status, AdminAlert.Status.RESOLVED, 'one seat left is not a pattern')
 
     def test_a_wave_of_auto_hides_is_called_out_with_the_threshold_that_caused_it(self):
         for _ in range(10):
             AuditLog.objects.create(action='auto_hide_post', target='post:1', detail='3 open reports')
         AuditLog.objects.filter(action='auto_hide_post').update(created_at=self.now - timedelta(hours=2))
-        raised = alerts.scan(self.now, media={'state': 'unknown', 'bytes': 0, 'files': 0, 'by_kind': {}, 'detail': ''})
-        self.assertIn('autohide_wave', [row.kind for row in raised])
+        self.assertIn('autohide_wave', [row.kind for row in self.scan()])
         row = AdminAlert.objects.get(kind='autohide_wave')
         self.assertEqual(row.severity, AdminAlert.Severity.CRITICAL)
         self.assertIn('(3)', row.detail, 'the sentence names the threshold that pulled it off')
 
     def test_storage_alerts_at_the_limit_it_is_given(self):
         media = {'state': 'ok', 'bytes': 6 * 1024 ** 3, 'files': 12, 'by_kind': {'mp4': 12}, 'detail': '.'}
-        self.assertEqual([row.kind for row in alerts.scan(self.now, media=media)], ['storage_high'])
-        self.assertEqual(AdminAlert.objects.get().context['limit_gb'], 5.0)
+        self.assertEqual(
+            [row.kind for row in alerts.scan(self.now, media=media) if row.kind not in alerts.PULSES],
+            ['storage_high'])
+        self.assertEqual(self.trouble().get().context['limit_gb'], 5.0)
 
         settings_store.write(None, {'alert_storage_gb': '20'})
-        alerts.scan(self.now, media=media)
-        self.assertEqual(AdminAlert.objects.get().status, AdminAlert.Status.RESOLVED)
+        self.scan()
+        self.assertEqual(self.trouble().get().status, AdminAlert.Status.RESOLVED)
 
     def test_an_alert_points_at_the_screen_that_clears_it(self):
         self._pile(3)
-        alerts.scan(self.now, media={'state': 'unknown', 'bytes': 0, 'files': 0, 'by_kind': {}, 'detail': ''})
-        row = AdminAlert.objects.get()
+        self.scan()
+        row = self.trouble().get()
         self.assertEqual(row.href, '/reports?target=post&status=open', 'the queue filter that shows this post')
-        self.assertEqual(alerts.counts(), {'open': 1, 'acked': 0, 'resolved': 0})
-        self.assertEqual(alerts.feed(5)[0]['key'], row.key)
+        self.assertEqual(alerts.feed(5)[0]['key'], row.key, 'a fire is listed above a wire to run')
+
+    def test_an_unwired_reporter_is_counted_apart_from_a_fire(self):
+        """A fresh install has four monitoring jobs nobody has wired up, and no trouble."""
+        self._pile(3)
+        self.scan()
+        counts = alerts.counts()
+        self.assertEqual(counts['unwired'], 4)
+        self.assertEqual(counts['attention'], 1)
+
 
 
 class PromotionPerformanceTests(TestCase):
@@ -533,7 +555,9 @@ class OverviewEndpointTests(RbacTestCase):
                 created_at=timezone.now() - timedelta(minutes=index + 1),
             )
         data = self.client_owner_dashboard()
-        self.assertEqual(data['alerts']['counts']['open'], 1)
+        self.assertEqual(data['alerts']['counts']['attention'], 1)
+        self.assertEqual(data['alerts']['counts']['unwired'], 4,
+                         'four reporters nobody has wired in yet — a checklist, not four fires')
         self.assertIn('3 open reports', data['alerts']['recent'][0]['title'])
 
     def test_the_campaign_table_is_a_second_call_so_the_fold_paints_first(self):

@@ -213,18 +213,20 @@ class AdminAlert(models.Model):
 
 
 class PolicyTerm(models.Model):
-    """A word or a thing this platform will not carry, and who said so.
+    """A word, a link or a thing this platform will not carry, and who said so.
 
-    Two kinds on one table because they are managed the same way and read by the
-    same screen: a blocked word is matched against text, a prohibited item is a
-    line a moderator quotes when deciding a listing. Both are stored lowercase
-    because a list that distinguishes `Firearm` from `firearm` quietly stops
-    matching half of what it is supposed to.
+    Three kinds on one table because they are managed the same way and read by the
+    same screens: a blocked word is matched against text, a blocked link is matched
+    against what a post points at, a prohibited item is a line a moderator quotes
+    when deciding a listing. All three are stored lowercase because a list that
+    distinguishes `Firearm` from `firearm` quietly stops matching half of what it
+    is supposed to.
     """
 
     class Kind(models.TextChoices):
         WORD = 'word', 'Blocked word'
         ITEM = 'item', 'Prohibited item'
+        LINK = 'link', 'Blocked link'
 
     kind = models.CharField(max_length=8, choices=Kind.choices, default=Kind.WORD)
     text = models.CharField(max_length=80)
@@ -310,3 +312,111 @@ class PublicNotice(models.Model):
 
     def __str__(self):
         return f'notice {self.target_type}:{self.target_id}'
+
+
+class CoinReview(models.Model):
+    """What the console did about a coin purchase, and why.
+
+    `wallet.CoinRequest` is the member site's table and holds only the payer's half
+    of the story, so the staff half — the sentence a rejection was made with, how
+    many coins were actually credited, which seat signed it — is kept here. One row
+    per action rather than a column per verdict, because a request can be asked for
+    more proof twice before anyone approves it, and overwriting the first ask would
+    lose the date the person was told.
+    """
+
+    class Action(models.TextChoices):
+        APPROVE = 'approve', 'Approved'
+        REJECT = 'reject', 'Rejected'
+        PROOF = 'proof', 'Asked for more proof'
+
+    request = models.ForeignKey('wallet.CoinRequest', on_delete=models.CASCADE, related_name='admin_reviews')
+    action = models.CharField(max_length=8, choices=Action.choices)
+    reason = models.CharField(max_length=240, blank=True)
+    coins_credited = models.PositiveIntegerField(default=0)
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name='coin_reviews_written',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [models.Index(fields=['request', '-created_at'], name='coin_review_recent')]
+
+    def __str__(self):
+        return f'{self.action} request {self.request_id}'
+
+
+class PromoReview(models.Model):
+    """What the console decided about one paid campaign, and what it cost.
+
+    `promotions.Promotion` is the member site's table and only holds the payer's
+    half of the story — the budget, the targeting, the counters. The staff half is
+    kept here: the sentence a rejection was made with, how many coins actually went
+    back, whether the Admin chose to refund or to withhold on a stop, and which seat
+    signed it. One row per action, because a campaign gets paused and resumed several
+    times before anyone ends it, and the last click is not the whole history.
+    """
+
+    class Action(models.TextChoices):
+        APPROVE = 'approve', 'Approved'
+        REJECT = 'reject', 'Rejected'
+        PAUSE = 'pause', 'Paused'
+        RESUME = 'resume', 'Resumed'
+        STOP = 'stop', 'Stopped'
+
+    class Choice(models.TextChoices):
+        CREDIT = 'credit', 'Refunded'
+        WITHHOLD = 'withhold', 'Withheld'
+
+    promotion = models.ForeignKey('promotions.Promotion', on_delete=models.CASCADE, related_name='admin_reviews')
+    action = models.CharField(max_length=8, choices=Action.choices)
+    reason = models.CharField(max_length=240, blank=True)
+    coins_refunded = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    choice = models.CharField(max_length=9, choices=Choice.choices, blank=True)
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name='promo_reviews_written',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [models.Index(fields=['promotion', '-created_at'], name='promo_review_recent')]
+
+    def __str__(self):
+        return f'{self.action} campaign {self.promotion_id}'
+
+
+class AdminPulse(models.Model):
+    """One thing that happens outside these tables, and the last time it said so.
+
+    A backup, a video transcoder, an uptime probe and an error collector cannot be
+    read out of Postgres, so they report in here —
+    `python manage.py adminpulse backup --state=ok`. `alerts.scan()` then tells the
+    three silences apart, because they mean three different things: never heard of
+    (nobody wired this up yet), heard of and gone quiet (the job stopped), and heard
+    of and reporting trouble. A row is only ever stamped, never deleted, so "when did
+    we last hear from the backups" stays answerable months later.
+    """
+
+    class State(models.TextChoices):
+        OK = 'ok', 'Healthy'
+        WARN = 'warn', 'Warned'
+        FAIL = 'fail', 'Failing'
+
+    key = models.CharField(max_length=40, unique=True)
+    label = models.CharField(max_length=80)
+    state = models.CharField(max_length=5, choices=State.choices, default=State.OK)
+    detail = models.CharField(max_length=240, blank=True)
+    # Whatever the reporter counted, as it counted it: `{'waiting': 41}`. Kept as
+    # JSON because a backlog, a backup size and an error rate have nothing in common
+    # except the number each of them is worried about.
+    counts = models.JSONField(default=dict, blank=True)
+    stamped_at = models.DateTimeField(default=timezone.now)
+    stamps = models.PositiveIntegerField(default=1)
+
+    class Meta:
+        ordering = ['key']
+
+    def __str__(self):
+        return f'{self.key} {self.state} at {self.stamped_at:%Y-%m-%d %H:%M}'

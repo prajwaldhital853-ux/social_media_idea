@@ -41,7 +41,91 @@ export async function api<T>(
     },
   };
   if (options.body !== undefined) init.body = JSON.stringify(options.body);
+  return send<T>(path, init);
+}
 
+/**
+ * Multipart writes — the payment QR is an image, and a JSON body cannot carry one.
+ * The browser sets the content type itself, so only the CSRF proof is added.
+ */
+export async function upload<T>(path: string, form: FormData): Promise<T> {
+  return send<T>(path, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { Accept: 'application/json', 'X-CSRF-Token': csrfToken() },
+    body: form,
+  });
+}
+
+/** What the browser was actually handed, read back out of the file's own headers. */
+export interface SavedFile {
+  filename: string;
+  rows: number;
+  truncated: boolean;
+  detail: string;
+  bytes: number;
+  /** The header line, so a seat sees the columns before an accountant does. */
+  head: string;
+}
+
+/**
+ * Build a CSV and give it to the browser as a file.
+ *
+ * The door answers as the file itself (`?raw=1`), so the name, the row count and the
+ * truncation warning are read out of the response headers the server set rather than
+ * repeated from what the screen already knew. A download that cannot be described
+ * afterwards is a download nobody can prove they handed over.
+ */
+export async function saveFile(path: string, body: Record<string, unknown> = {}): Promise<SavedFile> {
+  const response = await fetch(`/api/${path.replace(/^\/+/, '')}?raw=1`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: {
+      // Both media types, not just the file. This door answers as the CSV only when
+      // `?raw=1` is on the URL and as JSON every other time, and DRF negotiates the
+      // Accept header *before* the view runs: a request that offers only `text/csv`
+      // is refused with a 406 of its own, which swallows the file, the row counts,
+      // and every plain sentence the door would have said about a bad date.
+      Accept: 'text/csv, application/json',
+      'Content-Type': 'application/json',
+      'X-CSRF-Token': csrfToken(),
+    },
+    body: JSON.stringify(body),
+  });
+  const text = await response.text();
+  if (!response.ok) {
+    let detail = `The file could not be built (${response.status}).`;
+    let code = 'error';
+    try {
+      const data = JSON.parse(text);
+      detail = String(data.detail || detail);
+      code = String(data.code || code);
+    } catch {
+      detail = text.slice(0, 200) || detail;
+    }
+    throw new ApiError(detail, code, response.status, {});
+  }
+  const named = /filename="([^"]+)"/.exec(response.headers.get('Content-Disposition') || '');
+  const filename = named ? named[1] : 'export.csv';
+  const link = document.createElement('a');
+  const url = URL.createObjectURL(new Blob([text], { type: 'text/csv;charset=utf-8' }));
+  link.href = url;
+  link.download = filename;
+  link.click();
+  // Revoked on a delay: a URL freed in the same tick as the click has taken the
+  // file away from the browser before it finished saving it.
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
+  return {
+    filename,
+    rows: Number(response.headers.get('X-Export-Rows') || 0),
+    truncated: response.headers.get('X-Export-Truncated') === '1',
+    detail: response.headers.get('X-Export-Detail') || '',
+    bytes: text.length,
+    head: text.split('\n')[0] || '',
+  };
+}
+
+async function send<T>(path: string, init: RequestInit): Promise<T> {
   const response = await fetch(`/api/${path.replace(/^\/+/, '')}`, init);
   const text = await response.text();
   const data = text ? safeParse(text) : {};

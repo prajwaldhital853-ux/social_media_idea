@@ -47,10 +47,46 @@ export const NAV: NavGroup[] = [
     ],
   },
   {
+    id: 'safety',
+    label: 'Safety',
+    items: [
+      { href: '/spam', label: 'Spam rules', icon: 'shield', permission: 'spam_settings' },
+      { href: '/flags', label: 'Flagged pile', icon: 'alert', permission: 'reports' },
+      { href: '/alerts', label: 'Automated alerts', icon: 'pulse', permission: 'alerts' },
+    ],
+  },
+  {
+    id: 'money',
+    label: 'Money',
+    items: [
+      { href: '/coins', label: 'Coin requests', icon: 'coin', permission: 'coins_view' },
+      { href: '/ledger', label: 'Coin ledger', icon: 'disk', permission: 'coin_ledger' },
+      { href: '/pricing', label: 'Coin pricing', icon: 'qr', permission: 'coin_settings' },
+    ],
+  },
+  {
+    id: 'reach',
+    label: 'Reach',
+    items: [
+      { href: '/promotions', label: 'Paid campaigns', icon: 'target', permission: 'promotions_view' },
+      { href: '/packages', label: 'Campaign packages', icon: 'store', permission: 'promotion_packages' },
+      { href: '/algorithm', label: 'Reach controls', icon: 'sliders', permission: 'promotion_algorithm' },
+    ],
+  },
+  {
     id: 'platform',
     label: 'Platform',
     items: [
       { href: '/welcome', label: 'First-load wording', icon: 'chat', permission: 'welcome_text' },
+      { href: '/limits', label: 'Post limits', icon: 'sliders', permission: 'post_limits' },
+    ],
+  },
+  {
+    id: 'records',
+    label: 'Records',
+    items: [
+      { href: '/audit', label: 'Audit log', icon: 'disk', permission: 'audit' },
+      { href: '/exports', label: 'CSV exports', icon: 'download', permission: 'exports' },
     ],
   },
   {
@@ -69,6 +105,16 @@ export function navFor(permissions: string[], role: string): NavGroup[] {
             .filter(group => group.items.length > 0);
 }
 
+/** The two words above a screen: which group it sits in, and its own name. */
+export function crumbsFor(pathname: string): string[] {
+  const clean = (pathname || '/').replace(/\/$/, '') || '/';
+  for (const group of NAV) {
+    const hit = group.items.find(item => clean === item.href || clean.startsWith(`${item.href}/`));
+    if (hit) return [group.label, hit.label];
+  }
+  return [];
+}
+
 export function requires(pathname: string): string | null {
   for (const group of NAV) {
     for (const item of group.items) {
@@ -79,11 +125,16 @@ export function requires(pathname: string): string | null {
 }
 
 /**
- * Whether a route an alert points at exists yet. The dashboard links an alert to
- * the screen that clears it, but that screen may be next week's section — so a
- * route that has not shipped is named in the alert instead of linked to a 404.
+ * Whether this seat may open a route an alert points at. The dashboard links an
+ * alert to the screen that clears it, and two different things make a screen
+ * unreachable: it may not have shipped yet, or it may have shipped and be a door
+ * this seat was never given. Both read the same way to the person looking — a name
+ * instead of a link — because a link that lands on a 404 or on "not on your seat"
+ * sends a moderator to knock on a door instead of telling them who holds the key.
  */
-export function shipped(href: string): boolean {
+export function shipped(href: string, permissions: string[] = [], role = ''): boolean {
   const pathname = (href.split('?')[0] || '/').replace(/\/$/, '') || '/';
-  return NAV.some(group => group.items.some(item => pathname === item.href));
+  const hit = NAV.flatMap(group => group.items).find(item => pathname === item.href);
+  if (!hit) return false;
+  return role === 'superadmin' || !hit.permission || permissions.includes(hit.permission);
 }

@@ -13,6 +13,8 @@
  *   backend/.venv/Scripts/python.exe admin/qa/reset.py          # seats back to first run
  *   backend/.venv/Scripts/python.exe admin/qa/review_seed.py    # the pile section 7 decides
  *   backend/.venv/Scripts/python.exe admin/qa/people_seed.py    # the accounts section 8 acts on
+ *   backend/.venv/Scripts/python.exe admin/qa/coins_seed.py     # the payments section 10 decides
+ *   backend/.venv/Scripts/python.exe admin/qa/promotions_seed.py # the paid reach section 11 decides
  *   node admin/qa/console.mjs                                   # from the repository root
  */
 import crypto from 'node:crypto';
@@ -116,16 +118,36 @@ async function clickText(page, selector, needle) {
   await new Promise(resolve => setTimeout(resolve, 350));
 }
 
-const clearAndType = async (page, selector, value) => {
-  await again(async () => {
-    await page.click(selector);
-    await page.keyboard.down('Control');
-    await page.keyboard.press('KeyA');
-    await page.keyboard.up('Control');
+/**
+ * Type into a box and prove the box took it.
+ *
+ * A click can land on whatever is painted on top of the field, and a box typed into
+ * before React has hydrated silently reverts to its saved value. Both leave the old
+ * number in the field with a green save banner above it, which is a walkthrough that
+ * believes itself — so the field is focused from inside, cleared, typed, and read
+ * back, and anything that still refuses to hold is said out loud at the end.
+ */
+const typeStubs = [];
+async function typeInto(page, selector, value) {
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    await page.evaluate(sel => {
+      const box = document.querySelector(sel);
+      if (!box) throw new Error(`No element found for ${sel}`);
+      box.focus();
+      if (box.select) box.select();
+    }, selector);
     await page.keyboard.press('Backspace');
     await page.type(selector, value);
-  });
-};
+    const now = await page.evaluate(sel => document.querySelector(sel).value, selector);
+    if (now === value) return;
+    await new Promise(resolve => setTimeout(resolve, 300));
+  }
+  typeStubs.push(await page.evaluate(sel => {
+    const box = document.querySelector(sel);
+    return `${sel} still reads "${box ? box.value : 'gone'}"`;
+  }, selector));
+}
+const clearAndType = (page, selector, value) => again(() => typeInto(page, selector, value));
 
 /** Green banner, and specifically the one this action wrote. */
 async function expectBanner(page, needle) {
@@ -185,6 +207,17 @@ async function waitGone(page, selector) {
 async function pick(page, selector, value, apiNeedle) {
   const answer = page.waitForResponse(res => new RegExp(apiNeedle).test(res.url()), { timeout: 40000 });
   await page.select(selector, value);
+  return answer;
+}
+
+/** The same promise for a filter chip: the row of chips is a select that reads like a table. */
+async function chip(page, value, apiNeedle) {
+  const answer = page.waitForResponse(res => new RegExp(apiNeedle).test(res.url()), { timeout: 40000 });
+  await page.evaluate(want => {
+    const hit = [...document.querySelectorAll('.filters .fchip')].find(node => node.dataset.chip === want);
+    if (!hit) throw new Error(`no chip for ${want}`);
+    hit.click();
+  }, value);
   return answer;
 }
 
@@ -561,6 +594,8 @@ try {
 
   const screenOf = href => (href.split('?')[0] || '/').replace(/\/$/, '') || '/';
   const raised = dash.alerts.recent.filter(row => row.href);
+  const actionable = raised.filter(row => row.status === 'open');
+  const settledRows = raised.filter(row => row.status !== 'open');
   const dead = await owner.evaluate(() => ({
     tiles: [...document.querySelectorAll('.tile-link')].map(a => a.getAttribute('href')),
     alerts: [...document.querySelectorAll('.alert-go')].map(a => a.getAttribute('href')),
@@ -573,11 +608,16 @@ try {
   ok('every link the dashboard hands out opens a real screen',
     targets.length > 0 && linkCodes.every(code => code === 200),
     `${targets.length} links: ${[...new Set(linkCodes)].join(', ')} — ${dead.screens.length} screens on this seat`);
-  ok('an alert whose screen has not been built yet is named, not linked to a 404',
-    dead.screens.includes('/reports') && dead.alerts.length > 0
-      && dead.alerts.every(href => dead.screens.includes(screenOf(href)))
-      && dead.named.length === raised.length - dead.alerts.length && dead.named.length > 0,
-    `${dead.alerts.length} of ${raised.length} alerts link to the queue, ${dead.named.length} name their screen: ${dead.named.join(', ')}`);
+  // A Client holds every screen, so on this seat "the screen has not been built" is
+  // never the reason a row has no button: only a condition somebody already dealt
+  // with is allowed to name its screen instead of linking to it.
+  ok('an open alert is taken to the screen that fixes it, and every one of those screens is on this seat',
+    dead.screens.includes('/reports') && actionable.length > 0
+      && dead.alerts.length === actionable.length
+      && actionable.every(row => dead.screens.includes(screenOf(row.href)))
+      && dead.named.length === settledRows.length,
+    `${dead.alerts.length} of ${raised.length} alerts link out to ${[...new Set(raised.map(row => screenOf(row.href)))].join(', ')}, `
+    + `${dead.named.length} name the screen of an alert already decided: ${dead.named.join(', ')}`);
   const pills = await many(owner, '.alert .pill');
   ok('the alert feed carries its severity and status on every row',
     pills.length === dash.alerts.recent.length
@@ -615,6 +655,28 @@ try {
   ok('a Moderator gets the same dashboard, because the role ships with it',
     modGate.status === 200 && modTiles.join(',') === TILES, `HTTP ${modGate.status}, ${modTiles.length} cards`);
   await shot(mod, 'moderator-5-dashboard');
+
+  // The same alerts on a seat that holds four of the seven screens they point at.
+  // `shipped()` decides button-or-label per seat, so the drawer is the only honest
+  // list of what this person may open — and a button that walks a Moderator to a
+  // door answering 403 is worse than the plain word it is replaced with.
+  const modSeat = (await statusOf(mod, '/api/admin/session/')).body;
+  const modScreens = await mod.$$eval('.side-nav a', nodes => nodes.map(node => node.getAttribute('href')));
+  const modRaised = await mod.evaluate(() => ({
+    links: [...document.querySelectorAll('.alert-go')].map(a => a.getAttribute('href')),
+    named: [...document.querySelectorAll('.alert-here')].map(node => node.textContent.trim()),
+  }));
+  const modOpen = dash.alerts.recent.filter(row => row.href && row.status === 'open');
+  const onSeat = modOpen.filter(row => modScreens.includes(screenOf(row.href)));
+  const clientKeys = (await statusOf(owner, '/api/admin/session/')).body.permissions.length;
+  ok('a Moderator is offered an alert only for a screen that seat actually holds',
+    clientKeys > modSeat.permissions.length && modScreens.length < dead.screens.length
+      && modRaised.links.length === onSeat.length && onSeat.length < modOpen.length
+      && modRaised.named.length === modOpen.length - onSeat.length + settledRows.length,
+    `${onSeat.length} of ${modOpen.length} alert buttons survive the seat, and ${modRaised.named.length} rows name their screen instead: ${modRaised.named.join(', ')}`);
+  ok('and the rows it does open are the same numbers the Client was shown',
+    (await mod.$$eval('.alert', nodes => nodes.length)) === dash.alerts.recent.length,
+    `${dash.alerts.recent.length} rows on both seats, ${modSeat.permissions.length} screens on this one`);
 
   // ── 6. ending a seat takes the console away immediately ────────────────────
   await owner.bringToFront();
@@ -698,6 +760,11 @@ try {
   const rows = async (page, isReady) => {
     let list = [];
     for (let attempt = 0; attempt < 80; attempt += 1) {
+      // A queue row keeps its decision buttons and the content itself behind a
+      // click, so reading the screen means opening every row on it first.
+      await page.evaluate(() => {
+        document.querySelectorAll('.case:not(.open) .case-id').forEach(node => node.click());
+      });
       list = await readCases(page);
       if (isReady(list)) return list;
       await new Promise(resolve => setTimeout(resolve, 300));
@@ -744,6 +811,11 @@ try {
   await clearAndType(owner, '.panel[data-list="word"] input[name="note"]', 'the walkthrough word, typed with padding');
   await clickText(owner, '.panel[data-list="word"] .term-add button', 'Add');
   const wordSaved = await expectBanner(owner, 'blocked list');
+  // The banner lands before the list has re-fetched, so reading the rows straight
+  // away sometimes catches the screen a frame too early. Waiting for a row to
+  // appear — not for a particular word — keeps a broken normalisation a FAIL.
+  await owner.waitForSelector('.panel[data-list="word"] .term-text', { timeout: 40000 })
+    .catch(() => undefined);
   const words = await many(owner, '.panel[data-list="word"] .term-text');
   ok('a blocked word is stored in one case, without the padding it was typed with',
     wordSaved.includes('gunpowder') && words.includes('gunpowder')
@@ -895,19 +967,18 @@ try {
     `hidden: ${autohid.verbs.join('/')}; live: ${spare.verbs.join('/')}`);
 
   const byKind = '.toolbar select[aria-label="Filter by what was reported"]';
-  const byState = '.toolbar select[aria-label="Filter by report status"]';
   await pick(owner, byKind, 'listing', 'target=listing');
   await waitCases(owner, 0);
   const listedEmpty = await see(owner, '.panel.empty h2');
   await pick(owner, byKind, '', '/api/admin/review/');
-  await pick(owner, byState, 'all', 'status=all');
+  await chip(owner, 'all', 'status=all');
   const allRows = await waitCases(owner, 7);
   const everyReport = await owner.$$eval('.cases .case .pile', nodes => nodes.map(node => node.className));
   ok('a decided report does not vanish: every-report view still lists it, marked shut',
     allRows.length === 7 && listedEmpty === 'Nothing here'
       && everyReport.filter(cls => cls.includes('shut')).length === 4,
     `${everyReport.filter(cls => cls.includes('shut')).length} of ${everyReport.length} rows already decided`);
-  await pick(owner, byState, 'open', 'status=open');
+  await chip(owner, 'open', 'status=open');
   await waitCases(owner, 3);
 
   // 7.3 the takedown shelf ────────────────────────────────────────────────────
@@ -923,7 +994,7 @@ try {
     tabs.map(tab => tab.label).join(', '));
 
   await clearAndType(owner, '.search input', AUTHOR);
-  await pick(owner, '.toolbar select[aria-label="Filter by state"]', 'all', 'state=all');
+  await chip(owner, 'all', 'state=all');
   const shelf = await (await reload(owner, '/api/admin/content/')).json();
   const rows0 = await shelfRows(owner, `type=post&state=all&q=${AUTHOR}`);
   const shelfWords = { live: 'in the feed', active: 'live', hidden: 'hidden', removed: 'taken down' };
@@ -982,7 +1053,7 @@ try {
       && takenListing.state === 'Taken down', takenListing ? takenListing.decision.slice(0, 90) : 'missing');
 
   await clickText(owner, '.tabs .tab', 'Comments');
-  await pick(owner, '.toolbar select[aria-label="Filter by state"]', 'taken_down', 'state=taken_down');
+  await chip(owner, 'taken_down', 'state=taken_down');
   await reload(owner, 'type=comment');
   const commentShelf = await see(owner, '.panel.empty h2');
   ok('a comment that was left up is not on the shelf, and the screen says so instead of spinning',
@@ -1020,7 +1091,7 @@ try {
       && deskCount.startsWith('1 standing of 2') && !(await owner.$(`.notice[data-target="${sell.target}"] .notice-act`)),
     `${withdrew} — ${deskCount}`);
 
-  await pick(owner, '.toolbar select[aria-label="Filter by what it is about"]', 'post', 'target=post');
+  await chip(owner, 'post', 'target=post');
   await reload(owner, 'target=post');
   await owner.waitForFunction(() => document.querySelectorAll('.notice').length === 1, { timeout: 40000 });
   const oneKind = await text(owner, '.notice .notice-text');
@@ -1099,7 +1170,7 @@ try {
   await owner.goto(`${BASE}/content`, { waitUntil: 'domcontentloaded' });
   await owner.waitForSelector('.search input', { timeout: 40000 });
   await clearAndType(owner, '.search input', AUTHOR);
-  await pick(owner, '.toolbar select[aria-label="Filter by state"]', 'all', 'state=all');
+  await chip(owner, 'all', 'state=all');
   await reload(owner, '/api/admin/content/');
   const auditRows = await shelfRows(owner, `type=post&state=all&q=${AUTHOR}`);
   const modRecord = auditRows.find(row => row.target === spare.target);
@@ -1121,7 +1192,6 @@ try {
   const WALLETED = 'qa_walleted'; // holds the coins a deletion refuses
   const GONER = 'qa_goner';       // owes nothing, and is deleted by this run
   const SEARCH = '.search input';
-  const STATE_CHIP = '.toolbar select[aria-label="Filter by state"]';
   const PROVIDER_CHIP = '.toolbar select[aria-label="Filter by sign-up method"]';
   const REASON = '.person.open .ask textarea[name="reason"]';
   const WARN_BOX = '.person.open .ask textarea[name="warn_text"]';
@@ -1339,11 +1409,11 @@ try {
   ok('the flag and the lockout pills leave the row with it',
     (await pillGone(owner, FLAGGED, 'reports against')) && (await pillGone(owner, FLAGGED, 'failed sign-ins'))
       && (await pillWaiting(owner, FLAGGED, 'In good standing')) === 'In good standing', 'back to good standing');
-  await pick(owner, STATE_CHIP, 'flagged', 'status=flagged');
+  await chip(owner, 'flagged', 'status=flagged');
   const stillFlagged = await peopleShown(owner, `q=${FLAGGED}&status=flagged`);
   ok('the flagged filter no longer lists the account it just cleared',
     stillFlagged.length === 0, 'the pile is gone from the state chip too');
-  await pick(owner, STATE_CHIP, 'all', 'q=qa_flagged');
+  await chip(owner, 'all', 'q=qa_flagged');
   ok('and switching back to Everyone finds it again, because clearing flags is not deleting',
     (await peopleShown(owner, `q=${FLAGGED}`)).join() === FLAGGED, FLAGGED);
   await shot(owner, 'people-4-flags-cleared');
@@ -1834,6 +1904,1246 @@ try {
     (await statusOf(stranger, '/api/welcome/')).body.tagline);
   await shot(mod, 'welcome-2-locked');
   await stranger.close();
+
+  // ── 10. the coin desk (contract 6.7) ────────────────────────────────────────
+  // Real rupees, a stranger's bank slip and somebody's wallet balance: the three
+  // things a wrong click cannot be taken back. So this section reads the queue for
+  // what it does *not* carry, opens a receipt only through the link minted seconds
+  // earlier, moves money in all three directions the desk offers, and then turns
+  // the retention window down to nothing to watch the slip actually get deleted.
+  const nobody = await freshPage();
+  // A fetch has to be standing on a document to resolve a root-relative URL, and a
+  // fresh context sits on about:blank until something is navigated into it.
+  await nobody.goto(`${BASE}/login`, { waitUntil: 'domcontentloaded' });
+  const PAYER_ONE = 'qa_coin_one';
+  const PAYER_TWO = 'qa_coin_two';
+  const PAYER_THREE = 'qa_coin_three';
+  const PAYER_FOUR = 'qa_coin_four';
+  const COIN_BOX = id => `.coin[data-coin="${id}"]`;
+  const COIN_REASON = id => `${COIN_BOX(id)} .ask textarea[name="reason"]`;
+  const COIN_YES = id => `${COIN_BOX(id)} .ask-actions button`;
+  const coinVerb = (id, verb) => `${COIN_BOX(id)} .verbs button[data-verb="${verb}"]`;
+
+  /** The queue repaints after every decision, so a row is found by its payer. */
+  const findCoin = async who => {
+    await owner.waitForFunction(name => [...document.querySelectorAll('.coin')]
+      .some(row => row.textContent.includes(`@${name}`)), { timeout: 40000 }, who);
+    return owner.evaluate(name => [...document.querySelectorAll('.coin')]
+      .find(row => row.textContent.includes(`@${name}`)).dataset.coin, who);
+  };
+  const openCoin = async who => {
+    const id = await findCoin(who);
+    const already = await owner.$eval(COIN_BOX(id), node => node.className.includes('open'));
+    if (!already) await tap(owner, `${COIN_BOX(id)} .coin-id`);
+    await owner.waitForSelector(`${COIN_BOX(id)} .coin-body`, { timeout: 40000 });
+    return id;
+  };
+
+  // 10.1 — what the queue holds, and what it refuses to hold.
+  await owner.goto(`${BASE}/coins`, { waitUntil: 'domcontentloaded' });
+  await owner.waitForSelector('.coin', { timeout: 40000 });
+  const coinQueue = (await statusOf(owner, '/api/admin/coins/?status=pending')).body;
+  const coinIds = Object.fromEntries(coinQueue.results.map(row => [row.card.username, row.id]));
+  const chipCount = await owner.$eval('.filters [data-chip="pending"] b', node => Number(node.textContent.trim()));
+  ok('the coin desk opens on what is waiting, and the chip carries the server’s own count',
+    chipCount > 0 && chipCount === coinQueue.counts.pending, `${chipCount} vs ${coinQueue.counts.pending}`);
+  const held = await lineText(owner, '.facets');
+  ok('and the screen leads with how much money is held up and how long a slip is kept',
+    held.includes('coins') && held.includes('held up behind the review') && held.includes('kept for'),
+    held.replace(/\s+/g, ' ').slice(0, 130));
+  ok('the list is told a payment proof exists and is never given the proof itself',
+    coinQueue.results.every(row => 'has_proof' in row) && !/screenshot|media\/proofs/.test(JSON.stringify(coinQueue)),
+    `${coinQueue.results.filter(row => row.has_proof).length} of ${coinQueue.results.length} rows hold a slip`);
+  const byRef = (await statusOf(owner, '/api/admin/coins/?q=TRX-8801')).body.results;
+  ok('a bank reference finds the payer, which is how a cashier with a statement works',
+    byRef.length === 1 && byRef[0].card.username === PAYER_ONE,
+    byRef.map(row => row.card.username).join(', ') || 'nothing found');
+  const coldQueue = await statusOf(nobody, '/api/admin/coins/');
+  const openPricing = await statusOf(nobody, '/api/coins/pricing/');
+  ok('a stranger cannot read who has paid, but is told what a Coin costs and where to send it',
+    (coldQueue.status === 401 || coldQueue.status === 403) && openPricing.status === 200
+      && openPricing.body.bank.account.length > 4 && openPricing.body.min_purchase >= 1,
+    `${coldQueue.status} / ${openPricing.status} · ${openPricing.body.coin_price} NPR per Coin`);
+  await shot(owner, 'coins-1-queue');
+
+  // 10.2 — the receipt, behind a link that dies.
+  await clearAndType(owner, '.search input', PAYER_ONE);
+  const one = await openCoin(PAYER_ONE);
+  await tap(owner, `${COIN_BOX(one)} [data-proof-open]`);
+  // A bare selector timeout here would only say the picture did not arrive, so the
+  // wait reports what the row did say: the link it was given, or the sentence it
+  // answered with, or that the button is still sitting shut.
+  const opened = await owner.waitForFunction(box => {
+    const img = document.querySelector(`${box} .proof-img`);
+    if (img) {
+      // `complete` is the browser's own word for "the bytes have arrived or failed",
+      // so a picture still decoding keeps the poll running instead of reading 0px.
+      return img.complete ? { href: img.getAttribute('src'), width: img.naturalWidth } : false;
+    }
+    const said = document.querySelector(`${box} .card-error`);
+    if (said) return { error: said.textContent.trim() };
+    const shut = document.querySelector(`${box} .proof-shut`);
+    if (shut) return { shut: shut.textContent.replace(/\s+/g, ' ').trim() };
+    return false;
+  }, { timeout: 40000 }, COIN_BOX(one)).then(handle => handle.jsonValue());
+  ok('the payment slip opens only through a link the queue minted seconds ago',
+    Boolean(opened.href) && opened.width > 40 && /receipt\/\?t=/.test(opened.href),
+    JSON.stringify(opened).slice(0, 150));
+  const slip = { href: opened.href || '' };
+  const replay = await statusOf(owner, slip.href);
+  const tampered = await statusOf(owner, `${slip.href.slice(0, -6)}AAAAAA`);
+  const swapped = await statusOf(owner, slip.href.replace(`/coins/${one}/`, `/coins/${coinIds[PAYER_TWO]}/`));
+  ok('the link answers again inside its two minutes, and a broken one is refused outright',
+    replay.status === 200 && tampered.status === 410, `${replay.status} / ${tampered.status}`);
+  ok('and the same token will not open the next payer’s slip', swapped.status === 403, `${swapped.status}`);
+  await shot(owner, 'coins-2-proof');
+
+  await clearAndType(owner, '.search input', PAYER_THREE);
+  const ask3 = await openCoin(PAYER_THREE);
+  const noSlip = await see(owner, `${COIN_BOX(ask3)} .empty-note`);
+  ok('a request nobody has uploaded a slip for says so instead of opening a blank picture',
+    noSlip.includes('not uploaded a receipt'), noSlip.slice(0, 70));
+  const noLink = await statusOf(owner, `/api/admin/coins/${ask3}/receipt-link/`);
+  ok('and its receipt door answers 404 rather than handing out an empty file',
+    noLink.status === 404, `${noLink.status}`);
+
+  // 10.3 — the three verbs, and the sentence each one costs.
+  await tap(owner, coinVerb(ask3, 'proof'));
+  ok('asking for better proof is refused until the sentence is written',
+    await heldBack(owner, COIN_YES(ask3)), 'Confirm sits disabled on an empty box');
+  await clearAndType(owner, COIN_REASON(ask3), 'console QA sample - send the whole page of the slip');
+  const asked = await answered(owner, COIN_YES(ask3), 'Confirm', 'admin/coins/');
+  const stillOpen = (await statusOf(owner, `/api/admin/coins/${ask3}/`)).body;
+  ok('once written, the question goes out and the request stays open',
+    asked.status === 200 && stillOpen.request.status === 'pending' && stillOpen.asks.length === 1,
+    `${asked.status} · ${stillOpen.request.status} · ${stillOpen.asks.length} ask(s)`);
+  const askedBy = await see(owner, `${COIN_BOX(ask3)} .coin-by`);
+  ok('the row says who asked, so a delay has a name on it',
+    askedBy.includes(OWNER) && askedBy.includes('more proof'), askedBy.replace(/\s+/g, ' ').slice(0, 80));
+
+  // The paper behind a delay is a list, not a line somebody rewrites. This payer
+  // already carries a question from before the run, so counting the server's own
+  // list now, before the decision, is what makes "it kept the old one" a fact.
+  const paperBefore = (await statusOf(owner, `/api/admin/coins/${coinIds[PAYER_TWO]}/`)).body.asks;
+
+  await clearAndType(owner, '.search input', PAYER_TWO);
+  const two = Number(await openCoin(PAYER_TWO));
+  await tap(owner, coinVerb(two, 'reject'));
+  await clearAndType(owner, COIN_REASON(two), 'console QA sample - the reference does not match this amount');
+  const refusedOut = await answered(owner, COIN_YES(two), 'Confirm', 'admin/coins/');
+  ok('a rejection needs the sentence the payer is sent, and moves no coins at all',
+    refusedOut.status === 200 && refusedOut.body.request.status === 'rejected'
+      && refusedOut.body.coins_credited === 0, `${refusedOut.status} · ${refusedOut.body.detail.slice(0, 70)}`);
+
+  const paper = await statusOf(owner, `/api/admin/coins/${two}/`);
+  ok('and the paper behind the delay keeps growing: the earlier question is still on the row',
+    paperBefore.length === 1 && paperBefore[0].action === 'proof'
+      && paper.body.asks.length === paperBefore.length + 1
+      && paper.body.asks[0].action === 'proof' && paper.body.asks[0].by === OWNER
+      && paper.body.asks[1].action === 'reject' && Boolean(paper.body.asks[1].reason),
+    `${paperBefore.length} → ${paper.body.asks.length} asks · ${paper.body.asks.map(ask => ask.action).join(', ')}`);
+
+  // Deciding a request is also a move between piles: the desk must not keep
+  // counting it as somebody's wait, on the server or on the chip beside the filter.
+  const pendingNow = (await statusOf(owner, '/api/admin/coins/?status=pending')).body;
+  const rejectedNow = (await statusOf(owner, `/api/admin/coins/?status=rejected&q=${PAYER_TWO}`)).body;
+  const chipNow = await owner.$eval('.filters [data-chip="pending"] b', node => Number(node.textContent.trim()));
+  ok('a rejected request stops being somebody’s wait, on the server and on the chip, with no reload',
+    !pendingNow.results.some(row => row.id === two)
+      && rejectedNow.results.some(row => row.id === two)
+      && pendingNow.counts.pending === coinQueue.counts.pending - 1
+      && chipNow === pendingNow.counts.pending,
+    `${coinQueue.counts.pending} → ${pendingNow.counts.pending} waiting, chip says ${chipNow}`);
+
+  await clearAndType(owner, '.search input', PAYER_ONE);
+  await openCoin(PAYER_ONE);
+  const credited = await answered(owner, coinVerb(one, 'approve'), 'Credit', 'admin/coins/');
+  const said = await expectBanner(owner, 'Credited');
+  ok('crediting a purchase moves the coins through the wallet and names the ledger row it wrote',
+    credited.status === 200 && credited.body.coins_credited === 500 && /ledger row is #/.test(credited.body.detail),
+    said.replace(/\s+/g, ' ').slice(0, 90));
+  const creditedTwice = await postOf(owner, `/api/admin/coins/${one}/approve/`, {});
+  ok('the same receipt cannot be credited twice, and the door says it was already decided',
+    creditedTwice.status === 409 && /already approved/.test(creditedTwice.body.detail),
+    `${creditedTwice.status} ${creditedTwice.body.detail.slice(0, 50)}`);
+  const settled = (await statusOf(owner, `/api/admin/coins/${one}/`)).body.request;
+  ok('the row now names the seat that decided it, with the coins beside the words',
+    settled.status === 'approved' && settled.review.by === OWNER && settled.review.coins_credited === 500,
+    `${settled.review.label} by ${settled.review.by}`);
+  await shot(owner, 'coins-3-decided');
+
+  // 10.4 — the ledger, which only ever grows.
+  await owner.goto(`${BASE}/ledger`, { waitUntil: 'domcontentloaded' });
+  await owner.waitForSelector('tbody.entry', { timeout: 40000 });
+  const ledger = (await statusOf(owner, '/api/admin/coins/ledger/')).body;
+  ok('the ledger is the wallet’s own table and the screen calls it what it is',
+    ledger.totals.entries > 0 && (await lineText(owner, '.facets')).includes('none of them editable'),
+    `${ledger.totals.entries} rows · ${ledger.totals.credited} in · ${ledger.totals.debited} out`);
+  await clearAndType(owner, '.search input', PAYER_ONE);
+  // A search box settles a beat after the last keystroke, so waiting only for
+  // "some rows" would count the whole ledger before the filter had landed — and
+  // every row-count claim below is measured against this one wallet's history.
+  await owner.waitForFunction(name => {
+    const rows = [...document.querySelectorAll('tbody.entry')];
+    return rows.length > 0 && rows.every(row => row.textContent.includes(`@${name}`));
+  }, { timeout: 40000 }, PAYER_ONE);
+  const top = await owner.$eval('tbody.entry', node => ({
+    note: node.querySelector('.entry-note').textContent.trim(),
+    move: node.querySelector('.state').textContent.trim(),
+    balance: node.querySelector('td.num').textContent.trim(),
+  }));
+  ok('the approval the desk just made is a ledger row, with the wallet’s number beside it',
+    /approved/.test(top.note) && top.move.startsWith('+') && top.balance === '500.00',
+    `${top.move} · ${top.balance} · ${top.note.slice(0, 46)}`);
+  const rowsBefore = await owner.$$eval('tbody.entry', nodes => nodes.length);
+
+  await tap(owner, '[data-adjust-open]');
+  await owner.waitForSelector('[data-adjust]', { timeout: 40000 });
+  await clearAndType(owner, '[data-adjust] input[name="username"]', PAYER_ONE);
+  await clearAndType(owner, '[data-adjust] input[name="amount"]', '40');
+  ok('a hand-written row is refused until the reason is written',
+    await heldBack(owner, '[data-adjust-save]'), 'Confirm sits disabled on an empty reason');
+  await clearAndType(owner, '[data-adjust] textarea[name="reason"]',
+    'console QA sample - the bank confirmed a second payment');
+  const moved = await answered(owner, '[data-adjust-save]', 'Write the row', 'admin/coins/ledger/adjust/');
+  ok('with a reason it writes a new row and says plainly that nothing old was touched',
+    moved.status === 200 && moved.body.entry.note.includes(OWNER) && moved.body.balance === '540.00',
+    moved.body.detail.slice(0, 90));
+  const rowBanner = await expectBanner(owner, 'Credited 40');
+  ok('the new row is on the screen before the reload lands, and the note carries the seat',
+    rowBanner.includes('Credited 40'), rowBanner.replace(/\s+/g, ' ').slice(0, 80));
+
+  await tap(owner, '[data-adjust-open]');
+  await owner.waitForSelector('[data-adjust]', { timeout: 40000 });
+  await clearAndType(owner, '[data-adjust] input[name="username"]', PAYER_ONE);
+  await tap(owner, '[data-move-pick="debit"]');
+  await clearAndType(owner, '[data-adjust] input[name="amount"]', '99999');
+  await clearAndType(owner, '[data-adjust] textarea[name="reason"]',
+    'console QA sample - taking more than the wallet holds');
+  const over = await answered(owner, '[data-adjust-save]', 'Write the row', 'admin/coins/ledger/adjust/');
+  const overSaid = await see(owner, '[data-adjust] .card-error');
+  ok('a debit bigger than the wallet is refused by the ledger itself, and the screen repeats its words',
+    over.status === 400 && /Insufficient balance/.test(over.body.detail) && overSaid.includes('Insufficient balance'),
+    `${over.status} · ${overSaid.slice(0, 60)}`);
+  // The refused debit wrote no row, so the only difference between these two
+  // counts is the one honest row the desk wrote by hand.
+  await owner.waitForFunction(([count, name]) => {
+    const rows = [...document.querySelectorAll('tbody.entry')];
+    return rows.length === count && rows.every(row => row.textContent.includes(`@${name}`));
+  }, { timeout: 40000 }, [rowsBefore + 1, PAYER_ONE]).catch(() => undefined);
+  const entries = await owner.$$eval('tbody.entry', nodes => nodes.length);
+  ok('and the hand-written row sits on top of the wallet’s own history, none of it editable',
+    entries === rowsBefore + 1, `${rowsBefore} rows → ${entries} for ${PAYER_ONE}`);
+  await shot(owner, 'ledger-1-history');
+
+  // 10.5 — the pricing desk: the numbers, the QR and the clock on a stranger's slip.
+  await owner.goto(`${BASE}/pricing`, { waitUntil: 'domcontentloaded' });
+  await owner.waitForSelector('[data-knob="coin_price"]', { timeout: 40000 });
+  const knobs = await owner.$$eval('[data-knob]', nodes => nodes.map(node => node.dataset.knob));
+  ok('every number the contract names is a box on this desk, not a line of code',
+    ['coin_price', 'coin_min_purchase', 'coin_bank_name', 'coin_bank_account', 'coin_bank_holder',
+      'coin_proof_days', 'alert_coin_queue_hours'].every(key => knobs.includes(key)),
+    knobs.join(', '));
+  await clearAndType(owner, '[data-knob="coin_price"] input', '12.50');
+  await clearAndType(owner, '[data-knob="coin_min_purchase"] input', '250');
+  const priced = await answered(owner, '[data-desk-save]', 'Save the desk', 'admin/coins/desk/');
+  const quoted = (await statusOf(nobody, '/api/coins/pricing/')).body;
+  ok('a price and a floor written here are what the open door quotes next, with no deploy',
+    priced.status === 200 && Number(quoted.coin_price) === 12.5 && quoted.min_purchase === 250,
+    `${priced.status} · ${quoted.coin_price} / ${quoted.min_purchase} · ${priced.body.detail.slice(0, 50)}`);
+  ok('and the card a payer is told repaints to the new number',
+    (await text(owner, '.quote-price b')) === '12.50', await text(owner, '.quote-price b'));
+  await clearAndType(owner, '[data-knob="coin_price"] input', '0');
+  const free = await answered(owner, '[data-desk-save]', 'Save the desk', 'admin/coins/desk/');
+  ok('a Coin cannot be priced at zero, and the desk answers in the server’s own words',
+    free.status === 400 && /above zero/.test(free.body.detail), `${free.status} ${free.body.detail.slice(0, 60)}`);
+  await clearAndType(owner, '[data-knob="coin_price"] input', '10');
+  await answered(owner, '[data-desk-save]', 'Save the desk', 'admin/coins/desk/');
+
+  const qrBox = await owner.$('[data-qr-file]');
+  await qrBox.uploadFile(path.join(OUT, 'coin-qr.png'));
+  await nap(500);
+  const uploaded = await answered(owner, '[data-desk-save]', 'Save the desk', 'admin/coins/qr/');
+  const qrShown = await owner.$eval('.qr-img', node => node.naturalWidth).catch(() => 0);
+  ok('the payment QR is stored in its own folder, painted back on the desk and quoted to a payer',
+    uploaded.status === 200 && /coin-qr\//.test(uploaded.body.pricing.bank.qr)
+      && (await statusOf(nobody, '/api/coins/pricing/')).body.bank.qr === uploaded.body.pricing.bank.qr,
+    `${uploaded.status} · ${uploaded.body.pricing.bank.qr.split('/').pop()} · ${qrShown}px on screen`);
+  // The swap also lands in the audit log; section 11 reads that log back once the
+  // audit screen exists, so the claim is proved there rather than half-proved here.
+
+  await clearAndType(owner, '[data-knob="coin_proof_days"] input', '0');
+  const shortened = await answered(owner, '[data-desk-save]', 'Save the desk', 'admin/coins/desk/');
+  ok('how long a stranger’s payment screenshot is kept is a number the Admin turns',
+    shortened.status === 200, `${shortened.status} · ${shortened.body.pricing.proof_days} days`);
+  await owner.goto(`${BASE}/coins`, { waitUntil: 'domcontentloaded' });
+  await owner.waitForSelector('.coin', { timeout: 40000 });
+  // The banner counts the sweep this page load's own queue call just did, so the
+  // line has to be read before anything else asks the queue — a second fetch would
+  // find nothing left to delete and the count would be the run's, not the screen's.
+  const sweptLine = await owner.$('[data-swept]');
+  const sweptText = sweptLine ? (await text(owner, '[data-swept]')) : 'nothing reported';
+  const four = (await statusOf(owner, `/api/admin/coins/?status=all&q=${PAYER_FOUR}`)).body.results[0].id;
+  const afterSweep = (await statusOf(owner, `/api/admin/coins/${four}/`)).body.request;
+  ok('once the window closes, the queue says how many slips it deleted',
+    Boolean(sweptLine) && /[1-9]/.test(sweptText), sweptText.slice(0, 70));
+  ok('a settled purchase keeps its row and its decision but loses the picture',
+    afterSweep.has_proof === false && afterSweep.status === 'approved',
+    `proof ${afterSweep.has_proof} · ${afterSweep.status}`);
+  await owner.goto(`${BASE}/pricing`, { waitUntil: 'domcontentloaded' });
+  await owner.waitForSelector('[data-knob="coin_proof_days"]', { timeout: 40000 });
+  await clearAndType(owner, '[data-knob="coin_proof_days"] input', '30');
+  await answered(owner, '[data-desk-save]', 'Save the desk', 'admin/coins/desk/');
+  await shot(owner, 'pricing-1-desk');
+
+  // 10.6 — the money doors are their own screens, not a side effect of being staff.
+  // Section 3 handed this seat the coin queue as an explicit grant, so the honest
+  // thing to prove is not that a Moderator can never see money but that the grant
+  // was the only reason it could — and a Client taking it back takes the screen back.
+  await owner.bringToFront();
+  await owner.goto(`${BASE}/access`, { waitUntil: 'domcontentloaded' });
+  await owner.waitForSelector('.search input', { timeout: 40000 });
+  await clearAndType(owner, '.search input', SEAT);
+  await openSeat(owner, SEAT);
+  await owner.waitForSelector('.key-groups', { timeout: 40000 });
+  await clickText(owner, '.seat-keys button.key', 'Coin request queue');
+  await clickText(owner, '.key-actions button', 'Save screens');
+  await expectBanner(owner, 'Saved');
+  const revoked = (await statusOf(owner, `/api/admin/staff/?q=${SEAT}`)).body.results[0];
+  ok('one click takes a granted money screen out of a seat, and the denial is written on the row',
+    revoked.denied_keys.includes('coins_view') && !revoked.permissions.includes('coins_view'),
+    `denied ${revoked.denied_keys.join(', ') || 'nothing'}`);
+
+  const modQueue = await statusOf(mod, '/api/admin/coins/');
+  ok('a Moderator is not handed the coin queue, and the door names the screen to ask for',
+    modQueue.status === 403 && modQueue.body.permission === 'coins_view',
+    `${modQueue.status} ${modQueue.body.permission || 'allowed'}`);
+  const modDesk = await postOf(mod, `/api/admin/coins/${two}/reject/`, { reason: 'no pen on money' });
+  ok('and cannot reject a payment either, which is a different key again',
+    modDesk.status === 403 && modDesk.body.permission === 'coins_review',
+    `${modDesk.status} ${modDesk.body.permission || 'allowed'}`);
+  await mod.bringToFront();
+  await mod.goto(`${BASE}/coins`, { waitUntil: 'domcontentloaded' });
+  await mod.waitForSelector('.panel.blocked', { timeout: 40000 });
+  const moneyNav = await text(mod, '.side-nav');
+  ok('the console does not offer a Moderator the money screens at all',
+    !moneyNav.includes('Coin requests') && !moneyNav.includes('Coin ledger') && !moneyNav.includes('Coin pricing'),
+    moneyNav.replace(/\s+/g, ' ').slice(0, 90));
+  await shot(mod, 'coins-4-locked');
+  await nobody.close();
+
+  // ── 11. paid reach: the campaigns, the shelf they were bought from, the dials ──
+  // 6.8 is judged on money, so every refund here is read out of the wallet's own
+  // ledger and out of the open door the member site actually reads — not from the
+  // sentence the decision endpoint returned about itself. A desk that prints
+  // "180 coins went back" while writing no row is exactly the failure this
+  // section exists to catch, and a shelf that saves without the feed being told
+  // about it is the other one.
+  const REACH = {
+    refuse: 'qa_promo_one', live: 'qa_promo_two', paused: 'qa_promo_three',
+    record: 'qa_promo_four', clean: 'qa_promo_five', stale: 'qa_promo_stale',
+    draft: 'qa_promo_draft',
+  };
+  const PROMO_BOX = id => `.promo[data-promo="${id}"]`;
+  const promoVerb = (id, verb) => `${PROMO_BOX(id)} .verbs button[data-verb="${verb}"]`;
+  const PROMO_REASON = id => `${PROMO_BOX(id)} .ask textarea[name="reason"]`;
+  const PROMO_YES = id => `${PROMO_BOX(id)} .ask-actions button.btn.primary`;
+
+  /** The queue repaints after every decision, so a campaign is found by its payer.
+   *  Its payer, specifically: an open row prints the people who reported the thing
+   *  underneath it, and a match on the row's whole text answers to a reporter — the
+   *  stale rows of the pile just left are still on the page for a moment, and one of
+   *  them was the payer of the campaign two claims ago. */
+  const findPromo = async who => {
+    await owner.waitForFunction(name => [...document.querySelectorAll('.promo .promo-name b')]
+      .some(tag => tag.textContent === `@${name}`), { timeout: 40000 }, who);
+    return owner.evaluate(name => Number([...document.querySelectorAll('.promo')]
+      .find(row => row.querySelector('.promo-name b').textContent === `@${name}`).dataset.promo), who);
+  };
+  const openPromo = async who => {
+    const id = await findPromo(who);
+    const already = await owner.$eval(PROMO_BOX(id), node => node.className.includes('open'));
+    if (!already) await tap(owner, `${PROMO_BOX(id)} .promo-id`);
+    await owner.waitForSelector(`${PROMO_BOX(id)} .promo-body`, { timeout: 40000 });
+    return id;
+  };
+  /** Rows for one payer only, so a count read after a search is not the old list. */
+  const seeOnly = async who => {
+    await clearAndType(owner, '.search input', who);
+    await owner.waitForFunction(name => {
+      const list = [...document.querySelectorAll('.promo')];
+      return list.length > 0 && list.every(row => row.querySelector('.promo-name b').textContent === `@${name}`);
+    }, { timeout: 40000 }, who);
+  };
+  /** A filter chip fires its own request; wait for that answer, not the next paint. */
+  const reachPile = async which => {
+    // Clicking the chip that is already on refires nothing, so waiting for an
+    // answer to it would sit out the full timeout for no reason.
+    if (await owner.$eval('.filters .fchip.on', node => node.dataset.chip) !== which) {
+      const answer = owner.waitForResponse(res => /\/api\/admin\/promotions\//.test(res.url()), { timeout: 40000 });
+      await owner.evaluate(want => {
+        const hit = [...document.querySelectorAll('.filters .fchip')].find(node => node.dataset.chip === want);
+        if (!hit) throw new Error(`no chip for ${want}`);
+        hit.click();
+      }, which);
+      await answer;
+    }
+    await clearAndType(owner, '.search input', '');
+  };
+  const walletRows = async who => (await statusOf(owner, `/api/admin/coins/ledger/?q=${who}`)).body.results || [];
+  const unseated = await freshPage();
+  await unseated.goto(`${BASE}/login`, { waitUntil: 'domcontentloaded' });
+
+  const pid = {};
+  for (const [name, who] of Object.entries(REACH)) {
+    const found = await statusOf(owner, `/api/admin/promotions/?state=all&q=${who}`);
+    const hit = (found.body.results || []).find(row => row.owner === who);
+    pid[name] = hit ? hit.id : null;
+  }
+  ok('every verb 6.8 promises has a campaign of its own to do it to',
+    Object.values(pid).every(Boolean),
+    Object.entries(pid).map(([key, id]) => `${key}=#${id || 'missing'}`).join(' '));
+
+  // 11.1 — the queue, and what a seat is asked to look at before it signs anything.
+  await owner.goto(`${BASE}/promotions`, { waitUntil: 'domcontentloaded' });
+  await owner.waitForSelector('.promo', { timeout: 40000 });
+  const reachNav = await text(owner, '.side-nav');
+  ok('paid reach is its own drawer section, with the three screens it was promised',
+    reachNav.includes('Reach') && reachNav.includes('Paid campaigns')
+      && reachNav.includes('Campaign packages') && reachNav.includes('Reach controls'),
+    reachNav.replace(/\s+/g, ' ').slice(0, 120));
+  const waitingDesk = (await statusOf(owner, '/api/admin/promotions/')).body;
+  ok('the desk opens on money the site already took and nobody has looked at — not on a status column',
+    waitingDesk.state === 'waiting' && waitingDesk.results.length > 0
+      && waitingDesk.results.every(row => row.status === 'active' && row.sign_off === 'waiting'),
+    `${waitingDesk.results.length} on screen · ${waitingDesk.counts.waiting} waiting · `
+    + `${waitingDesk.counts.live} already signed off of ${waitingDesk.counts.every} bought`);
+  const waitingChip = await owner.$eval('.filters [data-chip="waiting"] b', node => Number(node.textContent));
+  ok('the chip carries the server’s own count of the pile, so a seat can see it clear to zero',
+    waitingChip === waitingDesk.counts.waiting && waitingChip > 0, `${waitingChip} vs ${waitingDesk.counts.waiting}`);
+  const reservedLine = await lineText(owner, '[data-held]');
+  ok('the screen says up front how much is being held and which dials decide who is shown it',
+    reservedLine.includes('reserved by campaigns that are running or paused')
+      && reservedLine.includes('promotions per person per day') && reservedLine.includes('relevance floor'),
+    reservedLine.replace(/\s+/g, ' ').slice(0, 150));
+
+  await seeOnly(REACH.refuse);
+  const dirtyRow = await openPromo(REACH.refuse);
+  ok('a campaign row names the coins and the package before anybody opens it',
+    (await text(owner, `${PROMO_BOX(dirtyRow)} [data-coins]`)) === '300.00'
+      && (await text(owner, `${PROMO_BOX(dirtyRow)} [data-package]`)).includes('7 d'),
+    `${await text(owner, `${PROMO_BOX(dirtyRow)} [data-coins]`)} coins · `
+    + `${await text(owner, `${PROMO_BOX(dirtyRow)} [data-package]`)}`);
+  ok('a decision about paid reach is made with the thing itself on the screen',
+    (await text(owner, `${PROMO_BOX(dirtyRow)} .cwrap .ctext`)).includes('a studio tour in Kathmandu'),
+    (await text(owner, `${PROMO_BOX(dirtyRow)} .cwrap .ctext`)).slice(0, 90));
+  const aimed = await many(owner, `${PROMO_BOX(dirtyRow)} [data-targeting] li`);
+  ok('and with the audience the payer asked for, written out rather than guessed from an id',
+    aimed.some(fact => fact.includes('18–35')) && aimed.some(fact => fact.includes('Nepal'))
+      && aimed.some(fact => fact.includes('Kathmandu')) && aimed.some(fact => fact.includes('Photography')),
+    aimed.join(' | ').slice(0, 160));
+  const pileLine = await lineText(owner, `${PROMO_BOX(dirtyRow)} [data-pile] .line`);
+  ok('the reports already sitting under it are read before the signature, not filed after it',
+    pileLine.includes('2 open report(s) from 2 people') && pileLine.includes('misleading'),
+    pileLine.replace(/\s+/g, ' ').slice(0, 150));
+  const reportLines = await many(owner, `${PROMO_BOX(dirtyRow)} li[data-report]`);
+  ok('and each one arrives as a quotable row — who said it, what they said, when',
+    reportLines.length === 3 && reportLines.some(line => line.includes('the same footage another account posted first'))
+      && reportLines.some(line => line.includes('dismissed')),
+    `${reportLines.length} rows: ${reportLines.map(line => line.slice(0, 40)).join(' / ')}`);
+  await shot(owner, 'reach-1-campaign-open');
+
+  // 11.2 — approve moves nothing, because the site took the coins when it was bought.
+  const cleanBefore = await walletRows(REACH.clean);
+  await reachPile('waiting');
+  const cleanRow = await openPromo(REACH.clean);
+  const signed = await answered(owner, promoVerb(cleanRow, 'approve'), 'Approve', 'admin/promotions/');
+  ok('signing a campaign off hands back nothing and charges nothing again',
+    signed.status === 200 && Number(signed.body.refunded) === 0
+      && /Nothing was charged again/.test(signed.body.detail),
+    `${signed.status} · ${signed.body.detail}`.slice(0, 140));
+  ok('and the wallet’s own history gains no row for it, which is the only proof that matters',
+    (await walletRows(REACH.clean)).length === cleanBefore.length,
+    `${cleanBefore.length} → ${(await walletRows(REACH.clean)).length} ledger rows for @${REACH.clean}`);
+  await waitGone(owner, PROMO_BOX(cleanRow));
+  await reachPile('live');
+  const nowLive = await statusOf(owner, `/api/admin/promotions/${cleanRow}/`);
+  ok('the campaign it just signed off is counted in the pile that is running, with the seat named on it',
+    nowLive.body.campaign.sign_off === 'approve'
+      && nowLive.body.campaign.review.by === OWNER
+      && (await findPromo(REACH.clean)) === cleanRow,
+    `signed off by @${nowLive.body.campaign.review.by}`);
+
+  // 11.3 — refuse: the money has to be worth writing a sentence for.
+  await reachPile('waiting');
+  const refuseRow = await openPromo(REACH.refuse);
+  await tap(owner, promoVerb(refuseRow, 'reject'));
+  await owner.waitForSelector(PROMO_REASON(refuseRow), { timeout: 40000 });
+  const owedBack = await lineText(owner, `${PROMO_BOX(refuseRow)} .ask .note.row`);
+  const purseBefore = await walletRows(REACH.refuse);
+  const blunt = await owner.$eval(PROMO_YES(refuseRow), node => node.disabled);
+  ok('the refund button will not fire until the seat has written the sentence the payer is sent',
+    blunt === true, `disabled with an empty reason box: ${blunt}`);
+  await clearAndType(owner, PROMO_REASON(refuseRow), 'console QA sample - the footage is not theirs to promote');
+  const armedNow = await owner.$eval(PROMO_YES(refuseRow), node => node.disabled);
+  ok('and the promise of what comes back is printed before the click, not after it',
+    armedNow === false && owedBack.includes('180'), owedBack.replace(/\s+/g, ' ').slice(0, 120));
+  const refusedReach = await answered(owner, PROMO_YES(refuseRow), 'Confirm', 'admin/promotions/');
+  ok('a campaign the platform itself turned down is paid back in full for the run it never got',
+    refusedReach.status === 200 && Number(refusedReach.body.refunded) === 180
+      && refusedReach.body.campaign.status === 'ended',
+    `${refusedReach.status} · ${refusedReach.body.refunded} back · ${refusedReach.body.campaign.status_label}`);
+  const refundRows = await walletRows(REACH.refuse);
+  const refundRow = refundRows.find(row => row.note.includes(`campaign ${refuseRow}`));
+  // Asserted on the row rather than on the length of the list: "one more row than
+  // before" is satisfied by any row that happens to arrive, while the claim is that
+  // THIS refund was written — a credit, the sum the run never got, named after the
+  // campaign it answers and the seat who signed it, and newest on the payer's ledger.
+  ok('the refund is a real ledger row through the wallet, and the note says which campaign it answers',
+    !!refundRow && refundRows[0] === refundRow && refundRow.kind === 'credit'
+      && Number(refundRow.amount) === 180 && refundRow.note.includes(OWNER),
+    `#${refuseRow} · ${refundRows.length} rows, was ${purseBefore.length} · `
+      + (refundRows[0] ? `${refundRows[0].kind} ${refundRows[0].amount} · ${refundRows[0].note}` : 'no row written'));
+  await shot(owner, 'reach-2-refund-paper');
+
+  // 11.4 — pause holds the reservation; a stop has to say what happens to the money.
+  await reachPile('live');
+  const runRow = await openPromo(REACH.live);
+  const halted = await answered(owner, promoVerb(runRow, 'pause'), 'Pause', 'admin/promotions/');
+  ok('pausing takes paid reach out of the feed without touching the coins behind it',
+    halted.status === 200 && Number(halted.body.refunded) === 0
+      && halted.body.campaign.status === 'paused' && /reservation stands/.test(halted.body.detail),
+    `${halted.status} · ${halted.body.detail}`.slice(0, 130));
+  await reachPile('paused');
+  const stoppedRow = await openPromo(REACH.live);
+  await tap(owner, promoVerb(stoppedRow, 'stop'));
+  await owner.waitForSelector(`${PROMO_BOX(stoppedRow)} [data-refund]`, { timeout: 40000 });
+  const undecided = await owner.$eval(PROMO_YES(stoppedRow), node => node.disabled);
+  await clearAndType(owner, PROMO_REASON(stoppedRow), 'console QA sample - the bank reversed this payment');
+  const stillBlind = await owner.$eval(PROMO_YES(stoppedRow), node => node.disabled);
+  ok('a stop refuses to be clicked until the seat has said out loud whether the coins go back',
+    undecided === true && stillBlind === true,
+    `disabled before the reason: ${undecided} · disabled after it, with no choice: ${stillBlind}`);
+  await tap(owner, `${PROMO_BOX(stoppedRow)} [data-refund] button[data-refund-pick="credit"]`);
+  const paidBack = await answered(owner, PROMO_YES(stoppedRow), 'Confirm', 'admin/promotions/');
+  ok('and choosing refund hands the 12 unrun days of an 800-coin run back to the payer',
+    paidBack.status === 200 && Number(paidBack.body.refunded) === 600
+      && paidBack.body.reviews[paidBack.body.reviews.length - 1].choice === 'refunded',
+    `${paidBack.status} · ${paidBack.body.refunded} back · ${JSON.stringify(
+      paidBack.body.reviews[paidBack.body.reviews.length - 1].choice)}`);
+
+  // 11.5 — withhold is the other honest answer, and it is a different amount.
+  await reachPile('paused');
+  const heldRow = await openPromo(REACH.paused);
+  const backOn = await answered(owner, promoVerb(heldRow, 'resume'), 'Resume', 'admin/promotions/');
+  ok('a paused campaign goes back into the feed on the end date it already had, not a fresh one',
+    backOn.status === 200 && backOn.body.campaign.status === 'active'
+      && backOn.body.campaign.left_hours > 0 && /end date it already had/.test(backOn.body.detail),
+    `${backOn.status} · ${Math.round((backOn.body.campaign.left_hours || 0) / 24)} days still to run`);
+  await reachPile('live');
+  const keptRow = await openPromo(REACH.paused);
+  const keptBefore = await walletRows(REACH.paused);
+  await tap(owner, promoVerb(keptRow, 'stop'));
+  await owner.waitForSelector(`${PROMO_BOX(keptRow)} [data-refund]`, { timeout: 40000 });
+  await clearAndType(owner, PROMO_REASON(keptRow), 'console QA sample - the account kept breaking this term');
+  await tap(owner, `${PROMO_BOX(keptRow)} [data-refund] button[data-refund-pick="withhold"]`);
+  const withheld = await answered(owner, PROMO_YES(keptRow), 'Confirm', 'admin/promotions/');
+  ok('withholding the same money is allowed too, and writes no credit row to pretend otherwise',
+    withheld.status === 200 && Number(withheld.body.refunded) === 0
+      && withheld.body.reviews[withheld.body.reviews.length - 1].choice === 'withheld'
+      && (await walletRows(REACH.paused)).length === keptBefore.length,
+    `${withheld.status} · ${withheld.body.refunded} back · `
+    + `${keptBefore.length} → ${(await walletRows(REACH.paused)).length} ledger rows`);
+
+  // 11.6 — the three answers that must not be allowed, and the record that must not move.
+  await reachPile('waiting');
+  const lateRow = await openPromo(REACH.stale);
+  const lateVerbs = await owner.$$eval(`${PROMO_BOX(lateRow)} [data-verb]`, nodes => nodes.map(n => n.dataset.verb));
+  const lateNote = await lineText(owner, `${PROMO_BOX(lateRow)} [data-over]`);
+  ok('a run that finished before anybody looked is not offered an Approve, and says why on the row',
+    !lateVerbs.includes('approve') && lateVerbs.length > 0 && /no longer exists/.test(lateNote),
+    `${lateVerbs.join(', ') || 'no verbs'} — ${lateNote.replace(/\s+/g, ' ').slice(0, 90)}`);
+  const tooLate = await postOf(owner, `/api/admin/promotions/${lateRow}/approve/`, {});
+  ok('and the door refuses the same approval even to something typing around the screen',
+    tooLate.status === 409 && /run is over/.test(tooLate.body.detail),
+    `${tooLate.status} · ${tooLate.body.detail}`);
+
+  await reachPile('all');
+  await seeOnly(REACH.draft);
+  const draftRow = await openPromo(REACH.draft);
+  const unpaid = await postOf(owner, `/api/admin/promotions/${draftRow}/approve/`, {});
+  const draftNote = await lineText(owner, `${PROMO_BOX(draftRow)} [data-unpaid]`);
+  ok('an unpaid draft has no coins behind it, so there is nothing here to approve',
+    unpaid.status === 400 && /not been paid for/.test(unpaid.body.detail) && !draftNote.includes('undefined'),
+    `${unpaid.status} · ${draftNote.replace(/\s+/g, ' ').slice(0, 90)}`);
+
+  await reachPile('ended');
+  const recordRow = await openPromo(REACH.record);
+  const recordNote = await lineText(owner, `${PROMO_BOX(recordRow)} [data-record]`);
+  const movedAgain = {};
+  for (const verb of ['approve', 'pause', 'reject', 'stop']) {
+    movedAgain[verb] = (await postOf(owner, `/api/admin/promotions/${recordRow}/${verb}/`,
+      { reason: 'console QA sample - try to change a record', refund: 'credit' })).status;
+  }
+  ok('an ended campaign is a record, not a task: none of the five verbs changes it again',
+    Object.values(movedAgain).every(code => code === 409),
+    Object.entries(movedAgain).map(([verb, code]) => `${verb} ${code}`).join(' '));
+  ok('and the screen shows the decision that closed it, in the words the seat wrote when it took it',
+    recordNote.includes('Stopped') && /kept breaking the same policy term/.test(recordNote)
+      && !recordNote.includes('undefined'),
+    recordNote.replace(/\s+/g, ' ').slice(0, 150));
+  const promoPaper = await many(owner, `${PROMO_BOX(recordRow)} li[data-paper]`);
+  ok('the whole trail is on the row, oldest first, with the money answer spelled out',
+    promoPaper.length >= 1 && promoPaper[0].includes('Stopped') && promoPaper[0].includes('withheld')
+      && promoPaper[0].includes(`@${OWNER}`),
+    promoPaper.map(line => line.slice(0, 60)).join(' / '));
+  await shot(owner, 'reach-3-paper-trail');
+
+  // 11.7 — the shelf: what a package is, and what the site is told when it changes.
+  await owner.goto(`${BASE}/packages`, { waitUntil: 'domcontentloaded' });
+  await owner.waitForSelector('[data-pkg-row]', { timeout: 40000 });
+  const shelfDesk = (await statusOf(owner, '/api/admin/promotions/packages/')).body;
+  await postOf(owner, '/api/admin/promotions/packages/', { packages: shelfDesk.shipped });
+  await owner.goto(`${BASE}/packages`, { waitUntil: 'domcontentloaded' });
+  await owner.waitForSelector('[data-pkg-row="pk_prime"]', { timeout: 40000 });
+  const quoted0 = (await statusOf(unseated, '/api/promotions/config/')).body;
+  const rowsOnShelf = await owner.$$eval('[data-pkg-row]', nodes => nodes.length);
+  ok('a package is three numbers a seat can read on one screen: price, days, people',
+    rowsOnShelf === 3 && quoted0.packages.length === 3
+      && quoted0.packages.every(pack => pack.coins > 0 && pack.days > 0 && /Up to [\d,]+ people/.test(pack.reach)),
+    quoted0.packages.map(pack => `${pack.name} ${pack.coins}/${pack.days}d`).join(' · '));
+  const boughtOn = await many(owner, '.pk-bought');
+  ok('the shelf shows how many campaigns already paid for each id, so a price is not changed blind',
+    boughtOn.some(line => /campaign/.test(line)) && !boughtOn.some(line => line.includes('undefined')),
+    boughtOn.join(' | ').slice(0, 120));
+
+  await clearAndType(owner, '[data-pkg-row="pk_prime"] [data-pkg-field="coins"]', '950');
+  await clearAndType(owner, '[data-pkg-row="pk_prime"] [data-pkg-field="days"]', '21');
+  await clearAndType(owner, '[data-pkg-row="pk_prime"] [data-pkg-field="reach"]', '55000');
+  const resold = await answered(owner, '[data-pkg-save]', 'Save the shelf', 'admin/promotions/packages/');
+  const quotedNow = (await statusOf(unseated, '/api/promotions/config/')).body;
+  ok('the shelf a payer chooses from is rewritten here, with no deploy and no code',
+    resold.status === 200 && quotedNow.packages_edited === true
+      && quotedNow.packages.some(pack => pack.id === 'pk_prime' && pack.coins === 950 && pack.days === 21),
+    `${resold.status} · Prime is now ${JSON.stringify(
+      (quotedNow.packages.find(pack => pack.id === 'pk_prime') || {}).coins)}`);
+  ok('and the member site is told the new number on the same open door it already reads',
+    quotedNow.packages.some(pack => pack.id === 'pk_prime'
+      && /55,000/.test(pack.reach) && pack.reach_max === 55000),
+    (quotedNow.packages.find(pack => pack.id === 'pk_prime') || {}).reach || 'nothing quoted');
+  const paidStay = await statusOf(owner, `/api/admin/promotions/${cleanRow}/`);
+  ok('a campaign already bought keeps the coins it reserved, so a shelf rewrite never re-bills anybody',
+    paidStay.body.campaign.coins === '600.00'
+      && (await walletRows(REACH.clean)).length === cleanBefore.length,
+    `#${cleanRow} still shows ${paidStay.body.campaign.coins} coins and no new ledger row`);
+
+  await clearAndType(owner, '[data-pkg-row="pk_growth"] [data-pkg-field="coins"]', '0');
+  const cheap = await postOf(owner, '/api/admin/promotions/packages/', {
+    packages: [{ id: 'pk_growth', name: 'Growth', coins: 0, days: 7, reach_max: 12000 }],
+  });
+  const freeShelf = await answered(owner, '[data-pkg-save]', 'Save the shelf', 'admin/promotions/packages/');
+  ok('a package priced at zero is refused, and the desk repeats the server’s own sentence',
+    cheap.status === 400 && /above zero/.test(cheap.body.detail)
+      && freeShelf.status === 400 && (await text(owner, '.pk-problems')).includes('above zero'),
+    `${cheap.status} · ${(await many(owner, '.pk-problems li')).join(' / ')}`.slice(0, 150));
+  await postOf(owner, '/api/admin/promotions/packages/', { packages: shelfDesk.shipped });
+  await unseated.goto(`${BASE}/login`, { waitUntil: 'domcontentloaded' });
+  await shot(owner, 'reach-4-shelf');
+
+  // 11.8 — the dials: weights, gates, caps and the one big switch.
+  await owner.goto(`${BASE}/algorithm`, { waitUntil: 'domcontentloaded' });
+  await owner.waitForSelector('[data-knob="algo_weight_like"]', { timeout: 40000 });
+  const knobBlocks = await owner.$$eval('[data-block]', nodes => nodes.map(n => n.dataset.block));
+  const doorFirst = (await statusOf(unseated, '/api/promotions/config/')).body;
+  const boxLike = await owner.$eval('[data-knob="algo_weight_like"] input', node => Number(node.value));
+  ok('the tuning is a desk of boxes, not a config file: weights, gates and the switch, split',
+    knobBlocks.join(',') === 'weight,gate,switch' && boxLike === doorFirst.weights.algo_weight_like,
+    `${knobBlocks.join(' + ')} · a like is worth ${boxLike}, which is what the feed is told`);
+  // Each dial is turned one notch off whatever the desk holds right now, because
+  // a run that typed the same seven every time would be a run that quietly turned
+  // nothing on its second trip through this file.
+  const DIALS = ['algo_weight_like', 'algo_relevance_floor', 'promo_daily_cap',
+    'promo_repeat_limit', 'promo_organic_gap'];
+  const turnedTo = {};
+  for (const key of DIALS) {
+    const now = await owner.$eval(`[data-knob="${key}"] input`, node => Number(node.value) || 0);
+    turnedTo[key] = now + 1;
+    await clearAndType(owner, `[data-knob="${key}"] input`, String(turnedTo[key]));
+  }
+  const turned = await answered(owner, '[data-algo-save]', 'Save', 'admin/promotions/algorithm/');
+  const doorNow = (await statusOf(unseated, '/api/promotions/config/')).body;
+  ok('relevance weights, the floor, the daily cap, the repeat limit and the organic gap all move without code',
+    turned.status === 200
+      && doorNow.weights.algo_weight_like === turnedTo.algo_weight_like
+      && doorNow.floor === turnedTo.algo_relevance_floor
+      && doorNow.caps.daily === turnedTo.promo_daily_cap
+      && doorNow.caps.repeat === turnedTo.promo_repeat_limit
+      && doorNow.caps.gap === turnedTo.promo_organic_gap,
+    `like ${doorNow.weights.algo_weight_like} · floor ${doorNow.floor} · `
+    + `${doorNow.caps.daily}/day · ${doorNow.caps.repeat} seen · ${doorNow.caps.gap} ordinary between`);
+  ok('and the audit line names only the dials that were actually turned',
+    (turned.body.changed || []).length === 5
+      && !turned.body.changed.includes('algo_weight_save') && !turned.body.changed.includes('promo_global_pause'),
+    (turned.body.changed || []).join(', '));
+  const untouched = await postOf(owner, '/api/admin/promotions/algorithm/', {});
+  ok('saving an unchanged desk is refused rather than written as a pretend staff action',
+    untouched.status === 400 && /no dial has been turned/.test(untouched.body.detail),
+    `${untouched.status} · ${untouched.body.detail}`);
+
+  await tap(owner, '[data-knob="promo_global_pause"] button[data-pause="1"]');
+  const pausedAll = await answered(owner, '[data-algo-save]', 'Save the dials', 'admin/promotions/algorithm/');
+  const doorPaused = (await statusOf(unseated, '/api/promotions/config/')).body;
+  ok('one switch stops every paid campaign at once, and the open door says so for the feed to obey',
+    pausedAll.status === 200 && doorPaused.global_pause === true
+      && /pause every promotion/i.test(pausedAll.body.detail),
+    `${pausedAll.status} · global_pause ${doorPaused.global_pause}`);
+  await owner.goto(`${BASE}/promotions`, { waitUntil: 'domcontentloaded' });
+  await owner.waitForSelector('.promo, .panel.empty', { timeout: 40000 });
+  const stoppedWarning = await lineText(owner, '[data-paused-all]');
+  ok('the campaign desk itself warns that approving now signs off reach the feed is not showing',
+    /paused at the platform level/.test(stoppedWarning) && /not showing anyone/.test(stoppedWarning),
+    stoppedWarning.replace(/\s+/g, ' ').slice(0, 140));
+  await reachPile('all');
+  const stillRunning = (await statusOf(owner, '/api/admin/promotions/?state=all')).body;
+  ok('and the switch changes no campaign: they keep their status and their reservation',
+    stillRunning.results.some(row => row.status === 'active')
+      && Number(stillRunning.counts.reserved) > 0,
+    `${stillRunning.results.filter(row => row.status === 'active').length} still active · `
+    + `${stillRunning.counts.reserved} coins still reserved`);
+  await owner.goto(`${BASE}/algorithm`, { waitUntil: 'domcontentloaded' });
+  await owner.waitForSelector('[data-knob="promo_global_pause"]', { timeout: 40000 });
+  await tap(owner, '[data-knob="promo_global_pause"] button[data-pause="off"]');
+  await answered(owner, '[data-algo-save]', 'Save', 'admin/promotions/algorithm/');
+  const doorOff = (await statusOf(unseated, '/api/promotions/config/')).body;
+  ok('turning it back off is the same one switch, so a spam wave is not a two-hour incident',
+    doorOff.global_pause === false, `global_pause ${doorOff.global_pause}`);
+  await shot(owner, 'reach-5-dials');
+
+  // 11.9 — reading paid reach and deciding it are two different keys.
+  const blindQueue = await statusOf(mod, '/api/admin/promotions/');
+  ok('a Moderator is not handed the paid campaign queue, and the door names the screen to ask for',
+    blindQueue.status === 403 && blindQueue.body.permission === 'promotions_view',
+    `${blindQueue.status} ${blindQueue.body.permission || 'allowed'}`);
+  await mod.bringToFront();
+  await mod.goto(`${BASE}/promotions`, { waitUntil: 'domcontentloaded' });
+  await mod.waitForSelector('.panel.blocked', { timeout: 40000 });
+  const modReachNav = await text(mod, '.side-nav');
+  ok('and is not offered the reach screens in the drawer either',
+    !modReachNav.includes('Paid campaigns') && !modReachNav.includes('Reach controls')
+      && !modReachNav.includes('Campaign packages'),
+    modReachNav.replace(/\s+/g, ' ').slice(0, 100));
+
+  await owner.bringToFront();
+  await owner.goto(`${BASE}/access`, { waitUntil: 'domcontentloaded' });
+  await owner.waitForSelector('.search input', { timeout: 40000 });
+  await clearAndType(owner, '.search input', SEAT);
+  await openSeat(owner, SEAT);
+  await owner.waitForSelector('.key-groups', { timeout: 40000 });
+  await clickText(owner, '.seat-keys button.key', 'Promotion queue and performance');
+  await clickText(owner, '.key-actions button', 'Save screens');
+  await expectBanner(owner, 'Saved');
+  const halfSeat = await statusOf(mod, '/api/admin/promotions/');
+  ok('a seat can be handed the campaign queue to read without being handed the coins behind it',
+    halfSeat.status === 200 && halfSeat.body.can_review === false
+      && halfSeat.body.results.length > 0,
+    `${halfSeat.status} · can_review ${halfSeat.body.can_review}`);
+  const halfDecide = await postOf(mod, `/api/admin/promotions/${cleanRow}/pause/`, { reason: 'read-only seat trying' });
+  ok('and the same seat is refused the decision, with the second key named on the way out',
+    halfDecide.status === 403 && halfDecide.body.permission === 'promotions_review',
+    `${halfDecide.status} ${halfDecide.body.permission || 'allowed'}`);
+  await mod.goto(`${BASE}/promotions`, { waitUntil: 'domcontentloaded' });
+  await mod.waitForSelector('.promo', { timeout: 40000 });
+  const readOnlyNote = await lineText(mod, '[data-readonly]');
+  const noVerbs = await mod.$$eval('.promo .verbs button', nodes => nodes.length);
+  ok('the screen a read-only seat is given says so on the page instead of offering dead buttons',
+    noVerbs === 0 && readOnlyNote.includes('Approve, pause, stop, refund')
+      && !readOnlyNote.includes('undefined'),
+    `${noVerbs} verbs offered — ${readOnlyNote.replace(/\s+/g, ' ').slice(0, 110)}`);
+  await shot(mod, 'reach-6-read-only');
+
+  await owner.goto(`${BASE}/access`, { waitUntil: 'domcontentloaded' });
+  await owner.waitForSelector('.search input', { timeout: 40000 });
+  await clearAndType(owner, '.search input', SEAT);
+  await openSeat(owner, SEAT);
+  await owner.waitForSelector('.key-groups', { timeout: 40000 });
+  await clickText(owner, '.seat-keys button.key', 'Promotion queue and performance');
+  await clickText(owner, '.key-actions button', 'Save screens');
+  await expectBanner(owner, 'Saved');
+  const shutAgain = await statusOf(mod, '/api/admin/promotions/');
+  ok('taking the screen back is the same one click, so a promotion desk can be closed for the night',
+    shutAgain.status === 403, `${shutAgain.status} after the grant was withdrawn`);
+
+  // ── 12. the safety desk, the pile, the alerts, the log, the files, the sizes ──
+  //
+  // Contracts 6.9 and 6.10 walk in the order a seat actually does them: read the log
+  // before anything has been touched, so the gap list is the honest one; turn the
+  // rules; watch the flagged pile move with the number; run the checks; take a file;
+  // then read the log again and find that every click above wrote its own row.
+  //
+  // The fixture for this section is `admin/qa/watch_seed.py`: four reporters on one
+  // hidden post, two on a live one, three each on a comment and a listing, three on a
+  // post that no longer exists, and four outside reporters each given a different
+  // answer — one healthy, one gone quiet, one counting trouble, one never wired in.
+
+  /**
+   * A file, asked for the way the screen asks for it.
+   *
+   * `again()` retries, and a retried build would hand the audit log a second
+   * download that no person took, so this one answers exactly once and keeps the
+   * headers the server set rather than the numbers the page already knew.
+   */
+  const rawFile = (page, apiPath, payload = {}) => page.evaluate(async (target, sent) => {
+    const csrf = (document.cookie.match(/(?:^|;\s*)exposing_csrf=([^;]*)/) || [])[1] || '';
+    const res = await fetch(target, {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        Accept: 'text/csv, application/json', 'Content-Type': 'application/json', 'X-CSRF-Token': decodeURIComponent(csrf),
+      },
+      body: JSON.stringify(sent),
+    });
+    const text = await res.text();
+    return {
+      status: res.status,
+      type: res.headers.get('Content-Type') || '',
+      filename: ((res.headers.get('Content-Disposition') || '').match(/filename="([^"]+)"/) || [])[1] || '',
+      rows: Number(res.headers.get('X-Export-Rows') || 0),
+      truncated: res.headers.get('X-Export-Truncated') === '1',
+      said: text.slice(0, 240),
+      head: text.split('\n')[0] || '',
+    };
+  }, apiPath, payload);
+
+  const watchPile = async () => (await statusOf(owner, '/api/admin/spam/flags/?page=0')).body;
+  // Only the rows this file's own accounts own, because the demo seed has a pile of
+  // its own and a count that includes it would be a count of somebody else's work.
+  const ownPile = desk => desk.content.filter(row => row.owner && row.owner.username === 'qa_peek_host');
+
+  await owner.goto(`${BASE}/audit`, { waitUntil: 'domcontentloaded' });
+  await owner.waitForSelector('[data-list="audit"] .entry', { timeout: 40000 });
+  const logShape = await owner.evaluate(() => ({
+    pens: document.querySelectorAll('[data-list="audit"] button').length,
+    families: document.querySelectorAll('.filters .fchip').length,
+    tiles: document.querySelectorAll('[data-entry]').length,
+  }));
+  ok('the audit log opens as evidence, not as a workspace: rows listed, families filterable, not one pen',
+    logShape.pens === 0 && logShape.families > 6 && logShape.tiles > 0,
+    `${logShape.pens} buttons in the table · ${logShape.families} family filters · ${logShape.tiles} rows`);
+
+  const gapFirst = await lineText(owner, '[data-missing-families]');
+  ok('a screen that counts zeroes can tell a quiet month from a hole in the logging, and says which families they are',
+    gapFirst.includes('alerts') && gapFirst.includes('data exports')
+      && !gapFirst.includes('coins and payments') && !gapFirst.includes('staff and access'),
+    gapFirst.replace(/\s+/g, ' ').slice(0, 180));
+
+  await clearAndType(owner, '.toolbar .search input', 'safety watch');
+  const systemLine = await until(owner, '[data-list="audit"] .entry', 'the platform itself');
+  ok('a row the platform wrote itself is named as one, instead of leaving the Who column blank',
+    systemLine.includes('the platform itself') && systemLine.includes('no account behind it')
+      && systemLine.includes('auto hide post'),
+    systemLine.replace(/\s+/g, ' ').slice(0, 150));
+
+  await clearAndType(owner, '.toolbar .search input', '');
+  await clearAndType(owner, '.toolbar .dates input:nth-of-type(2)', 'november');
+  const dateRefused = await expectBad(owner, 'Give a date as');
+  ok('a date typed in words is refused in words, before the screen shows an empty table that looks like a quiet year',
+    dateRefused.includes('2026-11-22'), dateRefused.replace(/\s+/g, ' ').slice(0, 140));
+  await clearAndType(owner, '.toolbar .dates input:nth-of-type(2)', '2020-01-01');
+  await owner.waitForFunction(() => (document.querySelector('[data-totals]') || {}).textContent
+    && document.querySelector('[data-totals]').textContent.includes('0 entries match'), { timeout: 40000 });
+  const logEmpty = await text(owner, '[data-totals]');
+  ok('and a window that holds nothing says so as a window, with the whole log still counted beside it',
+    logEmpty.startsWith('0 entries match this filter') && logEmpty.includes('rows in the log since it began'),
+    logEmpty.replace(/\s+/g, ' ').slice(0, 160));
+  await waitGone(owner, '[data-list="audit"]');
+  await clearAndType(owner, '.toolbar .dates input:nth-of-type(2)', '');
+  await owner.waitForSelector('[data-list="audit"] .entry', { timeout: 40000 });
+  await shot(owner, 'safety-1-audit-gap');
+
+  await owner.goto(`${BASE}/flags`, { waitUntil: 'domcontentloaded' });
+  await owner.waitForSelector('[data-totals]', { timeout: 40000 });
+  const pileRead = await watchPile();
+  const mineThree = ownPile(pileRead);
+  const pileTold = await text(owner, '[data-totals]');
+  ok('the pile screen leads with the number that decides it, and the number is the rule on the spam desk',
+    pileRead.threshold === 3 && pileTold.includes('a pile of 3 distinct reporters')
+      && (await owner.$('[data-totals] a[href="/spam"]')) !== null,
+    pileTold.replace(/\s+/g, ' ').slice(0, 140));
+  ok('the pile lists what the number reached, and keeps the four states apart instead of flattening them into one list',
+    mineThree.length === 3
+      && mineThree.filter(row => row.kind === 'post' && row.live === false).length === 1
+      && mineThree.filter(row => row.live === true).length === 2
+      && mineThree.every(row => row.reporters >= 3),
+    `${mineThree.length} of this fixture’s rows over the pile · `
+      + `${mineThree.filter(row => row.live).length} still in the feed`);
+  ok('auto-hide has only ever looked at posts, and the screen says so rather than implying a comment was judged',
+    mineThree.filter(row => row.kind !== 'post').every(row => row.state_word === 'in the feed' && row.live === true),
+    mineThree.map(row => `${row.kind}:${row.state_word || row.state}`).join(' · '));
+  const lostTarget = (pileRead.content || []).find(row => row.gone);
+  ok('a report outlives the thing it pointed at: the complaints on a deleted post stay on the list, named as gone',
+    !!lostTarget && lostTarget.owner === null && lostTarget.state === 'gone',
+    lostTarget ? `target ${lostTarget.id} with ${lostTarget.reporters} reporters` : 'no deleted target listed');
+  const pileQuiet = await owner.evaluate(() => ({
+    rows: document.querySelectorAll('[data-flag]').length,
+    held: [...document.querySelectorAll('[data-flag] [data-where]')].map(node => node.dataset.where),
+  }));
+  ok('what the list says about each target is what the platform actually did to it, row for row',
+    pileQuiet.rows === (pileRead.content || []).length && pileQuiet.held.includes('hidden')
+      && pileQuiet.held.includes('gone'),
+    `${pileQuiet.rows} rows · ${[...new Set(pileQuiet.held)].join(', ')}`);
+  await shot(owner, 'safety-2-flags');
+
+  await owner.goto(`${BASE}/spam`, { waitUntil: 'domcontentloaded' });
+  await owner.waitForSelector('[data-knob="alert_report_pile"] input', { timeout: 40000 });
+  const ruleBoxes = await owner.evaluate(() => ({
+    knobs: document.querySelectorAll('[data-spam="rules"] [data-knob]').length,
+    told: [...document.querySelectorAll('[data-spam="rules"] .desk-live')].map(node => node.textContent.trim()),
+  }));
+  ok('the spam desk is a screen of rules, and the four the site already refuses on are marked as refused-on',
+    ruleBoxes.knobs === 14 && ruleBoxes.told.length === 4
+      && ruleBoxes.told.every(line => line.includes('the site refuses this at its own door today')),
+    `${ruleBoxes.knobs} knobs · ${ruleBoxes.told.length} marked as already enforced`);
+
+  const quoteOpen = await statusOf(unseated, '/api/spam/config/');
+  ok('what the desk publishes is readable with nobody signed in, because that is the half that makes "no code changes" true',
+    quoteOpen.status === 200 && quoteOpen.body.auto_hide.reports === 3
+      && quoteOpen.body.limits.spam_signup_per_hour === 3,
+    `${quoteOpen.status} · pile ${quoteOpen.body.auto_hide && quoteOpen.body.auto_hide.reports}`);
+
+  await clearAndType(owner, '[data-knob="alert_report_pile"] input', '4');
+  await tap(owner, '[data-spam-save]');
+  const pileSaved = await expectBanner(owner, 'Saved reports before content is pulled');
+  ok('the number that decides what is pulled is a box, and saving it is written as a change to that box',
+    pileSaved.includes('/api/spam/config/'), pileSaved.replace(/\s+/g, ' ').slice(0, 150));
+  const quoteFive = await statusOf(unseated, '/api/spam/config/');
+  ok('a stranger is told the new rule on the next request, without anybody deploying anything',
+    quoteFive.body.auto_hide.reports === 4, `the open door now answers a pile of ${quoteFive.body.auto_hide.reports}`);
+  const deskCrossed = await statusOf(owner, '/api/admin/alerts/');
+  const pileDial = (deskCrossed.body.thresholds || []).find(item => item.key === 'alert_report_pile');
+  ok('and the other desk that reads the same rule sees the number the first one wrote',
+    pileDial && String(pileDial.value) === '4' && !!pileDial.set,
+    pileDial ? `the alerts desk reads ${pileDial.value}, written by ${pileDial.by}` : 'no shared dial');
+
+  await clearAndType(owner, '[data-knob="alert_report_pile"] input', '5');
+  await tap(owner, '[data-spam-save]');
+  await expectBanner(owner, 'Saved');
+  const pileFive = ownPile(await watchPile());
+  ok('raise the pile and the list shrinks by itself: at five reporters nothing here is over the line',
+    pileFive.length === 0, `${pileFive.length} of the fixture’s targets at or over five`);
+
+  const tightPile = await postOf(owner, '/api/admin/spam/', { alert_report_pile: 1 });
+  ok('a pile of one is refused out loud, because one complaint has never been a consensus',
+    tightPile.status === 400 && tightPile.body.detail.includes('Two people is the smallest pile'),
+    `${tightPile.status} — ${String(tightPile.body.detail).slice(0, 90)}`);
+  const stillDesk = await postOf(owner, '/api/admin/spam/', {});
+  ok('saving a desk nobody moved is refused rather than written to the log as a change',
+    stillDesk.status === 400 && stillDesk.body.detail.includes('no rule has been changed'),
+    `${stillDesk.status} — ${String(stillDesk.body.detail).slice(0, 80)}`);
+
+  await clearAndType(owner, '[data-knob="alert_report_pile"] input', '');
+  await tap(owner, '[data-spam-save]');
+  await expectBanner(owner, 'Saved');
+  const pileHome = await watchPile();
+  ok('a rule can be given back to the platform, and the desk then says it is the number the site was built with',
+    pileHome.threshold === 3 && ownPile(pileHome).length === 3,
+    `back to a pile of ${pileHome.threshold}`);
+
+  await tap(owner, '[data-knob="spam_autohide"] .moves button:nth-of-type(2)');
+  await tap(owner, '[data-spam-save]');
+  await expectBanner(owner, 'Saved');
+  const autoQuiet = await until(owner, '[data-live="auto_hide"]', 'off — every report waits');
+  const warnSaid = await lineText(owner, '[data-autohide-off]');
+  const spamDoor = await statusOf(unseated, '/api/spam/config/');
+  ok('switching auto-hide off is said three ways: the desk warns, the screen repeats, the open door agrees',
+    warnSaid.includes('Auto-hide is off') && autoQuiet.includes('off — every report waits for a person')
+      && spamDoor.body.auto_hide.enabled === false,
+    `the door answers enabled ${spamDoor.body.auto_hide.enabled}`);
+  await tap(owner, '[data-knob="spam_autohide"] .moves button:nth-of-type(1)');
+  await tap(owner, '[data-spam-save]');
+  await expectBanner(owner, 'Saved');
+  const autoBack = await until(owner, '[data-live="auto_hide"]', 'distinct reporters');
+  ok('and putting it back is the same two clicks, with the number it pulls on printed beside it',
+    autoBack.includes('on 3 distinct reporters'), autoBack.replace(/\s+/g, ' ').slice(0, 110));
+  await shot(owner, 'safety-3-spam');
+
+  await owner.goto(`${BASE}/alerts`, { waitUntil: 'domcontentloaded' });
+  await owner.waitForSelector('[data-alerts="wires"] [data-wire]', { timeout: 40000 });
+  const wireRows = await owner.$$eval('[data-wire]', nodes => nodes.map(node => ({
+    key: node.dataset.wire, wired: node.dataset.wired, said: node.textContent.replace(/\s+/g, ' ').trim(),
+  })));
+  ok('the four conditions nothing outside this codebase reports on are listed as wires, not as zeroes',
+    wireRows.length === 4 && wireRows.filter(row => row.wired === '1').length === 3
+      && wireRows.some(row => row.key === 'jobs' && row.wired === '0' && row.said.includes('never reported in')),
+    wireRows.map(row => `${row.key}:${row.wired}`).join(' '));
+  const wireCommand = await lineText(owner, '[data-alerts="wires"] .panel-foot');
+  ok('a wire comes with the exact command that would connect it, so the gap is somebody’s five-second job',
+    wireCommand.includes('python manage.py adminpulse') && wireCommand.includes('--state=ok'),
+    wireCommand.replace(/\s+/g, ' ').slice(0, 130));
+  const backupWire = wireRows.find(row => row.key === 'backup');
+  ok('heard from, then gone quiet, is told apart from never heard of — the backup wire says when it last spoke',
+    !!backupWire && backupWire.wired === '1' && backupWire.said.includes('last heard from')
+      && backupWire.said.includes('nightly dump'),
+    backupWire ? backupWire.said.slice(0, 120) : 'no backup wire');
+
+  const liveBefore = (await statusOf(owner, '/api/admin/alerts/?status=open')).body;
+  const errorsFired = liveBefore.rows.find(row => row.key === 'errors:backlog');
+  const backupFired = liveBefore.rows.find(row => row.key === 'backup:stale');
+  ok('a collector reporting 47 errors an hour against a dial of 20 becomes an alert a seat can see',
+    !!errorsFired && errorsFired.severity === 'critical' && errorsFired.title.includes('47 waiting'),
+    errorsFired ? `${errorsFired.title} → ${errorsFired.href}` : 'the error count raised nothing');
+  ok('and a backup that stopped talking raises its own trouble, linked to the screen a restore would come from',
+    !!backupFired && backupFired.severity === 'critical' && backupFired.href === '/exports'
+      && backupFired.title.includes('No word about backups for'),
+    backupFired ? backupFired.title : 'the silent backup raised nothing');
+
+  await clearAndType(owner, '[data-knob="alert_error_rate"] input', '100');
+  await tap(owner, '[data-thresholds-save]');
+  const dialSaved = await expectBanner(owner, 'Saved app errors in an hour');
+  ok('the dial that decides when something becomes an alert is a box on this desk too',
+    dialSaved.includes('closes whatever it no longer believes'), dialSaved.replace(/\s+/g, ' ').slice(0, 150));
+  const scanRan = await answered(owner, '[data-scan]', 'Run the checks', '/api/admin/alerts/scan/');
+  ok('a check runs because a person pressed it, and the screen says what was still true after that run',
+    scanRan.status === 200 && scanRan.body.detail.includes('condition(s) true'),
+    `${scanRan.status} · ${String(scanRan.body.detail).slice(0, 110)}`);
+  const liveRaised = (await statusOf(owner, '/api/admin/alerts/?status=open')).body;
+  ok('and the dial that was just moved is honoured by the very next scan: at 100 an hour, 47 is not an alert',
+    !liveRaised.rows.some(row => row.key === 'errors:backlog'),
+    `${liveRaised.rows.length} conditions still true after raising the dial`);
+
+  await clearAndType(owner, '[data-knob="alert_error_rate"] input', '20');
+  await tap(owner, '[data-thresholds-save]');
+  await expectBanner(owner, 'Saved');
+  await answered(owner, '[data-scan]', 'Run the checks', '/api/admin/alerts/scan/');
+  const liveBack = (await statusOf(owner, '/api/admin/alerts/?status=open')).body;
+  const errorsAgain = liveBack.rows.find(row => row.key === 'errors:backlog');
+  ok('put the dial back and the condition returns by itself — resolving is not the same as fixing',
+    !!errorsAgain && errorsAgain.status === 'open' && errorsAgain.occurrences > 1,
+    errorsAgain ? `back as ${errorsAgain.status} after ${errorsAgain.occurrences} times true` : 'it did not come back');
+
+  const ackTarget = liveBack.rows.find(row => row.key === 'backup:stale');
+  ok('and the trouble a seat has to act on is the one still listed as open after every scan above',
+    !!ackTarget && ackTarget.status === 'open', ackTarget ? `${ackTarget.key} ${ackTarget.status}`
+      : 'nothing in the backup family was open to acknowledge');
+  await owner.reload({ waitUntil: 'domcontentloaded' });
+  await owner.waitForSelector('[data-scan]', { timeout: 40000 });
+  await tap(owner, `[data-ack="${ackTarget.id}"]`);
+  const ackSaid = await expectBanner(owner, 'Acknowledged by');
+  ok('acknowledging says a person has read it, and says plainly that it did not make it less true',
+    ackSaid.includes('Still true until the next scan') && ackSaid.includes('sita'),
+    ackSaid.replace(/\s+/g, ' ').slice(0, 130));
+  const ackedPill = await until(owner, `[data-alert="${ackTarget.id}"] .pill`, 'acked');
+  ok('the row the desk just acknowledged is the row the list now shows as acknowledged',
+    ackedPill === 'acked', `the pill reads ${ackedPill}`);
+  await tap(owner, `[data-resolve="${ackTarget.id}"]`);
+  const resolvedSaid = await expectBanner(owner, 'Resolved by');
+  ok('resolving by hand is allowed, and is labelled as a claim about the condition rather than about the job',
+    resolvedSaid.includes('comes back on its own if the condition is still true'),
+    resolvedSaid.replace(/\s+/g, ' ').slice(0, 130));
+  await shot(owner, 'safety-4-alerts');
+
+  await owner.goto(`${BASE}/limits`, { waitUntil: 'domcontentloaded' });
+  await owner.waitForSelector('[data-knob="limit_photo_count"] input', { timeout: 40000 });
+  const sixNumbers = await owner.$$eval('[data-limits="sizes"] [data-knob] input', nodes => nodes.map(node => ({
+    key: node.name, value: node.value, dflt: node.dataset.default,
+  })));
+  ok('contract 6.10’s five defaults are six boxes on a settings screen, each showing the number the clause named',
+    sixNumbers.length === 6
+      && sixNumbers.every(box => box.value === box.dflt)
+      && sixNumbers.find(box => box.key === 'limit_text_chars').dflt === '2000'
+      && sixNumbers.find(box => box.key === 'limit_photo_count').dflt === '4'
+      && sixNumbers.find(box => box.key === 'limit_photo_mb').dflt === '5'
+      && sixNumbers.find(box => box.key === 'limit_video_seconds').dflt === '60'
+      && sixNumbers.find(box => box.key === 'limit_video_mb').dflt === '150',
+    sixNumbers.map(box => `${box.key}=${box.dflt}`).join(' '));
+  const sizesOpen = await statusOf(unseated, '/api/limits/config/');
+  ok('a composer is told the same six numbers without signing in, in the units it needs them in',
+    sizesOpen.status === 200 && sizesOpen.body.text.characters === 2000
+      && sizesOpen.body.photo.per_post === 4 && sizesOpen.body.photo.each_bytes === 5242880
+      && sizesOpen.body.video.seconds === 60,
+    `${sizesOpen.status} · ${JSON.stringify(sizesOpen.body.photo)}`);
+
+  await clearAndType(owner, '[data-knob="limit_photo_count"] input', '6');
+  await clearAndType(owner, '[data-knob="limit_video_mb"] input', '400');
+  await tap(owner, '[data-limits-save]');
+  const sizesSaved = await expectBanner(owner, 'Saved');
+  ok('a limit raised past what the server can honour is saved, and the banner is the one that admits it',
+    sizesSaved.includes('turned away by the upload endpoint') && sizesSaved.includes('150 MB'),
+    sizesSaved.replace(/\s+/g, ' ').slice(0, 180));
+  const sizesPublished = await statusOf(unseated, '/api/limits/config/');
+  await owner.waitForFunction(() => (document.querySelector('[data-drifted]') || {}).textContent
+    && document.querySelector('[data-drifted]').textContent.includes('2 of the six'), { timeout: 40000 });
+  const driftSaid = await text(owner, '[data-drifted]');
+  ok('the roomier composer is the rule the site is told now, and the screen still names the ceiling it cannot lift',
+    sizesPublished.body.photo.per_post === 6 && sizesPublished.body.video.each_mb === 400
+      && driftSaid.includes('150 → 400'),
+    driftSaid.replace(/\s+/g, ' ').slice(0, 170));
+  const outOfRange = await postOf(owner, '/api/admin/limits/', { limit_photo_count: 99 });
+  ok('a number that would break the composer is refused with the range it broke, not accepted as a stricter rule',
+    outOfRange.status === 400 && outOfRange.body.detail.includes('between 1 and 20'),
+    `${outOfRange.status} — ${String(outOfRange.body.detail).slice(0, 90)}`);
+  const notANumber = await postOf(owner, '/api/admin/limits/', { limit_text_chars: 'two thousand' });
+  ok('and a limit typed in words is refused in words, so no screen downstream has to render an `abc`',
+    notANumber.status === 400 && notANumber.body.detail.includes('whole number'),
+    `${notANumber.status} — ${String(notANumber.body.detail).slice(0, 90)}`);
+
+  await clearAndType(owner, '[data-knob="limit_photo_count"] input', '4');
+  await clearAndType(owner, '[data-knob="limit_video_mb"] input', '150');
+  await tap(owner, '[data-limits-save]');
+  await expectBanner(owner, 'Saved');
+  const sizesBack = await until(owner, '[data-live="photo"]', '4 per post');
+  const drifted = await owner.evaluate(() => document.querySelectorAll('[data-drifted], [data-oversized]').length);
+  ok('giving the six numbers back leaves nothing behind: no drift note, no ceiling warning, the clause’s own defaults',
+    drifted === 0 && sizesBack.includes('5 MB') && sizesBack.includes('5242880') === false,
+    `${drifted} warnings left · ${sizesBack.replace(/\s+/g, ' ').slice(0, 90)}`);
+  await shot(owner, 'safety-5-limits');
+
+  await owner.goto(`${BASE}/exports`, { waitUntil: 'domcontentloaded' });
+  await owner.waitForSelector('[data-list="exports"] .entry', { timeout: 40000 });
+  const fiveFiles = await owner.$$eval('[data-export]', nodes => nodes.map(node => node.dataset.export));
+  const capSaid = await lineText(owner, '[data-totals]');
+  const countSaid = await text(owner, '.toolbar-count');
+  ok('the five files the contract names are the five on the screen, in the order an accountant asks for them',
+    fiveFiles.join(',') === 'users,reports,coin_requests,coin_ledger,promotions'
+      && capSaid.includes('50,000') && /\d[\d,]* rows across the five files/.test(countSaid),
+    `${fiveFiles.join(', ')} · ${countSaid.replace(/\s+/g, ' ').slice(0, 60)} · ${capSaid.replace(/\s+/g, ' ').slice(0, 70)}`);
+
+  await clearAndType(owner, '.toolbar .dates input:nth-of-type(1)', '2026-11-20');
+  await clearAndType(owner, '.toolbar .dates input:nth-of-type(2)', '2026-11-01');
+  const windowBad = await expectBad(owner, 'first date is after the second');
+  ok('a window typed backwards is refused in words instead of handing over an empty file that looks like a quiet month',
+    windowBad.includes('would hold nothing'), windowBad.replace(/\s+/g, ' ').slice(0, 120));
+  await clearAndType(owner, '.toolbar .dates input:nth-of-type(1)', '');
+  await clearAndType(owner, '.toolbar .dates input:nth-of-type(2)', '');
+  // Blanking the two dates re-counts the five files, and a re-count deliberately
+  // greys out every Download while it runs — `busy` is one flag for reads and builds
+  // alike. So the click waits for the button to be clickable again, not for the line
+  // above the table: that line had already been the whole table once, so it never
+  // goes back to its spinner and a wait on it passes a second before the click would
+  // have landed on a disabled button.
+  await owner.waitForSelector('[data-download="users"]:not([disabled])', { timeout: 40000 });
+  await tap(owner, '[data-download="users"]');
+  await owner.waitForSelector('[data-saved="users"]', { timeout: 40000 });
+  const fileTaken = await text(owner, '[data-saved="users"]');
+  const fileProof = await rawFile(owner, '/api/admin/exports/coin_ledger/?raw=1');
+  ok('one click hands over the real file: the name and the count come from the headers the server set, not the page',
+    fileTaken.includes('exposing-users-') && fileTaken.includes(' rows, ') && !fileTaken.includes('undefined')
+      && fileProof.status === 200 && /text\/csv/.test(fileProof.type) && fileProof.rows > 0
+      && fileProof.head.startsWith('id,created_at,username') && fileProof.filename.startsWith('exposing-coin_ledger-'),
+    `${fileProof.filename} · ${fileProof.rows} rows · ${fileProof.head.slice(0, 40)}`);
+  const headFits = await owner.evaluate(() => {
+    // Measured on the paragraph, not on the note inside it: an inline `<em>` reports
+    // no width at all (both numbers come back 0), so a check written against it passes
+    // on a page that is overflowing. The block is the box the text can escape.
+    const line = document.querySelector('[data-saved="users"]');
+    return line ? { wide: line.scrollWidth, box: line.clientWidth } : null;
+  });
+  ok('the header line the file begins with is printed inside the panel, not run past its edge',
+    !!headFits && headFits.box > 0 && headFits.wide <= headFits.box + 1,
+    headFits ? `${headFits.wide}px of text in a ${headFits.box}px box` : 'no header line was shown');
+  const takenNote = await until(owner, '[data-list="exports-taken"]', 'exposing-users-');
+  ok('building a file of other people’s email addresses is a staff action, and the screen shows the record of it',
+    takenNote.includes('sita') && takenNote.includes('every row the table holds'),
+    takenNote.replace(/\s+/g, ' ').slice(-150));
+  const unknownFile = await rawFile(owner, '/api/admin/exports/names/?raw=1');
+  ok('and there is no sixth file to ask for: a dataset that is not one of the five is named back as a list',
+    unknownFile.status === 404 && unknownFile.said.includes('Choose one of'),
+    `${unknownFile.status} — ${unknownFile.said.slice(0, 90)}`);
+  await shot(owner, 'safety-6-exports');
+
+  await owner.goto(`${BASE}/audit`, { waitUntil: 'domcontentloaded' });
+  await owner.waitForSelector('[data-list="audit"] .entry', { timeout: 40000 });
+  const gapClosed = await statusOf(owner, '/api/admin/audit/');
+  const stillGaps = (gapClosed.body.facets.families || []).filter(row => row.contract && row.n === 0);
+  const gapLeft = await owner.evaluate(() => document.querySelectorAll('[data-missing-families]').length);
+  ok('the walkthrough closed the gap it opened with: every family the contract names now carries at least one row',
+    stillGaps.length === 0 && gapLeft === 0,
+    stillGaps.map(row => row.label).join(', ') || 'all nine families written');
+
+  const verbsWritten = {};
+  for (const verb of ['spam_settings', 'alert_scan', 'alert_thresholds', 'alert_ack', 'alert_resolve',
+    'post_limits', 'export_csv']) {
+    const read = await statusOf(owner, `/api/admin/audit/?action=${verb}`);
+    verbsWritten[verb] = (read.body.results || []).length;
+  }
+  ok('every action this desk took wrote its own row, with the seat’s name and the reason typed with it',
+    Object.entries(verbsWritten).every(([, n]) => n > 0),
+    Object.entries(verbsWritten).map(([verb, n]) => `${verb} ${n}`).join(' · '));
+
+  const fileInLog = await statusOf(owner, '/api/admin/audit/?q=exposing-users');
+  const fileRow = (fileInLog.body.results || [])[0];
+  ok('a file handed over a month from now is findable by its own filename, because the name is on the row',
+    (fileInLog.body.results || []).length > 0 && !!fileRow && fileRow.action === 'export_csv'
+      && fileRow.actor === 'sita' && String(fileRow.detail).includes('.csv'),
+    fileRow ? `${fileRow.actor} ${fileRow.action} — ${String(fileRow.detail).slice(0, 90)}` : 'the search found nothing');
+
+  await chip(owner, 'alerts', '/api/admin/audit/');
+  await until(owner, '[data-list="audit"] .entry', 'alert');
+  const alertVerbs = await many(owner, '[data-list="audit"] .verb');
+  ok('the family filter is a filter: every row it leaves is an alert action, and none of them is a coin or a campaign',
+    alertVerbs.length > 0 && alertVerbs.every(verb => verb.startsWith('alert')),
+    `${alertVerbs.length} rows · ${[...new Set(alertVerbs)].join(', ').slice(0, 110)}`);
+  await shot(owner, 'safety-7-audit-closed');
+
+  const shutDoors = [
+    ['/spam', 'spam_settings'], ['/alerts', 'alerts'], ['/audit', 'audit'],
+    ['/exports', 'exports'], ['/limits', 'post_limits'],
+  ];
+  for (const [gateRoute, gateKey] of shutDoors) {
+    const doorRead = await statusOf(mod, `/api/admin/${gateRoute.replace('/', '')}/`);
+    await mod.goto(`${BASE}${gateRoute}`, { waitUntil: 'domcontentloaded' });
+    await mod.waitForSelector('.panel.blocked', { timeout: 40000 });
+    const doorSeen = await mod.evaluate(() => ({
+      knobs: document.querySelectorAll('[data-knob]').length,
+      rows: document.querySelectorAll('[data-list] .entry').length,
+      said: document.querySelector('.panel.blocked').textContent.replace(/\s+/g, ' ').trim(),
+    }));
+    ok(`a Moderator is stopped at ${gateRoute} by the seat, not by a spinner: the door names ${gateKey} and the screen names nothing to type into`,
+      doorRead.status === 403 && doorRead.body.permission === gateKey
+        && doorSeen.knobs === 0 && doorSeen.rows === 0 && doorSeen.said.includes('Not on your seat'),
+      `${doorRead.status} ${doorRead.body.permission || 'allowed'} · ${doorSeen.knobs} knobs rendered`);
+  }
+  const pileShared = await statusOf(mod, '/api/admin/spam/flags/');
+  const rulesShut = await statusOf(mod, '/api/admin/spam/');
+  ok('the pile a moderator works from stays open to a moderator; only the rules behind it are a Client’s',
+    pileShared.status === 200 && pileShared.body.threshold === 3 && rulesShut.status === 403
+      && rulesShut.body.permission === 'spam_settings',
+    `flags ${pileShared.status} at a pile of ${pileShared.body.threshold} · rules ${rulesShut.status}`);
+  await mod.goto(`${BASE}/flags`, { waitUntil: 'domcontentloaded' });
+  await mod.waitForSelector('[data-totals]', { timeout: 40000 });
+  const pileForSeat = await mod.evaluate(() => ({
+    rows: document.querySelectorAll('[data-flag]').length,
+    link: !!document.querySelector('[data-totals] a[href="/spam"]'),
+  }));
+  ok('and the link that would take a moderator to the desk they cannot open is the one thing the screen does not hide',
+    pileForSeat.rows > 0 && pileForSeat.link === true,
+    `${pileForSeat.rows} rows · the spam desk ${pileForSeat.link ? 'is' : 'is not'} offered`);
+  await shot(mod, 'safety-8-gated');
+
+  await owner.emulateMediaFeatures([{ name: 'prefers-reduced-motion', value: 'no-preference' }]);
+  await owner.goto(`${BASE}/overview`, { waitUntil: 'domcontentloaded' });
+  await owner.waitForSelector('.tile', { timeout: 40000 });
+  const motionLoud = await owner.evaluate(() => {
+    const style = getComputedStyle(document.querySelector('.tile'));
+    return { name: style.animationName, seconds: style.animationDuration };
+  });
+  await owner.emulateMediaFeatures([{ name: 'prefers-reduced-motion', value: 'reduce' }]);
+  await owner.reload({ waitUntil: 'domcontentloaded' });
+  await owner.waitForSelector('.tile', { timeout: 40000 });
+  const motionCalm = await owner.evaluate(() => {
+    const style = getComputedStyle(document.querySelector('.tile'));
+    return { name: style.animationName, seconds: style.animationDuration };
+  });
+  // Compared in milliseconds, because the sheet writes `.01ms` and Chrome answers in
+  // seconds: `getComputedStyle` normalises `animation-duration` to `1e-05s`, so a
+  // check spelled `0.01ms` fails on a rule that is doing exactly what it says.
+  const asMs = value => (/ms$/.test(value) ? parseFloat(value) : parseFloat(value) * 1000);
+  ok('the animations are decoration that stands down when asked: reduced motion keeps the same entrance and gives it almost no time',
+    asMs(motionLoud.seconds) === 300 && motionCalm.name === motionLoud.name
+      && asMs(motionCalm.seconds) < 1,
+    `${motionLoud.name} ${motionLoud.seconds} → ${motionCalm.name} ${motionCalm.seconds}`);
+  await owner.emulateMediaFeatures([]);
+
+  await unseated.close();
 } catch (err) {
   ok('the walkthrough completed', false, `${err.message}`);
   await shot(owner, 'crash-owner').catch(() => undefined);
@@ -1846,12 +3156,17 @@ try {
     total: results.length,
     failed: results.filter(entry => !entry.pass).map(entry => entry.name),
     console_errors: [...new Set(errors)].slice(0, 20),
+    // A box that would not hold what was typed is not a passing run: every claim
+    // above it was judged on a number the desk never actually had.
+    typed_but_not_kept: typeStubs,
   };
   fs.mkdirSync(OUT, { recursive: true });
   fs.writeFileSync(path.join(OUT, 'admin-console-results.json'), JSON.stringify(summary, null, 2));
   console.log(`\n${summary.passed}/${summary.total} checks passed`
     + `\nfailed: ${summary.failed.join(' | ') || 'none'}`
-    + `\nconsole errors: ${summary.console_errors.join(' | ') || 'none'}`);
+    + `\nconsole errors: ${summary.console_errors.join(' | ') || 'none'}`
+    + `\nboxes that would not hold what was typed: ${summary.typed_but_not_kept.join(' | ') || 'none'}`);
   await browser.close();
-  process.exit(summary.failed.length || summary.console_errors.length ? 1 : 0);
+  process.exit(summary.failed.length || summary.console_errors.length
+    || summary.typed_but_not_kept.length ? 1 : 0);
 }

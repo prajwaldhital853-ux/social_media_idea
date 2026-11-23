@@ -175,7 +175,10 @@ export interface Overview {
   windows: { today: string; week: string; month: string; series_days: number };
   tiles: Tile[];
   health: { state: HealthCheck['state']; checks: HealthCheck[] };
-  alerts: { counts: { open: number; acked: number; resolved: number }; recent: AlertRow[] };
+  alerts: {
+    counts: { open: number; acked: number; resolved: number; attention: number; unwired: number };
+    recent: AlertRow[];
+  };
   thresholds: Record<string, Threshold>;
 }
 
@@ -562,4 +565,416 @@ export interface WelcomeDesk {
   lines: WelcomeLine[];
   card: WelcomeCard;
   detail?: string;
+}
+
+/** Contract 6.7 — what a Coin costs, where the rupees go, and how long a proof lives. */
+export interface CoinPricing {
+  coin_price: string | number;
+  min_purchase: number;
+  bank: { name: string; account: string; holder: string; qr: string };
+  proof_days: number;
+}
+
+export interface CoinAsk {
+  id: number;
+  card: PersonRef;
+  coins: number;
+  amount: string;
+  method: string;
+  reference: string;
+  status: 'pending' | 'approved' | 'rejected';
+  status_label: string;
+  has_proof: boolean;
+  created_at: string;
+  reviewed_at: string | null;
+  took: string | null;
+  age_hours: number;
+  asked?: boolean;
+  review?: {
+    action: 'approve' | 'reject' | 'proof';
+    label: string;
+    reason: string;
+    coins_credited: number;
+    by: string | null;
+    at: string;
+  };
+}
+
+export interface CoinPage extends Page<CoinAsk> {
+  counts: { pending: number; approved: number; rejected: number; every: number };
+  held: { coins: number; rupees: string };
+  proofs_deleted: number;
+  retention_days: number;
+  can_review: boolean;
+  pricing: CoinPricing;
+}
+
+export interface CoinDetail {
+  request: CoinAsk;
+  asks: { action: string; reason: string; by: string | null; at: string }[];
+}
+
+export interface ProofLink {
+  href: string;
+  expires_in: number;
+}
+
+/** One row of the wallet's own history — this console can add to it and nothing else. */
+export interface LedgerRow {
+  id: number;
+  username: string;
+  card: PersonRef;
+  kind: 'credit' | 'debit';
+  amount: string;
+  note: string;
+  created_at: string;
+  balance: string;
+  currency: string;
+}
+
+export interface LedgerPage extends Page<LedgerRow> {
+  totals: { credited: string; debited: string; entries: number };
+}
+
+/** A knob on a settings desk, typed by the server so the box knows what it holds. */
+export interface SettingLine {
+  key: string;
+  value: string | number;
+  default: string | number;
+  set: boolean;
+  type: 'int' | 'dec' | 'bool' | 'str';
+  label: string;
+  help: string;
+  group: string;
+  by: string | null;
+  at: string | null;
+}
+
+export interface CoinDesk {
+  lines: SettingLine[];
+  pricing: CoinPricing;
+  counts: { held: number };
+  detail?: string;
+}
+
+/** --- contract 6.8: promotions, packages and the reach dials ------------------ */
+
+export interface PromoPackage {
+  id: string;
+  name: string;
+  coins: number;
+  days: number | null;
+  reach_max: number;
+  reach: string;
+}
+
+/** One decision on one campaign. A campaign is paused and resumed more than once,
+ *  so the desk reads the whole trail rather than a status column. */
+export interface PromoMark {
+  action: 'approve' | 'reject' | 'pause' | 'resume' | 'stop';
+  label: string;
+  reason: string;
+  coins_refunded: string;
+  choice: 'refunded' | 'withheld' | null;
+  by: string | null;
+  at: string;
+}
+
+export type PromoState = 'draft' | 'active' | 'paused' | 'ended';
+
+export interface PromoRow {
+  id: number;
+  owner: string;
+  card: ContentPreview | null;
+  target: { type: ContentKind; id: string; state: string; text: string };
+  status: PromoState;
+  status_label: string;
+  running: boolean;
+  sign_off: string;
+  sign_off_label: string;
+  delivery: string;
+  category: string;
+  targeting: { age_min: number; age_max: number; country: string; city: string };
+  package: PromoPackage | null;
+  coins: string;
+  impressions: number;
+  clicks: number;
+  created_at: string;
+  ends_at: string | null;
+  age_hours: number;
+  left_hours: number | null;
+  refund_reject: string;
+  refund_stop: string;
+  pile: Pile;
+  today: number;
+  review?: PromoMark;
+  took?: string;
+}
+
+export interface PromoPage extends Page<PromoRow> {
+  counts: {
+    waiting: number; live: number; paused: number; ended: number; every: number; reserved: string;
+  };
+  state: string;
+  can_review: boolean;
+  controls: { caps: { daily: number; repeat: number; gap: number }; floor: number; global_pause: boolean };
+  packages: PromoPackage[];
+}
+
+export interface PromoBrief {
+  id: number;
+  reason: string;
+  details: string;
+  status: string;
+  created_at: string;
+  reporter: PersonRef | null;
+}
+
+export interface PromoDetail {
+  campaign: PromoRow;
+  reviews: PromoMark[];
+  reports: PromoBrief[];
+  target_state: string;
+}
+
+export interface PackageDesk {
+  packages: PromoPackage[];
+  shipped: PromoPackage[];
+  is_edited: boolean;
+  bought: Record<string, number>;
+  detail?: string;
+  errors?: string[];
+}
+
+export interface AlgorithmDesk {
+  lines: SettingLine[];
+  weights: Record<string, number>;
+  floor: number;
+  caps: { daily: number; repeat: number; gap: number };
+  global_pause: boolean;
+  packages: PromoPackage[];
+  shipped: boolean;
+  running: number;
+  started_today: number;
+  detail?: string;
+  changed?: string[];
+  errors?: string[];
+}
+
+/** What the member site is told, with nobody signed in. */
+export interface ReachConfig {
+  weights: Record<string, number>;
+  floor: number;
+  caps: { daily: number; repeat: number; gap: number };
+  global_pause: boolean;
+  packages: PromoPackage[];
+  packages_edited: boolean;
+}
+
+/** --- contract 6.9: spam rules, the flagged pile, alerts, audit, exports ---- */
+
+/** One heading of the spam desk: a name and the knobs that belong under it. */
+export interface SpamBlock {
+  id: 'rate' | 'new' | 'pile';
+  label: string;
+  lines: (SettingLine & { enforced: boolean })[];
+}
+
+export interface SpamDesk {
+  blocks: SpamBlock[];
+  threshold: number;
+  autohide: boolean;
+  block_links: boolean;
+  words: number;
+  items: number;
+  links: (Omit<TermRow, 'kind'> & { kind: string })[];
+  enforced: string[];
+  can_write_links: boolean;
+  detail?: string;
+  changed?: string[];
+  config?: SpamConfig;
+  errors?: string[];
+}
+
+/** What the member site is told, with nobody signed in. */
+export interface SpamConfig {
+  limits: Record<string, string | number | boolean>;
+  new_account: { hold_hours: number; posts_per_day: number; verify_first: boolean };
+  auto_hide: { enabled: boolean; reports: number };
+  link_block: boolean;
+  blocked_links: string[];
+  blocked_words: string[];
+}
+
+/** One target the pile has already pulled out of the feed. */
+export interface FlagRow {
+  kind: ContentKind;
+  label: string;
+  id: string;
+  state: string;
+  live: boolean;
+  gone: boolean;
+  state_word?: string;
+  owner: PersonRef | null;
+  reporters: number;
+  reports: number;
+  newest: string;
+  reasons: { reason: string; n: number }[];
+}
+
+export interface FlaggedPage {
+  generated_at: string;
+  threshold: number;
+  content: FlagRow[];
+  content_page: number;
+  content_more: boolean;
+  accounts: PersonRow[];
+  accounts_total: number;
+  words: number;
+  links: number;
+  can_review: boolean;
+}
+
+/** One outside reporter: the wire, and whether anything has ever spoken on it. */
+export interface AlertPulse {
+  key: string;
+  label: string;
+  severity: AlertRow['severity'];
+  href: string;
+  wired: boolean;
+  state: string;
+  detail: string;
+  counts: Record<string, number>;
+  stamped_at: string | null;
+  stamps: number;
+  quiet_after: number | null;
+  quiet_unit: string;
+  counted: string | null;
+  counted_at: number | null;
+  command: string;
+  silent: string;
+}
+
+export interface AlertKind {
+  kind: string;
+  label: string;
+  n: number;
+  active: number;
+  resolved: number;
+}
+
+export interface AlertDesk {
+  generated_at: string;
+  counts: {
+    open: number; acked: number; resolved: number; attention: number; unwired: number;
+  };
+  rows: AlertRow[];
+  kinds: AlertKind[];
+  thresholds: SettingLine[];
+  pulses: AlertPulse[];
+  statuses: { id: string; label: string }[];
+  severities: { id: string; label: string }[];
+  shown: number;
+  health: Overview['health'];
+  detail?: string;
+}
+
+export interface AlertScan {
+  detail: string;
+  raised: AlertRow[];
+  counts: AlertDesk['counts'];
+  feed: AlertRow[];
+}
+
+/** One row of the append-only log: who, when, what, and the reason typed with it. */
+export interface AuditLine {
+  id: number;
+  actor: string | null;
+  by: string;
+  action: string;
+  family: string;
+  target: string;
+  detail: string;
+  created_at: string;
+}
+
+export interface AuditFacets {
+  families: { id: string; label: string; n: number; contract: boolean }[];
+  actors: { actor: string; n: number }[];
+  actions: { action: string; n: number }[];
+}
+
+export interface AuditSummary {
+  entries: number;
+  people: number;
+  system: number;
+  newest: string | null;
+}
+
+export interface AuditPage extends Page<AuditLine> {
+  generated_at: string;
+  facets: AuditFacets;
+  summary: AuditSummary;
+  whole: AuditSummary;
+  filters: Record<string, string>;
+  contract: string[];
+}
+
+/** One of the five files, with what it would hold before it is built. */
+export interface ExportFile {
+  id: string;
+  label: string;
+  blurb: string;
+  columns: string[];
+  rows: number;
+}
+
+export interface ExportIndex {
+  files: ExportFile[];
+  labels: { id: string; label: string; blurb: string }[];
+  window: { since: string | null; until: string | null };
+  cap: number;
+  taken: AuditLine[];
+  columns_of: Record<string, string[]>;
+  detail?: string;
+}
+
+export interface ExportBuilt {
+  filename: string;
+  dataset: string;
+  rows: number;
+  columns: string[];
+  truncated: boolean;
+  detail: string;
+  csv: string;
+  taken_at: string;
+}
+
+/** --- contract 6.10: the size of one post ---------------------------------- */
+
+export interface LimitsBlock {
+  id: 'text' | 'photo' | 'video';
+  label: string;
+  lines: (SettingLine & { range: number[] })[];
+}
+
+export interface LimitsConfig {
+  text: { characters: number };
+  photo: { per_post: number; each_mb: number; each_bytes: number };
+  video: { per_post: number; seconds: number; each_mb: number; each_bytes: number };
+  server_upload_mb: number;
+}
+
+export interface LimitsDesk {
+  blocks: LimitsBlock[];
+  contract: Record<string, number>;
+  server: { upload_mb: number; kinds: string[] };
+  published: LimitsConfig;
+  oversized: string[];
+  can_write: boolean;
+  detail?: string;
+  changed?: string[];
+  warnings?: string[];
+  config?: LimitsConfig;
+  errors?: string[];
 }

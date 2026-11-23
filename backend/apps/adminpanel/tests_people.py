@@ -219,6 +219,8 @@ class SuspendTests(ReviewTestCase):
         self.assertEqual(self.member.suspended_until.year, 2030)
         self.assertEqual(self.member.suspended_until.month, 1)
         self.assertEqual(self.member.suspended_until.day, 5)
+        self.assertEqual(self.member.suspended_until.hour, 23,
+                         '“until the fifth” means all of the fifth, not the minute it starts')
 
         past = self.admin_seat.post(
             f'{PEOPLE_URL}ordinary/suspend/', {'until': '2001-01-01', 'reason': 'back then'}, format='json')

@@ -128,7 +128,8 @@ const HEALTH_HEADLINE: Record<string, string> = {
 };
 
 function TileCard({ tile, threshold }: { tile: Tile; threshold?: Threshold }) {
-  const link = shipped(tile.href) ? tile.href : null;
+  const { session } = useSession();
+  const link = shipped(tile.href, session?.permissions || [], session?.role) ? tile.href : null;
   return (
     <article className={`tile tile-${tile.kind}`} data-tile={tile.id}>
       <header className="tile-head">
@@ -309,6 +310,7 @@ function Spark({ points }: { points: SeriesPoint[] }) {
 
 function AlertFeed({ alerts }: { alerts: Overview['alerts'] }) {
   const rows = alerts.recent;
+  const { counts } = alerts;
   return (
     <section className="panel alerts">
       <header className="panel-head">
@@ -316,8 +318,9 @@ function AlertFeed({ alerts }: { alerts: Overview['alerts'] }) {
           <h2>Alerts</h2>
           <p>Raised by the platform itself, from the queues and limits on this screen.</p>
         </div>
-        <span className="panel-count">
-          {alerts.counts.open} open · {alerts.counts.acked} acknowledged · {alerts.counts.resolved} resolved
+        <span className="panel-count" data-alert-counts>
+          {counts.attention} need a look · {counts.unwired} condition{counts.unwired === 1 ? '' : 's'} nothing
+          reports on yet · {counts.open} open, {counts.acked} acknowledged, {counts.resolved} resolved
         </span>
       </header>
 
@@ -333,7 +336,9 @@ function AlertFeed({ alerts }: { alerts: Overview['alerts'] }) {
 }
 
 function AlertItem({ row }: { row: AlertRow }) {
-  const target = row.status === 'open' && row.href && shipped(row.href) ? row.href : null;
+  const { session } = useSession();
+  const target = row.status === 'open' && row.href
+    && shipped(row.href, session?.permissions || [], session?.role) ? row.href : null;
   return (
     <li className={`alert alert-${row.severity} alert-${row.status}`}>
       <span className="alert-dot" title={SEVERITY_LABEL[row.severity] || row.severity}/>
