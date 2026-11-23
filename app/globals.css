@@ -234,18 +234,20 @@ a:focus:not(:focus-visible) {
   text-decoration: none;
 }
 
-/* More, Wallet, Settings, Post and the reader's own face continue the nav's
-   list: the column is packed from the top, so no band of empty space cuts in
-   between Marketplace and More. */
+/* More, Wallet and Settings continue the nav's list: the column is packed from
+   the top, so no band of empty space cuts in between Marketplace and More. */
 .rail-foot {
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
 
 /* The one break in the column sits under the list, above the button that asks
-   for a new post — not cut into the middle of the nav. */
-.rail-foot .post-btn { margin-top: 18px; }
+   for a new post — and it takes whatever room is left, so the Post button and
+   the account row rest at the floor. */
+.rail-foot .post-btn { margin-top: auto; }
 
 .rail-bottom {
   display: flex;
@@ -6155,6 +6157,21 @@ textarea {
 /* The shape of the button that is about to arrive, so the head does not jump
    while the session is still being restored on a hard load. */
 .profile-actions-wait { width: 128px; height: 36px; border-radius: 9999px; background: var(--line); }
+/* A pending request from the person whose profile is open, answered where it
+   is read instead of back on the followers list. */
+.profile-request {
+  flex-basis: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 2px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: var(--brand-tint);
+  font-size: 13px;
+}
+.profile-request-copy { display: inline-flex; align-items: center; gap: 6px; flex: 1; min-width: 0; font-weight: 600; }
+.profile-request-copy svg { width: 15px; height: 15px; flex: none; }
 .profile-name {
   flex-basis: 100%; margin: 2px 0 0; font-size: 24px; font-weight: 850; line-height: 1.2;
   display: flex; align-items: center; gap: 7px;
