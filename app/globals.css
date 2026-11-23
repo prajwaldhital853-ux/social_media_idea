@@ -1181,6 +1181,47 @@ a:focus:not(:focus-visible) {
 }
 .topbar-signin:hover { background: var(--brand-d); text-decoration: none; }
 
+/* Eng on one half, नेप on the other, and the knob slides to the language that is
+   switched on. 40px tall like the bell and the theme button beside it, and it
+   paints only on the desktop bar: a phone already switches in the drawer. */
+.lang-switch {
+  position: relative;
+  display: none;
+  align-items: center;
+  height: 40px;
+  padding: 4px;
+  border-radius: 9999px;
+  background: var(--surface);
+  cursor: pointer;
+}
+.lang-opt {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 32px;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--muted);
+  transition: color 0.15s ease;
+}
+.lang-opt.on { color: var(--ink); }
+.lang-knob {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  width: 44px;
+  height: 32px;
+  border-radius: 9999px;
+  background: var(--card);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.14);
+  transition: transform 0.18s ease;
+}
+.lang-switch.ne .lang-knob { transform: translateX(44px); }
+@media (min-width: 769px) { .lang-switch { display: inline-flex; } }
+
 /* ===== Top-bar popovers (notifications, messenger) ===== */
 .topbar-panel {
   position: absolute;
@@ -6127,6 +6168,11 @@ textarea {
   z-index: 3;
 }
 .profile-back:hover { background: rgba(0, 0, 0, .65); }
+/* On a phone the banner is the picture, not a door with a chip welded into its
+   corner: the bar above it and the browser's own back already leave the page. */
+@media (max-width: 768px) {
+  .profile-back { display: none; }
+}
 .profile-head {
   position: relative; display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px;
   padding: 0 16px 14px; border-bottom: 1px solid var(--line);
@@ -6666,6 +6712,13 @@ button.profile-stat:hover b, a.profile-stat:hover b { color: var(--brand); }
 
 /* ---------- Marketplace ---------- */
 .market-view { animation: fadeIn .2s ease; }
+/* This header is a banner over a browse grid, not the page itself: one line of
+   title with the subtitle beside it, so the first row of listings starts
+   higher and more of them are above the fold. */
+.market-view > .header .home-header-row { padding: 8px 16px; }
+.market-view > .header .home-header-copy { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.market-view > .header .header-title { font-size: 18px; }
+.market-view > .header .header-sub { margin: 0; font-size: 12.5px; }
 .market-tabs .tab { padding: 13px 16px; }
 .market-filters { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 12px 16px 4px; }
 .market-search {

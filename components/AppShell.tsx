@@ -45,7 +45,11 @@ export default function AppShell({ children }: AppShellProps) {
   // Settings is one stack of switches. Suggested people beside it only make the
   // own column look narrower than it is.
   const settingsPage = pathname === '/settings';
-  const calmPage = !focusedPage && !settingsPage;
+  // The people page is itself a column of suggested faces; a second
+  // "Suggested for you" beside it only pushed the list down — and an empty calm
+  // band is still a band, so the whole column goes.
+  const peoplePage = pathname === '/people';
+  const calmPage = !focusedPage && !settingsPage && !peoplePage;
   const [mounted, setMounted] = useState(booted);
   const { serverMode, resync } = useApp();
   useEffect(() => {
