@@ -30,7 +30,7 @@ export default function ReactionSummary({ postId, extraCount = 0 }: { postId: st
   const shown = people.slice(0, 2);
   const others = Math.max(0, total - shown.length);
   const text = !shown.length
-    ? `${compact(total)} others`
+    ? compact(total)
     : shown.length === 1
       ? others > 0 ? `${label(shown[0])} and ${compact(others)} others` : label(shown[0])
       : others > 0

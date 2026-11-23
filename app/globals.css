@@ -7701,9 +7701,9 @@ button.profile-stat:hover b, a.profile-stat:hover b { color: var(--red); }
 
 /* Every control in the row reads at one size, so the verbs stop outweighing
    the sentence above them. */
-.post-actions .action-btn svg { width: 16px; height: 16px; }
+.post-actions .action-btn svg { width: 17px; height: 17px; }
 
-.post-actions .reaction-trigger.action-btn .reaction-art { width: 20px; height: 20px; }
+.post-actions .reaction-trigger.action-btn .reaction-art { width: 21px; height: 21px; }
 .post-actions .reaction-trigger.action-btn > span { font-variant-numeric: tabular-nums; }
 
 /* The count moving under a thumb that just changed hands is the whole receipt
@@ -7725,7 +7725,7 @@ button.profile-stat:hover b, a.profile-stat:hover b { color: var(--red); }
   .reaction-summary { font-size: 14px; }
   .reaction-chip .reaction-art { width: 21px; height: 21px; }
   .post-actions .reaction-trigger.action-btn { min-height: 44px; padding: 6px 15px 6px 9px; }
-  .post-actions .reaction-trigger.action-btn .reaction-art { width: 22px; height: 22px; }
+  .post-actions .reaction-trigger.action-btn .reaction-art { width: 23px; height: 23px; }
 }
 
 /* ===== Everyone who reacted ===== */
