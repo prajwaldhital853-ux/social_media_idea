@@ -97,6 +97,14 @@ export default function ModernLogin() {
       return;
     }
     if (needsSignup(res)) return;
+    // Nothing was guessed wrong here: the account simply has no password to type,
+    // because Google opened it. That is a pointer, not a failure, so it is not
+    // written in red and it spends none of the three tries.
+    if (res.googleOnly) {
+      setError('');
+      setNotice(res.detail || t('googleOnlyHint'));
+      return;
+    }
     if (res.locked) {
       setError('');
       setNotice('');
@@ -309,6 +317,9 @@ export default function ModernLogin() {
             <button type="submit" className={`login-submit ${canSubmit ? 'active' : ''}`} disabled={!canSubmit}>
               {busy ? t('checking') : t('signIn')}
             </button>
+            <button type="button" className="login-forgot" onClick={() => router.push('/forgot')}>
+              {t('forgot')}
+            </button>
             <button type="button" className="login-demo" onClick={useDemo} disabled={busy}>
               <b>{t('demoSignIn')}</b>
               <span>{t('demoCreds')}</span>
@@ -351,9 +362,13 @@ export default function ModernLogin() {
           </div>
         ) : null}
 
-        <p className="login-footer">
-          Don&apos;t have an account? <a href="/signup" onClick={e => { e.preventDefault(); router.push('/signup'); }}>{t('signUp')}</a>
-        </p>
+        {/* A locked account gets no side doors on this screen: not another signup,
+            not a reset letter, not the Google button. Only the wait is offered. */}
+        {lockedFor === null ? (
+          <p className="login-footer">
+            Don&apos;t have an account? <a href="/signup" onClick={e => { e.preventDefault(); router.push('/signup'); }}>{t('signUp')}</a>
+          </p>
+        ) : null}
         <nav className="auth-legal" aria-label="Legal">
           <a href="/legal/privacy">{t('privacy')}</a>
           <a href="/legal/terms">{t('terms')}</a>

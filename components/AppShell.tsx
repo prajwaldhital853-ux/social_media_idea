@@ -15,7 +15,7 @@ import CreateChooser from './CreateChooser';
 import { useApp } from '@/lib/AppContext';
 import { refreshHeldLists, refreshPullers } from '@/lib/lists';
 
-const WARM_ROUTES = ['/explore', '/video', '/marketplace', '/create', '/notifications', '/messages', '/wallet', '/saved', '/settings', '/signup', '/login'];
+const WARM_ROUTES = ['/explore', '/video', '/marketplace', '/create', '/notifications', '/messages', '/wallet', '/saved', '/settings', '/signup', '/login', '/forgot'];
 
 // Every page mounts its own shell, so a shell that paints nothing until an
 // effect has run drops the top bar, the rail and the page for a frame on each

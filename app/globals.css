@@ -1705,6 +1705,26 @@ a:focus:not(:focus-visible) {
   cursor: default;
 }
 
+/* Under the sign-in button, where a person looks after the password fails. Small
+   and plain on purpose: it is a way out, not a second call to action. */
+.login-forgot {
+  width: 100%;
+  margin-top: 10px;
+  padding: 2px;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 14px;
+  text-align: center;
+  cursor: pointer;
+}
+
+.login-forgot:hover {
+  color: var(--brand);
+  text-decoration: underline;
+}
+
 /* One tap into the seeded demo account; the credentials stay visible so a
    reviewer can also type them on a keyboard they trust. */
 .login-demo {

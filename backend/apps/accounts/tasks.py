@@ -10,6 +10,7 @@ def send_otp_email(email, code, purpose):
         'login': 'Your Exposing sign-in code',
         'unlock': 'Unlock your Exposing account',
         'verify': 'Verify your Exposing email',
+        'reset': 'Reset your Exposing password',
     }
     send_mail(
         subjects.get(purpose, 'Your Exposing code'),

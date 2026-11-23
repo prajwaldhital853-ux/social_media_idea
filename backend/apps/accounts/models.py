@@ -66,6 +66,7 @@ class EmailOTP(models.Model):
     PURPOSES = [
         ('login', 'New device login'), ('unlock', 'Account unlock'),
         ('verify', 'Email verification'), ('delete', 'Account deletion'),
+        ('reset', 'Password reset'),
     ]
 
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='otps')
