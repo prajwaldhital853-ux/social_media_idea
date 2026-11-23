@@ -6,7 +6,11 @@ and revokes their refresh sessions, so the session in the browser dies at the ne
 call instead of lingering until the token expires.
 """
 
+import re
+
 from django.db.models import Q
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError
 from django.utils import timezone
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
@@ -19,6 +23,10 @@ from .journal import record
 from .models import StaffAccount
 
 ROLES = {choice for choice, _label in StaffAccount.Role.choices}
+# The username is what the person types at the door, so it is checked here rather
+# than trusted to a form in the console: dots and underscores only, and nothing
+# that reads as two accounts when said out loud.
+_USERNAME = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._]{2,29}$')
 _SELF_EDIT = {
     'detail': 'Your own seat is edited by another staff account, so a bad click cannot lock you out.',
 }
@@ -45,6 +53,7 @@ def _row(staff):
         'last_admin_login_at': staff.last_admin_login_at,
         'recovery_left': len(staff.recovery_codes),
         'codes_locked_until': staff.totp_locked_until,
+        'must_change_password': staff.must_change_password,
     }
 
 
@@ -168,6 +177,72 @@ def staff_grant(request):
         user.save(update_fields=['is_staff'])
     record(caller.user, 'grant_staff', user.username, f'role={role} grant={granted_keys} deny={denied_keys}')
     return Response(_row(staff))
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+@rbac.staff_only('staff_grant')
+def staff_create(request):
+    """A seat for somebody with no account yet, written from the console.
+
+    The Client used to have to sign up as a person first and be promoted
+    afterwards, which meant a username taken by a spare account and a password
+    the new colleague chose themselves. Here the seat names the person, picks
+    their screens and writes the first password — and the flag on the row makes
+    that password unusable past the door, because a credential read out over the
+    phone or pasted into a chat is not a secret anybody should keep using.
+    """
+    data = request.data
+    username = (data.get('username') or '').strip()
+    name = (data.get('name') or '').strip()[:60]
+    email = (data.get('email') or '').strip().lower()
+    role = (data.get('role') or StaffAccount.Role.MODERATOR).strip()
+    password = str(data.get('password') or '')
+
+    if not _USERNAME.match(username):
+        return Response({'detail': 'Use 3-30 letters, numbers, dots or underscores for the username.'}, status=400)
+    if role not in ROLES:
+        return Response({'detail': 'Choose superadmin, admin or moderator.'}, status=400)
+    caller = request.staff_account
+    if role not in rbac.MANAGEABLE[caller.effective_role]:
+        return rbac.denial('permission_required', f'A {caller.effective_role} may only create Moderator seats.')
+    if User.objects.filter(username__iexact=username).exists():
+        return Response({'detail': f'The username {username} is already taken on the platform.'}, status=409)
+    if email and User.objects.filter(email__iexact=email).exists():
+        return Response({'detail': 'That email address already belongs to an account.'}, status=409)
+    try:
+        validate_password(password)
+    except ValidationError as exc:
+        return Response({'detail': ' '.join(exc.messages)}, status=400)
+
+    user = User.objects.create(
+        username=username, email=email, first_name=name,
+        is_staff=True, is_active=True, provider='email',
+    )
+    user.set_password(password)
+    user.save(update_fields=['password'])
+
+    staff = StaffAccount.for_user(user)
+    staff.role = role
+    staff.is_enabled = True
+    staff.revoked_at = None
+    staff.granted_by = caller.user
+    staff.must_change_password = True
+    if role != rbac.SUPERADMIN:
+        try:
+            staff.granted_keys = _clean_keys(data.get('granted_keys'), 'granted_keys')
+            staff.denied_keys = _clean_keys(data.get('denied_keys'), 'denied_keys')
+        except ValueError as exc:
+            user.delete()
+            return Response({'detail': str(exc)}, status=400)
+    staff.save(update_fields=['role', 'is_enabled', 'revoked_at', 'granted_by',
+                              'must_change_password', 'granted_keys', 'denied_keys'])
+    record(caller.user, 'create_staff', user.username,
+           f'role={role} password issued, must be replaced at first sign-in')
+    out = _row(staff)
+    out['detail'] = (f'{user.username} holds a {role} seat. Give them this password once — the '
+                     'console will make them choose their own before it opens.')
+    return Response(out, status=201)
 
 
 @api_view(['POST'])

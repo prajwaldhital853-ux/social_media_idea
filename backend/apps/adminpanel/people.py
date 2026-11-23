@@ -29,6 +29,7 @@ from django.utils.dateparse import parse_date, parse_datetime
 from apps.accounts.models import RefreshSession, User
 from apps.comments.models import Comment
 from apps.common.api import person
+from apps.common.mail import send_off_request
 from apps.marketplace.models import Listing
 from apps.moderation.models import AuditLog, Report
 from apps.notifications.services import notify
@@ -464,7 +465,11 @@ def enforcement_email(user, subject, body):
     contact = contact_lines()
     if contact:
         lines.append('Questions or an appeal? ' + ' · '.join(contact))
-    send_activity_email.delay(user.email, subject, '\n\n'.join(lines), support_link())
+    # Off the request's clock, like every other mail in the platform: `.delay()`
+    # here is a synchronous SMTP conversation inside the view, and a provider that
+    # stops answering would otherwise answer the seat with a 500 instead of a
+    # warning that did arrive but was not emailed.
+    send_off_request(send_activity_email, user.email, subject, '\n\n'.join(lines), support_link())
     return {'to': user.email, 'subject': subject}
 
 

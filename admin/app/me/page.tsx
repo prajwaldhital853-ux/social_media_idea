@@ -1,15 +1,13 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import ConsoleShell from '@/components/ConsoleShell';
 import { IC } from '@/lib/icons';
-import { ago, left, secondsLeft, stamp } from '@/lib/time';
+import { ago, stamp } from '@/lib/time';
 import { useSession } from '@/lib/session';
 import { PermissionEntry } from '@/lib/types';
-
-const WINDOW_SECONDS = 30 * 60;
 
 const ROLE_TEXT: Record<string, string> = {
   superadmin: 'The Client seat. Every screen, and the only role that can appoint or remove an Admin.',
@@ -20,14 +18,6 @@ const ROLE_TEXT: Record<string, string> = {
 export default function MePage() {
   const { session, can, signOut } = useSession();
   const router = useRouter();
-  const [now, setNow] = useState(0);
-
-  // A second countdown next to the top-bar one, so the length of what is left is
-  // obvious rather than something to infer from "24 min left".
-  useEffect(() => {
-    const id = setInterval(() => setNow(Date.now() / 1000), 20000);
-    return () => clearInterval(id);
-  }, []);
 
   const groups = useMemo(() => {
     const entries = session?.permission_keys || [];
@@ -43,9 +33,6 @@ export default function MePage() {
 
   // No early return while the seat is missing: the shell is what notices the
   // session has ended and walks the person back to the door.
-  const remaining = secondsLeft(session?.admin_expires_at);
-  void now;
-  const filled = Math.max(0, Math.min(100, (remaining / WINDOW_SECONDS) * 100));
 
   return (
     <ConsoleShell
@@ -85,12 +72,10 @@ export default function MePage() {
             <div><dt>That was</dt><dd>{ago(session.last_admin_login_at || null)}</dd></div>
           </dl>
 
-          <div className="window-bar" title="The console asks for a fresh code every 30 minutes">
-            <div className="window-bar-fill" style={{ width: `${filled}%` }} />
-          </div>
           <p className="note">
-            {left(session.admin_expires_at)} in this window. When it runs out nothing you were
-            typing is thrown away — a code box opens, you confirm, and the screen carries on.
+            This seat has no clock on it. It ends when you sign out below, or when this tab or the
+            machine closes — not while you are working. Nothing you were typing is thrown away if the
+            browser is restarted: the code box opens again, you confirm, and the screen carries on.
             If the phone is gone, one recovery code gets you back in.
           </p>
           <button

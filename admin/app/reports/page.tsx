@@ -1,17 +1,17 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
 import Banner from '@/components/Banner';
 import ConsoleShell from '@/components/ConsoleShell';
-import ContentCard from '@/components/ContentCard';
-import DecisionBar from '@/components/Decision';
-import { Act, Chips, More } from '@/components/List';
+import { PeoplePicks } from '@/components/Find';
+import { ActLink, Chips, More } from '@/components/List';
 import { api } from '@/lib/api';
 import { num } from '@/lib/format';
 import { IC } from '@/lib/icons';
 import { ago } from '@/lib/time';
 import { useSession } from '@/lib/session';
-import { ContentKind, Decision as Verb, Outcome, PersonRef, QueuePage, QueueRow } from '@/lib/types';
+import { ContentKind, QueuePage, QueueRow } from '@/lib/types';
 
 const TARGETS = [
   { id: '', label: 'Anything reported' },
@@ -113,7 +113,7 @@ export default function ReportsPage() {
   /**
    * Reports arrive one per person, but a decision is made about a post. Grouping
    * the page by target is what turns "14 rows" into "4 things to decide" and
-   * gives the whole pile one set of buttons.
+   * gives the whole pile one line, one count and one page to open.
    */
   const cases = useMemo(() => {
     const byTarget = new Map<string, QueueRow[]>();
@@ -124,17 +124,6 @@ export default function ReportsPage() {
     });
     return Array.from(byTarget.values());
   }, [rows]);
-
-  const decide = (rep: QueueRow, verb: Verb, reason: string, notice: string) =>
-    api<Outcome>(`admin/review/${rep.id}/decide/`, {
-      method: 'POST',
-      body: { action: verb, reason, notice },
-    });
-
-  const handled = (out: Outcome) => {
-    setBanner({ kind: 'ok', text: out.detail });
-    load();
-  };
 
   return (
     <ConsoleShell
@@ -162,7 +151,8 @@ export default function ReportsPage() {
           {IC.search}
           <input
             value={q} onChange={event => setQ(event.target.value)}
-            placeholder="Search by reporter, reason or target id" aria-label="Search reports"
+            placeholder="Search by a word in the report, or by the name, username or email of whoever wrote or reported the thing"
+            aria-label="Search reports"
           />
         </label>
         <select value={target} onChange={event => setTarget(event.target.value)} aria-label="Filter by what was reported">
@@ -172,6 +162,10 @@ export default function ReportsPage() {
           {rows === null ? '…' : <>Things to decide: <b>{cases.length}</b></>}
         </span>
       </div>
+
+      {/* A seat comes to this queue with a person's name, not a target id, so the
+          desk lists the people that name could mean and one click filters to them. */}
+      <PeoplePicks query={q} onPick={hit => setQ(hit.fill)}/>
 
       <Banner banner={banner} />
 
@@ -215,7 +209,7 @@ export default function ReportsPage() {
                 <th style={{ width: '6%' }} aria-label="Actions"/>
               </tr>
             </thead>
-            {cases.map(bucket => <Case key={bucket[0].target} bucket={bucket} onDone={handled} decide={decide}/>)}
+            {cases.map(bucket => <Case key={bucket[0].target} bucket={bucket}/>)}
           </table>
           <More hasMore={!!cursor} busy={busy} onMore={older} label="Show older reports"/>
         </div>
@@ -224,38 +218,27 @@ export default function ReportsPage() {
   );
 }
 
-function Case({ bucket, decide, onDone }: {
-  bucket: QueueRow[];
-  decide: (rep: QueueRow, verb: Verb, reason: string, notice: string) => Promise<Outcome>;
-  onDone: (out: Outcome) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const [showWho, setShowWho] = useState(false);
+function Case({ bucket }: { bucket: QueueRow[] }) {
   const rep = bucket[0];
   const openCount = rep.pile.open;
-  const distinct: PersonRef[] = [];
-  bucket.forEach(row => {
-    if (row.reporter && !distinct.some(who => who.username === row.reporter!.username)) distinct.push(row.reporter);
-  });
+  const reporters = new Set(bucket.map(row => row.reporter?.username).filter(Boolean)).size;
   const line = rep.content
     ? [rep.content.author ? `@${rep.content.author.username}` : '', rep.content.title || rep.content.text || '']
       .filter(Boolean).join(' — ')
     : 'deleted';
+  const href = `/review/${rep.target_type}/${rep.target_id}`;
 
   return (
-    <tbody className={`case${open ? ' open' : ''}`} data-case={rep.target}>
-      <tr className={`grid-row${open ? ' open' : ''}`}>
+    <tbody className="case" data-case={rep.target}>
+      <tr className="grid-row">
         <td>
-          <button
-            type="button" className="case-id" aria-expanded={open}
-            onClick={() => { setOpen(!open); if (open) setShowWho(false); }}
-          >
+          <Link href={href} className="case-id">
             <span className="grid-caret">{IC.chevron}</span>
             <span className="case-name">
               <span className="id">{rep.target}</span>
               <span className="case-line dim" title={line}>{line}</span>
             </span>
-          </button>
+          </Link>
         </td>
         <td className="strong">{KINDS[rep.content ? rep.content.kind : ''] || rep.target.split(':')[0]}</td>
         <td>
@@ -273,14 +256,9 @@ function Case({ bucket, decide, onDone }: {
             ))}
         </div></td>
         <td>
-          <span className="case-who">
-            <button
-              type="button" className="link" aria-expanded={open && showWho}
-              onClick={() => { setShowWho(true); setOpen(true); }}
-            >
-              {distinct.length} reporter{distinct.length === 1 ? '' : 's'} {(open && showWho) ? '▲' : '▼'}
-            </button>
-          </span>
+          <Link href={href} className="link">
+            {reporters} reporter{reporters === 1 ? '' : 's'}
+          </Link>
         </td>
         <td><div className="case-side">
           {rep.campaigns > 0 && (
@@ -288,62 +266,13 @@ function Case({ bucket, decide, onDone }: {
               {IC.coin}<span>{rep.campaigns} campaign running</span>
             </span>
           )}
+          {rep.missing && <span className="pill mute">deleted</span>}
         </div></td>
         <td className="dim"><span className="case-age">{ago(rep.created_at)}</span></td>
         <td><div className="grid-acts">
-          <Act
-            icon="eye" label={open ? 'Close this case' : 'Open this case'}
-            onClick={() => setOpen(!open)}
-          />
+          <ActLink to={href} icon="eye" label="Open this case"/>
         </div></td>
       </tr>
-
-      {open && (
-        <tr className="grid-detail">
-          <td colSpan={8}>
-            <div className="grid-body case-body">
-              <div>
-                <h3>The thing reported</h3>
-                <ContentCard content={rep.content} matched={rep.matches}/>
-                {rep.missing && (
-                  <p className="note row">
-                    {IC.alert}
-                    <span>
-                      This target was deleted after it was reported. Dismiss the reports so they stop
-                      counting, or leave them — there is nothing left to take down.
-                    </span>
-                  </p>
-                )}
-                {showWho && (
-                  <>
-                    <h3>Who reported it</h3>
-                    <ul className="reporters">
-                      {bucket.map(row => (
-                        <li key={row.id}>
-                          <b>@{row.reporter ? row.reporter.username : 'deleted account'}</b>
-                          <span>{TITLED(row.reason)}</span>
-                          {row.details && <em>{row.details}</em>}
-                          <span className="when">{ago(row.created_at)}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </>
-                )}
-              </div>
-              <div>
-                <h3>Decide</h3>
-                <DecisionBar
-                  actions={rep.actions}
-                  permission={rep.permission}
-                  target={rep.target}
-                  run={(verb, reason, notice) => decide(rep, verb, reason, notice)}
-                  onDone={onDone}
-                />
-              </div>
-            </div>
-          </td>
-        </tr>
-      )}
     </tbody>
   );
 }

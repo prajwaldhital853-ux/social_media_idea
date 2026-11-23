@@ -1,9 +1,11 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
 import Banner from '@/components/Banner';
 import ConsoleShell from '@/components/ConsoleShell';
 import { useConfirm } from '@/components/Confirm';
+import { ContentPicks, Hit, PeoplePicks } from '@/components/Find';
 import { Chips, More } from '@/components/List';
 import { api } from '@/lib/api';
 import { IC } from '@/lib/icons';
@@ -37,27 +39,33 @@ const DESK_KINDS: { id: ContentKind; label: string }[] = [
 /**
  * The hand-written notice. A decision in the queue still writes one as a side
  * effect, but contract 6.5 says a notice is only ever added or removed through
- * this dashboard — so the desk needs its own way of saying it, for the claim
- * that nobody reported.
+ * this desk — so the desk needs its own way of saying it, for the claim that
+ * nobody reported.
+ *
+ * It asks for a word, never a number: a seat has the sentence and whoever wrote
+ * it, and the desk lists what carries them so the target can be chosen rather
+ * than typed out of an address bar.
  */
 function AttachDesk({ busy, onDone }: {
   busy: boolean;
   onDone: (banner: { kind: 'ok' | 'bad'; text: string }) => void;
 }) {
-  const [kind, setKind] = useState('post');
-  const [ident, setIdent] = useState('');
+  const [kind, setKind] = useState<ContentKind>('post');
+  const [word, setWord] = useState('');
+  const [picked, setPicked] = useState<Hit | null>(null);
   const [text, setText] = useState('');
   const [reason, setReason] = useState('');
   const [sending, setSending] = useState(false);
   const { noteGate } = useSession();
   const confirm = useConfirm();
 
-  const ready = ident.trim() !== '' && text.trim() !== '' && reason.trim() !== '';
+  const ready = !!picked && text.trim() !== '' && reason.trim() !== '';
 
   const send = async () => {
+    if (!picked) return;
     const sure = await confirm({
-      title: `Put this notice on ${kind}:${ident.trim()}?`,
-      body: 'The sentence is shown to everyone who reaches that post, comment, listing or account, and it is written to the record under your name. It stays up until a seat withdraws it.',
+      title: 'Put this notice up?',
+      body: `Everyone who reaches ${picked.who} — ${picked.label} — will read your sentence above it, and it goes on the record under your name. It stays there until a seat withdraws it.`,
       confirmLabel: 'Put it up',
       tone: 'amber',
     });
@@ -66,10 +74,12 @@ function AttachDesk({ busy, onDone }: {
     try {
       const out = await api<{ detail?: string }>('admin/notices/attach/', {
         method: 'POST',
-        body: { target: `${kind}:${ident.trim()}`, text: text.trim(), reason: reason.trim() },
+        body: { target: picked.target, text: text.trim(), reason: reason.trim() },
       });
       setText('');
       setReason('');
+      setPicked(null);
+      setWord('');
       onDone({ kind: 'ok', text: out.detail || 'The notice is standing.' });
     } catch (err) {
       if (!noteGate(err)) onDone({ kind: 'bad', text: (err as Error).message });
@@ -78,14 +88,20 @@ function AttachDesk({ busy, onDone }: {
     }
   };
 
+  const choose = (hit: Hit) => {
+    setPicked(hit);
+    setWord('');
+  };
+
   return (
     <section className="panel" data-attach="notice">
       <div className="panel-head">
         <div>
           <h2>Put a notice on content</h2>
           <p>
-            The sentence goes over the post, comment, listing or account it names and everyone
-            reading that content sees it. Nobody but this desk can put one up or take one down.
+            Three steps: say what it goes on, find it by a word from it or by who
+            wrote it, then write the sentence. Everyone who reaches that thing reads
+            the sentence, and only this desk can put one up or take one down.
           </p>
         </div>
       </div>
@@ -93,25 +109,51 @@ function AttachDesk({ busy, onDone }: {
       <div className="ask">
         <div className="term-add">
           <label className="field">
-            <span>What it goes on</span>
-            <select value={kind} onChange={event => setKind(event.target.value)} aria-label="What the notice goes on">
+            <span>1. What it goes on</span>
+            <select
+              value={kind} aria-label="What the notice goes on"
+              onChange={event => {
+                setKind(event.target.value as ContentKind);
+                setPicked(null);
+                setWord('');
+              }}
+            >
               {DESK_KINDS.map(item => (
                 <option key={item.id} value={item.id}>{item.label}</option>
               ))}
             </select>
           </label>
+
           <label className="field grow">
-            <span>Its number</span>
+            <span>2. Find it</span>
             <input
-              name="id" value={ident} maxLength={12} autoComplete="off" aria-label="Content id"
-              placeholder="5815 — the number at the end of the address bar"
-              onChange={event => setIdent(event.target.value.replace(/[^0-9]/g, ''))}
+              name="find" value={word} maxLength={80} autoComplete="off" aria-label="Search for the thing to put the notice on"
+              placeholder={kind === 'user'
+                ? 'Their name, @username or email'
+                : 'A word from it, or the name, @username or email of whoever wrote it'}
+              onChange={event => setWord(event.target.value)}
             />
           </label>
         </div>
 
+        {picked ? (
+          <p className="picked" data-notice-target={picked.target}>
+            <span className="picked-what">
+              <b>{picked.label}</b>
+              <em>{picked.who} · <Link href={picked.href}>open it</Link></em>
+            </span>
+            <button type="button" className="btn ghost tiny" onClick={() => setPicked(null)}>
+              {IC.x}<span>Not that one</span>
+            </button>
+          </p>
+        ) : (
+          kind === 'user'
+            ? <PeoplePicks query={word} onPick={choose}/>
+            : <ContentPicks kind={kind} query={word} onPick={choose}/>
+        )}
+
         <label className="field">
-          <span>The sentence the community reads <em>{text.length}/240</em></span>
+          <span>3. The sentence the community reads <em>{text.length}/240</em></span>
           <textarea
             name="text" rows={2} value={text} maxLength={240}
             placeholder="This claim has been checked and is false."
@@ -120,7 +162,7 @@ function AttachDesk({ busy, onDone }: {
         </label>
 
         <label className="field">
-          <span>Why it is going up</span>
+          <span>Why it is going up <em>{reason.length}/120</em></span>
           <input
             name="reason" value={reason} maxLength={120} autoComplete="off" aria-label="Why the notice goes up"
             placeholder="misinformation — the health claim has no source"
@@ -131,15 +173,18 @@ function AttachDesk({ busy, onDone }: {
         <div className="ask-actions">
           <button
             type="button" className="btn primary" disabled={busy || sending || !ready} onClick={send}
-            title={ready ? 'Put this notice on the content' : 'The sentence and the reason are both needed'}
+            title={ready
+              ? 'Put this notice on the content'
+              : picked ? 'The sentence and the reason are both needed' : 'Pick the thing the notice goes on first'}
           >
             {IC.mega}<span>{sending ? 'Working…' : 'Put the notice up'}</span>
           </button>
         </div>
 
         <p className="note">
-          Writing about a {kind === 'user' ? 'n account' : kind} also needs
-          <b> {PEN[kind]}</b> on the seat, and the number is the one in the address bar.
+          A notice about {kind === 'user' ? 'an account' : `a ${kind}`} also needs
+          <b> {PEN[kind]}</b> on the seat — the desk searches with the same pen, so
+          a list that comes back saying it cannot search is telling you which key is missing.
         </p>
       </div>
     </section>
@@ -254,7 +299,7 @@ export default function NoticesPage() {
           {IC.search}
           <input
             value={q} onChange={event => setQ(event.target.value)}
-            placeholder="Search the notice text, the person or the target id" aria-label="Search notices"
+            placeholder="Search the sentence, the reason on file, or the person it is about" aria-label="Search notices"
           />
         </label>
         <span className="toolbar-count">

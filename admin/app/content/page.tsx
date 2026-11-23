@@ -1,17 +1,18 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
 import Banner from '@/components/Banner';
 import ConsoleShell from '@/components/ConsoleShell';
-import ContentCard, { statePill } from '@/components/ContentCard';
-import DecisionBar from '@/components/Decision';
-import { Act, Chips, More } from '@/components/List';
+import { statePill } from '@/components/ContentCard';
+import { PeoplePicks } from '@/components/Find';
+import { ActLink, Chips, More } from '@/components/List';
 import { api } from '@/lib/api';
 import { num } from '@/lib/format';
 import { IC } from '@/lib/icons';
-import { ago, stamp } from '@/lib/time';
+import { ago } from '@/lib/time';
 import { useSession } from '@/lib/session';
-import { ContentKind, Decision as Verb, Outcome, ShelfPage, ShelfRow } from '@/lib/types';
+import { ContentKind, ShelfPage, ShelfRow } from '@/lib/types';
 
 const TYPES: { id: ContentKind; label: string; key: string }[] = [
   { id: 'post', label: 'Posts', key: 'content' },
@@ -117,18 +118,6 @@ export default function ContentPage() {
     }
   };
 
-  const act = (row: ShelfRow, verb: Verb, reason: string, notice: string) => {
-    const [kind, id] = row.target.split(':');
-    return api<Outcome>(`admin/content/${kind}/${id}/`, {
-      method: 'POST', body: { action: verb, reason, notice },
-    });
-  };
-
-  const handled = (out: Outcome) => {
-    setBanner({ kind: 'ok', text: out.detail });
-    load();
-  };
-
   return (
     <ConsoleShell
       title="Takedown shelf"
@@ -169,7 +158,9 @@ export default function ContentPage() {
           {IC.search}
           <input
             value={q} onChange={event => setQ(event.target.value)}
-            placeholder={type === 'listing' ? 'Search listings by title, description or seller' : `Search ${type} text or author`}
+            placeholder={type === 'listing'
+              ? 'Search a listing by its title, its description, or whoever is selling it'
+              : `Search a ${type} by what it says, or by the name, username or email of whoever wrote it`}
             aria-label="Search content"
           />
         </label>
@@ -177,6 +168,10 @@ export default function ContentPage() {
           {rows === null ? '…' : <>On this shelf: <b>{rows.length}</b></>}
         </span>
       </div>
+
+      {/* The word is a person's name, so the desk lists the people it could mean
+          and a seat picks one instead of hoping the spelling matches. */}
+      <PeoplePicks query={q} onPick={hit => setQ(hit.fill)}/>
 
       {counts && (
         <p className="facets">
@@ -214,12 +209,7 @@ export default function ContentPage() {
                 <th style={{ width: '7%' }} aria-label="Actions"/>
               </tr>
             </thead>
-            {rows.map(row => (
-              <ShelfCase
-                key={row.target} row={row} state={state}
-                onDone={handled} act={act}
-              />
-            ))}
+            {rows.map(row => <ShelfCase key={row.target} row={row}/>)}
           </table>
           <More hasMore={!!cursor} busy={busy} onMore={older} label="Show older"/>
         </div>
@@ -229,18 +219,12 @@ export default function ContentPage() {
 }
 
 /**
- * One shelf row. The decision buttons and the content itself live underneath it,
- * so the shelf can hold forty things on one screen and still let a seat read the
- * post before deciding on it. The open state stays with the row's own key, so a
- * decision repaints the row without folding it back up.
+ * One shelf row. It says how the thing stands and who moved it; the thing itself,
+ * the reports behind it and the five verbs live on the page the row opens, which
+ * is the same page a report queue row opens — a seat should not have to remember
+ * which desk it came from to decide about one post.
  */
-function ShelfCase({ row, state, act, onDone }: {
-  row: ShelfRow;
-  state: string;
-  act: (row: ShelfRow, verb: Verb, reason: string, notice: string) => Promise<Outcome>;
-  onDone: (out: Outcome) => void;
-}) {
-  const [open, setOpen] = useState(false);
+function ShelfCase({ row }: { row: ShelfRow }) {
   const chips = [
     row.pile.open > 0 ? `${row.pile.open} open report${row.pile.open === 1 ? '' : 's'}` : null,
     row.campaigns > 0 ? `${row.campaigns} campaign running` : null,
@@ -250,21 +234,19 @@ function ShelfCase({ row, state, act, onDone }: {
     ? [row.content.author ? `@${row.content.author.username}` : '', row.content.title || row.content.text || '']
       .filter(Boolean).join(' — ')
     : '';
+  const href = `/review/${row.target.replace(':', '/')}`;
 
   return (
-    <tbody className={`case${open ? ' open' : ''}`} data-case={row.target}>
-      <tr className={`grid-row${open ? ' open' : ''}`}>
+    <tbody className="case" data-case={row.target}>
+      <tr className="grid-row">
         <td>
-          <button
-            type="button" className="case-id" aria-expanded={open}
-            onClick={() => setOpen(!open)}
-          >
+          <Link href={href} className="case-id">
             <span className="grid-caret">{IC.chevron}</span>
             <span className="case-name">
               <span className="id">{row.target}</span>
               <span className="case-line dim" title={line}>{line}</span>
             </span>
-          </button>
+          </Link>
         </td>
         <td className="strong">{KIND_LABEL[row.content.kind] || row.content.kind}</td>
         <td>{statePill(row.content.state, row.content.kind)}</td>
@@ -280,49 +262,9 @@ function ShelfCase({ row, state, act, onDone }: {
         </td>
         <td className="dim">{ago(row.content.created_at)}</td>
         <td><div className="grid-acts">
-          <Act
-            icon="eye" label={open ? 'Close this row' : 'Open this row'}
-            onClick={() => setOpen(!open)}
-          />
+          <ActLink to={href} icon="eye" label="Open this row"/>
         </div></td>
       </tr>
-
-      {open && (
-        <tr className="grid-detail">
-          <td colSpan={7}>
-            <div className="grid-body case-body">
-              <div>
-                <h3>The thing itself</h3>
-                <ContentCard content={row.content} matched={row.matches}/>
-                {row.decision && (
-                  <p className="shelf-decision">
-                    <span className={`verb verb-${row.decision.action}`}>
-                      {DONE_LABEL[row.decision.action] || row.decision.action}
-                    </span>
-                    <span>
-                      by <b>{row.decision.actor || 'the system'}</b> {ago(row.decision.at)}
-                      <em title={stamp(row.decision.at)}>{row.decision.detail}</em>
-                    </span>
-                  </p>
-                )}
-              </div>
-              <div>
-                <h3>Decide</h3>
-                <DecisionBar
-                  actions={row.actions}
-                  permission={row.permission}
-                  target={row.target}
-                  run={(verb, reason, notice) => act(row, verb, reason, notice)}
-                  onDone={onDone}
-                  footnote={state === 'taken_down'
-                    ? 'Restore puts it back exactly as it was; the author is told.'
-                    : undefined}
-                />
-              </div>
-            </div>
-          </td>
-        </tr>
-      )}
     </tbody>
   );
 }

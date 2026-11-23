@@ -199,6 +199,10 @@ em { font-style: normal; }
 
 .bar-spacer { flex: 1; }
 
+/* The drawer's chevron points onward; turned round it is the way the seat came. */
+.bar-back svg { transform: rotate(180deg); }
+.bar-back span { white-space: nowrap; }
+
 .console-main {
   min-width: 0;
   display: flex;
@@ -631,6 +635,92 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, .btn:focus-vi
 .toolbar-count { margin-left: auto; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .toolbar-count b { color: var(--ink); font-size: 13px; }
 
+/* ── the pick-list a typed word answers with ────────────── */
+/* A seat comes to these desks with a name it half-remembers, never with the
+   number at the end of an address bar, so the screen lists who or what could be
+   meant and one click settles it. It sits under the toolbar instead of floating
+   over it: a back office you can read beats a menu that covers the rows. */
+
+.picks {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin: -6px 0 12px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-top: 0;
+  border-radius: 0 0 var(--radius) var(--radius);
+  background: var(--paper);
+}
+
+.picks li { display: flex; align-items: center; gap: 6px; }
+
+.pick-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: inherit;
+  text-align: left;
+}
+
+.pick-main:hover { background: var(--tint); }
+
+.pick-label { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.pick-who {
+  color: var(--muted);
+  font-size: 11.6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pick-go {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 4px;
+  color: var(--muted);
+}
+
+.pick-go:hover { background: var(--tint); color: var(--ink); }
+
+/* The thing the desk settled on, still named in words while the sentence is written. */
+.picked {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 12px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--amber);
+  border-radius: var(--radius);
+  background: var(--paper);
+}
+
+.picked-what { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+
+.picked-what b,
+.picked-what em { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.picked-what em { color: var(--muted); font-size: 11.8px; }
+
+.picked-what em a { color: var(--brand); text-decoration: underline; }
+
+@media (max-width: 640px) {
+  .picked { flex-wrap: wrap; }
+  .picked .btn { flex: none; }
+}
+
 .banner {
   display: flex;
   align-items: flex-start;
@@ -803,12 +893,6 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, .btn:focus-vi
 .grid-body h3 { font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); margin: 12px 0 5px; }
 .grid-body h3:first-child { margin-top: 0; }
 
-/* A review row opens the other way round: the content is the wide half and the
-   verbs sit beside it, because a decision is made while reading, not after. */
-.grid-body.case-body { grid-template-columns: minmax(0, 1fr) 330px; }
-.case-body .verbs { flex-direction: column; align-items: stretch; }
-.case-body .verbs .btn { justify-content: flex-start; }
-
 /* ── the roster and the directory ──────────────────────── */
 /* The staff roster and the user directory are the same table with different
    columns, so they share the row, the opened detail and the verbs. `.seat*`
@@ -957,22 +1041,6 @@ button.key:hover { border-color: #c3c9d1; color: var(--ink); background: #F7F8FA
 .facts > div { display: flex; gap: 10px; align-items: center; font-size: 13px; }
 .facts dt { min-width: 132px; color: var(--muted); font-size: 12.5px; }
 .facts dd { margin: 0; }
-
-.window-bar {
-  position: relative;
-  height: 6px;
-  margin: 14px 0 4px;
-  border-radius: 999px;
-  background: var(--tint);
-  overflow: hidden;
-}
-
-.window-bar-fill {
-  height: 100%;
-  border-radius: 999px;
-  background: linear-gradient(90deg, var(--brand), var(--amber));
-  transition: width 0.6s var(--ease);
-}
 
 .me-groups { display: flex; flex-direction: column; gap: 13px; }
 .me-group h3 { font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); margin-bottom: 5px; }
@@ -1407,8 +1475,6 @@ button.key:hover { border-color: #c3c9d1; color: var(--ink); background: #F7F8FA
 
 .case-age { color: var(--muted); font-size: 11.8px; white-space: nowrap; }
 
-.case-who { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
-
 .reporters {
   display: flex;
   flex-direction: column;
@@ -1519,19 +1585,6 @@ button.key:hover { border-color: #c3c9d1; color: var(--ink); background: #F7F8FA
 .tab.active { border-color: var(--brand); background: var(--brand-tint); color: var(--brand-d); }
 
 .tab:disabled { opacity: 0.5; cursor: not-allowed; }
-
-.shelf-decision {
-  display: flex;
-  align-items: flex-start;
-  gap: 9px;
-  padding: 8px 11px;
-  border-radius: 9px;
-  border: 1px dashed var(--line);
-  font-size: 12.4px;
-  color: var(--muted);
-}
-
-.shelf-decision em { display: block; overflow-wrap: anywhere; }
 
 .verb {
   padding: 2px 8px;
@@ -1899,14 +1952,21 @@ button.key:hover { border-color: #c3c9d1; color: var(--ink); background: #F7F8FA
 .promotions .num { font-variant-numeric: tabular-nums; }
 
 /* The shelf is edited as rows, not as a form: a package is a name, a price, a
-   promise and a count of who already bought it, and all four move together. */
+   promise and a count of who already bought it, and all four move together.
+   Every track is allowed to reach zero, because a track whose minimum is wider
+   than the column it sits in does not wrap — it paints its inputs across the
+   panel next door, and a click meant for Days lands on somebody else's box. */
 
 .pk-rows { display: flex; flex-direction: column; gap: 10px; }
 
-.pk-head {
+.pk-head,
+.pk-row {
   display: grid;
-  grid-template-columns: minmax(190px, 1.2fr) minmax(200px, 1fr) minmax(170px, 1fr) 130px 74px;
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1fr) 92px 56px;
   gap: 12px;
+}
+
+.pk-head {
   margin: 0 0 -4px;
   color: var(--muted);
   font-size: 11px;
@@ -1916,9 +1976,6 @@ button.key:hover { border-color: #c3c9d1; color: var(--ink); background: #F7F8FA
 }
 
 .pk-row {
-  display: grid;
-  grid-template-columns: minmax(190px, 1.2fr) minmax(200px, 1fr) minmax(170px, 1fr) 130px 74px;
-  gap: 12px;
   align-items: end;
   padding: 12px 0;
   border-top: 1px solid var(--line);
@@ -1958,6 +2015,26 @@ button.key:hover { border-color: #c3c9d1; color: var(--ink); background: #F7F8FA
   padding: 0 0 0 18px;
   color: var(--red-ink, #9a2c22);
   font-size: 12.2px;
+}
+
+/* The shelf keeps the wide half and the read-only reference the narrow one: two
+   columns of equal width leave five tracks of inputs with nowhere to go. */
+.pkg-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 14px;
+  align-items: start;
+}
+
+@media (max-width: 1120px) {
+  .pkg-grid { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (max-width: 700px) {
+  .pk-head { display: none; }
+  .pk-row { grid-template-columns: minmax(0, 1fr); align-items: stretch; }
+  .pk-bought { flex-direction: row; align-items: baseline; gap: 6px; padding-bottom: 0; }
+  .pk-row > button { justify-self: start; }
 }
 
 /* The dials are grouped by what they move, so a seat can see that a weight is
@@ -2006,12 +2083,6 @@ button.key:hover { border-color: #c3c9d1; color: var(--ink); background: #F7F8FA
 .term.moved { background: var(--amber-tint); }
 
 .term.moved .term-text::after { content: ' ·'; color: var(--amber-ink); }
-
-@media (max-width: 1180px) {
-  .pk-head, .pk-row { grid-template-columns: minmax(170px, 1fr) minmax(190px, 1fr) minmax(150px, 1fr); }
-  .pk-head span:nth-child(4), .pk-bought { display: none; }
-  .pk-row > button { justify-self: start; }
-}
 
 /* ── loading ───────────────────────────────────────────── */
 

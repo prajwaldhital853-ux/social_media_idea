@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 import { crumbsFor, navFor, requires } from '@/lib/nav';
 import { IC } from '@/lib/icons';
-import { left } from '@/lib/time';
+import { cameFrom, visit } from '@/lib/trail';
 import { useSession } from '@/lib/session';
 
 // Every screen renders its own shell, so switching screens rebuilds this drawer
@@ -19,9 +19,16 @@ export default function ConsoleShell({
   const router = useRouter();
   const pathname = usePathname();
   const { status, session, lapsed, error, verify, signOut, busy, can } = useSession();
-  const [tick, setTick] = useState(0);
   const [jump, setJump] = useState('');
+  const [back, setBack] = useState<{ href: string; label: string } | null>(null);
   const navRef = useRef<HTMLElement>(null);
+
+  // The trail is stamped before anything below it reads, so a detail page opened
+  // from a list can name that list on the same paint.
+  useLayoutEffect(() => {
+    visit({ href: pathname, label: title });
+    setBack(cameFrom());
+  }, [pathname, title]);
 
   useLayoutEffect(() => {
     const nav = navRef.current;
@@ -35,13 +42,6 @@ export default function ConsoleShell({
   useEffect(() => {
     if (status === 'out') router.replace('/login');
   }, [status, router]);
-
-  // The window closes on its own; the top bar counts it down so nobody is
-  // surprised mid-task, and the minute it empties the prompt opens by itself.
-  useEffect(() => {
-    const id = setInterval(() => setTick(n => n + 1), 15000);
-    return () => clearInterval(id);
-  }, []);
 
   if (status === 'loading') {
     return (
@@ -65,7 +65,6 @@ export default function ConsoleShell({
   const needed = requires(pathname);
   const blocked = !!needed && !can(needed);
   const crumb = crumbsFor(pathname);
-  void tick;
 
   // Twenty-odd screens is too many to find by scrolling, and a staff member who
   // knows the word they need should not have to know where it lives.
@@ -120,6 +119,14 @@ export default function ConsoleShell({
 
       <div className="console-main">
         <div className="bar">
+          {back && (
+            <Link
+              href={back.href} className="btn ghost tiny bar-back"
+              title={`Back to ${back.label}`}
+            >
+              {IC.chevron}<span>Back</span>
+            </Link>
+          )}
           <label className="bar-query">
             {IC.search}
             <input
@@ -128,8 +135,8 @@ export default function ConsoleShell({
             />
           </label>
           <span className="bar-spacer" />
-          <span className="window-meter" title="Your second factor is good for 30 minutes">
-            {IC.lock}<span>{left(session.admin_expires_at)}</span>
+          <span className="window-meter" title="This seat ends when you sign out or close the tab, not on a clock">
+            {IC.lock}<span>Signed in</span>
           </span>
         </div>
 
@@ -188,7 +195,7 @@ function CodePrompt({ verify, signOut, busy, error, onDone }: {
         <p>
           {recovery
             ? 'One of your ten codes. Each works once, and a spent code is gone.'
-            : 'Your 30-minute admin window closed. Nothing you typed is lost — enter the code your authenticator shows.'}
+            : 'This seat was locked or its proof was dropped while the screen was open. Nothing you typed is lost — enter the code your authenticator shows.'}
         </p>
         <input
           autoFocus inputMode={recovery ? 'text' : 'numeric'} autoComplete="one-time-code"

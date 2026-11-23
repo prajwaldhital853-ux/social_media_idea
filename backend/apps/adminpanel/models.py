@@ -55,6 +55,10 @@ class StaffAccount(models.Model):
     last_admin_login_at = models.DateTimeField(null=True, blank=True)
     login_failed = models.PositiveSmallIntegerField(default=0)
     login_locked_until = models.DateTimeField(null=True, blank=True)
+    # Set when the console wrote the first password. The seat cannot get past the
+    # door until the person behind it has replaced it with one only they know: a
+    # password read out over the phone is not a secret, and it is in the audit log.
+    must_change_password = models.BooleanField(default=False)
 
     class Meta:
         ordering = ['-granted_at']

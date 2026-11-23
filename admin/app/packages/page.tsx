@@ -147,7 +147,7 @@ export default function PackagesScreen() {
           <div className="skeleton"/><div className="skeleton"/><div className="skeleton skeleton-short"/>
         </div>
       ) : (
-        <div className="policy-grid">
+        <div className="pkg-grid">
           <section className="panel" data-pkg="shelf">
             <div className="panel-head">
               <div>

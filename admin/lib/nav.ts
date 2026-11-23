@@ -105,23 +105,36 @@ export function navFor(permissions: string[], role: string): NavGroup[] {
             .filter(group => group.items.length > 0);
 }
 
+/**
+ * Screens a seat arrives at from inside a row rather than from the drawer. They
+ * stay out of the sidebar — it is a list of desks, not a list of every page —
+ * but they still need the two words above them and the door that opens them.
+ */
+const OFF_DRAWER = [
+  { href: '/review/', group: 'Moderation', label: 'The thing itself', permission: 'reports' },
+];
+
+const isUnder = (pathname: string, href: string) => pathname === href || pathname.startsWith(`${href}/`);
+
 /** The two words above a screen: which group it sits in, and its own name. */
 export function crumbsFor(pathname: string): string[] {
   const clean = (pathname || '/').replace(/\/$/, '') || '/';
   for (const group of NAV) {
-    const hit = group.items.find(item => clean === item.href || clean.startsWith(`${item.href}/`));
+    const hit = group.items.find(item => isUnder(clean, item.href));
     if (hit) return [group.label, hit.label];
   }
-  return [];
+  const off = OFF_DRAWER.find(item => clean.startsWith(item.href));
+  return off ? [off.group, off.label] : [];
 }
 
 export function requires(pathname: string): string | null {
   for (const group of NAV) {
     for (const item of group.items) {
-      if (pathname === item.href || pathname.startsWith(`${item.href}/`)) return item.permission;
+      if (isUnder(pathname, item.href)) return item.permission;
     }
   }
-  return null;
+  const off = OFF_DRAWER.find(item => pathname.startsWith(item.href));
+  return off ? off.permission : null;
 }
 
 /**

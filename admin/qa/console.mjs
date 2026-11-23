@@ -432,7 +432,7 @@ try {
   ok('saving the codes lands on the dashboard, which the seat is allowed to open',
     new URL(owner.url()).pathname === '/overview', owner.url());
   const meter = await text(owner, '.window-meter');
-  ok('the top bar counts the 30-minute window down', /\d+ min left/.test(meter), meter);
+  ok('the top bar says the seat is open and leaves no clock on it', /Signed in/.test(meter), meter);
   const nav = await many(owner, '.side-item-label');
   ok('a Client seat sees every console entry',
     nav.includes('Staff and access') && nav.includes('My seat') && nav.includes('Dashboard'), nav.join(', '));
@@ -442,6 +442,9 @@ try {
   await owner.waitForSelector('.search input', { timeout: 40000 });
   await clickText(owner, '.console-head-right button', 'Grant a seat');
   await owner.waitForSelector('.grant', { timeout: 20000 });
+  // The panel now opens on the new-account mode; this seat is a demo member who
+  // already has an account, so the walk goes to the other half of the desk.
+  await clickText(owner, '.grant .fchip', 'An account that exists');
   await owner.type('.grant input', SEAT);
   await owner.select('.grant select', 'moderator');
   await shot(owner, 'owner-3-grant-form');
@@ -504,8 +507,8 @@ try {
   ok('the seat lists its own screens under named groups',
     groups.length >= 2 && groups.includes('Coins and payments') && !groups.includes('Staff'),
     groups.join(', '));
-  ok('the window is the same thirty minutes for every role',
-    /\d+ min left/.test(await text(mod, '.window-meter')), await text(mod, '.window-meter'));
+  ok('the seat shows no clock for a Moderator either',
+    /Signed in/.test(await text(mod, '.window-meter')), await text(mod, '.window-meter'));
 
   await mod.goto(`${BASE}/access`, { waitUntil: 'domcontentloaded' });
   await mod.waitForSelector('.panel.blocked', { timeout: 40000 });
@@ -1650,11 +1653,28 @@ try {
 
   const DESK = '.panel[data-attach="notice"]';
   const KIND_PICK = `${DESK} select[aria-label="What the notice goes on"]`;
-  const NOTICE_ID = `${DESK} input[name="id"]`;
+  const NOTICE_FIND = `${DESK} input[name="find"]`;
   const NOTICE_BOX = `${DESK} textarea[name="text"]`;
   const NOTICE_WHY_BOX = `${DESK} input[name="reason"]`;
   const PUT_UP = `${DESK} .ask-actions button`;
   const noticeAt = target => `.notices .notice[data-target="${target}"]`;
+  /**
+   * The desk takes a word now, not the number off an address bar: type it, wait
+   * for the pick-list to name the thing, click it. A list that cannot find the
+   * target is reported as what the seat would have seen.
+   */
+  const pickTarget = async (word, target) => {
+    await clearAndType(owner, NOTICE_FIND, word);
+    const sel = `${DESK} .picks button[data-pick="${target}"]`;
+    try {
+      await owner.waitForSelector(sel, { timeout: 40000 });
+    } catch {
+      const said = await text(owner, `${DESK} .note.row`);
+      ok(`the desk found ${target} from the word ${word}`, false, said.replace(/\s+/g, ' ').slice(0, 120));
+      throw new Error(`no ${target} in the pick-list for ${word}`);
+    }
+    await tap(owner, sel);
+  };
   /** The sentences the desk says are standing on one piece of content, withdrawn ones left out. */
   const standingOn = async (target, count) => {
     await owner.waitForFunction(([sel, want]) => document.querySelectorAll(sel).length === want,
@@ -1696,7 +1716,7 @@ try {
   ok('the sentence and the reason both have to be there before the button wakes',
     await heldBack(owner, PUT_UP), 'empty boxes, dead button');
 
-  await clearAndType(owner, NOTICE_ID, idOf(spare.target));
+  await pickTarget(AUTHOR, spare.target);
   await clearAndType(owner, NOTICE_BOX, NOTICE_TEXT);
   ok('and a sentence alone is still not enough — the reason is what the log keeps',
     await heldBack(owner, PUT_UP), 'reason blank');
@@ -1746,7 +1766,7 @@ try {
   await shot(owner, 'notices-2-withdrawn');
 
   // 9.4 — the guards: the same sentence twice, and a seat with no pen.
-  await clearAndType(owner, NOTICE_ID, idOf(spare.target));
+  await pickTarget(AUTHOR, spare.target);
   await clearAndType(owner, NOTICE_BOX, NOTICE_TEXT);
   await clearAndType(owner, NOTICE_WHY_BOX, NOTICE_WHY);
   const backUp = await answered(owner, PUT_UP, 'Put the notice up', 'admin/notices/attach/');
@@ -1755,6 +1775,7 @@ try {
     backUp.status === 201 && (await standingOn(spare.target, 1))[0] === NOTICE_TEXT,
     `${backUp.status} ${backBanner.slice(0, 70)}`);
 
+  await pickTarget(AUTHOR, spare.target);
   await clearAndType(owner, NOTICE_BOX, NOTICE_TEXT);
   await clearAndType(owner, NOTICE_WHY_BOX, NOTICE_WHY);
   const upTwice = await answered(owner, PUT_UP, 'Put the notice up', 'admin/notices/attach/');
@@ -1764,12 +1785,13 @@ try {
       && (await standingOn(spare.target, 1)).length === 1,
     `${upTwice.status} ${upTwiceBanner.slice(0, 80)}`);
 
+  await pickTarget(AUTHOR, spare.target);
   await clearAndType(owner, NOTICE_BOX, NOTICE_AGAIN);
   const second = await answered(owner, PUT_UP, 'Put the notice up', 'admin/notices/attach/');
   const beside = await standingOn(spare.target, 2);
   ok('a second sentence about the same thing stands beside the first',
     second.status === 201 && beside.length === 2 && beside.includes(NOTICE_AGAIN)
-      && (await statusOf(owner, `/api/admin/notices/?target=post&q=${idOf(spare.target)}`))
+      && (await statusOf(owner, `/api/admin/notices/?target=post&q=${AUTHOR}`))
         .body.results.filter(row => row.target === spare.target && row.is_live).length === 2,
     `${second.status} · ${beside.length} standing on ${spare.target}`);
 
