@@ -301,7 +301,7 @@ export default function ReelsFeed({ initialKey }: { initialKey?: string }) {
                       />
                     </div>
                     <div className="reel-rail-item">
-                      <button type="button" aria-label="Comment on this reel" onClick={() => setCommentsOpen(true)}>
+                      <button type="button" aria-label="Comment on this reel" onClick={e => { e.currentTarget.blur(); setCommentsOpen(true); }}>
                         {IC.msg}
                       </button>
                       <span>{commentCount > 0 ? compact(commentCount) : 'Comment'}</span>
@@ -312,14 +312,14 @@ export default function ReelsFeed({ initialKey }: { initialKey?: string }) {
                         className={`save ${saved ? 'on' : ''}`}
                         aria-label={saved ? 'Unsave this reel' : 'Save this reel'}
                         aria-pressed={saved}
-                        onClick={() => me ? toggleSave(slide.post.id) : router.push('/login')}
+                        onClick={e => { e.currentTarget.blur(); if (me) toggleSave(slide.post.id); else router.push('/login'); }}
                       >
                         {saved ? IC.bookmarkFill : IC.bookmark}
                       </button>
                       <span>{saveCount > 0 ? compact(saveCount) : 'Save'}</span>
                     </div>
                     <div className="reel-rail-item">
-                      <button type="button" aria-label="Share this reel" onClick={() => void shareReel(slide)}>
+                      <button type="button" aria-label="Share this reel" onClick={e => { e.currentTarget.blur(); void shareReel(slide); }}>
                         {IC.share}
                       </button>
                       <span>{shareCount > 0 ? compact(shareCount) : 'Share'}</span>

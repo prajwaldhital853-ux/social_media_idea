@@ -3935,6 +3935,14 @@ body::-webkit-scrollbar {
   transform: scale(0.92);
 }
 
+/* The rail belongs to the video, not to the page's keyboard chrome: the brand
+   ring drawn around a round button read as a red circle that appeared on its
+   own, and the control kept focus when the sheet it opened closed again. */
+.reel-rail-item > button:focus,
+.reel-rail-item > button:focus-visible {
+  outline: none;
+}
+
 .reel-rail-item > button.on {
   color: #ff5d6c;
   border-color: rgba(255, 93, 108, 0.55);
@@ -3986,7 +3994,7 @@ body::-webkit-scrollbar {
 
 .reel-rail-item .reaction-trigger:focus-visible {
   outline: none;
-  background: rgba(255, 255, 255, 0.22);
+  background: rgba(10, 12, 16, 0.45);
 }
 
 .reel-rail-item .reaction-trigger.reacted {
@@ -6157,21 +6165,6 @@ textarea {
 /* The shape of the button that is about to arrive, so the head does not jump
    while the session is still being restored on a hard load. */
 .profile-actions-wait { width: 128px; height: 36px; border-radius: 9999px; background: var(--line); }
-/* A pending request from the person whose profile is open, answered where it
-   is read instead of back on the followers list. */
-.profile-request {
-  flex-basis: 100%;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 2px;
-  padding: 8px 10px;
-  border-radius: 12px;
-  background: var(--brand-tint);
-  font-size: 13px;
-}
-.profile-request-copy { display: inline-flex; align-items: center; gap: 6px; flex: 1; min-width: 0; font-weight: 600; }
-.profile-request-copy svg { width: 15px; height: 15px; flex: none; }
 .profile-name {
   flex-basis: 100%; margin: 2px 0 0; font-size: 24px; font-weight: 850; line-height: 1.2;
   display: flex; align-items: center; gap: 7px;
