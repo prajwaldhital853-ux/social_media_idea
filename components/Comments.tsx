@@ -95,7 +95,9 @@ export default function Comments({ postId, onClose, mediaIndex }: { postId: stri
   // The API build ships tallies, not reaction rows, so db.reactions is empty
   // here and the kinds have to come from the mix, which reads them.
   const postKinds = reactionMix(targetType, targetId).map(m => m.kind);
-  const quickKinds = postKinds.length ? postKinds : REACTIONS.map(r => r.kind);
+  // Every face is on offer, not only the ones this post already collected: a box
+  // that shows a single emoji because one person reacted reads as a broken picker.
+  const quickKinds = [...postKinds, ...REACTIONS.map(r => r.kind).filter(kind => !postKinds.includes(kind))];
   const myPostReaction = myReaction(targetType, targetId);
 
   const requestClose = () => {

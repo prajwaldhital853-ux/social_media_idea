@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import PostCard from '@/components/PostCard';
+import PullToRefresh from '@/components/PullToRefresh';
 import { useApp } from '@/lib/AppContext';
 import { postsFragment, useList } from '@/lib/lists';
 import { useWindowed } from '@/lib/useWindowed';
@@ -67,6 +68,14 @@ export default function Feed() {
     if (serverMode) void feed.reload();
   });
 
+  // The demo build reads its own cache, so there is nothing to re-pull — but the
+  // gesture still has to land somewhere, and a spinner that snaps straight back
+  // reads as a broken control rather than an up-to-date list.
+  const refresh = async () => {
+    if (serverMode) { await feed.reload(); return; }
+    await new Promise(resolve => setTimeout(resolve, 500));
+  };
+
   return (
     <>
       <header className={`header home-header ${lifted ? 'lifted' : ''}`}>
@@ -75,6 +84,7 @@ export default function Feed() {
           <button type="button" role="tab" aria-selected={tab === 'following'} className={`tab ${tab === 'following' ? 'active' : ''}`} onClick={() => setFeedTab('following')}>{t('following')}</button>
         </div>
       </header>
+      <PullToRefresh onRefresh={() => refresh} />
       {tab === 'following' && !me ? (
         <div className="feed-empty"><p>{t('followingSignIn')}</p><Link href="/login">{t('signIn')}</Link></div>
       ) : feed.error ? (

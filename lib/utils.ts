@@ -133,27 +133,48 @@ export const reactionRank = (kind: ReactionKind) => {
   return i < 0 ? REACTIONS.length : i;
 };
 
-export const resizeImage = (file: File, max = 1280): Promise<string> => {
+const blit = (src: HTMLImageElement | HTMLCanvasElement, sw: number, sh: number, dw: number, dh: number) => {
+  const c = document.createElement('canvas');
+  c.width = dw;
+  c.height = dh;
+  const x = c.getContext('2d');
+  if (x) {
+    x.imageSmoothingEnabled = true;
+    x.imageSmoothingQuality = 'high';
+    x.fillStyle = '#fff';
+    x.fillRect(0, 0, dw, dh);
+    x.drawImage(src, 0, 0, sw, sh, 0, 0, dw, dh);
+  }
+  return c;
+};
+
+// 2048 rather than 1280: a phone shows a card at two pixels per css point, so a
+// 1280 edge is upscaled by the display and every uploaded photo looks soft.
+export const resizeImage = (file: File, max = 2048): Promise<string> => {
   return new Promise((res, rej) => {
     const url = URL.createObjectURL(file);
     const img = new Image();
     img.onload = () => {
-      const w = img.width;
-      const h = img.height;
+      const w = img.naturalWidth || img.width;
+      const h = img.naturalHeight || img.height;
       const s = Math.min(1, max / Math.max(w, h));
-      const nw = Math.round(w * s);
-      const nh = Math.round(h * s);
-      const c = document.createElement('canvas');
-      c.width = nw;
-      c.height = nh;
-      const x = c.getContext('2d');
-      if (x) {
-        x.fillStyle = '#fff';
-        x.fillRect(0, 0, nw, nh);
-        x.drawImage(img, 0, 0, nw, nh);
+      const tw = Math.max(1, Math.round(w * s));
+      const th = Math.max(1, Math.round(h * s));
+      let from: HTMLImageElement | HTMLCanvasElement = img;
+      let sw = w;
+      let sh = h;
+      // One jump from four thousand pixels to two thousand is what makes a photo
+      // mush: the browser averages a huge area into its destination in a single
+      // pass. Halving twice over keeps the edges the eye reads as detail.
+      while (sw > tw * 2 && sh > th * 2) {
+        const dw = Math.max(tw, Math.floor(sw / 2));
+        const dh = Math.max(th, Math.floor(sh / 2));
+        from = blit(from, sw, sh, dw, dh);
+        sw = dw;
+        sh = dh;
       }
       URL.revokeObjectURL(url);
-      res(c.toDataURL('image/jpeg', 0.8));
+      res(blit(from, sw, sh, tw, th).toDataURL('image/jpeg', 0.82));
     };
     img.onerror = () => {
       URL.revokeObjectURL(url);

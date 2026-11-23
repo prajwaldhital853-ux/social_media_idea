@@ -39,7 +39,7 @@ export async function profileImage(file: File, max: number, onProgress?: Progres
   return uploadDataUrl(dataUrl, file.name || 'photo.jpg', onProgress);
 }
 
-async function resizeImageSafe(file: File, max = 1280): Promise<string> {
+async function resizeImageSafe(file: File, max = 2048): Promise<string> {
   try {
     return await resizeImage(file, max);
   } catch {

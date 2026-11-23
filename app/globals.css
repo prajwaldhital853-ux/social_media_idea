@@ -7756,10 +7756,12 @@ button.profile-stat:hover b, a.profile-stat:hover b { color: var(--red); }
 .post-actions .reaction-trigger.action-btn .reaction-art { width: 22px; height: 22px; }
 .post-actions .reaction-trigger.action-btn > span { font-variant-numeric: tabular-nums; }
 
-/* The count moving under a thumb that just changed hands is the whole receipt
-   for the tap; without it the reaction looks like it has not landed yet. */
+/* The thumb taking the punch is the receipt for the tap. The count never moves:
+   scaling the number slides it sideways under the thumb and reads as a counter
+   that has lost its place, which is most obvious in the narrow Reels rail. */
 .reaction-trigger.pop .reaction-art,
-.reaction-trigger.pop > span { animation: reactionPunch 0.28s cubic-bezier(0.2, 0.8, 0.3, 1.4); }
+.reaction-trigger.pop .reaction-mix,
+.reaction-trigger.pop > svg { animation: reactionPunch 0.28s cubic-bezier(0.2, 0.8, 0.3, 1.4); }
 @keyframes reactionPunch {
   0% { transform: none; }
   38% { transform: scale(1.26); }
@@ -7888,7 +7890,8 @@ button.profile-stat:hover b, a.profile-stat:hover b { color: var(--red); }
 @media (prefers-reduced-motion: reduce) {
   .reactors-sheet { animation: none; }
   .reaction-trigger.pop .reaction-art,
-  .reaction-trigger.pop > span { animation: none; }
+  .reaction-trigger.pop .reaction-mix,
+  .reaction-trigger.pop > svg { animation: none; }
 }
 
 /* ===== The author tag =====
@@ -8007,4 +8010,70 @@ button.profile-stat:hover b, a.profile-stat:hover b { color: var(--red); }
   .image-cropper { width: 100%; max-width: 100%; border-radius: 0; }
 
   .crop-stage { height: min(38vh, 280px); }
+}
+
+/* ===== Pull to refresh =====
+   The indicator is fixed to the viewport rather than a translated wrapper around
+   the feed: transforming an ancestor would unstick the sticky home header. */
+html { overscroll-behavior-y: none; }
+
+.ptr {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 6px;
+  z-index: 95;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(-56px);
+}
+
+.ptr.dragging { transition: none; }
+
+.ptr:not(.dragging) { transition: transform .24s ease, opacity .18s ease; }
+
+.ptr.visible { opacity: 1; }
+
+.ptr-ring {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  box-shadow: 0 3px 12px -4px rgba(0, 0, 0, .35);
+}
+
+.ptr-arc {
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  border-top-color: var(--brand);
+  border-right-color: var(--brand);
+}
+
+.ptr.loading .ptr-arc { animation: ptrSpin .75s linear infinite; }
+
+@keyframes ptrSpin {
+  to { transform: rotate(360deg); }
+}
+
+.ptr-text {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 4px 10px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ptr.loading .ptr-arc { animation-duration: 1.6s; }
 }
