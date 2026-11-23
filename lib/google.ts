@@ -50,11 +50,17 @@ let initializedFor = '';
  * Tap stops showing itself for about a day once a visitor dismisses it: the spinner
  * starts, nothing arrives, and the console stays clean. The button flow carries no such
  * cooldown, and this is the shape Google's branding rules ask for anyway.
+ *
+ * `hint` is the address this browser last signed in with. Without it the button keeps
+ * naming whichever account the browser as a whole is using, which is a different thing
+ * from the account that has an Exposing seat — and a chip that names the wrong one is
+ * read as the sign-in having gone to the wrong one.
  */
 export async function renderGoogleButton(
   box: HTMLElement,
   clientId: string,
   handlers: { token: (token: string) => void; error: (message: string) => void },
+  hint = '',
 ): Promise<void> {
   const id = await loadGis();
   if (initializedFor !== clientId) {
@@ -77,5 +83,44 @@ export async function renderGoogleButton(
     size: 'large',
     text: 'continue_with',
     width: Math.round(Math.min(360, Math.max(200, box.clientWidth || 320))),
+    ...(hint ? { hint, hint_version: '3' } : {}),
   });
+}
+
+const HINT_KEY = 'exposing-google-account';
+
+/** The address and name inside a Google credential, read here rather than asked for.
+ *
+ * The token is signed by Google and is already on the page, so a form can be filled
+ * from the account that was actually chosen before the server has answered anything —
+ * and it stays filled even when that answer is an error.
+ */
+export function credentialAccount(token: string): { email: string; name: string } {
+  try {
+    const body = (token || '').split('.')[1];
+    if (!body) return { email: '', name: '' };
+    const json = JSON.parse(atob(body.replace(/-/g, '+').replace(/_/g, '/'))) as { email?: string; name?: string };
+    return { email: (json.email || '').toLowerCase(), name: json.name || '' };
+  } catch {
+    // A token this browser cannot read is simply a token this browser cannot prefill.
+    return { email: '', name: '' };
+  }
+}
+
+export function googleAccountHint(): string {
+  try {
+    return localStorage.getItem(HINT_KEY) || '';
+  } catch {
+    return '';
+  }
+}
+
+/** Remembers the account that was just used, so the next button names it. */
+export function rememberGoogleAccount(email: string): string {
+  const value = (email || '').toLowerCase();
+  try {
+    if (value) localStorage.setItem(HINT_KEY, value);
+    else localStorage.removeItem(HINT_KEY);
+  } catch { /* a private window that refuses storage keeps working without the hint */ }
+  return value;
 }

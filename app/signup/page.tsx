@@ -8,6 +8,7 @@ import BrandLogo from '@/components/BrandLogo';
 import { AuthResult, useApp } from '@/lib/AppContext';
 import { API_ENABLED } from '@/lib/api';
 import GoogleButton from '@/components/GoogleButton';
+import { credentialAccount } from '@/lib/google';
 import { COUNTRIES, THEME_KEY, ageFromDob, uid } from '@/lib/utils';
 import { IC } from '@/lib/icons';
 import { SignupProvider, User } from '@/lib/types';
@@ -15,6 +16,14 @@ import type { TranslationKey } from '@/lib/i18n';
 
 const GOOGLE_KEY = 'exposing-google';
 type Prefill = { email: string; name: string; google_sub: string };
+
+/** prajwal.dhital@gmail.com → prajwal_dhital: the one guess worth making for a
+ *  person who arrived here with an address already proved and no handle yet. */
+const googleUsername = (email: string, name: string) => {
+  const raw = ((email.split('@')[0] || name) || '')
+    .replace(/[^A-Za-z0-9_]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
+  return raw.length >= 3 && raw.length <= 20 ? raw.toLowerCase() : '';
+};
 
 /**
  * A failure the server wrote itself carries the handle for its own log line,
@@ -186,6 +195,15 @@ export default function SignupPage() {
   const googleToken = async (token: string) => {
     setError('');
     setGoogleBusy(true);
+    // Filled from the credential before the server is asked anything: the boxes carry
+    // the address that was actually chosen in Google's dialog, so a form left open by
+    // a slow answer is never showing a different member's details.
+    const picked = credentialAccount(token);
+    if (picked.email) {
+      setEmail(picked.email);
+      if (picked.name && !name) setName(picked.name);
+      if (!username) setUsername(googleUsername(picked.email, picked.name));
+    }
     try {
       const res = await googleSignIn({ id_token: token });
       if (res.needsSignup && res.prefill) {

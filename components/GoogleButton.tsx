@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { renderGoogleButton } from '@/lib/google';
+import { credentialAccount, googleAccountHint, rememberGoogleAccount, renderGoogleButton } from '@/lib/google';
 
 /**
  * Google's own sign-in button, drawn into the page.
@@ -20,24 +20,39 @@ export default function GoogleButton({ clientId, onToken, onError, fallback }: {
 }) {
   const box = useRef<HTMLDivElement>(null);
   const [failed, setFailed] = useState(false);
+  const [hint, setHint] = useState('');
   // The handlers change on every render, but Google's callback is registered once, so
   // it reads the live pair rather than the one that happened to exist when it was drawn.
   const live = useRef({ onToken, onError });
   live.current = { onToken, onError };
 
   useEffect(() => {
+    setHint(googleAccountHint());
+  }, []);
+
+  useEffect(() => {
     if (failed || !box.current) return;
     let alive = true;
     renderGoogleButton(box.current, clientId, {
-      token: token => { if (alive) live.current.onToken(token); },
+      token: token => {
+        if (!alive) return;
+        // The chip is redrawn for the account that was really used, so it never keeps
+        // naming the browser's own profile after a different one signed in here.
+        const picked = credentialAccount(token).email;
+        if (picked !== hint) {
+          rememberGoogleAccount(picked);
+          setHint(picked);
+        }
+        live.current.onToken(token);
+      },
       error: message => {
         if (!alive) return;
         setFailed(true);
         live.current.onError(message);
       },
-    }).catch(() => { if (alive) setFailed(true); });
+    }, hint).catch(() => { if (alive) setFailed(true); });
     return () => { alive = false; };
-  }, [clientId, failed]);
+  }, [clientId, failed, hint]);
 
   if (failed) return <>{fallback}</>;
   return <div className="gbtn" ref={box} />;

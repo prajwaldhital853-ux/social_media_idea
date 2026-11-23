@@ -259,6 +259,11 @@ EMAIL_USE_SSL = (os.environ.get('EMAIL_USE_SSL') or '').lower() in ('1', 'true',
 # the call — one key per deployment decides who the mail is from.
 DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL') or 'no-reply@exposing.app'
 SERVER_EMAIL = DEFAULT_FROM_EMAIL
+# Render's free web services refuse outbound SMTP on 25, 465 and 587, so on that
+# host EMAIL_BACKEND is apps.common.email.EmailBackend and this key is the mail
+# settings. Both exist because neither provider works on the other's network.
+RESEND_API_KEY = os.environ.get('RESEND_API_KEY') or ''
+RESEND_API_URL = os.environ.get('RESEND_API_URL') or 'https://api.resend.com/emails'
 GOOGLE_CLIENT_ID = os.environ.get('GOOGLE_CLIENT_ID', '')
 # Emails quote a link back to the site; on Render the frontend lives on another
 # host, so this is the browser origin rather than the API's own.
