@@ -215,7 +215,8 @@ a:focus:not(:focus-visible) {
   flex-direction: column;
   gap: 8px;
   border-right: 1px solid var(--line);
-  overflow-y: auto;
+  /* Nav, Post and the account row have fixed seats; the column never scrolls. */
+  overflow: hidden;
   background: var(--paper);
   width: 280px;
 }
@@ -233,51 +234,19 @@ a:focus:not(:focus-visible) {
   text-decoration: none;
 }
 
-.rail-bottom {
-  margin-top: 4px;
+/* Wallet, Settings, Post and the reader's own face form one stack at the
+   rail's foot; the free space stays above it, under the nav. */
+.rail-foot {
+  margin-top: auto;
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
 
-/* The short list that fills the rail below the account row: the wide layout
-   keeps Post right under More, so without these the column ends in dead air. */
-.rail-extra {
-  margin-top: 8px;
-  padding-top: 8px;
-  border-top: 1px solid var(--line);
+.rail-bottom {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-}
-
-.nav-item.secondary {
-  font-size: 15px;
-  font-weight: 500;
-  color: var(--muted);
-}
-
-.nav-item.secondary svg {
-  width: 22px;
-  height: 22px;
-  fill: var(--muted);
-}
-
-.nav-item.secondary:hover,
-.nav-item.secondary.active {
-  color: var(--ink);
-}
-
-.nav-item.secondary:hover svg,
-.nav-item.secondary.active svg {
-  fill: var(--ink);
-}
-
-.rail-extra-lang {
-  width: 22px;
-  text-align: center;
-  font-weight: 800;
-  font-size: 12px;
+  gap: 8px;
 }
 
 .rail-user {
@@ -379,9 +348,6 @@ a:focus:not(:focus-visible) {
 }
 
 .post-btn {
-  /* The wide rail closes the row gap itself; only the icon rail leaves the
-     button free to sink toward the foot. */
-  margin-top: auto;
   background: var(--brand);
   color: var(--on-brand);
   padding: 16px;
@@ -1764,13 +1730,6 @@ a:focus:not(:focus-visible) {
 
   .nav-item span {
     display: none;
-  }
-
-  /* The icon rail still needs its language badge: it has no svg of its own. */
-  .nav-item .rail-extra-lang {
-    display: inline-flex;
-    width: auto;
-    font-size: 14px;
   }
 
   .nav-item {
@@ -7289,7 +7248,7 @@ a.market-card { text-decoration: none; }
   .rail-bottom { gap: 6px; }
   .nav-item { gap: 14px; padding: 9px 12px; border-radius: 12px; font-size: 15px; font-weight: 600; }
   .nav-item svg { width: 22px; height: 22px; }
-  .post-btn { margin-top: 10px; width: 100%; padding: 11px; font-size: 15px; border-radius: 12px; }
+  .post-btn { width: 100%; padding: 11px; font-size: 15px; border-radius: 12px; }
   .rail-user { padding: 6px; border-radius: 12px; gap: 10px; }
   .rail-user-name { font-size: 14px; }
   .rail-user-handle { font-size: 12.5px; }
