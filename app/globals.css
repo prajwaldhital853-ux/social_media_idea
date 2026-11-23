@@ -2359,27 +2359,29 @@ a.trend-item:hover { text-decoration: none; }
 /* ===== Toast ===== */
 .toast {
   position: fixed; left: 50%; bottom: calc(84px + env(safe-area-inset-bottom)); transform: translateX(-50%);
-  display: flex; align-items: center; gap: 14px;
-  background: var(--brand); color: var(--on-brand); padding: 14px 16px; border-radius: 12px;
-  font-size: 15px; font-weight: 700; z-index: 1700; box-shadow: var(--shadow-lg);
-  animation: fadeIn 0.2s ease; width: min(520px, 92vw); text-align: left;
+  display: flex; align-items: center; gap: 10px;
+  background: var(--ink); color: var(--paper); padding: 10px 16px; border-radius: 9999px;
+  font-size: 14px; font-weight: 600; z-index: 1700; box-shadow: var(--shadow-lg);
+  animation: fadeIn 0.2s ease; max-width: 90vw; text-align: center;
 }
 @media (min-width: 769px) { .toast { bottom: 28px; } }
 
 .toast-x {
-  margin-left: auto; flex: none; width: 26px; height: 26px; border: 0;
-  background: transparent; color: var(--on-brand);
-  font-size: 20px; line-height: 1; cursor: pointer; opacity: .9;
+  flex: none; width: 20px; height: 20px; border: 0;
+  background: transparent; color: var(--paper);
+  font-size: 17px; line-height: 1; cursor: pointer; opacity: .65;
 }
 
-.toast-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; flex: none; }
+.toast-x:hover { opacity: 1; }
+
+.toast-actions { display: flex; align-items: center; gap: 8px; flex: none; }
 
 .toast-btn {
-  border: 1px solid rgba(255, 255, 255, .55); background: transparent; color: var(--on-brand);
-  border-radius: 8px; padding: 6px 14px; font-size: 13px; font-weight: 700; cursor: pointer;
+  border: 1px solid rgba(255, 255, 255, .35); background: transparent; color: var(--paper);
+  border-radius: 9999px; padding: 4px 14px; font-size: 13px; font-weight: 600; cursor: pointer;
 }
 
-.toast-btn.solid { background: #fff; border-color: #fff; color: var(--brand); }
+.toast-btn.solid { background: var(--paper); border-color: var(--paper); color: var(--ink); }
 
 /* ===== Mobile: top bar + bottom menu ===== */
 .m-top { display: none; }
@@ -8037,9 +8039,10 @@ button.profile-stat:hover b, a.profile-stat:hover b { color: var(--red); }
 
 @media (max-width: 768px) { .crop-zoom { display: none; } }
 
-.crop-actions { display: flex; align-items: center; gap: 10px; }
+.crop-actions { display: flex; align-items: center; justify-content: flex-end; gap: 10px; }
 
-.crop-apply { flex: 1; width: auto; margin-top: 0; }
+/* The apply button is the sheet's own verb, not a full-width form submit. */
+.crop-apply { flex: none; width: auto; margin-top: 0; padding: 9px 18px; white-space: nowrap; }
 
 /* A profile with no banner is blank on purpose: it used to borrow the author's
    first picture, which read as a cover somebody else picked. */

@@ -40,6 +40,14 @@ export default function ImageCropper({ src, name, ratio, round, max, onCancel, o
 
   useBackClose(true, onCancel);
 
+  // Framing a photo is the only thing on screen while this is open, so the page
+  // behind the sheet does not get to scroll out from under it.
+  useEffect(() => {
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = overflow; };
+  }, []);
+
   // The frame holds the target aspect at any viewport, so what the user frames is
   // what gets exported — measuring it in JS beats fighting max-width/max-height in CSS.
   useLayoutEffect(() => {
