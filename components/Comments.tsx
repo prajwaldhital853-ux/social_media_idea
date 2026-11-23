@@ -234,13 +234,23 @@ export default function Comments({ postId, onClose, mediaIndex }: { postId: stri
       <div key={comment.id} data-comment={comment.id} className={`comments-row ${isReply ? 'reply' : ''}`}>
         <Avatar user={author} size={isReply ? 26 : 30} />
         <div className="comments-content">
-          <div className="comment-bubble">
-            <div><b>{author.name}</b>{author.verified && <VerifiedBadge size={13} />}{isAuthor && <span className="comment-author-badge">{t('author')}</span>}</div>
-            <p><CommentText text={comment.text} replyToName={replyToName} /></p>
-            {kinds.length > 0 && (
-              <span className="comment-bubble-reactions">
-                {kinds.map(kind => <span key={kind} className="comment-reaction-badge" title={kind}><ReactionIcon kind={kind} /></span>)}
-                <em>{commentReactions.length}</em>
+          {/* The tag stands beside the card, not in it, level with the name —
+              a label the post's author wears, not part of what they typed. */}
+          <div className="comment-bubble-row">
+            <div className="comment-bubble">
+              <div><b>{author.name}</b>{author.verified && <VerifiedBadge size={13} />}</div>
+              <p><CommentText text={comment.text} replyToName={replyToName} /></p>
+              {kinds.length > 0 && (
+                <span className="comment-bubble-reactions">
+                  {kinds.map(kind => <span key={kind} className="comment-reaction-badge" title={kind}><ReactionIcon kind={kind} /></span>)}
+                  <em>{commentReactions.length}</em>
+                </span>
+              )}
+            </div>
+            {isAuthor && (
+              <span className="comment-author-badge">
+                <span className="comment-author-badge-icon">{IC.edit}</span>
+                {t('author')}
               </span>
             )}
           </div>
