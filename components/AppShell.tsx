@@ -49,7 +49,10 @@ export default function AppShell({ children }: AppShellProps) {
   // "Suggested for you" beside it only pushed the list down — and an empty calm
   // band is still a band, so the whole column goes.
   const peoplePage = pathname === '/people';
-  const calmPage = !focusedPage && !settingsPage && !peoplePage;
+  // The wallet is a stack of tables. A suggestion column beside a balance only
+  // makes the numbers look like a footnote.
+  const walletPage = pathname === '/wallet' || pathname.startsWith('/wallet/');
+  const calmPage = !focusedPage && !settingsPage && !peoplePage && !walletPage;
   const [mounted, setMounted] = useState(booted);
   const { serverMode, resync } = useApp();
   useEffect(() => {
@@ -89,7 +92,7 @@ export default function AppShell({ children }: AppShellProps) {
   if (!mounted) return null;
 
   return (
-    <div className={`shell ${focusedPage ? 'focused-page' : ''} ${postPage ? 'post-page' : ''} ${inChat ? 'chat-page' : ''} ${feedPage ? 'feed-page' : ''} ${messengerPage ? 'messenger-page' : ''} ${marketPage ? 'market-page' : ''} ${settingsPage ? 'settings-page' : ''}`}>
+    <div className={`shell ${focusedPage ? 'focused-page' : ''} ${postPage ? 'post-page' : ''} ${inChat ? 'chat-page' : ''} ${feedPage ? 'feed-page' : ''} ${messengerPage ? 'messenger-page' : ''} ${marketPage ? 'market-page' : ''} ${settingsPage ? 'settings-page' : ''} ${walletPage ? 'wallet-page' : ''}`}>
       {!focusedPage && <TopBar />}
       <NavRail />
       <main className="main">

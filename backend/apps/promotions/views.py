@@ -125,6 +125,46 @@ def promotion_queue(request):
     return paginator.get_paginated_response(data)
 
 
+EDITABLE = ('category', 'age_min', 'age_max', 'country', 'city')
+
+
+@api_view(['PATCH'])
+@permission_classes([IsAuthenticated])
+def promotion_update(request, pk):
+    """Retarget a campaign that is already running.
+
+    The budget is spent at request time, so the package and the coin figure are
+    not editable here — the money is already out of the wallet.
+    """
+    promo = Promotion.objects.filter(pk=pk, owner=request.user).first()
+    if not promo:
+        return Response({'detail': 'Not your promotion.'}, status=404)
+    if promo.status not in (Promotion.Status.ACTIVE, Promotion.Status.PAUSED, Promotion.Status.DRAFT):
+        return Response({'detail': 'A finished promotion cannot be edited.'}, status=400)
+    fields = []
+    for name in EDITABLE:
+        if name not in request.data:
+            continue
+        value = request.data[name]
+        if name in ('age_min', 'age_max'):
+            try:
+                value = int(value)
+            except (TypeError, ValueError):
+                return Response({'detail': f'{name} must be a number.'}, status=400)
+        else:
+            value = str(value or '').strip()[:80]
+        setattr(promo, name, value)
+        fields.append(name)
+    if not fields:
+        return Response({'detail': 'Nothing to change.'}, status=400)
+    if promo.age_min > promo.age_max:
+        return Response({'detail': 'age_min cannot exceed age_max.'}, status=400)
+    if promo.age_min < 13 or promo.age_max > 100:
+        return Response({'detail': 'Age range must sit between 13 and 100.'}, status=400)
+    promo.save(update_fields=fields)
+    return Response(_row(promo))
+
+
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def promotion_action(request, pk, action):
