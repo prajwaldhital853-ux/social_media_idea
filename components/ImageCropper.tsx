@@ -40,6 +40,14 @@ export default function ImageCropper({ src, name, ratio, round, max, onCancel, o
 
   useBackClose(true, onCancel);
 
+  // Framing a photo is the only thing on screen while this is open, so the page
+  // behind the sheet does not get to scroll out from under it.
+  useEffect(() => {
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = overflow; };
+  }, []);
+
   // The frame holds the target aspect at any viewport, so what the user frames is
   // what gets exported — measuring it in JS beats fighting max-width/max-height in CSS.
   useLayoutEffect(() => {
@@ -193,19 +201,11 @@ export default function ImageCropper({ src, name, ratio, round, max, onCancel, o
           </div>
         </div>
         <p className="crop-hint">{t('cropHint')}</p>
-        <label className="crop-zoom">
-          <span>{t('cropZoomOut')}</span>
-          <input
-            type="range"
-            min={1}
-            max={MAX_ZOOM}
-            step={0.01}
-            value={zoom}
-            aria-label={t('cropZoom')}
-            onChange={e => setZoomTo(Number(e.target.value))}
-          />
-          <span>{t('cropZoomIn')}</span>
-        </label>
+        <div className="crop-zoom" role="group" aria-label={t('cropZoom')}>
+          <button type="button" className="zoom-btn" aria-label={t('cropZoomOut')} disabled={zoom <= 1} onClick={() => setZoomTo(zoom / 1.3)}>−</button>
+          <span className="zoom-level">{Math.round(zoom * 100)}%</span>
+          <button type="button" className="zoom-btn" aria-label={t('cropZoomIn')} disabled={zoom >= MAX_ZOOM} onClick={() => setZoomTo(zoom * 1.3)}>+</button>
+        </div>
         {failed && <p className="form-error" role="alert">{failed}</p>}
         <div className="crop-actions">
           <button type="button" className="ghost-btn" onClick={onCancel} disabled={busy}>{t('cancel')}</button>

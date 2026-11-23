@@ -85,6 +85,11 @@ interface AppContextType {
   setFeedTab: (tab: 'foryou' | 'following') => void;
   toast: string | null;
   showToast: (msg: string) => void;
+  hideToast: () => void;
+  /** A question the reader answers in the toast bar, never in the browser's dialog. */
+  confirmBox: { text: string; onYes: () => void } | null;
+  showConfirm: (text: string, onYes: () => void) => void;
+  hideConfirm: () => void;
   /** Session bootstrap has finished (signed in or anonymous). */
   ready: boolean;
   /** The API did not answer and is being waited on — say so instead of spinning. */
@@ -203,6 +208,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [createChooserOpen, setCreateChooserOpen] = useState(false);
   const [feedTab, setFeedTab] = useState<'foryou' | 'following'>('foryou');
   const [toast, setToast] = useState<string | null>(null);
+  const [confirmBox, setConfirmBox] = useState<{ text: string; onYes: () => void } | null>(null);
 
   /** Async continuations read the cache through this ref, never a captured render. */
   const dbRef = useRef(db);
@@ -278,6 +284,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
     lastToastRef.current = { msg, at: Date.now() };
     setToast(msg);
   };
+
+  /**
+   * A destructive action asks in the bar at the foot of the screen, not through
+   * window.confirm: the browser's dialog is unstyled, blocks the whole page, and
+   * on a phone names the origin instead of the thing being deleted.
+   */
+  const showConfirm = (text: string, onYes: () => void) => {
+    // Both bars sit at the same spot, so a question takes the space over.
+    setToast(null);
+    setConfirmBox({ text, onYes });
+  };
+  const hideConfirm = () => setConfirmBox(null);
+  const hideToast = () => setToast(null);
 
   /** Fresh signed-in user record, read at the moment an async continuation needs it. */
   const currentMe = (): User | null => {
@@ -1514,7 +1533,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         openCreateChooser: () => setCreateChooserOpen(true),
         closeCreateChooser: () => setCreateChooserOpen(false),
         feedTab, setFeedTab,
-        toast, showToast,
+        toast, showToast, hideToast,
+        confirmBox, showConfirm, hideConfirm,
         ready, waking, serverMode, resync, merge,
         signin, signupAccount, verifyCode, resendCode, googleSignIn,
         updateProfile, requestAccountDeletion, confirmAccountDeletion, loadPerson, loadEntity,

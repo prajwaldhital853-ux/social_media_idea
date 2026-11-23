@@ -20,7 +20,7 @@ import type { Listing } from '@/lib/types';
 export default function ListingPage() {
   const params = useParams();
   const router = useRouter();
-  const { db, me, t, feature, setDb, serverMode, showToast, activePromo, isListingSaved, toggleListingSave } = useApp();
+  const { db, me, t, feature, setDb, serverMode, showToast, showConfirm, activePromo, isListingSaved, toggleListingSave } = useApp();
   const lang = db.lang;
   const [photo, setPhoto] = useState(0);
   const [editing, setEditing] = useState(false);
@@ -188,7 +188,7 @@ export default function ListingPage() {
                   <button
                     type="button"
                     className="ghost-btn danger"
-                    onClick={() => { if (window.confirm(t('confirmDelete'))) setStatus('removed'); }}
+                    onClick={() => showConfirm(t('confirmDelete'), () => setStatus('removed'))}
                   >
                     {IC.x}{t('del')}
                   </button>
