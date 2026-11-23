@@ -64,6 +64,23 @@ class ProfileTests(TestCase):
         self.assertEqual(resp.data['followers'], 1)
         self.assertEqual(resp.data['posts'], 1)
 
+    def test_the_post_number_counts_what_the_visitor_may_read(self):
+        """The head number and the shelf under it answer one question. Counting
+        every live row promised a post the grid below refused to hand over."""
+        Post.objects.create(author=self.owner, text='circle only', audience='followers')
+        stranger = auth_client(make_user('profilestranger'))
+        self.assertEqual(stranger.get('/api/profiles/profileowner/').data['posts'], 1)
+        self.assertEqual(self.co.get('/api/profiles/profileowner/').data['posts'], 2)
+
+        self.owner.profile.is_private = True
+        self.owner.profile.save(update_fields=['is_private'])
+        # A private account withholds both its posts and their tally, until the
+        # visitor is inside the circle.
+        self.assertEqual(stranger.get('/api/profiles/profileowner/').data['posts'], 0)
+        self.assertEqual(self.co.get('/api/profiles/profileowner/').data['posts'], 2)
+        Follow.objects.create(follower=self.viewer, followee=self.owner, status='accepted')
+        self.assertEqual(auth_client(self.viewer).get('/api/profiles/profileowner/').data['posts'], 2)
+
     def test_every_card_reports_the_same_counts_as_the_profile(self):
         """The profile, the search card, the sync graph and the admin roster all
         show a follower and post number; a pending request or a moderated post

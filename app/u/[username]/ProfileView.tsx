@@ -21,7 +21,7 @@ import { Listing, Post, User } from '@/lib/types';
 export default function UserProfilePage() {
   const params = useParams();
   const router = useRouter();
-  const { db, me, t, isFollowing, followState, toggleFollow, showToast, openComposer, serverMode, loadPerson, ready, updateProfile, incomingRequests, acceptRequest, declineRequest } = useApp();
+  const { db, me, t, isFollowing, followState, toggleFollow, showToast, openComposer, serverMode, loadPerson, ready, updateProfile } = useApp();
   const username = String(params.username || '');
   const user = db.users.find(u => u.username.toLowerCase() === username.toLowerCase());
   const [tab, setTab] = useState<'posts' | 'reels' | 'photos' | 'about' | 'listings'>('posts');
@@ -133,9 +133,6 @@ export default function UserProfilePage() {
   const following = isFollowing(user.id);
   const fState = followState(user.id);
   const followsMe = !!me && db.follows.some(f => f.follower === user.id && f.following === me.id && f.status !== 'pending');
-  // Somebody who asked to follow a private account should not have to be found
-  // again on the followers page: their own profile carries the answer.
-  const askedMe = !own && !!me && incomingRequests().some(f => f.follower === user.id);
   const suspended = !!user.susp && (user.susp.until === null || user.susp.until > Date.now());
   const followers = db.follows.filter(f => f.following === user.id && f.status !== 'pending').map(f => db.users.find(u => u.id === f.follower)).filter((u): u is User => !!u);
   const followingList = db.follows.filter(f => f.follower === user.id && f.status !== 'pending').map(f => db.users.find(u => u.id === f.following)).filter((u): u is User => !!u);
@@ -310,14 +307,6 @@ export default function UserProfilePage() {
             <button type="button" className="icon-btn" aria-label={t('share')} title={t('share')} onClick={() => void shareProfile()}>{IC.share}</button>
           </div>
 
-          {askedMe && (
-            <div className="profile-request">
-              <span className="profile-request-copy">{IC.lock}<span>{t('wantsToFollow')}</span></span>
-              <button type="button" className="follow-btn small" onClick={() => void acceptRequest(user.id)}>{t('confirm')}</button>
-              <button type="button" className="ghost-btn small" onClick={() => void declineRequest(user.id)}>{t('delete')}</button>
-            </div>
-          )}
-
           <h1 className="profile-name">
             {user.name || user.username}
             {user.verified && <VerifiedBadge size={20} />}
@@ -362,7 +351,16 @@ export default function UserProfilePage() {
             ) : suspended && !own ? (
               <p className="feed-empty">{t('suspNotice')}</p>
             ) : posts.length === 0 ? (
-              <p className="feed-empty">{t('noPosts')}</p>
+              // The row above already knows the author's total; until this page's
+              // first rows land, saying "no posts" would contradict it.
+              serverMode && !authorPosts.loaded ? (
+                <div className="feed-skeleton" aria-hidden="true">
+                  <div className="feed-skeleton-head"><span className="sk-avatar" /><span className="sk-lines"><i /><i /></span></div>
+                  <div className="sk-block" />
+                </div>
+              ) : (
+                <p className="feed-empty">{t('noPosts')}</p>
+              )
             ) : (
               <>
                 {posts.slice(0, postLimit).map(post => <PostCard key={post.id} post={post} author={user} />)}

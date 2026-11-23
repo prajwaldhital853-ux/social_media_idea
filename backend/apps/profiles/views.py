@@ -13,6 +13,7 @@ from apps.common.pagination import KeysetPagination
 from apps.follows.models import Follow
 from apps.follows.suggest import suggested_accounts
 from apps.posts.services import announce_profile_change
+from apps.posts.views import visible_posts
 
 from .models import Profile
 
@@ -86,9 +87,14 @@ class ProfileSerializer(serializers.ModelSerializer):
         return instance
 
 
-def _counts(user):
+def _counts(user, viewer):
     return {
-        'posts': user.posts.filter(status='live').count(),
+        # The head number and the grid under it are the same question, so they
+        # get the same answer: what this visitor is allowed to read. Counting
+        # every live row advertised a post that the shelf below refused to
+        # show — a follower-only post to a stranger, or a private account's
+        # whole shelf to somebody still waiting.
+        'posts': visible_posts(viewer).filter(author=user).count(),
         'followers': Follow.objects.filter(followee=user, status='accepted').count(),
         'following': Follow.objects.filter(follower=user, status='accepted').count(),
     }
@@ -128,7 +134,7 @@ def profile_detail(request, username):
         return Response(serializer.data)
     full = _can_view_full(request.user, user)
     data = ProfileSerializer(profile).data
-    data.update(_counts(user))
+    data.update(_counts(user, request.user))
     data['joined'] = user.date_joined
     data['locked'] = not full
     if not full:

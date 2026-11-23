@@ -76,6 +76,20 @@ class FollowTests(TestCase):
         reqs = self.cb.get('/api/follows/requests/')
         self.assertEqual([r['username'] for r in reqs.data['results']], ['followa'])
 
+    def test_answering_or_withdrawing_an_ask_clears_its_bell_row(self):
+        self.b.profile.is_private = True
+        self.b.profile.save()
+        self.ca.post('/api/follows/', {'username': 'followb'}, format='json')
+        waiting = Notification.objects.filter(recipient=self.b, kind='follow_request', read_at__isnull=True)
+        self.assertEqual(waiting.count(), 1)
+        edge = Follow.objects.get(follower=self.a, followee=self.b)
+        self.cb.post(f'/api/follows/requests/{edge.pk}/accept/')
+        self.assertEqual(waiting.count(), 0, 'an answered ask is not still waiting in the bell')
+
+        self.ca.post('/api/follows/', {'username': 'followb'}, format='json')
+        self.ca.delete('/api/follows/followb/')
+        self.assertEqual(waiting.count(), 0, 'a withdrawn ask leaves nothing to answer')
+
     def test_only_followee_can_act_on_request(self):
         self.b.profile.is_private = True
         self.b.profile.save()
