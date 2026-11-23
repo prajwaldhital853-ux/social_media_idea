@@ -8,7 +8,7 @@ import Avatar from '@/components/Avatar';
 import VerifiedBadge from '@/components/VerifiedBadge';
 import PeopleList from '@/components/PeopleList';
 import { useApp } from '@/lib/AppContext';
-import { usersFragment, useList } from '@/lib/lists';
+import { usersFragment, useList, usePull } from '@/lib/lists';
 import { IC } from '@/lib/icons';
 import { User } from '@/lib/types';
 
@@ -43,6 +43,13 @@ export default function PeoplePage({ kind }: { kind: 'followers' | 'following' }
       .finally(() => { if (live) setPersonRead(true); });
     return () => { live = false; };
   }, [serverMode, username, loadPerson]);
+
+  // The pull at the shell re-reads the circle's own totals, which no page of the
+  // list can answer: the list holds rows, the profile row holds the count.
+  usePull(() => loadPerson(username).then(read => {
+    if (!read) return;
+    setProfile({ followers: read.stats.followers, following: read.stats.following, locked: read.locked });
+  }), serverMode && !!username);
 
   const people = useMemo<User[]>(() => {
     if (!user) return [];

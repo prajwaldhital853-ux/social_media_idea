@@ -9,8 +9,11 @@ import Drawer from './Drawer';
 import MobileNav from './MobileNav';
 import SiteFooter from './SiteFooter';
 import Toast from './Toast';
+import PullToRefresh from './PullToRefresh';
 import CreatePostModal from './CreatePostModal';
 import CreateChooser from './CreateChooser';
+import { useApp } from '@/lib/AppContext';
+import { refreshHeldLists, refreshPullers } from '@/lib/lists';
 
 const WARM_ROUTES = ['/explore', '/video', '/marketplace', '/create', '/notifications', '/messages', '/wallet', '/saved', '/settings', '/signup', '/login'];
 
@@ -44,10 +47,30 @@ export default function AppShell({ children }: AppShellProps) {
   const settingsPage = pathname === '/settings';
   const calmPage = !focusedPage && !settingsPage;
   const [mounted, setMounted] = useState(booted);
+  const { serverMode, resync } = useApp();
   useEffect(() => {
     booted = true;
     setMounted(true);
   }, []);
+
+  // A chat thread and the composer own the vertical drag: on a thread a downward
+  // pull is "read the older messages", and the sheet has nothing to re-pull.
+  const pullable = !inChat && pathname !== '/create';
+
+  // One gesture for the whole page. The reader is lifted to the top, every list
+  // this screen reads is re-pulled from page one — and because a rebuild empties
+  // the rows first, each section draws its own skeleton and then the new data.
+  // The session rides along, so a screen with no list (a profile header, a
+  // balance, the badges) still answers with something fresher.
+  const refresh = async () => {
+    window.scrollTo({ top: 0, behavior: 'auto' });
+    try {
+      if (serverMode) await Promise.all([refreshHeldLists(), refreshPullers(), resync()]);
+      // A demo build has no server to ask, but the gesture still has to land
+      // somewhere: a spinner that snaps straight back reads as a broken control.
+      else await new Promise(resolve => setTimeout(resolve, 500));
+    } catch { /* each list reports its own failure; the pull only has to unwind */ }
+  };
 
   useEffect(() => {
     if (!mounted) return;
@@ -80,6 +103,7 @@ export default function AppShell({ children }: AppShellProps) {
       <MobileNav />
       <CreatePostModal />
       <CreateChooser />
+      {pullable && <PullToRefresh onRefresh={refresh} />}
       <Toast />
     </div>
   );
