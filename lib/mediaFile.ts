@@ -9,6 +9,17 @@ export const MAX_PHOTO_MB = 10;
 
 const mb = (bytes: number) => Math.max(1, Math.round(bytes / (1024 * 1024)));
 
+/** What a photo must already be before a picker spends time reading it. */
+export function checkPhoto(file: File): void {
+  if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+    throw new Error('Choose a JPEG, PNG or WebP image.');
+  }
+  if (!file.size) throw new Error('That file is empty — choose another one.');
+  if (file.size > MAX_PHOTO_MB * 1024 * 1024) {
+    throw new Error(`Photo must be under ${MAX_PHOTO_MB} MB — this one is ${mb(file.size)} MB.`);
+  }
+}
+
 /** One photo, downscaled and stored where this build keeps media: the API or the device. */
 export async function imageFromFile(file: File, onProgress?: Progress): Promise<Media> {
   const dataUrl = await resizeImageSafe(file);
@@ -22,13 +33,7 @@ export async function imageFromFile(file: File, onProgress?: Progress): Promise<
  * validates these columns as URLs, so a data URL would be refused at write time.
  */
 export async function profileImage(file: File, max: number, onProgress?: Progress): Promise<string> {
-  if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
-    throw new Error('Choose a JPEG, PNG or WebP image.');
-  }
-  if (!file.size) throw new Error('That file is empty — choose another one.');
-  if (file.size > MAX_PHOTO_MB * 1024 * 1024) {
-    throw new Error(`Photo must be under ${MAX_PHOTO_MB} MB — this one is ${mb(file.size)} MB.`);
-  }
+  checkPhoto(file);
   const dataUrl = await resizeImageSafe(file, max);
   if (!API_ENABLED) return dataUrl;
   return uploadDataUrl(dataUrl, file.name || 'photo.jpg', onProgress);

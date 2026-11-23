@@ -1,18 +1,18 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useApp } from '@/lib/AppContext';
 import { useBackClose } from '@/lib/useBackClose';
-import { COUNTRIES, safeUrl, uid } from '@/lib/utils';
-import { profileImage } from '@/lib/mediaFile';
-import { API_ENABLED } from '@/lib/api';
-import { Post, ProfileLink } from '@/lib/types';
+import { COUNTRIES, safeUrl } from '@/lib/utils';
+import { checkPhoto, profileImage } from '@/lib/mediaFile';
+import { ProfileLink } from '@/lib/types';
 import Avatar from './Avatar';
+import ImageCropper from './ImageCropper';
 import { IC } from '@/lib/icons';
 
 export default function EditProfileModal({ onClose }: { onClose: () => void }) {
-  const { me, setDb, t, showToast, updateProfile } = useApp();
+  const { me, t, showToast, updateProfile } = useApp();
   const [name, setName] = useState(me?.name || '');
   const [bio, setBio] = useState(me?.bio || '');
   const [country, setCountry] = useState(me?.country || 'Nepal');
@@ -30,10 +30,42 @@ export default function EditProfileModal({ onClose }: { onClose: () => void }) {
   const [error, setError] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
   const coverRef = useRef<HTMLInputElement>(null);
+  const [crop, setCrop] = useState<{ src: string; kind: 'avatar' | 'cover' } | null>(null);
+  const cropSrc = useRef('');
 
   useBackClose(true, onClose);
 
+  useEffect(() => () => { if (cropSrc.current) URL.revokeObjectURL(cropSrc.current); }, []);
+
   if (!me) return null;
+
+  const stopCrop = () => {
+    if (cropSrc.current) URL.revokeObjectURL(cropSrc.current);
+    cropSrc.current = '';
+    setCrop(null);
+  };
+
+  // The crop runs before a byte leaves the device, so the author decides which part
+  // of the picture exists at all rather than which part the frame happens to show.
+  const openCrop = (file: File | undefined, kind: 'avatar' | 'cover') => {
+    if (!file) return;
+    try {
+      checkPhoto(file);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'That image could not be read. Try another one.');
+      return;
+    }
+    const url = URL.createObjectURL(file);
+    cropSrc.current = url;
+    setCrop({ src: url, kind });
+  };
+
+  const useCrop = async (file: File) => {
+    const kind = crop?.kind;
+    stopCrop();
+    if (!kind) return;
+    await pickImage(file, kind === 'avatar' ? 320 : 1600, kind === 'avatar' ? setAvatar : setCover);
+  };
 
   const pickImage = async (file: File | undefined, max: number, apply: (src: string) => void) => {
     if (!file) return;
@@ -77,30 +109,6 @@ export default function EditProfileModal({ onClose }: { onClose: () => void }) {
       phone: phone.trim(), website: website.trim(),
       links: filled.map(l => ({ label: l.label.trim() || new URL(l.url).hostname, url: (safeUrl(l.url) as string) }))
     };
-    // Demo builds have no server to call, so the cache is the source of truth.
-    if (!API_ENABLED) {
-      const now = Date.now();
-      const changed: Array<'profile' | 'cover'> = [];
-      if (avatar && avatar !== me.avatar) changed.push('profile');
-      if (cover && cover !== me.cover) changed.push('cover');
-      const notes: Post[] = changed.map((activity, i) => ({
-        id: uid(),
-        uid: me.id,
-        text: '',
-        media: [{ type: 'image', src: activity === 'profile' ? avatar : cover }],
-        ts: now + i,
-        status: 'live',
-        activity,
-      }));
-      setDb(prev => ({
-        ...prev,
-        users: prev.users.map(u => u.id === me.id ? { ...u, ...patch } : u),
-        posts: [...notes, ...prev.posts],
-      }));
-      showToast(t('profileUpdated'));
-      onClose();
-      return;
-    }
     setBusy(true);
     setError('');
     try {
@@ -114,7 +122,8 @@ export default function EditProfileModal({ onClose }: { onClose: () => void }) {
   };
 
   return createPortal(
-    <div className="modal-overlay" onClick={onClose}>
+    <>
+      <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content edit-profile-modal" onClick={e => e.stopPropagation()} role="dialog" aria-label={t('editProfile')}>
         <div className="modal-header">
           <b>{t('editProfile')}</b>
@@ -128,7 +137,7 @@ export default function EditProfileModal({ onClose }: { onClose: () => void }) {
               {IC.camera}
               <span>{uploading ? `Uploading ${uploading}%` : busy ? '…' : t('changePhoto')}</span>
             </button>
-            <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={e => { void pickImage(e.target.files?.[0], 320, setAvatar); e.target.value = ''; }} />
+            <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={e => { openCrop(e.target.files?.[0], 'avatar'); e.target.value = ''; }} />
           </div>
           <div className="edit-cover-row">
             <div className="edit-cover-preview" style={cover ? { backgroundImage: `url(${cover})` } : undefined}>
@@ -139,7 +148,7 @@ export default function EditProfileModal({ onClose }: { onClose: () => void }) {
               <span>{uploading ? `Uploading ${uploading}%` : busy ? '…' : t('changeCover')}</span>
             </button>
             {cover && <button type="button" className="edit-cover-clear" onClick={() => setCover('')} aria-label={t('close')}>{IC.x}</button>}
-            <input ref={coverRef} type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={e => { void pickImage(e.target.files?.[0], 1600, setCover); e.target.value = ''; }} />
+            <input ref={coverRef} type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={e => { openCrop(e.target.files?.[0], 'cover'); e.target.value = ''; }} />
           </div>
           <label className="field">
             <span>{t('fullName')}</span>
@@ -220,7 +229,19 @@ export default function EditProfileModal({ onClose }: { onClose: () => void }) {
           <button type="submit" className="promote-submit" disabled={busy}>{busy && !uploading ? 'Saving…' : t('save')}</button>
         </form>
       </div>
-    </div>,
+      </div>
+      {crop && (
+        <ImageCropper
+          src={crop.src}
+          name={crop.kind === 'avatar' ? 'avatar.jpg' : 'cover.jpg'}
+          ratio={crop.kind === 'avatar' ? 1 : 2.4}
+          round={crop.kind === 'avatar'}
+          max={crop.kind === 'avatar' ? 320 : 1600}
+          onCancel={stopCrop}
+          onCrop={file => { void useCrop(file); }}
+        />
+      )}
+    </>,
     document.body
   );
 }
