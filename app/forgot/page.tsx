@@ -7,21 +7,21 @@ import { useApp } from '@/lib/AppContext';
 import { API_ENABLED } from '@/lib/api';
 import { THEME_KEY } from '@/lib/utils';
 
-type Step = 'ask' | 'code' | 'done';
+type Step = 'ask' | 'code' | 'new' | 'done';
 
 /** 1:58 — both clocks on this screen are minutes and seconds. */
 const clock = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 
 export default function ForgotPage() {
-  const { t, requestPasswordReset, confirmPasswordReset, resendCode } = useApp();
+  const { t, requestPasswordReset, verifyResetCode, confirmPasswordReset, resendCode } = useApp();
   const router = useRouter();
   const [step, setStep] = useState<Step>('ask');
   const [email, setEmail] = useState('');
   const [challenge, setChallenge] = useState('');
   const [code, setCode] = useState('');
+  const [ticket, setTicket] = useState('');
   const [password, setPassword] = useState('');
   const [again, setAgain] = useState('');
-  const [devCode, setDevCode] = useState('');
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
@@ -66,7 +66,6 @@ export default function ForgotPage() {
     setNotice(t('resetSent'));
     if (!res.challenge) return;
     setChallenge(res.challenge);
-    setDevCode(res.devCode || '');
     setExpiresAt(Date.now() + (res.expiresIn || 600) * 1000);
     setResendAt(Date.now() + (res.resendIn || 120) * 1000);
     setStep('code');
@@ -85,23 +84,40 @@ export default function ForgotPage() {
     }
     if (!res.challenge) return;
     setChallenge(res.challenge);
-    setDevCode(res.devCode || '');
+    setCode('');
     setExpiresAt(Date.now() + (res.expiresIn || 600) * 1000);
     setResendAt(Date.now() + (res.resendIn || 120) * 1000);
-    setCode('');
     setNotice(t('resetResent'));
+  };
+
+  const verify = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (code.length !== 6) return setError(t('wrongCode'));
+    setBusy(true);
+    setError('');
+    const res = await verifyResetCode(challenge, code);
+    setBusy(false);
+    if (!res.ok || !res.ticket) {
+      return setError(res.attemptsLeft && res.attemptsLeft > 0
+        ? `${res.detail || t('wrongCode')} ${t(res.attemptsLeft === 1 ? 'codeTryOne' : 'codeTriesLeft', { n: res.attemptsLeft })}`
+        : res.detail || t('wrongCode'));
+    }
+    // The password box is only drawn once the address has been proved, so nobody
+    // staring at a wrong code is also told their new word was refused.
+    setTicket(res.ticket);
+    setNotice(res.detail || t('codeVerified'));
+    setStep('new');
   };
 
   const apply = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (code.length !== 6) return setError(t('wrongCode'));
     if (!password) return setError(t('e_nopass'));
     if (password !== again) return setError(t('passwordMismatch'));
     setBusy(true);
     setError('');
-    const res = await confirmPasswordReset(challenge, code, password, email.trim());
+    const res = await confirmPasswordReset(challenge, password, ticket, email.trim());
     setBusy(false);
-    if (!res.ok) return setError(res.detail || t('wrongCode'));
+    if (!res.ok) return setError(res.detail || t('e_nopass'));
     setStep('done');
     setNotice(t('resetDone'));
     setError('');
@@ -112,7 +128,10 @@ export default function ForgotPage() {
       <div className="login-content">
         <BrandLogo height={64} className="login-brand" href="/" />
         <h1 className="login-title">{t('forgotTitle')}</h1>
-        <p className="auth-code-detail">{t('forgotDetail')}</p>
+        {/* The whole explanation belongs on the screen that asks for the address.
+            Once a code is on its way, the same paragraph over the notice that says
+            a code is on its way is two sentences about one thing. */}
+        {step === 'ask' ? <p className="auth-code-detail">{t('forgotDetail')}</p> : null}
 
         {step === 'ask' ? (
           <form onSubmit={send} noValidate>
@@ -134,7 +153,7 @@ export default function ForgotPage() {
         ) : null}
 
         {step === 'code' ? (
-          <form onSubmit={apply} noValidate>
+          <form onSubmit={verify} noValidate>
             {notice ? <p className="auth-notice" role="status">{notice}</p> : null}
             <p className="auth-code-hint">{t('codeSentTo', { email })}</p>
             <input
@@ -149,11 +168,27 @@ export default function ForgotPage() {
               disabled={busy}
               onChange={e => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
             />
-            {devCode ? (
-              <button type="button" className="auth-code-dev" onClick={() => setCode(devCode)}>
-                {t('devCode')} <b>{devCode}</b>
+            <p className="auth-code-meta">
+              {expiresLeft > 0 ? `${t('codeExpiresIn')} ${clock(expiresLeft)}` : t('codeExpired')}
+            </p>
+            {error ? <p className="signup-error" role="alert">{error}</p> : null}
+            <button type="submit" className={`login-submit ${code.length === 6 && !busy ? 'active' : ''}`} disabled={code.length !== 6 || busy}>
+              {busy ? t('checking') : t('confirm')}
+            </button>
+            <div className="auth-code-actions">
+              <button type="button" className="auth-code-link" disabled={resendLeft > 0 || busy} onClick={() => void resend()}>
+                {resendLeft > 0 ? `${t('resendCode')} in ${clock(resendLeft)}` : t('resendCode')}
               </button>
-            ) : null}
+              <button type="button" className="auth-code-link" onClick={() => { setStep('ask'); setChallenge(''); setCode(''); setError(''); setNotice(''); }}>
+                {t('backToLogin')}
+              </button>
+            </div>
+          </form>
+        ) : null}
+
+        {step === 'new' ? (
+          <form onSubmit={apply} noValidate>
+            <p className="auth-notice" role="status">{notice}</p>
             <input
               className="login-input"
               type="password"
@@ -172,29 +207,16 @@ export default function ForgotPage() {
               value={again}
               onChange={e => setAgain(e.target.value)}
             />
-            <p className="auth-code-meta">
-              {expiresLeft > 0 ? `${t('codeExpiresIn')} ${clock(expiresLeft)}` : t('codeExpired')}
-            </p>
-            {resendLeft > 0 ? <p className="auth-code-meta" role="timer">{t('nextCodeIn', { time: clock(resendLeft) })}</p> : null}
             {error ? <p className="signup-error" role="alert">{error}</p> : null}
             <button
               type="submit"
-              className={`login-submit ${code.length === 6 && password && again && !busy ? 'active' : ''}`}
-              disabled={code.length !== 6 || !password || !again || busy}
+              className={`login-submit ${password && again && !busy ? 'active' : ''}`}
+              disabled={!password || !again || busy}
             >
               {busy ? t('checking') : t('setPassword')}
             </button>
             <div className="auth-code-actions">
-              <button type="button" className="auth-code-link" disabled={resendLeft > 0 || busy} onClick={() => void resend()}>
-                {resendLeft > 0 ? `${t('resendCode')} in ${clock(resendLeft)}` : t('resendCode')}
-              </button>
-              <button
-                type="button"
-                className="auth-code-link"
-                onClick={() => { setStep('ask'); setChallenge(''); setCode(''); setPassword(''); setAgain(''); setError(''); setNotice(''); }}
-              >
-                {t('backToLogin')}
-              </button>
+              <button type="button" className="auth-code-link" onClick={() => router.push('/login')}>{t('backToLogin')}</button>
             </div>
           </form>
         ) : null}
