@@ -1,7 +1,7 @@
 """Build (or rebuild) the demo dataset the app opens on.
 
     manage.py seed_demo --purge      wipe the junk and lay a fresh showcase
-    manage.py seed_demo              seeds only when the showcase is missing
+    manage.py seed_demo              trim an oversized showcase, or lay one if missing
 
 The showcase is 36 named Nepali members, 16 photo posts (single and multi image)
 and 4 reels whose clips are cached first-party under MEDIA_ROOT/demo, and the
@@ -102,7 +102,8 @@ class Command(BaseCommand):
         if options['purge'] or Post.objects.count() < self.photos:
             self.purge()
         else:
-            self.stdout.write('Showcase already present — pass --purge to rebuild it.')
+            if not self.trim():
+                self.stdout.write('Showcase already present — pass --purge to rebuild it.')
             return self.report()
 
         with transaction.atomic():
@@ -215,6 +216,37 @@ class Command(BaseCommand):
                 cursor.execute('ALTER TABLE wallet_transaction ENABLE TRIGGER wallet_ledger_no_delete')
         kept = f' {spared} signed-up accounts were left alone.' if spared else ''
         self.stdout.write(f'Purged {count} seeded demo members and all generated content.{kept}')
+
+    # ------------------------------- trim ---------------------------------
+    def trim(self):
+        """Cut an oversized showcase down to the requested size without rebuilding it.
+
+        A purge lays the demo fresh, and it is the fresh part that costs the admin
+        console its paper trail — so a showcase that only needs to get smaller takes
+        the quiet path. The newest posts of each shape stay where they are, with the
+        comments, reactions and bell rows already hanging off them, and only the
+        surplus goes. Surplus means a post a seeded member wrote: nothing anyone
+        made from a browser is ever eligible to be trimmed.
+        """
+        keep = set(Post.objects.filter(media__kind='image').order_by('-created_at')
+                   .distinct().values_list('pk', flat=True)[:self.photos])
+        keep |= set(Post.objects.filter(media__kind='video').order_by('-created_at')
+                    .distinct().values_list('pk', flat=True)[:self.reels])
+        surplus = list(Post.objects.exclude(pk__in=keep).filter(author__seeded=True)
+                       .values_list('pk', flat=True))
+        if not surplus:
+            return 0
+        # These three point at a post by its id in a string, so no cascade reaches
+        # them: a campaign or a report left behind would open on nothing.
+        targets = [str(pk) for pk in surplus]
+        with transaction.atomic():
+            Post.objects.filter(pk__in=surplus).delete()
+            Notification.objects.filter(target_type='post', target_id__in=targets).delete()
+            Promotion.objects.filter(target_type='post', target_id__in=targets).delete()
+            Report.objects.filter(target_type='post', target_id__in=targets).delete()
+        self.stdout.write(f'Trimmed {len(surplus)} demo posts down to the newest '
+                          f'{self.photos} photo posts and {self.reels} reels.')
+        return len(surplus)
 
     # ------------------------------- people -------------------------------
     def people(self):
