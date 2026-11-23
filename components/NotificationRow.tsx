@@ -15,13 +15,14 @@ import { Notification } from '@/lib/types';
  * follow-back action on its right, and a button may not nest inside a button.
  */
 export default function NotificationRow({ n, onOpen }: { n: Notification; onOpen: (n: Notification) => void }) {
-  const { db, me, t, followState, requestFrom, followBack, toggleFollow } = useApp();
+  const { db, me, t, followState, requestFrom, toggleFollow, acceptRequest, declineRequest } = useApp();
   const actor = n.actor ? db.users.find(u => u.id === n.actor) : undefined;
   const askedFor = n.kind === 'follow' && !!actor && !!me && actor.id !== me.id;
   const state = askedFor ? followState(actor!.id) : 'none';
-  // Their request is still waiting, so this tap answers it instead of starting
-  // a second one — a plain toggle would cancel my own standing request.
-  const answer = askedFor && !!requestFrom(actor!.id) && state !== 'following';
+  // The row answers the request that is actually standing, not the wording of
+  // the note: confirm or delete it here. Follow back only appears afterwards.
+  const waiting = askedFor ? requestFrom(actor!.id) : null;
+  const followsMe = askedFor && db.follows.some(f => f.follower === actor!.id && f.following === me!.id && f.status !== 'pending');
 
   return (
     <div className={`notif-row ${n.read ? '' : 'unread'}`}>
@@ -38,13 +39,18 @@ export default function NotificationRow({ n, onOpen }: { n: Notification; onOpen
           <span className={`notif-time ${n.read ? '' : 'fresh'}`}>{ago(n.ts, db.lang)}</span>
         </span>
       </button>
-      {askedFor && (
+      {waiting ? (
+        <span className="request-actions">
+          <button type="button" className="follow-btn small" onClick={() => void acceptRequest(actor!.id)}>{t('confirm')}</button>
+          <button type="button" className="ghost-btn small" onClick={() => void declineRequest(actor!.id)}>{t('delete')}</button>
+        </span>
+      ) : askedFor && (
         <button
           type="button"
-          className={`notif-follow ${state === 'following' ? 'on' : !answer && state === 'pending' ? 'pending' : ''}`}
-          onClick={() => void (answer ? followBack(actor!.id) : toggleFollow(actor!.id))}
+          className={`notif-follow ${state === 'following' ? 'on' : state === 'pending' ? 'pending' : ''}`}
+          onClick={() => void toggleFollow(actor!.id)}
         >
-          {state === 'following' ? t('following') : answer ? t('followBack') : state === 'pending' ? t('requested') : t('followBack')}
+          {state === 'following' ? t('following') : state === 'pending' ? t('requested') : followsMe ? t('followBack') : t('follow')}
         </button>
       )}
       {!n.read && <span className="notif-dot" aria-label={t('unread')} />}

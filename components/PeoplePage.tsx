@@ -15,7 +15,7 @@ import { User } from '@/lib/types';
 export default function PeoplePage({ kind }: { kind: 'followers' | 'following' }) {
   const params = useParams();
   const router = useRouter();
-  const { db, me, t, incomingRequests, acceptRequest, declineRequest, serverMode, loadPerson } = useApp();
+  const { db, me, t, incomingRequests, acceptRequest, declineRequest, removeFollower, serverMode, loadPerson } = useApp();
   const username = String(params.username || '');
   const user = db.users.find(u => u.username.toLowerCase() === username.toLowerCase());
   const [profile, setProfile] = useState<{ followers: number; following: number; locked: boolean } | null>(null);
@@ -82,7 +82,7 @@ export default function PeoplePage({ kind }: { kind: 'followers' | 'following' }
     );
   }
 
-  const own = me?.id === user.id;
+  const own = !!me && (me.id === user.id || me.username.toLowerCase() === username.toLowerCase());
   const requests = own ? incomingRequests() : [];
   const title = kind === 'followers' ? t('followersOf', { name: user.name || user.username }) : t('followingOf', { name: user.name || user.username });
   const total = profile ? (kind === 'followers' ? profile.followers : profile.following) : people.length;
@@ -90,6 +90,23 @@ export default function PeoplePage({ kind }: { kind: 'followers' | 'following' }
   // instead of claiming nobody is there.
   const hidden = !!profile?.locked;
   const emptyText = hidden ? t('privateNotice') : (kind === 'followers' ? t('noFollowers') : t('noFollowing'));
+
+  // An answer moves a real edge, so the page re-reads the circle and the totals
+  // rather than trusting the one row it just changed.
+  const settle = async () => {
+    if (!serverMode) return;
+    await circle.reload();
+    const read = await loadPerson(username).catch(() => null);
+    if (read) setProfile({ followers: read.stats.followers, following: read.stats.following, locked: read.locked });
+  };
+  const answer = async (id: string, yes: boolean) => {
+    if (yes) await acceptRequest(id); else await declineRequest(id);
+    await settle();
+  };
+  const dropFollower = async (id: string) => {
+    await removeFollower(id);
+    await settle();
+  };
 
   return (
     <AppShell>
@@ -127,8 +144,8 @@ export default function PeoplePage({ kind }: { kind: 'followers' | 'following' }
                       </span>
                     </Link>
                     <span className="request-actions">
-                      <button type="button" className="follow-btn small" onClick={() => acceptRequest(u.id)}>{t('accept')}</button>
-                      <button type="button" className="ghost-btn small" onClick={() => declineRequest(u.id)}>{t('decline')}</button>
+                      <button type="button" className="follow-btn small" onClick={() => void answer(u.id, true)}>{t('confirm')}</button>
+                      <button type="button" className="ghost-btn small" onClick={() => void answer(u.id, false)}>{t('delete')}</button>
                     </span>
                   </div>
                 );
@@ -140,6 +157,7 @@ export default function PeoplePage({ kind }: { kind: 'followers' | 'following' }
         <PeopleList
           people={people}
           empty={emptyText}
+          onRemove={own && kind === 'followers' ? dropFollower : undefined}
           server={serverMode ? {
             hasMore: circle.hasMore,
             loading: circle.loading,

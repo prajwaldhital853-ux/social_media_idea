@@ -35,10 +35,11 @@ interface AppContextType {
   followState: (targetId: string) => 'none' | 'pending' | 'following';
   /** A request from that account to follow me that is still waiting. */
   requestFrom: (targetId: string) => Follow | null;
-  followBack: (targetId: string) => Promise<void>;
   incomingRequests: () => Follow[];
   acceptRequest: (followerId: string) => Promise<void>;
   declineRequest: (followerId: string) => Promise<void>;
+  /** Drop one accepted follower of mine, silently and without blocking. */
+  removeFollower: (followerId: string) => Promise<void>;
   mutualIds: () => string[];
   react: (targetType: Target, targetId: string, kind: ReactionKind) => Promise<void>;
   myReaction: (targetType: Target, targetId: string) => ReactionKind | null;
@@ -944,15 +945,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
           return;
         }
       }
-      // Following them is also the answer to any request they still hold on
-      // me, which is how two private accounts reach a mutual follow without
-      // either hunting through a followers list. The API settles the same edge
-      // and sends its own notification; notify() is a no-op there.
-      const asked = edgeOf(targetId, self.id);
-      if (asked && asked.status === 'pending') {
-        putEdge({ ...asked, status: 'accepted' });
-        notify(targetId, 'follow', 'accepted your follow request', `/u/${self.username}`, self.username);
-      }
       if (pending) showToast('Follow request sent.');
     } finally {
       followInFlight.current.delete(targetId);
@@ -993,15 +985,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const acceptRequest = (followerId: string) => moderateRequest(followerId, true);
   const declineRequest = (followerId: string) => moderateRequest(followerId, false);
 
-  /**
-   * The one tap a normal app gives back: yes to the person who asked to follow
-   * me, then follow them if I have not already asked. The ordinary follow
-   * button cannot do this in that state — with a request of my own still
-   * standing, its toggle would cancel it instead.
-   */
-  const followBack = async (targetId: string) => {
-    if (requestFrom(targetId)) await moderateRequest(targetId, true);
-    if (followState(targetId) === 'none') await toggleFollow(targetId);
+  /** Take a person out of my followers. Silent, and it is not a block. */
+  const removeFollower = async (followerId: string) => {
+    const self = currentMe();
+    if (!self || self.id === followerId) return;
+    const edge = edgeOf(followerId, self.id);
+    if (!edge) return;
+    const username = usernameOf(followerId);
+    if (API_ENABLED && !username) return;
+    dropEdge(followerId, self.id);
+    if (API_ENABLED) {
+      try {
+        await api.del(`/api/follows/${username}/follower/`);
+      } catch (err) {
+        putEdge(edge);
+        showToast(errText(err, 'That follower could not be removed.'));
+        return;
+      }
+    }
+    showToast('Follower removed.');
   };
 
   const myReaction = (targetType: Target, targetId: string) => {
@@ -1547,7 +1549,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       value={{
         db, setDb, me, isAdmin, isStaff, t, feature,
         addPost, updatePost, deletePost, addComment, deleteComment,
-        toggleFollow, isFollowing, followState, requestFrom, followBack, incomingRequests, acceptRequest, declineRequest, mutualIds,
+        toggleFollow, isFollowing, followState, requestFrom, incomingRequests, acceptRequest, declineRequest, removeFollower, mutualIds,
         react, myReaction, reactionCount, reactionMix, reactionPeople, myPostReaction, toggleSave, isSaved, toggleListingSave, isListingSaved,
         sharePost, countView, blockUser, unblockUser, isBlocked, blockedIds,
         notify, markAllRead, markRead, sendMessage, markThreadRead, addReport, logAudit,
