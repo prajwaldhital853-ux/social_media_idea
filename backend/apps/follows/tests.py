@@ -60,6 +60,22 @@ class FollowTests(TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertFalse(Follow.objects.filter(follower=self.a, followee=self.b).exists())
 
+    def test_re_requesting_a_private_account_asks_again(self):
+        self.b.profile.is_private = True
+        self.b.profile.save()
+        self.ca.post('/api/follows/', {'username': 'followb'}, format='json')
+        edge = Follow.objects.get(follower=self.a, followee=self.b)
+        self.cb.post(f'/api/follows/requests/{edge.pk}/accept/')
+        # The unfollow that should have cleared this row never reached the
+        # database, so B still holds an accepted edge from A. Asking again has
+        # to hand B a question to answer, not a receipt for the old answer.
+        resp = self.ca.post('/api/follows/', {'username': 'followb'}, format='json')
+        self.assertEqual(resp.data['status'], 'pending')
+        edge.refresh_from_db()
+        self.assertEqual(edge.status, 'pending')
+        reqs = self.cb.get('/api/follows/requests/')
+        self.assertEqual([r['username'] for r in reqs.data['results']], ['followa'])
+
     def test_only_followee_can_act_on_request(self):
         self.b.profile.is_private = True
         self.b.profile.save()

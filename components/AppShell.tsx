@@ -39,6 +39,10 @@ export default function AppShell({ children }: AppShellProps) {
   const messengerPage = pathname === '/messages' || pathname.startsWith('/messages/');
   // Browsing listings is a grid, not a column: it reads better edge to edge.
   const marketPage = pathname === '/marketplace' || pathname.startsWith('/marketplace/');
+  // Settings is one stack of switches. Suggested people beside it only make the
+  // own column look narrower than it is.
+  const settingsPage = pathname === '/settings';
+  const calmPage = !focusedPage && !settingsPage;
   const [mounted, setMounted] = useState(booted);
   useEffect(() => {
     booted = true;
@@ -58,7 +62,7 @@ export default function AppShell({ children }: AppShellProps) {
   if (!mounted) return null;
 
   return (
-    <div className={`shell ${focusedPage ? 'focused-page' : ''} ${postPage ? 'post-page' : ''} ${inChat ? 'chat-page' : ''} ${feedPage ? 'feed-page' : ''} ${messengerPage ? 'messenger-page' : ''} ${marketPage ? 'market-page' : ''}`}>
+    <div className={`shell ${focusedPage ? 'focused-page' : ''} ${postPage ? 'post-page' : ''} ${inChat ? 'chat-page' : ''} ${feedPage ? 'feed-page' : ''} ${messengerPage ? 'messenger-page' : ''} ${marketPage ? 'market-page' : ''} ${settingsPage ? 'settings-page' : ''}`}>
       {!focusedPage && <TopBar />}
       <NavRail />
       <main className="main">
@@ -67,9 +71,11 @@ export default function AppShell({ children }: AppShellProps) {
           {!focusedPage && profilePage && <SiteFooter />}
         </div>
       </main>
-      <aside className="side-calm">
-        <SuggestCard />
-      </aside>
+      {calmPage && (
+        <aside className="side-calm">
+          <SuggestCard />
+        </aside>
+      )}
       <Drawer />
       <MobileNav />
       <CreatePostModal />
