@@ -7,9 +7,10 @@ import Avatar from './Avatar';
 import { IC } from '@/lib/icons';
 
 export default function NavRail() {
-  const { me, logout, openDrawer, t, feature, openCreateChooser } = useApp();
+  const { me, logout, openDrawer, t, feature, openCreateChooser, theme, toggleTheme, updateLang, db } = useApp();
   const pathname = usePathname();
   const router = useRouter();
+  const isDark = theme === 'dark';
 
   const navItems = [
     { icon: IC.home, label: t('home'), href: '/' },
@@ -63,6 +64,33 @@ export default function NavRail() {
             </button>
           </div>
         )}
+      </div>
+
+      <div className="rail-extra">
+        <Link href="/messages" className={`nav-item secondary ${pathname.startsWith('/messages') ? 'active' : ''}`}>
+          {IC.msg}
+          <span>{t('messages')}</span>
+        </Link>
+        <Link href="/saved" className={`nav-item secondary ${pathname.startsWith('/saved') ? 'active' : ''}`}>
+          {IC.bookmark}
+          <span>{t('saved')}</span>
+        </Link>
+        <Link href="/wallet" className={`nav-item secondary ${pathname.startsWith('/wallet') ? 'active' : ''}`}>
+          {IC.wallet}
+          <span>{t('wallet')}</span>
+        </Link>
+        <Link href="/settings" className={`nav-item secondary ${pathname.startsWith('/settings') ? 'active' : ''}`}>
+          {IC.gear}
+          <span>{t('settings')}</span>
+        </Link>
+        <button type="button" className="nav-item secondary" onClick={toggleTheme}>
+          {isDark ? IC.sun : IC.moon}
+          <span>{isDark ? 'Light mode' : 'Dark mode'}</span>
+        </button>
+        <button type="button" className="nav-item secondary" onClick={() => updateLang(db.lang === 'en' ? 'ne' : 'en')}>
+          <span className="rail-extra-lang">{db.lang === 'en' ? 'ने' : 'EN'}</span>
+          <span>{db.lang === 'en' ? 'नेपाली' : 'English'}</span>
+        </button>
       </div>
     </aside>
   );
