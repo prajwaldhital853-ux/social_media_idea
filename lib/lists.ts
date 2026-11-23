@@ -19,6 +19,9 @@ import { User } from './types';
 
 export type Query = Record<string, string | number | boolean | null | undefined>;
 
+/** How a re-read of page one treats the rows already on screen. */
+type Mode = 'append' | 'refresh' | 'rebuild';
+
 export interface ListDef {
   path: string;
   frag: (rows: any[]) => Fragment;
@@ -88,7 +91,7 @@ function apiPath(path: string): string {
   return `/api${path.startsWith('/') ? path : `/${path}`}`;
 }
 
-async function fetchPage(key: string, def: ListDef, query: Query | undefined, cursor: string | null, refresh = false): Promise<void> {
+async function fetchPage(key: string, def: ListDef, query: Query | undefined, cursor: string | null, mode: Mode = 'append'): Promise<void> {
   // A demo build has no server of its own: fetching anyway would merge real
   // rows into the seeded cache and hand screens people the demo never had.
   const before = snapshot(key);
@@ -96,7 +99,16 @@ async function fetchPage(key: string, def: ListDef, query: Query | undefined, cu
   // A refresh is deliberately not a `loading` transition: `loading` is what
   // every screen reads to decide whether to show a skeleton, and re-running
   // the first page has to leave the rows already on screen alone.
-  set(key, refresh ? { refreshing: true, error: null } : { loading: true, error: null });
+  //
+  // A rebuild is the opposite on purpose: it empties the list first, so the
+  // screen trades the rows the reader was looking at for its own skeleton and
+  // what lands underneath is the newest page. That is what makes releasing a
+  // pull read as an answer rather than as a spinner that changed nothing.
+  set(key, mode === 'append'
+    ? { loading: true, error: null }
+    : mode === 'refresh'
+      ? { refreshing: true, error: null }
+      : { ids: [], cursor: null, loaded: false, done: false, loading: true, refreshing: false, error: null });
   try {
     const page = await api.get<{ results: any[]; next_cursor: string | null; has_more: boolean }>(
       apiPath(def.path),
@@ -117,6 +129,14 @@ async function fetchPage(key: string, def: ListDef, query: Query | undefined, cu
     });
   } catch (err: any) {
     const message = err?.message || 'Could not load this list.';
+    // A rebuild emptied the rows on purpose, so a failed one puts back what the
+    // reader was looking at and keeps quiet about it: the HTTP client has
+    // already said the failure out loud, and an error line over a page that
+    // still reads fine is worse than a page that is a beat stale.
+    if (mode === 'rebuild' && before.ids.length) {
+      set(key, { ids: before.ids, cursor: before.cursor, done: before.done, loaded: true, loading: false, refreshing: false, error: null });
+      return;
+    }
     // Rows that are already on screen outlive a failed re-read; only a list
     // that never answered at all is entitled to swap itself for an error line.
     set(key, before.ids.length
@@ -135,7 +155,64 @@ function loadAt(sk: string, def: ListDef, query: Query | undefined): Promise<voi
 }
 
 function refreshAt(sk: string, def: ListDef, query: Query | undefined): Promise<void> {
-  return fetchPage(sk, def, query, null, true);
+  return fetchPage(sk, def, query, null, 'refresh');
+}
+
+/** Re-read page one and let the screen redraw itself: the rows on the way out are cleared first. */
+function rebuildAt(sk: string, def: ListDef, query: Query | undefined): Promise<void> {
+  return fetchPage(sk, def, query, null, 'rebuild');
+}
+
+/**
+ * The lists a mounted screen is reading right now, and how many screens are
+ * reading each. Pull-to-refresh lives at the shell, where it cannot know the
+ * name of a single list on the page — this registry is what it asks instead,
+ * so every section of every screen is re-pulled by the one gesture.
+ */
+const held = new Map<string, { def: ListDef; query?: Query; owners: number }>();
+
+function hold(sk: string, def: ListDef, query?: Query): void {
+  const entry = held.get(sk);
+  if (entry) entry.owners += 1;
+  else held.set(sk, { def, query, owners: 1 });
+}
+
+function release(sk: string): void {
+  const entry = held.get(sk);
+  if (!entry) return;
+  entry.owners -= 1;
+  if (entry.owners <= 0) held.delete(sk);
+}
+
+/** Re-pull every list on screen, each from page one. */
+export function refreshHeldLists(): Promise<void> {
+  return Promise.all(Array.from(held.entries(), ([sk, entry]) => rebuildAt(sk, entry.def, entry.query)))
+    .then(() => undefined);
+}
+
+/**
+ * A screen whose headline number does not come from a paginated list — a
+ * profile's real totals, a circle's counts — adds itself here, so the one pull
+ * at the shell re-reads it too. Whatever it returns is waited on, and one screen
+ * that fails does not stop the rest of the page.
+ */
+const pullers = new Set<() => unknown>();
+
+export function refreshPullers(): Promise<void> {
+  return Promise.all(Array.from(pullers, fn => Promise.resolve().then(fn).catch(() => undefined)))
+    .then(() => undefined);
+}
+
+/** Re-read what this screen holds outside of a list when the page is pulled open. */
+export function usePull(fn: () => unknown, enabled = true): void {
+  const run = useRef(fn);
+  run.current = fn;
+  useEffect(() => {
+    if (!enabled) return;
+    const job = () => run.current();
+    pullers.add(job);
+    return () => { pullers.delete(job); };
+  }, [enabled]);
 }
 
 function loadMoreAt(sk: string, def: ListDef, query: Query | undefined): Promise<void> {
@@ -183,6 +260,15 @@ export function useList(key: string, def: ListDef, query?: Query, enabled = true
     () => (enabled ? snapshot(sk) : IDLE),
     () => IDLE,
   );
+
+  // While this screen is open it owns a reading of the list, so the shell's
+  // pull-to-refresh re-pulls it. Counted, because two screens on one page can
+  // read the same list and only the last one to leave should drop it.
+  useEffect(() => {
+    if (!enabled) return;
+    hold(sk, defRef.current, queryRef.current);
+    return () => release(sk);
+  }, [sk, enabled]);
 
   // An exhausted list that came back with no rows has not finished reading: the
   // first thread, the first comment and the first post all arrive into exactly

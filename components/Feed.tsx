@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import PostCard from '@/components/PostCard';
-import PullToRefresh from '@/components/PullToRefresh';
 import { useApp } from '@/lib/AppContext';
 import { postsFragment, useList } from '@/lib/lists';
 import { useWindowed } from '@/lib/useWindowed';
@@ -68,26 +67,11 @@ export default function Feed() {
     if (serverMode) void feed.reload();
   });
 
-  // The demo build reads its own cache, so there is nothing to re-pull — but the
-  // gesture still has to land somewhere, and a spinner that snaps straight back
-  // reads as a broken control rather than an up-to-date list.
-  //
   // A refresh is a rewrite of the whole page, not a top-up: the reader is lifted
   // to the top, the rows they were looking at are traded for the skeleton, and
-  // what appears underneath is the newest page. `feed.reload()` deliberately
-  // keeps the old rows on screen, so the swap is decided here.
-  const [pulled, setPulled] = useState(false);
-  const refresh = async () => {
-    window.scrollTo({ top: 0, behavior: 'auto' });
-    setPulled(true);
-    try {
-      if (serverMode) await feed.reload();
-      else await new Promise(resolve => setTimeout(resolve, 500));
-    } finally {
-      setPulled(false);
-    }
-  };
-
+  // what appears underneath is the newest page. The shell's pull-to-refresh asks
+  // every mounted list to rebuild itself, and a rebuild empties `feed.ids` and
+  // sets `loading` — which is exactly what `filling` below already draws.
   const skeleton = (
     <div className="feed-skeleton" aria-hidden="true">
       <div className="feed-skeleton-head"><span className="sk-avatar" /><span className="sk-lines"><i /><i /></span></div>
@@ -104,7 +88,6 @@ export default function Feed() {
           <button type="button" role="tab" aria-selected={tab === 'following'} className={`tab ${tab === 'following' ? 'active' : ''}`} onClick={() => setFeedTab('following')}>{t('following')}</button>
         </div>
       </header>
-      <PullToRefresh onRefresh={() => refresh} />
       {tab === 'following' && !me ? (
         <div className="feed-empty"><p>{t('followingSignIn')}</p><Link href="/login">{t('signIn')}</Link></div>
       ) : feed.error ? (
@@ -112,10 +95,8 @@ export default function Feed() {
           <p>{feed.error}</p>
           <button type="button" className="ghost-btn" onClick={() => feed.reload()}>{t('retry')}</button>
         </div>
-      ) : pulled ? (
-        <>{skeleton}{skeleton}</>
       ) : filling ? (
-        skeleton
+        <>{skeleton}{skeleton}</>
       ) : posts.length === 0 ? (
         // Two different empties: an empty follow list, and a full one whose
         // accounts have simply not posted. Only the first is a hint to search.
@@ -127,7 +108,7 @@ export default function Feed() {
         const author = db.users.find(u => u.id === post.uid);
         return author ? <PostCard key={post.id} post={post} author={author} /> : null;
       })}
-      {pending && hasMore && !pulled && skeleton}
+      {pending && hasMore && !filling && skeleton}
       {hasMore && <div ref={sentinel} className="feed-sentinel" aria-hidden="true" />}
     </>
   );

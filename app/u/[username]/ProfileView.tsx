@@ -11,7 +11,7 @@ import EditProfileModal from '@/components/EditProfileModal';
 import ImageCropper from '@/components/ImageCropper';
 import Lightbox from '@/components/Lightbox';
 import { useApp } from '@/lib/AppContext';
-import { listingsFragment, postsFragment, useList } from '@/lib/lists';
+import { listingsFragment, postsFragment, useList, usePull } from '@/lib/lists';
 import { useWindowed } from '@/lib/useWindowed';
 import { canSeePost, privateIds, compact, ago, safeUrl } from '@/lib/utils';
 import { checkPhoto, profileImage } from '@/lib/mediaFile';
@@ -76,6 +76,13 @@ export default function UserProfilePage() {
       .finally(() => { if (live) setPersonRead(true); });
     return () => { live = false; };
   }, [serverMode, username, loadPerson]);
+
+  // The pull at the shell re-reads the one number no list carries: the author's
+  // real totals, which a paginated page of posts can only ever understate.
+  usePull(
+    () => loadPerson(username).then(read => { if (read) setStats(read.stats); }),
+    serverMode && !!username,
+  );
 
   const cachedPosts = useMemo(() => {
     const index = new Map(db.posts.map(p => [p.id, p] as [string, Post]));
