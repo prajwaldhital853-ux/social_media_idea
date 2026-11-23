@@ -8,8 +8,10 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
 from apps.accounts.models import User
+from apps.common.api import person
 from apps.common.pagination import KeysetPagination
 from apps.follows.models import Follow
+from apps.follows.suggest import suggested_accounts
 from apps.posts.services import announce_profile_change
 
 from .models import Profile
@@ -175,3 +177,29 @@ def user_search(request):
         card['follow_state'] = edges.get(row.pk, 'none')
         data.append(card)
     return paginator.get_paginated_response(data)
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def user_suggestions(request):
+    """The friend-of-a-friend roster, best justified first.
+
+    One bounded page, not a cursor: the rail and the See-all screen read the
+    same rows, and nobody is asked to walk ten thousand suggestions.
+    """
+    try:
+        limit = min(max(int(request.query_params.get('limit') or 30), 1), 60)
+    except (TypeError, ValueError):
+        limit = 30
+    edges = {}
+    if request.user.is_authenticated:
+        edges = dict(Follow.objects.filter(follower=request.user).values_list('followee_id', 'status'))
+    data = []
+    for row, mutuals in suggested_accounts(request.user, limit=limit):
+        card = person(row)
+        card['followers'] = row.followers_count
+        card['role'] = 'user'
+        card['mutuals'] = mutuals
+        card['follow_state'] = edges.get(row.pk, 'none')
+        data.append(card)
+    return Response({'results': data, 'next_cursor': None, 'has_more': False})

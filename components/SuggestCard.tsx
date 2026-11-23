@@ -4,30 +4,40 @@ import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useApp } from '@/lib/AppContext';
+import { usersFragment, useList } from '@/lib/lists';
+import { localSuggestions } from '@/lib/suggest';
+import { User } from '@/lib/types';
 import Avatar from './Avatar';
 import VerifiedBadge from './VerifiedBadge';
 
+const GLANCE = 4;
+const ROSTER = 30;
+
 export default function SuggestCard() {
-  const { db, me, isFollowing, toggleFollow, t } = useApp();
+  const { db, me, isFollowing, toggleFollow, t, serverMode } = useApp();
   const router = useRouter();
   const [expanded, setExpanded] = useState(false);
 
-  const suggestions = useMemo(() => {
-    const followerCount = (id: string) => db.follows.filter(f => f.following === id).length;
-    return db.users
-      .filter(u => u.id !== me?.id && !isFollowing(u.id) && u.role === 'user')
-      .sort((a, b) => Number(b.verified) - Number(a.verified) || followerCount(b.id) - followerCount(a.id))
-      .slice(0, 6);
-  }, [db.users, db.follows, me?.id, isFollowing]);
+  // The server's own walk of the follow graph, so the rail says the same thing
+  // as the See-all screen instead of re-ranking whoever is cached.
+  const list = useList('suggested', { path: '/users/suggested/', frag: usersFragment }, { limit: ROSTER }, serverMode);
+
+  const suggestions = useMemo<User[]>(() => {
+    if (serverMode) {
+      const index = new Map(db.users.map(u => [u.id, u] as [string, User]));
+      return list.ids.map(id => index.get(id)).filter((u): u is User => !!u);
+    }
+    return localSuggestions(db, me?.id || null, ROSTER);
+  }, [serverMode, list.ids, db, me?.id]);
 
   if (!suggestions.length) return null;
-  const shown = expanded ? suggestions : suggestions.slice(0, 4);
+  const shown = expanded ? suggestions.slice(0, ROSTER) : suggestions.slice(0, GLANCE);
 
   return (
     <section className="suggest-rail" aria-label={t('suggestedForYou')}>
       <div className="suggest-rail-head">
         <h2>{t('suggestedForYou')}</h2>
-        <Link href="/explore">{t('seeAll')}</Link>
+        <Link href="/people">{t('seeAll')}</Link>
       </div>
       <ul className="suggest-list">
         {shown.map(u => (
@@ -49,7 +59,7 @@ export default function SuggestCard() {
           </li>
         ))}
       </ul>
-      {suggestions.length > 4 && (
+      {suggestions.length > GLANCE && (
         <button type="button" className="suggest-more" onClick={() => setExpanded(e => !e)}>
           {expanded ? t('showLess') : t('showMore')}
         </button>

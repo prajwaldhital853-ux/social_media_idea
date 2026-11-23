@@ -36,6 +36,33 @@ CHUNK = 1024 * 1024
 # a clip the browser still holds cannot be a stale one.
 MAX_AGE = 86400
 
+IMAGE_TYPES = {'image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/avif'}
+
+
+def _true_type(target, declared):
+    """What the bytes are, when the suffix the upload arrived with says otherwise.
+
+    Older rows were named from the client's original file, so a canvas's JPEG sits
+    under a .png. Saying "image/png" about it is a lie the browser holds against us:
+    with nosniff it draws nothing but a broken-image icon.
+    """
+    if declared not in IMAGE_TYPES:
+        return declared
+    try:
+        with open(target, 'rb') as handle:
+            head = handle.read(16)
+    except OSError:
+        return declared
+    if head[:3] == b'\xff\xd8\xff':
+        return 'image/jpeg'
+    if head[:8] == b'\x89PNG\r\n\x1a\n':
+        return 'image/png'
+    if head[:6] in (b'GIF87a', b'GIF89a'):
+        return 'image/gif'
+    if head[:4] == b'RIFF' and head[8:12] == b'WEBP':
+        return 'image/webp'
+    return declared
+
 
 def _range(header, size):
     """Start, end and status for one Range header; the whole file when absent."""
@@ -116,6 +143,9 @@ def serve_media(request, path):
         response['Last-Modified'] = http_date(stat.st_mtime)
         return response
 
+    # The type is sniffed from the bytes because a container built by a phone
+    # often declares a codec the file does not carry.
+    content_type = _true_type(target, content_type)
     start, end, status = _range(request.headers.get('Range'), size)
     if status == 416:
         response = HttpResponse(status=416)

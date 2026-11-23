@@ -12,7 +12,6 @@ exists; opening it mints a two-minute signed link, and the bytes only come out
 for the seat that asked.
 """
 
-import os
 import secrets
 
 from django.conf import settings as django_settings
@@ -23,6 +22,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
 from apps.common.pagination import KeysetPagination
+from apps.common.uploads import EXTENSIONS
 from apps.wallet.models import CoinRequest, Transaction
 
 from . import coins, rbac, settings_store
@@ -223,7 +223,7 @@ def coin_qr_upload(request):
         return Response({'detail': 'The payment QR has to be a PNG, JPEG or WebP image.'}, status=400)
     if upload.size > QR_MAX_BYTES:
         return Response({'detail': 'A payment QR is a small drawing; keep it under 2 MB.'}, status=400)
-    extension = os.path.splitext(upload.name or '')[1] or '.png'
+    extension = EXTENSIONS[upload.content_type]
     name = f'coin-qr/{secrets.token_hex(8)}{extension}'.lower()
     path = default_storage.save(name, upload)
     url = request.build_absolute_uri(f'{django_settings.MEDIA_URL}{path}')

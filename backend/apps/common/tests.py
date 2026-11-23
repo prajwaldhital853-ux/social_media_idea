@@ -42,6 +42,9 @@ class SyncPayloadTests(TestCase):
         SavedListing.objects.create(user=cache_user, listing=listing)
         Follow.objects.create(follower=cache_user, followee=self.other, status=Follow.Status.ACCEPTED)
         Follow.objects.create(follower=self.other, followee=cache_user, status=Follow.Status.PENDING)
+        # The stranger is only suggestible through a bridge: suggestions walk the
+        # viewer's own graph, and nobody is pushed at a stranger for being popular.
+        Follow.objects.create(follower=self.other, followee=self.stranger, status=Follow.Status.ACCEPTED)
         Promotion.objects.create(owner=cache_user, target_type='post', target_id=str(self.post.pk),
                                  category='Bikes', package='speed', budget=Decimal('100'), status='active')
         apply(cache_user.wallet.pk, 'credit', 250, 'seed')

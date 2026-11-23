@@ -13,6 +13,7 @@ from rest_framework.response import Response
 
 from apps.accounts.models import User
 from apps.follows.models import Block, Follow
+from apps.follows.suggest import suggested_accounts
 from apps.messages.models import Message
 from apps.notifications.models import Notification
 from apps.promotions.models import Promotion
@@ -27,6 +28,9 @@ GRAPH_LIMIT = 400
 # an edge truncated out of this window renders a Follow button that the server
 # then refuses, so the window per user is wider than any seeded roster.
 EDGE_LIMIT = 1000
+# Warmth only: the rail and the See-all screen read the wider list from their
+# own endpoint, so the bootstrap carries enough rows to fill the first glance.
+SUGGEST_LIMIT = 12
 
 
 def _role(user):
@@ -117,29 +121,16 @@ def sync(request):
     ]
     graph_ids = {edge.follower_id for edge in edges} | {edge.followee_id for edge in edges}
 
-    # Both sides of every block the viewer is party to: a stranger who blocked you
-    # is not a suggestion, and someone you blocked is not either. The client only
-    # needs its own side, since that is the list it can lift.
+    # Both sides of every block the viewer is party to: the client only needs
+    # its own side, since that is the list it can lift.
     my_blocks = list(Block.objects.filter(blocker=user).values_list('blocked_id', flat=True)[:EDGE_LIMIT])
-    block_ids = set(my_blocks) | set(
-        Block.objects.filter(blocked=user).values_list('blocker_id', flat=True)[:EDGE_LIMIT]
-    )
 
-    following_ids = [row['following'] for row in edge_rows if row['status'] == Follow.Status.ACCEPTED]
-    suggested = (
-        User.objects.exclude(pk=user.pk)
-        .exclude(pk__in=following_ids)
-        .exclude(pk__in=block_ids)
-        .exclude(pk__in=[row['follower'] for row in edge_rows if row['status'] == Follow.Status.PENDING])
-        .select_related('profile')
-        .annotate(followers_count=Count('followers', filter=Q(followers__status='accepted'), distinct=True))
-        .order_by('-profile__verified', '-followers_count', 'pk')[:12]
-    )
     suggestion_rows = []
-    for row in suggested:
+    for row, mutuals in suggested_accounts(user, limit=SUGGEST_LIMIT):
         card = person(row)
         card['followers'] = row.followers_count
         card['role'] = _role(row)
+        card['mutuals'] = mutuals
         suggestion_rows.append(card)
     graph_ids |= {card['id'] for card in suggestion_rows}
     graph_ids |= set(my_blocks)
