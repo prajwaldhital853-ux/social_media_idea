@@ -971,8 +971,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
         return;
       }
       try {
-        await api.post(`/api/follows/requests/${edge.rid}/${accept ? 'accept' : 'decline'}/`, {});
+        // The username rides along because the row id is only a snapshot: the
+        // server answers the request that is actually standing between us.
+        await api.post(`/api/follows/requests/${edge.rid}/${accept ? 'accept' : 'decline'}/`, { username: usernameOf(followerId) });
       } catch (err) {
+        if (err instanceof ApiError && err.status === 404) {
+          dropEdge(followerId, self.id);
+          showToast('That request is no longer waiting.');
+          return;
+        }
         if (accept) putEdge(edge); else putEdge({ ...edge, status: 'pending' });
         showToast(errText(err, 'That request could not be updated.'));
         return;

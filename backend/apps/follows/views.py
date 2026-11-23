@@ -133,7 +133,25 @@ def requests_list(request):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def request_action(request, pk, action):
-    edge = get_object_or_404(Follow, pk=pk, followee=request.user, status=Follow.Status.PENDING)
+    """Answer a follow request.
+
+    A row id the client holds is a snapshot, not a promise: the person may have
+    withdrawn, or another device may have answered first. So the body names the
+    follower and the edge that is actually standing gets the answer, and one
+    already settled answers as itself instead of failing with Django's sentence.
+    """
+    edge = Follow.objects.filter(pk=pk, followee=request.user).first()
+    if edge is None:
+        asked = request.data.get('username')
+        follower = User.objects.filter(username=asked).first() if asked else None
+        edge = (
+            Follow.objects.filter(follower=follower, followee=request.user).first()
+            if follower is not None else None
+        )
+    if edge is None:
+        return Response({'detail': 'No follow request from that account is waiting.', 'status': 'gone'}, status=404)
+    if edge.status != Follow.Status.PENDING:
+        return Response({'status': edge.status})
     if action == 'accept':
         edge.status = Follow.Status.ACCEPTED
         edge.save(update_fields=['status'])
