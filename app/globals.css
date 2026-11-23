@@ -7634,7 +7634,7 @@ button.profile-stat:hover b, a.profile-stat:hover b { color: var(--red); }
   display: flex;
   align-items: center;
   min-width: 0;
-  margin: -1px 0 -6px;
+  margin: -1px 0 -12px;
   padding: 0 2px;
 }
 
@@ -7645,7 +7645,7 @@ button.profile-stat:hover b, a.profile-stat:hover b { color: var(--red); }
   min-width: 0;
   max-width: 100%;
   margin-left: -7px;
-  padding: 4px 7px;
+  padding: 2px 7px;
   border: 0;
   border-radius: 9px;
   background: none;
@@ -7717,11 +7717,11 @@ button.profile-stat:hover b, a.profile-stat:hover b { color: var(--red); }
 }
 
 @media (min-width: 1024px) {
-  .reaction-row { margin: -3px 0 -9px; }
+  .reaction-row { margin: -4px 0 -13px; }
 }
 
 @media (max-width: 768px) {
-  .reaction-row { margin: -1px 0 -5px; }
+  .reaction-row { margin: -1px 0 -11px; }
   .reaction-summary { font-size: 14px; }
   .reaction-chip .reaction-art { width: 21px; height: 21px; }
   .post-actions .reaction-trigger.action-btn { min-height: 44px; padding: 6px 15px 6px 9px; }
