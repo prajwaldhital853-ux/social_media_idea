@@ -8057,7 +8057,6 @@ html { overscroll-behavior-y: none; }
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
   pointer-events: none;
   opacity: 0;
   transform: translateY(-56px);
@@ -8093,16 +8092,6 @@ html { overscroll-behavior-y: none; }
 
 @keyframes ptrSpin {
   to { transform: rotate(360deg); }
-}
-
-.ptr-text {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--muted);
-  background: var(--paper);
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  padding: 4px 10px;
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -71,10 +71,30 @@ export default function Feed() {
   // The demo build reads its own cache, so there is nothing to re-pull — but the
   // gesture still has to land somewhere, and a spinner that snaps straight back
   // reads as a broken control rather than an up-to-date list.
+  //
+  // A refresh is a rewrite of the whole page, not a top-up: the reader is lifted
+  // to the top, the rows they were looking at are traded for the skeleton, and
+  // what appears underneath is the newest page. `feed.reload()` deliberately
+  // keeps the old rows on screen, so the swap is decided here.
+  const [pulled, setPulled] = useState(false);
   const refresh = async () => {
-    if (serverMode) { await feed.reload(); return; }
-    await new Promise(resolve => setTimeout(resolve, 500));
+    window.scrollTo({ top: 0, behavior: 'auto' });
+    setPulled(true);
+    try {
+      if (serverMode) await feed.reload();
+      else await new Promise(resolve => setTimeout(resolve, 500));
+    } finally {
+      setPulled(false);
+    }
   };
+
+  const skeleton = (
+    <div className="feed-skeleton" aria-hidden="true">
+      <div className="feed-skeleton-head"><span className="sk-avatar" /><span className="sk-lines"><i /><i /></span></div>
+      <div className="sk-block" />
+      <div className="sk-lines wide"><i /><i /></div>
+    </div>
+  );
 
   return (
     <>
@@ -92,12 +112,10 @@ export default function Feed() {
           <p>{feed.error}</p>
           <button type="button" className="ghost-btn" onClick={() => feed.reload()}>{t('retry')}</button>
         </div>
+      ) : pulled ? (
+        <>{skeleton}{skeleton}</>
       ) : filling ? (
-        <div className="feed-skeleton" aria-hidden="true">
-          <div className="feed-skeleton-head"><span className="sk-avatar" /><span className="sk-lines"><i /><i /></span></div>
-          <div className="sk-block" />
-          <div className="sk-lines wide"><i /><i /></div>
-        </div>
+        skeleton
       ) : posts.length === 0 ? (
         // Two different empties: an empty follow list, and a full one whose
         // accounts have simply not posted. Only the first is a hint to search.
@@ -109,13 +127,7 @@ export default function Feed() {
         const author = db.users.find(u => u.id === post.uid);
         return author ? <PostCard key={post.id} post={post} author={author} /> : null;
       })}
-      {pending && hasMore && (
-        <div className="feed-skeleton" aria-hidden="true">
-          <div className="feed-skeleton-head"><span className="sk-avatar" /><span className="sk-lines"><i /><i /></span></div>
-          <div className="sk-block" />
-          <div className="sk-lines wide"><i /><i /></div>
-        </div>
-      )}
+      {pending && hasMore && !pulled && skeleton}
       {hasMore && <div ref={sentinel} className="feed-sentinel" aria-hidden="true" />}
     </>
   );

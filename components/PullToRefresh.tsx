@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { useApp } from '@/lib/AppContext';
 
 type Props = {
   onRefresh: () => unknown;
@@ -15,7 +14,6 @@ const MAX_PULL = 96;
 const RESISTANCE = 0.42;
 
 export default function PullToRefresh({ onRefresh, armAt = 62 }: Props) {
-  const { t } = useApp();
   const [pull, setPull] = useState(0);
   const [busy, setBusy] = useState(false);
   const run = useRef(onRefresh);
@@ -86,7 +84,6 @@ export default function PullToRefresh({ onRefresh, armAt = 62 }: Props) {
     };
   }, [armAt]);
 
-  const armed = pull >= armAt;
   return (
     <div
       className={`ptr${pull > 0 ? ' visible' : ''}${busy ? ' loading' : pull > 0 ? ' dragging' : ''}`}
@@ -96,7 +93,6 @@ export default function PullToRefresh({ onRefresh, armAt = 62 }: Props) {
       <span className="ptr-ring">
         <span className="ptr-arc" style={busy ? undefined : { transform: `rotate(${Math.min(360, (pull / armAt) * 360)}deg)` }} />
       </span>
-      <span className="ptr-text">{busy ? t('ptrLoading') : armed ? t('ptrRelease') : t('ptrPull')}</span>
     </div>
   );
 }
