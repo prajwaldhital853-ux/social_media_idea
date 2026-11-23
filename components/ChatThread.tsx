@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import Avatar from './Avatar';
 import VerifiedBadge from './VerifiedBadge';
@@ -17,6 +18,79 @@ function dayStart(ts: number) {
   const d = new Date(ts);
   d.setHours(0, 0, 0, 0);
   return d.getTime();
+}
+
+/** A shared link is either the site's own post/reel or somewhere off-site. */
+function shareTarget(url: string): { path: string; postId: string; index: number } | null {
+  let path = '';
+  try { path = new URL(url).pathname; } catch { return null; }
+  const post = path.match(/^\/post\/([^/?#]+)/);
+  if (post) return { path, postId: decodeURIComponent(post[1]), index: 0 };
+  const reel = path.match(/^\/video\/([^/?#]+)/);
+  if (reel) {
+    const key = decodeURIComponent(reel[1]);
+    const cut = key.lastIndexOf('-');
+    const index = cut > 0 ? Number(key.slice(cut + 1)) : 0;
+    return { path, postId: cut > 0 ? key.slice(0, cut) : key, index: Number.isFinite(index) ? index : 0 };
+  }
+  return null;
+}
+
+/** Message text with its links live rather than as coloured plain words. */
+function MessageText({ text }: { text: string }) {
+  const parts = text.split(/(https?:\/\/[^\s]+)/g);
+  return (
+    <p>
+      {parts.map((part, i) => {
+        if (!/^https?:\/\//.test(part)) return <span key={i}>{part}</span>;
+        const target = shareTarget(part);
+        const label = part.replace(/^https?:\/\//, '');
+        return target
+          ? <Link key={i} className="chat-link" href={target.path}>{label}</Link>
+          : <a key={i} className="chat-link" href={part} target="_blank" rel="noopener noreferrer">{label}</a>;
+      })}
+    </p>
+  );
+}
+
+/**
+ * The card under a shared link. The post is usually already in the cache because
+ * the reader was looking at the thread it was sent from; a person who opens the
+ * chat cold pulls the row by id once, and keeps the plain link if it is gone.
+ */
+function ShareCard({ path, postId, index }: { path: string; postId: string; index: number }) {
+  const { db, loadEntity } = useApp();
+  const [asked, setAsked] = useState(false);
+  const post = db.posts.find(p => p.id === postId);
+
+  useEffect(() => {
+    if (post || asked) return;
+    setAsked(true);
+    void loadEntity('post', postId);
+  }, [post, asked, postId, loadEntity]);
+
+  if (!post) return null;
+  const media = post.media[index] || post.media[0];
+  const art = media ? media.src || media.gen || '' : '';
+  const author = db.users.find(u => u.id === post.uid);
+  const host = typeof window === 'undefined' ? '' : window.location.host;
+
+  return (
+    <Link href={path} className="chat-link-card">
+      <span className="chat-link-art">
+        {art
+          ? media?.type === 'video'
+            ? <video src={art} muted playsInline preload="metadata" />
+            : <img src={art} alt="" loading="lazy" />
+          : IC.video}
+      </span>
+      <span className="chat-link-copy">
+        <b>{author ? author.name || author.username : 'Exposing'}</b>
+        <small>{post.text}</small>
+        <em>{host}</em>
+      </span>
+    </Link>
+  );
 }
 
 /**
@@ -347,6 +421,8 @@ export default function ChatThread({ other }: { other: User }) {
           const mine = m.from === me?.id;
           // Rows without a server status (seeded or pre-upgrade) read off `read`.
           const receipt = mine ? m.status || (m.read ? 'read' : 'delivered') : null;
+          const linked = m.text.match(/https?:\/\/[^\s]+/);
+          const shared = linked ? shareTarget(linked[0]) : null;
           return (
             <div key={m.id} className="chat-turn">
               {separator && (
@@ -359,7 +435,8 @@ export default function ChatThread({ other }: { other: User }) {
               <div className={`chat-bubble-row ${mine ? 'mine' : 'theirs'}`}>
                 {!mine && <Avatar user={other} size={28} />}
                 <div className={`chat-bubble ${mine ? 'mine' : 'theirs'}`}>
-                  <p>{m.text}</p>
+                  <MessageText text={m.text} />
+                  {shared && <ShareCard path={shared.path} postId={shared.postId} index={shared.index} />}
                   <span className="chat-meta">
                     {ago(m.ts, lang)}
                     {receipt && <span className={`chat-receipt ${receipt}`}>{receipt === 'sent' ? '✓' : '✓✓'}</span>}
