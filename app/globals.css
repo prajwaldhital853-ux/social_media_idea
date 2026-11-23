@@ -234,10 +234,9 @@ a:focus:not(:focus-visible) {
   text-decoration: none;
 }
 
-/* Wallet, Settings, Post and the reader's own face form one stack at the
-   rail's foot; the free space stays above it, under the nav. */
+/* More, Wallet, Settings, Post and the reader's own face continue the nav's
+   list without a band of empty space between Marketplace and More. */
 .rail-foot {
-  margin-top: auto;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -7269,6 +7268,7 @@ a.market-card { text-decoration: none; }
     background: var(--paper);
   }
   .rail-nav { gap: 2px; }
+  .rail-foot { gap: 2px; }
   .rail-bottom { gap: 6px; }
   .nav-item { gap: 14px; padding: 9px 12px; border-radius: 12px; font-size: 15px; font-weight: 600; }
   .nav-item svg { width: 22px; height: 22px; }
