@@ -8,9 +8,9 @@ import { useApp } from '@/lib/AppContext';
 import { ServerPaging, useWindowed } from '@/lib/useWindowed';
 import { User } from '@/lib/types';
 
-export default function PeopleList({ people, empty, server }: { people: User[]; empty: string; server?: ServerPaging }) {
+export default function PeopleList({ people, empty, server, onRemove }: { people: User[]; empty: string; server?: ServerPaging; onRemove?: (id: string) => void }) {
   const router = useRouter();
-  const { db, me, t, followState, requestFrom, followBack, toggleFollow } = useApp();
+  const { db, me, t, followState, toggleFollow } = useApp();
   // Keyed on the first row so a freshly loaded page appends instead of restarting the window.
   const { limit, pending, sentinel, hasMore } = useWindowed(people.length, 10, people[0]?.id || 'empty', server);
 
@@ -38,9 +38,6 @@ export default function PeopleList({ people, empty, server }: { people: User[]; 
       {people.slice(0, limit).map(u => {
         const state = followState(u.id);
         const followsMe = !!me && db.follows.some(f => f.follower === u.id && f.following === me.id && f.status !== 'pending');
-        // A standing request from this person makes the row answer it rather
-        // than send a second request of my own.
-        const answer = state !== 'following' && !!requestFrom(u.id);
         return (
           <div className="people-row" key={u.id}>
             <Link href={`/u/${u.username}`} className="people-id">
@@ -51,13 +48,18 @@ export default function PeopleList({ people, empty, server }: { people: User[]; 
               </span>
             </Link>
             {me && u.id !== me.id && (
-              <button
-                type="button"
-                className={`follow-btn small ${state === 'following' ? 'on' : ''} ${!answer && state === 'pending' ? 'pending' : ''}`}
-                onClick={() => void (answer ? followBack(u.id) : toggleFollow(u.id))}
-              >
-                {state === 'following' ? t('unfollow') : answer ? t('followBack') : state === 'pending' ? t('requested') : followsMe ? t('followBack') : t('follow')}
-              </button>
+              <>
+                <button
+                  type="button"
+                  className={`follow-btn small ${state === 'following' ? 'on' : ''} ${state === 'pending' ? 'pending' : ''}`}
+                  onClick={() => void toggleFollow(u.id)}
+                >
+                  {state === 'following' ? t('unfollow') : state === 'pending' ? t('requested') : followsMe ? t('followBack') : u.private ? t('requestFollow') : t('follow')}
+                </button>
+                {onRemove && (
+                  <button type="button" className="ghost-btn small" onClick={() => onRemove(u.id)}>{t('remove')}</button>
+                )}
+              </>
             )}
             {!me && (
               <button type="button" className="follow-btn small" onClick={() => router.push('/login')}>{t('follow')}</button>

@@ -56,17 +56,9 @@ def follow(request):
         verb = 'requested to follow you' if private else 'started following you'
         notify(target, request.user, kind, f'{request.user.username} {verb}.', 'user', request.user.pk)
         email_activity(target, request.user, kind)
-    # Following somebody who had asked to follow me is the answer to that
-    # request. Leaving it pending would strand two private accounts, each
-    # waiting on a button the other never sees.
-    asked = Follow.objects.filter(
-        follower=target, followee=request.user, status=Follow.Status.PENDING
-    ).first()
-    if asked is not None:
-        asked.status = Follow.Status.ACCEPTED
-        asked.save(update_fields=['status'])
-        notify(target, request.user, 'follow_accept',
-               f'{request.user.username} accepted your follow request.', 'user', request.user.pk)
+    # Approval is one-way and explicit: following somebody who asked to follow
+    # me does not answer their request. They stay pending until I confirm, so
+    # two private accounts reach a mutual follow by two separate decisions.
     return Response({'status': edge.status, 'created': created}, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
 
 
@@ -77,6 +69,17 @@ def unfollow(request, username):
     deleted, _ = Follow.objects.filter(follower=request.user, followee=target).delete()
     # Same reasoning as a repeat follow: an edge already gone is a stale client,
     # not a failure, and a 404 here bounces an honest unfollow tap into a toast.
+    return Response({'detail': 'Removed.' if deleted else 'Nothing to remove.', 'removed': bool(deleted)})
+
+
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated])
+def remove_follower(request, username):
+    """Take one person out of my followers without blocking them. Silent: they
+    are not told, and my own follow of them is untouched — they simply have to
+    ask again to get back in."""
+    target = get_object_or_404(User, username=username)
+    deleted, _ = Follow.objects.filter(follower=target, followee=request.user).delete()
     return Response({'detail': 'Removed.' if deleted else 'Nothing to remove.', 'removed': bool(deleted)})
 
 
