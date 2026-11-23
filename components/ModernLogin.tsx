@@ -216,8 +216,10 @@ export default function ModernLogin() {
           done(user.name || user.username);
         }
       } else setError(t('googleUnavailable'));
-    } catch {
-      setError(t('googleUnavailable'));
+    } catch (err) {
+      // Which half failed matters to the visitor: a cancelled chooser and a browser
+      // that cannot show one are different dead ends.
+      setError((err as Error)?.message || t('googleUnavailable'));
     } finally {
       setBusy(false);
     }

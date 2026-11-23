@@ -193,8 +193,8 @@ export default function SignupPage() {
       } else {
         setError(t('googleUnavailable'));
       }
-    } catch {
-      setError(t('googleUnavailable'));
+    } catch (err) {
+      setError((err as Error)?.message || t('googleUnavailable'));
     } finally {
       setBusy(false);
     }

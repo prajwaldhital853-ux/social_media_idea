@@ -11,7 +11,12 @@ from rest_framework.exceptions import AuthenticationFailed
 from .models import User
 
 ACCESS_TTL = timedelta(minutes=15)
-REFRESH_TTL = timedelta(days=7)
+# A seat is ended by the person sitting in it, or by an admin locking the
+# account — never by a clock. Every refresh hands out a token this long again,
+# so a browser that is used at all rolls itself forward indefinitely; the number
+# only decides how long an abandoned one may be replayed, and it is the longest
+# lifetime browsers reliably keep a cookie for.
+REFRESH_TTL = timedelta(days=400)
 ALGORITHM = 'HS256'
 
 

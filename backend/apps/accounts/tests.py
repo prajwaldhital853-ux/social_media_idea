@@ -264,15 +264,31 @@ class SessionTests(TestCase):
         self.client.post('/api/auth/otp/', {'challenge': resp.data['challenge'], 'code': resp.data['dev_code'], 'device_id': 'dev-s'}, format='json')
         self.client.credentials(HTTP_X_CSRF_TOKEN=self.client.cookies['exposing_csrf'].value)
 
-    def test_refresh_rotates_and_old_token_dies(self):
+    def test_refresh_race_with_its_own_rotation_keeps_the_session(self):
+        # Two tabs can fire the same refresh token a beat apart. The loser is the
+        # same browser as the winner, so it gets a session instead of a sign-out.
         old = self.client.cookies['exposing_refresh'].value
         resp = self.client.post('/api/auth/refresh/')
         self.assertEqual(resp.status_code, 200)
-        new = self.client.cookies['exposing_refresh'].value
-        self.assertNotEqual(old, new)
+        self.assertNotEqual(self.client.cookies['exposing_refresh'].value, old)
         self.client.cookies['exposing_refresh'] = old
-        resp = self.client.post('/api/auth/refresh/')
-        self.assertEqual(resp.status_code, 401)
+        self.assertEqual(self.client.post('/api/auth/refresh/').status_code, 200)
+
+    def test_reusing_a_rotated_token_after_the_race_window_dies(self):
+        old = self.client.cookies['exposing_refresh'].value
+        self.client.post('/api/auth/refresh/')
+        # A request cannot have been in flight longer than the client's own
+        # deadline, so a retired token presented later than that is not this
+        # browser finishing a call.
+        RefreshSession.objects.filter(revoked_at__isnull=False).update(
+            revoked_at=timezone.now() - timedelta(seconds=20))
+        self.client.cookies['exposing_refresh'] = old
+        self.assertEqual(self.client.post('/api/auth/refresh/').status_code, 401)
+
+    def test_the_clock_does_not_end_a_session(self):
+        # A seat is only ever ended by the person in it or by an admin: a refresh
+        # cookie measured in days is how that survives a weekend away.
+        self.assertGreater(int(self.client.cookies['exposing_refresh']['max-age']), 300 * 86400)
 
     def test_logout_revokes_session_and_clears_cookies(self):
         refresh = self.client.cookies['exposing_refresh'].value
