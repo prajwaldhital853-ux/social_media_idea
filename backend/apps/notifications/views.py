@@ -14,10 +14,9 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from apps.accounts.auth import decode_token
-from apps.accounts.models import User
 from apps.common.api import person
 from apps.common.pagination import KeysetPagination
+from apps.common.stream import acquire, release, stream_user
 from apps.messages.models import Message
 
 from .models import Notification
@@ -72,24 +71,6 @@ def mark_read(request):
     return Response({'read': count})
 
 
-# One process, one bookkeeping table: the cap stops one account pinning every
-# stream slot. Multi-instance deploys move this into Redis alongside the
-# channel layer.
-_streams = {}
-
-
-def _stream_user(request):
-    """The same cookie the DRF views read; this endpoint is plain Django, not DRF."""
-    token = request.COOKIES.get('exposing_access')
-    if not token:
-        return None
-    try:
-        payload = decode_token(token, 'access')
-    except Exception:
-        return None
-    return User.objects.filter(pk=int(payload['sub']), is_active=True).first()
-
-
 def _since(user_pk, since_ts, since_pk, limit=50):
     """Rows born after the cursor, oldest first. Re-stamped rows (a repeat
     message from the same actor) carry a new created_at, so the cursor sees
@@ -132,15 +113,11 @@ async def _notification_events(user_pk, since_ts, interval, max_life, since_pk=0
             if not rows:
                 yield ': keepalive\n\n'
     finally:
-        held = _streams.get(user_pk, 1)
-        if held <= 1:
-            _streams.pop(user_pk, None)
-        else:
-            _streams[user_pk] = held - 1
+        release(user_pk)
 
 
 async def notification_stream(request):
-    user = await sync_to_async(_stream_user)(request)
+    user = await sync_to_async(stream_user)(request)
     if user is None:
         return JsonResponse({'detail': 'Authentication required.'}, status=401)
     if user.is_suspended:
@@ -160,9 +137,8 @@ async def notification_stream(request):
             except ValueError:
                 since_ts = None
 
-    if _streams.get(user.pk, 0) >= settings.SSE_STREAMS_PER_USER:
+    if not acquire(user.pk, settings.SSE_STREAMS_PER_USER):
         return JsonResponse({'detail': 'Too many live streams for this account. Close a tab and try again.'}, status=429)
-    _streams[user.pk] = _streams.get(user.pk, 0) + 1
 
     response = StreamingHttpResponse(
         _notification_events(user.pk, since_ts, settings.SSE_INTERVAL, settings.SSE_MAX_LIFE, since_pk),

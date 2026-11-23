@@ -12,7 +12,10 @@ _counter = itertools.count(1)
 
 def make_user(username=None, **extra):
     username = username or f'tuser{next(_counter)}'
-    defaults = {'email': f'{username}@test.local', 'password': 'Test-Pass-9271', 'date_of_birth': '1998-04-12', 'country': 'Nepal', 'city': 'Kathmandu'}
+    # A test member is somebody who finished signing up. Sign-in refuses an address
+    # that was never confirmed, so an unverified row here would turn every sign-in
+    # test into a verification test. Pass email_verified=False to mean it.
+    defaults = {'email': f'{username}@test.local', 'password': 'Test-Pass-9271', 'date_of_birth': '1998-04-12', 'country': 'Nepal', 'city': 'Kathmandu', 'email_verified': True}
     defaults.update(extra)
     return User.objects.create_user(username=username, **defaults)
 

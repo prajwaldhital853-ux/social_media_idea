@@ -1,13 +1,14 @@
 from asgiref.sync import async_to_sync, sync_to_async
 from channels.testing import WebsocketCommunicator
 from django.core.cache import cache
-from django.test import TestCase, TransactionTestCase, override_settings
+from django.test import AsyncClient, TestCase, TransactionTestCase, override_settings
 from django.utils import timezone
 
 from apps.accounts.auth import issue_access
 from apps.common.testutils import auth_client, make_user, run_threads
 from apps.follows.models import Follow
 from apps.messages.models import Conversation, Message
+from apps.messages.presence import is_watching, mark_watching, stop_watching
 
 from exposing.asgi import application
 
@@ -245,3 +246,108 @@ class ChatSocketTests(TransactionTestCase):
                 await comm_a.disconnect()
                 await comm_b.disconnect()
         async_to_sync(run)()
+
+    def test_an_open_socket_is_a_reader_watching_the_thread(self):
+        async def run():
+            comm = self._comm(self.b, 'wsa')
+            try:
+                self.assertTrue((await comm.connect())[0])
+                self.assertTrue(is_watching(self.b.pk, self.a.pk))
+            finally:
+                await comm.disconnect()
+            # Gone means gone: the next message to an absent reader is worth a bell.
+            self.assertFalse(is_watching(self.b.pk, self.a.pk))
+        async_to_sync(run)()
+
+
+class ThreadStreamTests(TestCase):
+    """The thread's own stream: the rows it carries, the receipts, and the
+    watching it proves while a browser holds the request open."""
+
+    def setUp(self):
+        cache.clear()
+        self.a = make_user('ssea')
+        self.b = make_user('sseb')
+        self.ca = auth_client(self.a)
+        self.cb = auth_client(self.b)
+        self.token = issue_access(self.a)
+
+    def _client(self):
+        client = AsyncClient()
+        client.cookies['exposing_access'] = self.token
+        return client
+
+    async def _drain(self, resp):
+        return await self._drain_from(resp.streaming_content)
+
+    async def _drain_from(self, frames):
+        chunks = []
+        async for chunk in frames:
+            chunks.append(chunk.decode())
+        return ''.join(chunks)
+
+    async def test_the_stream_wants_a_reader_and_a_thread(self):
+        self.assertEqual((await AsyncClient().get('/api/messages/sseb/stream/')).status_code, 401)
+        client = self._client()
+        self.assertEqual((await client.get('/api/messages/nobody-here/stream/')).status_code, 404)
+        self.assertEqual((await client.get('/api/messages/ssea/stream/')).status_code, 404)
+
+    def _seed_thread(self):
+        """A pair of rows, a receipt and a keystroke — from the sync client,
+        which an async test has to hand to a thread like any other ORM work."""
+        self.ca.post('/api/messages/sseb/', {'text': 'the one I sent'}, format='json')
+        self.cb.post('/api/messages/ssea/', {'text': 'the answer'}, format='json')
+        self.cb.post('/api/messages/ssea/read/', {}, format='json')
+        self.cb.post('/api/messages/ssea/typing/', {}, format='json')
+
+    @override_settings(CHAT_SSE_INTERVAL=0.05, SSE_MAX_LIFE=0.2)
+    async def test_the_stream_carries_rows_receipts_and_a_keystroke(self):
+        await sync_to_async(self._seed_thread)()
+
+        body = await self._drain(await self._client().get('/api/messages/sseb/stream/'))
+        # A stream opened a beat after the page fetch starts a few seconds back,
+        # so a message written inside that gap is carried rather than lost; the
+        # client merges by id and shows it once.
+        self.assertIn('event: chat', body)
+        self.assertIn('the answer', body)
+        self.assertIn('the one I sent', body)
+        self.assertIn('event: receipt', body)
+        self.assertIn('"state":"read"', body)
+        self.assertIn('event: typing', body)
+        self.assertIn('"by":"sseb"', body)
+
+    @override_settings(CHAT_SSE_INTERVAL=0.05, SSE_MAX_LIFE=0.5)
+    async def test_an_open_stream_is_a_reader_watching(self):
+        response = await self._client().get('/api/messages/sseb/stream/')
+        frames = response.streaming_content
+        await frames.__anext__()   # the retry line, before the first look
+        await frames.__anext__()   # one tick round: it proves the reader is here
+        self.assertTrue(is_watching(self.a.pk, self.b.pk))
+        # Running the stream out to the server's own close is what a browser's
+        # reconnect rides, and the flag has to lapse with it.
+        await self._drain_from(frames)
+        self.assertFalse(is_watching(self.a.pk, self.b.pk))
+
+    def test_a_message_to_a_watching_reader_rings_no_bell(self):
+        self.ca.post('/api/messages/sseb/', {'text': 'are you there'}, format='json')
+        rows = self.b.notifications.filter(kind='message')
+        self.assertEqual(rows.count(), 1)
+        rows.update(read_at=timezone.now())
+
+        mark_watching(self.b.pk, self.a.pk)
+        self.ca.post('/api/messages/sseb/', {'text': 'answer, not an alarm'}, format='json')
+        self.assertIsNotNone(rows.get().read_at)
+
+        stop_watching(self.b.pk, self.a.pk)
+        self.ca.post('/api/messages/sseb/', {'text': 'while you were out'}, format='json')
+        self.assertIsNone(rows.get().read_at)
+
+    def test_reading_the_thread_reads_its_bells(self):
+        self.ca.post('/api/messages/sseb/', {'text': 'ping'}, format='json')
+        self.cb.post('/api/messages/ssea/', {'text': 'pong'}, format='json')
+        resp = self.cb.post('/api/messages/ssea/read/')
+        self.assertEqual(resp.data['read'], 1)
+        self.assertEqual(resp.data['notifications'], 1)
+        self.assertIsNotNone(self.b.notifications.filter(kind='message').get().read_at)
+        # Reading a thread says nothing about the bells another person earned.
+        self.assertIsNone(self.a.notifications.filter(kind='message').get().read_at)

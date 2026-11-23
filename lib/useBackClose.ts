@@ -21,9 +21,12 @@ function bind() {
 }
 
 // Call before closing a layer as part of a route navigation so the cleanup
-// does not issue a history.back() that would undo the navigation.
-export function closeLayerWithoutBack() {
-  skipBack++;
+// does not issue a history.back() that would undo the navigation. One press can
+// take several layers with it — the popover and the picker it opened — and every
+// one of them would otherwise spend the same single pass, the last of them
+// walking straight back over the route the press asked for.
+export function closeLayerWithoutBack(count = stack.length) {
+  skipBack += count;
 }
 
 export function useBackClose(active: boolean, close: Closer) {

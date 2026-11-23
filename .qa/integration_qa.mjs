@@ -8,10 +8,12 @@
 import puppeteer from 'puppeteer-core';
 import { retryWrite } from './shots.mjs';
 
+// A second checkout runs its own pair of servers, so the suite has to be pointed
+// at them instead of assumed to belong to the one on :3000.
 const BASE = process.env.QA_BASE || 'http://localhost:3000';
-const OUT = 'D:/social_medial/.qa';
+const OUT = process.env.QA_OUT || 'D:/social_medial/.qa';
 const CHROME = 'C:/Program Files/Google/Chrome/Application/chrome.exe';
-const DEMO = { username: 'sita', password: 'exposing-demo-1' };
+const DEMO = { username: 'sita', email: 'sita@demo.test', password: 'exposing-demo-1' };
 
 const results = [];
 const ok = (name, pass, detail = '') => {
@@ -138,7 +140,7 @@ async function walk(page, sel, rounds = 8) {
 const d = await newPage({ width: 1440, height: 900 });
 
 // ---------------------------------------------------------------- sign in ----
-const landed = await signIn(d, DEMO.username, DEMO.password);
+const landed = await signIn(d, DEMO.email, DEMO.password);
 ok('desktop: the demo account signs in against /api/auth/', landed === '/', landed);
 const session = await api(d, '/api/sync/');
 ok('desktop: the session is the account that signed in', session.body?.me?.username === DEMO.username,
@@ -166,6 +168,10 @@ ok('desktop: reels come from the video keyset stream',
   reelSlides > 0 && reelVideos === reelSlides && reelSlides >= (reelPage.body?.results?.length || 0),
   `screen ${reelSlides} slides / ${reelVideos} videos, api ${reelPage.body?.results?.length} posts`);
 ok('desktop: the reel counter reads the server page', (await textOf(d, '.reel-count')).startsWith('1 / '));
+// Sorting a *person's* reels is a question about that person, so the words moved
+// to their profile: the page everybody scrolls has nothing to reorder.
+ok('desktop: the reels page carries no sort control',
+  (await count(d, '.reel-sort, .reel-filters, .profile-reel-sort')) === 0);
 await shot(d, 'intg-desktop-reels');
 
 // --------------------------------------------------------- post detail page ---
@@ -184,29 +190,32 @@ ok('desktop: a deep-linked post hydrates by id', deepText.length > 0 && deepText
   deepText.slice(0, 60));
 await shot(d, 'intg-desktop-post-deeplink');
 
-// The post page is a sheet the width of the screen, not a card floating on a
-// canvas: a band of page colour beside it is what the review called "the side
-// white lines". Only the words keep a measure.
-const bleed = await d.evaluate(() => {
+// The post is a card again, not a sheet: a centered column on the canvas with
+// the media inset inside it, rounded like every other card in the feed.
+const card = await d.evaluate(() => {
   const box = sel => { const el = document.querySelector(sel); if (!el) return null; const r = el.getBoundingClientRect(); return { x: Math.round(r.x), w: Math.round(r.width) }; };
-  const shell = document.querySelector('.shell');
-  return {
-    vw: window.innerWidth,
-    shell: box('.shell'), shellPadRight: getComputedStyle(shell).paddingRight,
-    main: box('.main'),
-    mosaic: box('.media-mosaic'),
-    caption: box('.post-caption')
-  };
+  const shell = box('.shell');
+  const mosaicEl = document.querySelector('.media-mosaic');
+  const mosaic = mosaicEl ? {
+    ...box('.media-mosaic'),
+    radius: getComputedStyle(mosaicEl).borderRadius,
+  } : null;
+  const caption = box('.post-caption');
+  const vw = window.innerWidth;
+  const leftGap = shell?.x ?? 0;
+  const rightGap = vw - (shell ? shell.x + shell.w : 0);
+  return { vw, shell, mosaic, caption, leftGap, rightGap };
 });
-ok('desktop: the post sheet runs edge to edge with no page colour beside it',
-  bleed.shell?.x === 0 && bleed.shell?.w === bleed.vw && bleed.main?.w === bleed.vw && bleed.shellPadRight === '0px',
-  JSON.stringify(bleed));
-ok('desktop: post media reaches both edges of the screen',
-  !bleed.mosaic || (bleed.mosaic.x === 0 && bleed.mosaic.w === bleed.vw),
-  JSON.stringify(bleed.mosaic));
-ok('desktop: the caption keeps a readable measure inside the full-width sheet',
-  !bleed.caption || (bleed.caption.w <= 800 && bleed.caption.x > 0),
-  JSON.stringify(bleed.caption));
+ok('desktop: the post page is a centered card on the canvas, not a sheet',
+  !!card.shell && card.shell.w <= 760 && card.leftGap > 40 && Math.abs(card.leftGap - card.rightGap) <= 8,
+  JSON.stringify(card));
+ok('desktop: post media sits inside the card in its rounded frame',
+  !card.mosaic || (card.mosaic.x > card.shell.x && card.mosaic.x + card.mosaic.w <= card.shell.x + card.shell.w
+    && card.mosaic.radius !== '0px'),
+  JSON.stringify(card.mosaic));
+ok('desktop: the caption keeps a readable measure inside the card',
+  !card.caption || (card.caption.w <= 760 && card.caption.x > 0),
+  JSON.stringify(card.caption));
 
 // -------------------------------------------------------------- comments ------
 const marker = `live-${Date.now().toString(36)}`;
@@ -301,6 +310,111 @@ ok('desktop: the followers list pages people with a cursor',
   `first ${followersFirst}, api page ${pageHandles.length}, walked ${followersAll}, server total ${followerTotal}`);
 await shot(d, 'intg-desktop-followers');
 
+// ------------------------------------------- a person's reels, on their profile ---
+// The shelf moved: what one visitor scrolls is everybody's feed, so the words
+// that decide which of *a person's* clips lead belong above their reels tab —
+// and they pick the order from the server's page, not from the rows this
+// visitor happened to have cached.
+const clipRows = (await api(d, '/api/posts/?media=video')).body?.results || [];
+let reelAuthor = null;
+let reelLatest = [];
+for (const candidate of [...new Set(clipRows.map(r => r.author_username))]) {
+  const rows = (await api(d, `/api/posts/?author=${candidate}&media=video`)).body?.results || [];
+  if (rows.length >= 3) { reelAuthor = candidate; reelLatest = rows; break; }
+}
+// "Most views" has to have something true to put on top, so the clip that sits
+// last in the newest-first page is watched past the leader through the endpoint
+// the player itself posts to. A shelf of all-zero tallies sorts to its tie-break,
+// and "the order changed" would be an accident of the data rather than a claim.
+const reelHead = reelLatest[reelLatest.length - 1];
+// The leader is whatever the server's own views page puts on top, which is every
+// clip the author has — not just the ten rows of the newest-first page.
+const reelTop = Number((await api(d, `/api/posts/?author=${reelAuthor}&media=video&order=views`)).body?.results?.[0]?.views || 0);
+for (let i = 0; i < reelTop - (reelHead?.views || 0) + 2; i++) {
+  await api(d, `/api/posts/${reelHead?.id}/view/`, { method: 'POST' });
+}
+const reelPages = async order => {
+  const q = order === 'latest' ? '' : `&order=${order}`;
+  const rows = (await api(d, `/api/posts/?author=${reelAuthor}&media=video${q}`)).body?.results || [];
+  return rows.flatMap(r => (r.media || []).filter(m => m.kind === 'video').map(m => m.url));
+};
+const openReelTab = async () => {
+  await goto(d, `/u/${reelAuthor}`);
+  await waitFor(d, '.tab');
+  await d.evaluate(() => {
+    const el = [...document.querySelectorAll('.tab')].find(t => /reel/i.test(t.textContent || ''));
+    el?.click();
+  });
+  const cells = await waitFor(d, '.profile-media-cell.reel-cell');
+  await sleep(1200);
+  return cells;
+};
+const shelf = () => d.evaluate(() => ({
+  words: [...document.querySelectorAll('.profile-reel-sort button')].map(el => el.textContent.trim()),
+  on: [...document.querySelectorAll('.profile-reel-sort button.on')].map(el => el.textContent.trim()),
+  srcs: [...document.querySelectorAll('.profile-media-cell.reel-cell video')].map(el => el.getAttribute('src') || ''),
+}));
+const pickWord = async label => {
+  // The shelf keeps the rows it had while the new page is in flight — a sort is a
+  // refresh, not a blank — so the word is only proven to have worked when the
+  // server's page for it has actually arrived.
+  const order = label === 'Most views' ? 'views' : label === 'Oldest' ? 'oldest' : '';
+  const arriving = d.waitForResponse(r => /\/api\/posts\?/.test(r.url())
+    && (order ? r.url().includes(`order=${order}`) : !/order=/.test(r.url())), { timeout: 15000 }).catch(() => null);
+  await d.evaluate(label => {
+    const el = [...document.querySelectorAll('.profile-reel-sort button')].find(b => b.textContent.trim() === label);
+    el?.click();
+  }, label);
+  await arriving;
+  await sleep(600);
+  return shelf();
+};
+/** The shelf shows the page the server chose, in that order, from the front. */
+const bare = u => (u || '').replace(/^[a-z]+:\/\/[^/]+/, '').split('?')[0];
+const onServerPage = (screen, page) => {
+  const want = (page || []).map(bare);
+  const got = (screen || []).map(bare);
+  return got.length > 0 && got.every((src, i) => src === want[i]);
+};
+ok('desktop: an author with a shelf of reels exists', !!reelAuthor && !!reelHead,
+  `${reelAuthor}, ${reelLatest.length} clips, head bumped to beat ${reelTop} views`);
+const shelfCells = await openReelTab();
+const asLatest = await shelf();
+const quiet = await d.evaluate(() => {
+  const el = document.querySelector('.profile-reel-sort button');
+  if (!el) return null;
+  const s = getComputedStyle(el);
+  return { size: parseFloat(s.fontSize), opacity: parseFloat(s.opacity),
+    bg: s.backgroundColor, height: Math.round(el.getBoundingClientRect().height) };
+});
+ok('desktop: the profile leads its reels with three quiet words',
+  asLatest.words.length === 3 && asLatest.on.length === 1 && shelfCells > 0
+  && quiet && quiet.size <= 13 && quiet.opacity < 1 && /rgba\(0, 0, 0, 0\)|transparent/.test(quiet.bg)
+  && quiet.height <= 26,
+  `${JSON.stringify(asLatest.words)} on ${JSON.stringify(asLatest.on)}, ${JSON.stringify(quiet)}`);
+ok('desktop: the shelf opens on the newest-first page',
+  onServerPage(asLatest.srcs, await reelPages('latest')), asLatest.srcs.slice(0, 3).join(' '));
+const viewsPage = await reelPages('views');
+const asViews = await pickWord('Most views');
+ok('desktop: "Most views" re-sorts the shelf onto its own page',
+  asViews.srcs.join(',') !== asLatest.srcs.join(',') && onServerPage(asViews.srcs, viewsPage),
+  `shelf ${asViews.srcs.slice(0, 2).map(bare)} vs page ${viewsPage.slice(0, 2).map(bare)} vs latest ${asLatest.srcs.slice(0, 2).map(bare)}`);
+// The first cell opens the clip it is standing in for, so the shelf's head can be
+// read off the route rather than from a filename two posts happen to share.
+await d.evaluate(() => document.querySelector('.profile-media-cell.reel-cell')?.click());
+await d.waitForFunction(() => /\/video\/|\/media\//.test(location.pathname), { timeout: 10000, polling: 200 }).catch(() => {});
+const headPath = await url(d);
+const headId = (headPath.match(/\/video\/(\d+)-/) || [])[1] || (headPath.match(/\/post\/(\d+)\//) || [])[1];
+ok('desktop: the watched clip now leads the shelf',
+  !!headId && headId === String(reelHead?.id), `${headPath} vs the clip with the most views, ${reelHead?.id}`);
+await openReelTab();
+const oldestPage = await reelPages('oldest');
+const asOldest = await pickWord('Oldest');
+ok('desktop: "Oldest" hands the shelf to the ascending page',
+  onServerPage(asOldest.srcs, oldestPage),
+  `shelf ${asOldest.srcs.slice(0, 2).map(bare)} vs page ${oldestPage.slice(0, 2).map(bare)}`);
+await shot(d, 'intg-desktop-profile-reels');
+
 // ----------------------------------------------------------------- search ----
 await goto(d, `/explore?q=${DEMO.username}`);
 await waitFor(d, '.search-view');
@@ -343,18 +457,27 @@ const seeded = await d.evaluate(async ([peer]) => {
 ok('desktop: twelve messages land on the thread endpoint', seeded.sent === 12, JSON.stringify(seeded));
 await goto(d, '/messages');
 await waitFor(d, '.inbox-row');
-const inboxTop = await textOf(d, '.inbox-row');
+// Mutuals no one has written to yet sit in a band above the threads, so "leads
+// with" means the first row that is a thread — the band lives in its own section.
+const inboxRows = await d.$$eval('.inbox-row', els => els.map(el => ({
+  text: (el.textContent || '').trim(),
+  band: !!el.closest('.inbox-suggested'),
+})));
+const firstThread = (inboxRows.find(r => !r.band) || {}).text || '';
+const inboxTop = inboxRows[0] ? inboxRows[0].text : '';
 // The row shows the display name, which need not contain the username.
-ok('desktop: the inbox leads with the conversation just written',
-  inboxTop.toLowerCase().includes(String(peerName).toLowerCase()), inboxTop.slice(0, 60));
+ok('desktop: the inbox leads its threads with the conversation just written',
+  firstThread.toLowerCase().includes(String(peerName).toLowerCase()),
+  `first thread row: ${firstThread.slice(0, 50)} | top row: ${inboxTop.slice(0, 50)}`);
 await goto(d, `/messages/${chatPeer}`);
 await waitFor(d, '.chat-bubble');
 await sleep(600);
 const firstPageBubbles = await count(d, '.chat-bubble');
 const olderBtn = await count(d, '.chat-older-btn');
+const lastBubble = await d.$$eval('.chat-bubble', els => (els[els.length - 1]?.textContent || '').trim());
 ok('desktop: the thread opens on the newest keyset page',
-  firstPageBubbles > 0 && firstPageBubbles <= 10 && olderBtn === 1,
-  `${firstPageBubbles} bubbles, load-more ${olderBtn}`);
+  olderBtn === 1 && firstPageBubbles >= 10 && firstPageBubbles <= 24 && lastBubble.includes('intg older 11'),
+  `${firstPageBubbles} bubbles, load-more ${olderBtn}, tail "${lastBubble.slice(-24)}"`);
 const scrollBefore = await d.evaluate(() => {
   const el = document.querySelector('.chat-thread');
   return el.scrollHeight - el.scrollTop;
@@ -415,7 +538,7 @@ await shot(d, 'intg-desktop-saved');
 
 // ------------------------------------------------------------------ mobile ----
 const m = await newPage({ width: 390, height: 844 }, true);
-await signIn(m, DEMO.username, DEMO.password);
+await signIn(m, DEMO.email, DEMO.password);
 await goto(m, '/');
 const mFeedFirst = await waitFor(m, 'article.post');
 const mFeedWalked = await walk(m, 'article.post');

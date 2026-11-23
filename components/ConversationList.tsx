@@ -15,6 +15,10 @@ interface ConversationListProps {
   activeId?: string;
 }
 
+// A handful of names, not a directory: the band is there to start a chat, and
+// the picker behind the pencil is where anybody else is.
+const BAND_ROWS = 6;
+
 /**
  * The inbox column: it is the whole messages screen below the top bar and the
  * left pane of the desktop messenger above it, so both keep one search box,
@@ -32,7 +36,11 @@ export default function ConversationList({ head, activeId }: ConversationListPro
   const shown = conversations.filter(c =>
     !needle || c.other.name.toLowerCase().includes(needle) || c.other.username.toLowerCase().includes(needle)
   );
-  const { limit, pending, sentinel, hasMore } = useWindowed(shown.length, 10, needle,
+  // The band is short on purpose: it is a starting point, and it has no history
+  // to page through. The threads below it window and paginate as before.
+  const band = shown.filter(c => c.suggested).slice(0, BAND_ROWS);
+  const threads = shown.filter(c => !c.suggested);
+  const { limit, pending, sentinel, hasMore } = useWindowed(threads.length, 10, needle,
     serverMode ? {
       hasMore: inbox.hasMore, loading: inbox.loading, load: inbox.loadMore,
       loaded: inbox.loaded, error: inbox.error, retry: inbox.reload,
@@ -89,22 +97,39 @@ export default function ConversationList({ head, activeId }: ConversationListPro
           </div>
         )
       ) : (
-        <div className="inbox-list">
-          {shown.slice(0, limit).map(c => (
-            <ConversationRow
-              key={c.other.id}
-              c={c}
-              active={c.other.id === activeId}
-              onOpen={openThread}
-            />
-          ))}
-          {pending && hasMore && (
-            <div className="people-skeleton inbox" aria-hidden="true">
-              <span className="sk-avatar" /><span className="sk-lines"><i /><i /></span>
-            </div>
+        <>
+          {band.length > 0 && (
+            <section className="inbox-suggested">
+              <h3 className="inbox-band-label">{t('mutualBand')}</h3>
+              <div className="inbox-list">
+                {band.map(c => (
+                  <ConversationRow
+                    key={c.other.id}
+                    c={c}
+                    active={c.other.id === activeId}
+                    onOpen={openThread}
+                  />
+                ))}
+              </div>
+            </section>
           )}
-          {hasMore && <div ref={sentinel} className="feed-sentinel" aria-hidden="true" />}
-        </div>
+          <div className="inbox-list">
+            {threads.slice(0, limit).map(c => (
+              <ConversationRow
+                key={c.other.id}
+                c={c}
+                active={c.other.id === activeId}
+                onOpen={openThread}
+              />
+            ))}
+            {pending && hasMore && (
+              <div className="people-skeleton inbox" aria-hidden="true">
+                <span className="sk-avatar" /><span className="sk-lines"><i /><i /></span>
+              </div>
+            )}
+            {hasMore && <div ref={sentinel} className="feed-sentinel" aria-hidden="true" />}
+          </div>
+        </>
       )}
 
       {picker && me && (

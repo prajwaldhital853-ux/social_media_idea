@@ -177,10 +177,13 @@ class Command(BaseCommand):
 
     # -------------------------------- purge -------------------------------
     def purge(self):
-        """Drop every generated row and every test member.
+        """Drop every generated row and every member this command created.
 
-        There is no production data to protect: this database is the demo. The
-        four members the browser suites sign in as are kept, and reset clean.
+        The rule for accounts is written on the row: a member the seeder made carries
+        ``seeded=True`` and goes, and one who signed up from a browser does not, no
+        matter which environment this runs in. That has to be the rule, because this
+        command is a deploy step — the first version of it deleted every real account
+        on every push, which is what an account disappearing actually looked like.
 
         The ledger's append-only rule is enforced by a database trigger, and a
         cascade from user deletion reaches it, so the trigger is muted for the
@@ -194,15 +197,19 @@ class Command(BaseCommand):
                               Promotion, Report, AuditLog, Notification, Message, Conversation,
                               Reaction, Comment, PostMedia, Post, Follow, Wallet):
                     model.objects.all().delete()
-                junk = User.objects.exclude(username__in=KEEP)
+                junk = User.objects.exclude(username__in=KEEP).filter(seeded=True)
                 count = junk.count()
                 junk.delete()
-                Profile.objects.all().delete()
-                User.objects.update(failed_attempts=0, locked_until=None, suspended_until=None,
-                                    suspend_reason='')
+                spared = User.objects.filter(seeded=False).count()
+                Profile.objects.filter(user__seeded=True).delete()
+                # Lockouts and suspensions are reset for the demo cast only. Wiping
+                # them for a real account here would undo a moderator's decision.
+                User.objects.filter(seeded=True).update(
+                    failed_attempts=0, locked_until=None, suspended_until=None, suspend_reason='')
                 cursor.execute('ALTER TABLE wallet_transaction ENABLE TRIGGER wallet_ledger_no_update')
                 cursor.execute('ALTER TABLE wallet_transaction ENABLE TRIGGER wallet_ledger_no_delete')
-        self.stdout.write(f'Purged {count} test members and all generated content.')
+        kept = f' {spared} signed-up accounts were left alone.' if spared else ''
+        self.stdout.write(f'Purged {count} seeded demo members and all generated content.{kept}')
 
     # ------------------------------- people -------------------------------
     def people(self):
@@ -214,6 +221,8 @@ class Command(BaseCommand):
             user.first_name, user.last_name = first, last
             user.city, user.country = city, 'Nepal'
             user.email, user.provider, user.email_verified = f'{username}@demo.test', 'email', True
+            # What tells a purge that this account is the demo's to delete.
+            user.seeded = True
             user.date_of_birth = datetime(1980 + (index * 7) % 22, (index % 12) + 1, (index % 27) + 1).date()
             if username == 'sita':
                 user.is_superuser = user.is_staff = True

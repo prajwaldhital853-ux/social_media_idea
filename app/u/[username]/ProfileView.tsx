@@ -32,6 +32,7 @@ export default function UserProfilePage() {
   const username = String(params.username || '');
   const user = db.users.find(u => u.username.toLowerCase() === username.toLowerCase());
   const [tab, setTab] = useState<'posts' | 'reels' | 'photos' | 'about' | 'listings'>('posts');
+  const [reelOrder, setReelOrder] = useState<'views' | 'latest' | 'oldest'>('latest');
   const [editing, setEditing] = useState(false);
   const [zoom, setZoom] = useState<{ src: string; caption: string } | null>(null);
   // Only the profile row knows the true totals; a paginated list holds no more
@@ -53,6 +54,15 @@ export default function UserProfilePage() {
     { path: '/marketplace/', frag: listingsFragment },
     { seller: username },
     serverMode && !!username && !locked,
+  );
+  // The reels tab is a shelf of its own, and the server orders it: "most views"
+  // over the rows this visitor happens to have scrolled past would be a sort of
+  // a fragment, and the grid would change shape as the page loads more.
+  const authorReels = useList(
+    'profile-reels',
+    { path: '/posts/', frag: postsFragment(me?.id || null) },
+    { author: username, media: 'video', order: reelOrder === 'latest' ? undefined : reelOrder },
+    serverMode && !!username && tab === 'reels',
   );
 
   useEffect(() => {
@@ -81,6 +91,12 @@ export default function UserProfilePage() {
   const { limit: postLimit, pending: postsPending, sentinel: postsSentinel, hasMore: morePosts } = useWindowed(
     posts.length, 10, user?.id,
     serverMode ? { hasMore: authorPosts.hasMore, loading: authorPosts.loading, load: authorPosts.loadMore } : undefined,
+  );
+  // The reels grid pages on its own list rather than on the posts the reader has
+  // scrolled past, so an author with a hundred reels is not cut off at page one.
+  const { limit: reelLimit, sentinel: reelsSentinel, hasMore: moreReels } = useWindowed(
+    authorReels.ids.length, 12, `${username}:${reelOrder}`,
+    serverMode ? { hasMore: authorReels.hasMore, loading: authorReels.loading, load: authorReels.loadMore } : undefined,
   );
 
   if (!user) {
@@ -122,6 +138,24 @@ export default function UserProfilePage() {
   // demo data is editable straight from localStorage, so render re-validates.
   const aboutLinks = (user.links || []).map(l => ({ ...l, url: safeUrl(l.url) })).filter((l): l is { label: string; url: string } => !!l.url);
   const mediaItems = posts.flatMap(p => p.media.map((m, index) => ({ m, index, post: p })));
+  // One cell per moving picture this author owns, in the order the reader picked.
+  // Only the demo build sorts: its rows arrive in one order and the words are the
+  // reader's, so the shelf has to re-lay them. The server build must not, because
+  // its paginator breaks a tie its own way — equal tallies oldest-first — and a
+  // second sort here would scramble what the cursor was built on.
+  const reelCells = (() => {
+    const index = new Map(db.posts.map(p => [p.id, p] as [string, Post]));
+    const rows = serverMode
+      ? authorReels.ids.map(id => index.get(id)).filter((p): p is Post => !!p)
+      : db.posts.filter(p => p.uid === user.id && p.status === 'live'
+          && canSeePost(p, me?.id ?? null, db.follows, privateIds(db.users)));
+    const cells = rows.flatMap(p => (p.media || [])
+      .map((m, i) => ({ m, index: i, post: p }))
+      .filter(c => c.m.type === 'video'));
+    return serverMode ? cells : cells.sort((a, b) => (reelOrder === 'views'
+      ? (b.post.views ?? 0) - (a.post.views ?? 0) || b.post.ts - a.post.ts
+      : reelOrder === 'oldest' ? a.post.ts - b.post.ts : b.post.ts - a.post.ts));
+  })();
   const userListings = serverMode
     ? authorListings.ids
         .map(id => db.listings.find(l => l.id === id))
@@ -303,24 +337,49 @@ export default function UserProfilePage() {
         )}
 
         {tab === 'reels' && (
-          mediaItems.filter(({ m }) => m.type === 'video').length === 0 ? (
-            <p className="feed-empty">{t('noPosts')}</p>
+          reelCells.length === 0 ? (
+            // The shelf asks for its own page, so the first beat of it is empty
+            // for a real reason: a grid holding its shape says "loading", while
+            // "no reels yet" would only ever be true once the page has answered.
+            serverMode && !authorReels.loaded ? (
+              <div className="profile-media-grid" aria-hidden="true">
+                {[0, 1, 2, 3, 4, 5].map(i => <div className="sk-block profile-reel-sk" key={i} />)}
+              </div>
+            ) : (
+              <p className="feed-empty">{t('noPosts')}</p>
+            )
           ) : (
-            <div className="profile-media-grid">
-              {mediaItems.filter(({ m }) => m.type === 'video').map(({ m, index, post }) => (
-                <button
-                  type="button"
-                  className="profile-media-cell reel-cell"
-                  key={`${post.id}-${index}`}
-                  aria-label={`${t('reels')} by ${user.name}`}
-                  onClick={() => openMedia(post.id, index, post.media.length === 1)}
-                >
-                  <video src={m.src} muted preload="metadata" playsInline />
-                  <span className="profile-media-play">{IC.video}</span>
-                  {(post.views ?? 0) > 0 && <span className="profile-cell-views">{compact(post.views ?? 0)}</span>}
-                </button>
-              ))}
-            </div>
+            <>
+              <div className="profile-reel-sort" role="group" aria-label={t('sortReels')}>
+                {([['views', t('mostViewed')], ['latest', t('latest')], ['oldest', t('oldest')]] as ['views' | 'latest' | 'oldest', string][]).map(([key, label]) => (
+                  <button
+                    key={key}
+                    type="button"
+                    className={reelOrder === key ? 'on' : ''}
+                    aria-pressed={reelOrder === key}
+                    onClick={() => setReelOrder(key)}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <div className="profile-media-grid">
+                {(serverMode ? reelCells.slice(0, reelLimit) : reelCells).map(({ m, index, post }) => (
+                  <button
+                    type="button"
+                    className="profile-media-cell reel-cell"
+                    key={`${post.id}-${index}`}
+                    aria-label={`${t('reels')} by ${user.name}`}
+                    onClick={() => openMedia(post.id, index, post.media.length === 1)}
+                  >
+                    <video src={m.src} muted preload="metadata" playsInline />
+                    <span className="profile-media-play">{IC.video}</span>
+                    {(post.views ?? 0) > 0 && <span className="profile-cell-views">{compact(post.views ?? 0)}</span>}
+                  </button>
+                ))}
+              </div>
+              {moreReels && <div ref={reelsSentinel} className="feed-sentinel" aria-hidden="true" />}
+            </>
           )
         )}
 
@@ -351,33 +410,58 @@ export default function UserProfilePage() {
               <p>{user.bio || t('noBio')}</p>
             </div>
             <div className="about-card">
-              <h2>{IC.globe}{t('about')}</h2>
+              <h2>{IC.calendar}{t('aboutBasic')}</h2>
               <dl className="about-list">
                 {location && <div><dt>{IC.globe}{t('city')}</dt><dd>{location}</dd></div>}
                 <div><dt>{IC.calendar}{t('joined')}</dt><dd>{joinedLabel}</dd></div>
-                {user.dob && <div><dt>{IC.calendar}{t('dob')}</dt><dd>{new Date(user.dob).toLocaleDateString(db.lang === 'ne' ? 'ne-NP' : 'en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}</dd></div>}
-                {phoneUrl && (
-                  <div>
-                    <dt>{IC.phone}{t('phone')}</dt>
-                    <dd><a className="about-link" href={phoneUrl}>{user.phone}</a></dd>
-                  </div>
-                )}
-                {websiteUrl && (
-                  <div>
-                    <dt>{IC.globe}{t('website')}</dt>
-                    <dd><a className="about-link" href={websiteUrl} target="_blank" rel="noopener noreferrer">{websiteUrl.replace(/^https?:\/\//, '')}</a></dd>
-                  </div>
-                )}
-                {aboutLinks.map(l => (
-                  <div key={l.url}>
-                    <dt>{IC.link}{l.label}</dt>
-                    <dd><a className="about-link" href={l.url} target="_blank" rel="noopener noreferrer">{l.url.replace(/^https?:\/\//, '')}</a></dd>
-                  </div>
-                ))}
-                <div><dt>{IC.img}{t('postsCount')}</dt><dd>{posts.length}</dd></div>
-                <div><dt>{IC.users}{t('followers')}</dt><dd>{countFollowers}</dd></div>
-                <div><dt>{IC.users}{t('followingCount')}</dt><dd>{countFollowing}</dd></div>
+                {user.dob && <div><dt>{IC.smile}{t('dob')}</dt><dd>{new Date(user.dob).toLocaleDateString(db.lang === 'ne' ? 'ne-NP' : 'en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}</dd></div>}
               </dl>
+            </div>
+            {(phoneUrl || websiteUrl) && (
+              <div className="about-card">
+                <h2>{IC.phone}{t('aboutContact')}</h2>
+                <dl className="about-list">
+                  {phoneUrl && (
+                    <div>
+                      <dt>{IC.phone}{t('phone')}</dt>
+                      <dd><a className="about-link" href={phoneUrl}>{user.phone}</a></dd>
+                    </div>
+                  )}
+                  {websiteUrl && (
+                    <div>
+                      <dt>{IC.globe}{t('website')}</dt>
+                      <dd><a className="about-link" href={websiteUrl} target="_blank" rel="noopener noreferrer">{websiteUrl.replace(/^https?:\/\//, '')}</a></dd>
+                    </div>
+                  )}
+                </dl>
+              </div>
+            )}
+            {aboutLinks.length > 0 && (
+              <div className="about-card">
+                <h2>{IC.link}{t('aboutLinksTitle')}</h2>
+                <dl className="about-list">
+                  {aboutLinks.map(l => (
+                    <div key={l.url}>
+                      <dt>{IC.link}{l.label}</dt>
+                      <dd><a className="about-link" href={l.url} target="_blank" rel="noopener noreferrer">{l.url.replace(/^https?:\/\//, '')}</a></dd>
+                    </div>
+                  ))}
+                </dl>
+              </div>
+            )}
+            <div className="about-card about-stats">
+              <div className="about-stat">
+                <b>{posts.length}</b>
+                <span>{t('postsCount')}</span>
+              </div>
+              <div className="about-stat">
+                <b>{countFollowers}</b>
+                <span>{t('followers')}</span>
+              </div>
+              <div className="about-stat">
+                <b>{countFollowing}</b>
+                <span>{t('followingCount')}</span>
+              </div>
             </div>
             {followingList.length > 0 && (
               <div className="about-card">

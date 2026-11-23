@@ -43,7 +43,7 @@ async function signIn(identifier) {
   await sleep(900);
 }
 
-await signIn('sita');
+await signIn('sita@demo.test');
 await goto('/');
 await sleep(2000);
 const snap = () => page.evaluate(() => [...document.querySelectorAll('article.post')].slice(0, 12).map(a => ({

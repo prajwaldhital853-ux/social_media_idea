@@ -80,7 +80,7 @@
     {
       "name": "desktop: the bell opens an activity box over the canvas",
       "pass": true,
-      "detail": "{\"rows\":10,\"groups\":[\"New\",\"Earlier\"],\"tabs\":[\"All\",\"Unread (1)\"],\"foot\":\"See all notifications\",\"right\":1380,\"top\":60,\"w\":380,\"bg\":\"rgb(11, 12, 14)\"}"
+      "detail": "{\"rows\":10,\"groups\":[\"Earlier\"],\"tabs\":[\"All\",\"Unread\"],\"foot\":\"See all notifications\",\"right\":1380,\"top\":60,\"w\":380,\"bg\":\"rgb(11, 12, 14)\"}"
     },
     {
       "name": "desktop: the Unread tab filters the popover to unread rows",
@@ -95,7 +95,7 @@
     {
       "name": "desktop: a popover row navigates and closes the popover",
       "pass": true,
-      "detail": "{\"path\":\"/u/arjun\",\"panel\":false}"
+      "detail": "{\"path\":\"/messages/mingma\",\"panel\":false}"
     },
     {
       "name": "desktop: the message icon opens a thread list at the top of the page",
@@ -115,7 +115,7 @@
     {
       "name": "desktop: picking a thread opens it beside the inbox, not over it",
       "pass": true,
-      "detail": "{\"path\":\"/messages/deepa\",\"chat\":true,\"bubbles\":10,\"compose\":true,\"backHidden\":true,\"stillListed\":10,\"activeRow\":true}"
+      "detail": "{\"path\":\"/messages/arjun\",\"chat\":true,\"bubbles\":10,\"compose\":true,\"backHidden\":true,\"stillListed\":10,\"activeRow\":true}"
     },
     {
       "name": "desktop: the thread hides the mobile back button on desktop",
@@ -125,7 +125,7 @@
     {
       "name": "desktop: sending from the messenger pane appends the bubble",
       "pass": true,
-      "detail": "{\"before\":10,\"after\":12,\"last\":\"Qoder phase 9 check\"}"
+      "detail": "{\"before\":10,\"after\":11,\"last\":\"Qoder phase 9 check\"}"
     },
     {
       "name": "desktop: browser back steps out of the thread to the inbox",
@@ -140,17 +140,17 @@
     {
       "name": "mobile: the inbox stays a single column with no thread pane",
       "pass": true,
-      "detail": "{\"rows\":10,\"mainHidden\":true,\"topbarHidden\":true,\"search\":true,\"head\":true,\"waitedMs\":2908}"
+      "detail": "{\"rows\":10,\"mainHidden\":true,\"topbarHidden\":true,\"search\":true,\"head\":true,\"waitedMs\":535}"
     },
     {
       "name": "mobile: a thread is still full width with its back button",
       "pass": true,
-      "detail": "{\"path\":\"/messages/deepa\",\"chatW\":390,\"sideHidden\":true,\"backShown\":true,\"compose\":true}"
+      "detail": "{\"path\":\"/messages/arjun\",\"chatW\":390,\"sideHidden\":true,\"backShown\":true,\"compose\":true}"
     },
     {
       "name": "mobile: the feed keeps its own sheet and loads posts",
       "pass": true,
-      "detail": "{\"bg\":\"rgb(255, 255, 255)\",\"posts\":6,\"waitedMs\":201}"
+      "detail": "{\"bg\":\"rgb(255, 255, 255)\",\"posts\":10,\"waitedMs\":192}"
     },
     {
       "name": "mobile: the For you / Following band thins on scroll without losing its place",

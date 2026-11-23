@@ -78,7 +78,7 @@ const sendFromCompose = async page => {
 if (MODE === 'api') {
   const A = await launch();
   const B = await launch();
-  await signIn(A.page, 'sita');
+  await signIn(A.page, 'sita@demo.test');
   await goto(A.page, '/messages/arjun');
   await sleep(1200);
   await sendFromCompose(A.page);

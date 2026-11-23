@@ -11,10 +11,12 @@ from apps.accounts.models import User
 from apps.common.api import person
 from apps.common.pagination import KeysetPagination, decode_cursor
 from apps.follows.models import Follow
+from apps.notifications.models import Notification
 from apps.notifications.services import notify_latest
 
 from .models import Conversation, Message
 from .consumer import broadcast_message, broadcast_read
+from .presence import is_watching, note_typing
 
 
 class MessageSerializer(serializers.ModelSerializer):
@@ -113,7 +115,11 @@ def thread(request, username):
         with transaction.atomic():
             message = Message.objects.create(conversation=conversation, sender=request.user, text=text)
             Conversation.objects.filter(pk=conversation.pk).update(last_message_at=message.created_at)
-        notify_latest(other, request.user, 'message', f'{request.user.username} sent you a message.', 'user', request.user.pk)
+        # A bell for a message the reader is watching happen is a second ping for
+        # one event, and the one they did not ask for. Only whoever is away gets
+        # told; whoever is here already sees the bubble land.
+        if not is_watching(other.pk, request.user.pk):
+            notify_latest(other, request.user, 'message', f'{request.user.username} sent you a message.', 'user', request.user.pk)
         broadcast_message(message, [request.user.pk, other.pk])
         return Response(MessageSerializer(message).data, status=status.HTTP_201_CREATED)
     conversation = Conversation.objects.filter(participants=request.user).filter(participants=other).first()
@@ -149,6 +155,27 @@ def mark_read(request, username):
         return Response({'read': 0})
     _mark_delivered(conversation, request.user)
     count = conversation.messages.filter(sender=other, read_at__isnull=True).update(read_at=timezone.now())
+    # Reading the thread reads the bells it came from. Without this the same
+    # message sits in the tray as "new" after the reader has already answered it
+    # — and anyone who arrived from the profile, not the tray, never clears it.
+    notifications = Notification.objects.filter(
+        recipient=request.user, actor=other, kind='message', read_at__isnull=True,
+    ).update(read_at=timezone.now())
     if count:
         broadcast_read(request.user.pk, [request.user.pk, other.pk], count)
-    return Response({'read': count})
+    return Response({'read': count, 'notifications': notifications})
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def typing(request, username):
+    """A keystroke, aimed at one thread. Nothing to answer and nothing to keep.
+
+    The socket carries this for free when it is open; this is the same tell for
+    every client whose handshake never made it through the proxy in front of the
+    app, and it is deliberately cheap: one cache write, no row, no fan-out.
+    """
+    other = get_object_or_404(User, username=username)
+    if other.pk != request.user.pk:
+        note_typing(request.user.pk, other.pk)
+    return Response({'ok': True})

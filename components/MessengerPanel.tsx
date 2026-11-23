@@ -12,6 +12,8 @@ import { IC } from '@/lib/icons';
 
 // The popover is a jump list, not the inbox: twelve threads, then the screen.
 const PANEL_ROWS = 12;
+// Three names from the band, so the conversations already running keep the rest.
+const PANEL_BAND = 3;
 
 export default function MessengerPanel({ close }: { close: () => void }) {
   const router = useRouter();
@@ -21,9 +23,11 @@ export default function MessengerPanel({ close }: { close: () => void }) {
   const { conversations, inbox } = useInbox();
 
   const needle = q.trim().toLowerCase();
-  const shown = conversations.filter(c =>
+  const matching = conversations.filter(c =>
     !needle || c.other.name.toLowerCase().includes(needle) || c.other.username.toLowerCase().includes(needle)
-  ).slice(0, PANEL_ROWS);
+  );
+  const band = matching.filter(c => c.suggested).slice(0, PANEL_BAND);
+  const shown = [...band, ...matching.filter(c => !c.suggested)].slice(0, PANEL_ROWS);
 
   const go = (username: string) => {
     closeLayerWithoutBack();

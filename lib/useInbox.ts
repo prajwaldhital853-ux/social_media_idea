@@ -2,27 +2,28 @@
 
 import { useMemo } from 'react';
 import { useApp } from './AppContext';
-import { idOf } from './dto';
-import { inboxFragment, useList } from './lists';
+import { inboxListDef, useList } from './lists';
 import { Message, User } from './types';
 
 export interface Conversation {
   other: User;
   last: Message | null;
   unread: number;
+  /** A mutual follow with no thread yet, from the band above the conversations. */
+  suggested?: boolean;
 }
 
 /**
- * The inbox the messages screen and the top-bar popover both need: one row per
- * thread, newest activity first, and the mutuals you have never written to kept
- * below the real conversations so a fresh match is still one tap away.
+ * The inbox the messages screen and the top-bar popover both need: the mutual
+ * follows you have not written to as one band on top, then one row per thread,
+ * newest activity first.
  */
 export function useInbox(enabled = true): { conversations: Conversation[]; inbox: ReturnType<typeof useList> } {
   const { db, me, mutualIds, serverMode } = useApp();
 
   const inbox = useList(
     'inbox',
-    { path: '/messages/inbox/', frag: inboxFragment(me?.id || ''), ids: rows => rows.map(row => idOf(row.user && row.user.id)) },
+    inboxListDef(me?.id || ''),
     undefined,
     serverMode && !!me && enabled,
   );
@@ -39,9 +40,10 @@ export function useInbox(enabled = true): { conversations: Conversation[]; inbox
         const current = last.get(otherId);
         if (!current || m.ts >= current.ts) last.set(otherId, m);
       }
-      // Mutuals you have never written to are the tail of the inbox, and only
-      // once the real threads have arrived: before that they would sit on top
-      // of a list that is about to appear above them.
+      // Two people who follow each other belong in the messages column whether or
+      // not they have spoken: the band on top is where a first hello starts. Only
+      // once the real threads have arrived — before that it would sit above a
+      // list that is about to appear on top of it.
       const talked = new Set(inbox.ids);
       const rows = inbox.ids
         .map(id => {
@@ -55,10 +57,10 @@ export function useInbox(enabled = true): { conversations: Conversation[]; inbox
             .filter(id => !talked.has(id))
             .map(id => db.users.find(u => u.id === id))
             .filter((u): u is User => !!u)
-            .map(other => ({ other, last: null, unread: 0 }))
+            .map(other => ({ other, last: null, unread: 0, suggested: true }))
             .sort((a, b) => a.other.name.localeCompare(b.other.name))
         : [];
-      return [...rows, ...fresh];
+      return [...fresh, ...rows];
     }
     const byOther = new Map<string, Message[]>();
     for (const m of db.messages) {
@@ -78,9 +80,11 @@ export function useInbox(enabled = true): { conversations: Conversation[]; inbox
     for (const id of mutualIds()) {
       if (byOther.has(id)) continue;
       const other = db.users.find(u => u.id === id);
-      if (other) out.push({ other, last: null, unread: 0 });
+      if (other) out.push({ other, last: null, unread: 0, suggested: true });
     }
-    return out.sort((a, b) => (b.last?.ts ?? 0) - (a.last?.ts ?? 0) || a.other.name.localeCompare(b.other.name));
+    // One order for both builds: the band above the threads, threads by activity.
+    return out.sort((a, b) => Number(!!b.suggested) - Number(!!a.suggested)
+      || (b.last?.ts ?? 0) - (a.last?.ts ?? 0) || a.other.name.localeCompare(b.other.name));
   }, [db.messages, db.users, db.follows, me, inbox.ids, serverMode]);
 
   return { conversations, inbox };

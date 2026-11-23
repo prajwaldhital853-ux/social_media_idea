@@ -43,7 +43,7 @@ async function signIn(identifier) {
   await sleep(900);
 }
 
-await signIn('sita');
+await signIn('sita@demo.test');
 await goto('/');
 await sleep(1200);
 
