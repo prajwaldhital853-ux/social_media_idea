@@ -242,6 +242,10 @@ a:focus:not(:focus-visible) {
   gap: 8px;
 }
 
+/* The one break in the column sits under the list, above the button that asks
+   for a new post — not cut into the middle of the nav. */
+.rail-foot .post-btn { margin-top: 18px; }
+
 .rail-bottom {
   display: flex;
   flex-direction: column;
