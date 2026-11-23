@@ -58,6 +58,10 @@ async function gisId(clientId: string) {
       // Without this flag GIS shows its own One Tap overlay, which mobile browsers
       // suppress outright — the click looked like it did nothing.
       use_fedcm_for_prompt: true,
+      // Both flags, because this is a button the visitor pressed and not a page that
+      // displayed itself. One Tap keeps a per-day cooldown and goes quiet after a
+      // dismissal; the button path is the one Google says to use for a click.
+      use_fedcm_for_button: true,
       callback: (response: any) => {
         const hand = pending;
         pending = null;
