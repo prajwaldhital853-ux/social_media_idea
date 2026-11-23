@@ -144,7 +144,9 @@ CHAT_SSE_INTERVAL = float(os.environ.get('EXPOSING_CHAT_SSE_INTERVAL') or '1')
 # ending one every five minutes costs the reader nothing, and an hour-long hold
 # no longer outlives a deploy.
 SSE_MAX_LIFE = float(os.environ.get('EXPOSING_SSE_MAX_LIFE') or '300')
-SSE_STREAMS_PER_USER = int(os.environ.get('EXPOSING_SSE_STREAMS') or '3')
+# Notifications and chat each hold one stream per tab, so three tabs is the
+# ordinary desk: a cap of three refused the fourth tab mid-demo.
+SSE_STREAMS_PER_USER = int(os.environ.get('EXPOSING_SSE_STREAMS') or '8')
 WS_SOCKETS_PER_USER = int(os.environ.get('EXPOSING_WS_SOCKETS') or '8')
 
 DATABASES = {'default': _database()}

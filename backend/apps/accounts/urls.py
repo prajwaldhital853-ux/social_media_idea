@@ -13,4 +13,6 @@ urlpatterns = [
     path('auth/unlock/confirm/', views.unlock_confirm),
     path('auth/google/', views.google),
     path('auth/me/', views.me),
+    path('auth/delete/request/', views.account_delete_request),
+    path('auth/delete/confirm/', views.account_delete_confirm),
 ]

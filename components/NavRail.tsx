@@ -32,37 +32,47 @@ export default function NavRail() {
             <span>{item.label}</span>
           </Link>
         ))}
+      </nav>
 
+      <div className="rail-foot">
         <button type="button" className="nav-item" onClick={openDrawer}>
           {IC.menu}
           <span>{t('more')}</span>
         </button>
-      </nav>
+        <Link href="/wallet" className={`nav-item ${pathname.startsWith('/wallet') ? 'active' : ''}`}>
+          {IC.wallet}
+          <span>{t('wallet')}</span>
+        </Link>
+        <Link href="/settings" className={`nav-item ${pathname.startsWith('/settings') ? 'active' : ''}`}>
+          {IC.gear}
+          <span>{t('settings')}</span>
+        </Link>
 
-      <button 
-        type="button" 
-        className="post-btn" 
-        onClick={() => me ? openCreateChooser() : router.push('/login')}
-      >
-        {IC.plus}
-        <span>{t('post')}</span>
-      </button>
+        <button
+          type="button"
+          className="post-btn"
+          onClick={() => me ? openCreateChooser() : router.push('/login')}
+        >
+          {IC.plus}
+          <span>{t('post')}</span>
+        </button>
 
-      <div className="rail-bottom">
-        {me && (
-          <div className="rail-user">
-            <Link href={`/u/${me.username}`} className="rail-user-link">
-              <Avatar user={me} size={40} />
-              <span className="rail-user-meta">
-                <span className="rail-user-name">{me.name || me.username}</span>
-                <span className="rail-user-handle">@{me.username}</span>
-              </span>
-            </Link>
-            <button type="button" className="icon-btn" onClick={logout} aria-label={t('logout')} title={t('logout')}>
-              {IC.logout}
-            </button>
-          </div>
-        )}
+        <div className="rail-bottom">
+          {me && (
+            <div className="rail-user">
+              <Link href={`/u/${me.username}`} className="rail-user-link">
+                <Avatar user={me} size={40} />
+                <span className="rail-user-meta">
+                  <span className="rail-user-name">{me.name || me.username}</span>
+                  <span className="rail-user-handle">@{me.username}</span>
+                </span>
+              </Link>
+              <button type="button" className="icon-btn" onClick={logout} aria-label={t('logout')} title={t('logout')}>
+                {IC.logout}
+              </button>
+            </div>
+          )}
+        </div>
       </div>
     </aside>
   );

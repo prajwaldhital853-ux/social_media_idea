@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import Link from 'next/link';
 import AppShell from '@/components/AppShell';
 import Avatar from '@/components/Avatar';
@@ -14,6 +14,7 @@ import { IC } from '@/lib/icons';
 export default function SettingsPage() {
   const { db, me, t, theme, toggleTheme, updateLang, setDb, showToast, showConfirm, logout, updateProfile, serverMode, ready } = useApp();
   const [editing, setEditing] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   if (!me) {
     return (
@@ -163,6 +164,17 @@ export default function SettingsPage() {
           </nav>
         </section>
 
+        <section className="settings-card settings-danger">
+          <h2>{t('dangerZone')}</h2>
+          <div className="settings-row">
+            <span className="settings-row-copy">
+              <b>{t('deleteAccount')}</b>
+              <small>{t('deleteAccountHint')}</small>
+            </span>
+            <button type="button" className="ghost-btn delete-account-btn" onClick={() => setDeleting(true)}>{t('deleteAccount')}</button>
+          </div>
+        </section>
+
         {!serverMode && (
           <section className="settings-card">
             <h2>{t('resetDemo')}</h2>
@@ -177,6 +189,122 @@ export default function SettingsPage() {
       </div>
 
       {editing && <EditProfileModal onClose={() => setEditing(false)} />}
+      {deleting && me && <DeleteAccountModal onClose={() => setDeleting(false)} />}
     </AppShell>
+  );
+}
+
+/**
+ * Two steps stand between a curious tap and a deleted account: the word the
+ * reader has to type, and a code the server mails to the address on file.
+ */
+function DeleteAccountModal({ onClose }: { onClose: () => void }) {
+  const { me, t, serverMode, showToast, requestAccountDeletion, confirmAccountDeletion } = useApp();
+  const [word, setWord] = useState('');
+  const [step, setStep] = useState<'word' | 'code'>('word');
+  const [challenge, setChallenge] = useState<number>(0);
+  const [devCode, setDevCode] = useState('');
+  const [code, setCode] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const codeRef = useRef<HTMLInputElement>(null);
+
+  const armed = word.trim().toUpperCase() === 'DELETE';
+
+  const askForCode = async () => {
+    if (!armed) return;
+    setBusy(true);
+    setError('');
+    try {
+      if (!serverMode) {
+        await confirmAccountDeletion(0, '');
+        return;
+      }
+      const read = await requestAccountDeletion('DELETE');
+      if (!read?.challenge) {
+        setError(read?.detail || 'The server did not start the deletion. Try again.');
+        return;
+      }
+      setChallenge(read.challenge);
+      setDevCode(read.dev_code || '');
+      setStep('code');
+      showToast(t('deleteCodeSent').replace('{email}', me?.email || ''));
+      setTimeout(() => codeRef.current?.focus(), 60);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'The deletion could not be started.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const finish = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (code.trim().length < 4) {
+      setError('Enter the code from the email.');
+      return;
+    }
+    setBusy(true);
+    setError('');
+    try {
+      await confirmAccountDeletion(challenge, code.trim());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'That code did not go through.');
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="modal-overlay" onClick={busy ? undefined : onClose}>
+      <div className="modal-content delete-account-modal" onClick={e => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={t('deleteAccount')}>
+        <div className="modal-header">
+          <b>{t('deleteAccount')}</b>
+          <button type="button" className="modal-close" onClick={onClose} aria-label={t('close')} disabled={busy}>{IC.x}</button>
+        </div>
+
+        {step === 'word' ? (
+          <div className="delete-account-body">
+            <p className="delete-account-warning">{t('deleteAccountHint')}</p>
+            <label className="field">
+              <span>{t('deleteTypeHint')}</span>
+              <input
+                type="text"
+                value={word}
+                autoFocus
+                autoComplete="off"
+                spellCheck={false}
+                placeholder="DELETE"
+                onChange={e => setWord(e.target.value)}
+              />
+            </label>
+            {error && <p className="form-error" role="alert">{error}</p>}
+            <button type="button" className="promote-submit delete-account-submit" disabled={!armed || busy} onClick={() => { void askForCode(); }}>
+              {busy ? '…' : t('deleteConfirm')}
+            </button>
+          </div>
+        ) : (
+          <form className="delete-account-body" onSubmit={finish}>
+            <p className="delete-account-warning">{t('deleteCodeSent').replace('{email}', me?.email || '')}</p>
+            <label className="field">
+              <span>{t('deleteCodeTitle')}</span>
+              <input
+                ref={codeRef}
+                type="text"
+                inputMode="numeric"
+                value={code}
+                maxLength={6}
+                autoComplete="one-time-code"
+                onChange={e => setCode(e.target.value.replace(/\D/g, ''))}
+              />
+              <small className="field-count">{t('deleteCodeHint')}</small>
+            </label>
+            {devCode && <p className="settings-hint">Demo code: <b>{devCode}</b></p>}
+            {error && <p className="form-error" role="alert">{error}</p>}
+            <button type="submit" className="promote-submit delete-account-submit" disabled={busy}>
+              {busy ? '…' : t('deleteConfirm')}
+            </button>
+          </form>
+        )}
+      </div>
+    </div>
   );
 }
