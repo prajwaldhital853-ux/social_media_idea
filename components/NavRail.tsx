@@ -32,14 +32,13 @@ export default function NavRail() {
             <span>{item.label}</span>
           </Link>
         ))}
+      </nav>
 
+      <div className="rail-foot">
         <button type="button" className="nav-item" onClick={openDrawer}>
           {IC.menu}
           <span>{t('more')}</span>
         </button>
-      </nav>
-
-      <div className="rail-foot">
         <Link href="/wallet" className={`nav-item ${pathname.startsWith('/wallet') ? 'active' : ''}`}>
           {IC.wallet}
           <span>{t('wallet')}</span>
