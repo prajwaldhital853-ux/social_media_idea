@@ -1,15 +1,16 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
 import Banner from '@/components/Banner';
 import ConsoleShell from '@/components/ConsoleShell';
-import { Act, Chips, More } from '@/components/List';
+import { ActLink, Chips, More } from '@/components/List';
 import { api } from '@/lib/api';
 import { num } from '@/lib/format';
 import { IC } from '@/lib/icons';
 import { ago, stamp } from '@/lib/time';
 import { useSession } from '@/lib/session';
-import { CoinAsk, CoinDetail, CoinPage, LedgerPage, ProofLink } from '@/lib/types';
+import { CoinAsk, CoinPage } from '@/lib/types';
 
 /**
  * Contract 6.7 — the coin desk. Somebody has already sent real rupees and is
@@ -102,24 +103,6 @@ export default function CoinsPage() {
     }
   };
 
-  const settle = async (id: number, verb: string, reason: string) => {
-    const out = await api<{ detail: string; request: CoinAsk }>(`admin/coins/${id}/${verb}/`, {
-      method: 'POST', body: { reason },
-    });
-    setRows(list => (list || []).map(row => (row.id === id ? out.request : row)));
-    setPage(current => (current ? {
-      ...current,
-      counts: {
-        ...current.counts,
-        pending: current.counts.pending + (out.request.status === 'pending' ? 0 : -1),
-        approved: current.counts.approved + (out.request.status === 'approved' ? 1 : 0),
-        rejected: current.counts.rejected + (out.request.status === 'rejected' ? 1 : 0),
-      },
-    } : current));
-    setBanner({ kind: 'ok', text: out.detail });
-    return out;
-  };
-
   return (
     <ConsoleShell
       title="Coin requests"
@@ -210,12 +193,7 @@ export default function CoinsPage() {
                 <th style={{ width: '6%' }} aria-label="Actions"/>
               </tr>
             </thead>
-            {rows.map(row => (
-              <Ask
-                key={row.id} row={row} canReview={review} busy={busy}
-                settle={settle} onReask={load}
-              />
-            ))}
+            {rows.map(row => <Ask key={row.id} row={row}/>)}
           </table>
           <More hasMore={!!cursor} busy={busy} onMore={older} label="Show older requests"/>
         </div>
@@ -224,88 +202,25 @@ export default function CoinsPage() {
   );
 }
 
-function Ask({ row, canReview, busy, settle, onReask }: {
-  row: CoinAsk;
-  canReview: boolean;
-  busy: boolean;
-  settle: (id: number, verb: string, reason: string) => Promise<unknown>;
-  onReask: () => Promise<void>;
-}) {
-  const { noteGate } = useSession();
-  const [open, setOpen] = useState(false);
-  const [verb, setVerb] = useState<'reject' | 'proof' | null>(null);
-  const [reason, setReason] = useState('');
-  const [detail, setDetail] = useState<CoinDetail | null>(null);
-  const [proof, setProof] = useState<ProofLink | null>(null);
-  const [closed, setClosed] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [working, setWorking] = useState(false);
+
+/**
+ * The row is the queue; the desk is a page. A request that moves real money
+ * is not settled inside a table a scroll can carry away.
+ */
+function Ask({ row }: { row: CoinAsk }) {
   const standing = STANDINGS[row.status] || { tone: 'mute', label: row.status_label };
-  const timer = useRef<number | null>(null);
-
-  // The link is a two-minute window on purpose, so the picture closes itself when
-  // the window does rather than staying on screen as if it were still private.
-  useEffect(() => {
-    if (!proof) return undefined;
-    timer.current = window.setTimeout(() => setClosed(true), proof.expires_in * 1000);
-    return () => {
-      if (timer.current) window.clearTimeout(timer.current);
-    };
-  }, [proof]);
-
-  useEffect(() => {
-    setClosed(false);
-    setProof(null);
-  }, [row.id]);
-
-  const expand = async () => {
-    setOpen(true);
-    if (detail) return;
-    try {
-      setDetail(await api<CoinDetail>(`admin/coins/${row.id}/`));
-    } catch (err) {
-      if (!noteGate(err)) setError((err as Error).message);
-    }
-  };
-
-  const showProof = async () => {
-    setError(null);
-    try {
-      setClosed(false);
-      setProof(await api<ProofLink>(`admin/coins/${row.id}/receipt-link/`));
-    } catch (err) {
-      setProof(null);
-      if (!noteGate(err)) setError((err as Error).message);
-    }
-  };
-
-  const submit = async (which: 'approve' | 'reject' | 'proof') => {
-    setWorking(true);
-    setError(null);
-    try {
-      await settle(row.id, which, verb === which ? reason.trim() : '');
-      setVerb(null);
-      setReason('');
-      setDetail(await api<CoinDetail>(`admin/coins/${row.id}/`));
-      onReask();
-    } catch (err) {
-      if (!noteGate(err)) setError((err as Error).message);
-    } finally {
-      setWorking(false);
-    }
-  };
 
   return (
-    <tbody className={`coin${open ? ' open' : ''}`} data-coin={row.id}>
-      <tr className={`grid-row${open ? ' open' : ''}`}>
+    <tbody className="coin" data-coin={row.id}>
+      <tr className="grid-row">
         <td>
-          <button type="button" className="coin-id" aria-expanded={open} onClick={() => (open ? setOpen(false) : expand())}>
+          <Link href={`/coins/${row.id}`} className="coin-id">
             <span className="grid-caret">{IC.chevron}</span>
             <span className="coin-name">
               <b>{row.card.name}</b>
               <em>@{row.card.username}{row.card.verified ? ' ✓' : ''}</em>
             </span>
-          </button>
+          </Link>
         </td>
         <td className="strong num" data-coins>{row.coins}</td>
         <td className="num">NPR {row.amount}</td>
@@ -326,141 +241,10 @@ function Ask({ row, canReview, busy, settle, onReask }: {
         </td>
         <td>
           <div className="grid-acts">
-            <Act icon="eye" label={open ? 'Close this request' : 'Open this request'} onClick={() => (open ? setOpen(false) : expand())}/>
+            <ActLink to={`/coins/${row.id}`} icon="eye" label="Open this request"/>
           </div>
         </td>
       </tr>
-
-      {open && (
-        <tr className="grid-detail">
-          <td colSpan={8}>
-            <div className="grid-body coin-body">
-              <div>
-                <h3>What they say they paid</h3>
-                <ul className="coin-facts">
-                  <li><span>Coins asked for</span><b>{row.coins}</b></li>
-                  <li><span>Rupees</span><b>{row.amount}</b></li>
-                  <li><span>Method</span><b>{row.method}</b></li>
-                  <li><span>Reference</span><b>{row.reference || '—'}</b></li>
-                  <li><span>Uploaded</span><b>{ago(row.created_at)}</b></li>
-                </ul>
-
-                <h3>The payment proof</h3>
-                {row.has_proof ? (
-                  proof && !closed ? (
-                    <div className="proof" data-proof>
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={proof.href} alt={`Payment proof for @${row.card.username}`} className="proof-img"/>
-                      <p className="note row">
-                        {IC.lock}
-                        <span>This link closes after {Math.round(proof.expires_in / 60)} minutes and is
-                          good only for your seat. The receipt is never printed in the list itself.</span>
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="proof-shut">
-                      <button type="button" className="btn ghost tiny" disabled={working} onClick={showProof} data-proof-open>
-                        {IC.eye}<span>{closed ? 'Ask for the link again' : 'Open the payment proof'}</span>
-                      </button>
-                      {closed && <p className="note row"><span>That view has closed. Nothing was downloaded.</span></p>}
-                    </div>
-                  )
-                ) : (
-                  <p className="empty-note">{IC.x}<span>They have not uploaded a receipt yet.</span></p>
-                )}
-
-                {detail && detail.asks.length > 0 && (
-                  <>
-                    <h3>What was asked of them</h3>
-                    <ul className="coin-asks">
-                      {detail.asks.map((ask, index) => (
-                        <li key={`${ask.at}-${index}`}>
-                          <b>{ask.action === 'proof' ? 'More proof' : ask.action === 'reject' ? 'Rejected' : 'Credited'}</b>
-                          <span>{ask.reason || 'no sentence was written'}</span>
-                          <em>{ask.by ? `@${ask.by}` : 'system'} {ago(ask.at)}</em>
-                        </li>
-                      ))}
-                    </ul>
-                  </>
-                )}
-              </div>
-
-              <div>
-                <h3>Decide</h3>
-                {row.status !== 'pending' ? (
-                  <div className="verdict">
-                    <p className="verdict-line">
-                      {IC.check}
-                      <span><b>{row.review?.label || row.status_label}</b> — {row.review?.reason || 'no sentence was written'}</span>
-                    </p>
-                    {row.review?.coins_credited ? (
-                      <p className="verdict-note">
-                        <span>Coins moved</span>
-                        <b>{row.review.coins_credited} into @{row.card.username}&apos;s wallet</b>
-                      </p>
-                    ) : null}
-                    <p className="note">{IC.alert}<span>Nothing here can be undone. If the money was credited
-                      by mistake, write a correction in the ledger — it will be a new row, not an edit.</span></p>
-                  </div>
-                ) : !canReview ? (
-                  <p className="note row">
-                    {IC.lock}
-                    <span>Crediting coins is not on your seat. You can read the request and open the proof.</span>
-                  </p>
-                ) : (
-                  <div className="decide">
-                    <div className="verbs">
-                      <button type="button" className="btn primary tiny" data-verb="approve"
-                        disabled={working} onClick={() => submit('approve')}
-                        title={`Credit ${row.coins} coins to @${row.card.username} now`}>
-                        {IC.check}<span>Credit {row.coins} coins</span>
-                      </button>
-                      <button type="button" className="btn amber tiny" data-verb="proof"
-                        disabled={working || verb === 'proof'} onClick={() => setVerb(verb === 'proof' ? null : 'proof')}
-                        title="Leave the request open and ask them for a better receipt">
-                        {IC.refresh}<span>Ask for more proof</span>
-                      </button>
-                      <button type="button" className="btn danger outline tiny" data-verb="reject"
-                        disabled={working || verb === 'reject'} onClick={() => setVerb(verb === 'reject' ? null : 'reject')}
-                        title="Refuse the request and tell them why">
-                        {IC.x}<span>Reject</span>
-                      </button>
-                    </div>
-
-                    {verb && (
-                      <div className="ask">
-                        <label className="field">
-                          <span>{verb === 'reject' ? 'Why the money is not being credited — they are sent this' : 'What more you need from them'}</span>
-                          <textarea
-                            rows={2} name="reason" maxLength={240} value={reason} autoFocus
-                            placeholder={verb === 'reject'
-                              ? 'e.g. the reference does not match this amount'
-                              : 'e.g. the right-hand edge of the receipt is cut off'}
-                            onChange={event => setReason(event.target.value)}
-                          />
-                        </label>
-                        <div className="ask-actions">
-                          <button
-                            type="button" className="btn primary tiny" disabled={working || !reason.trim()}
-                            onClick={() => submit(verb)}
-                          >
-                            {IC.go}<span>{working ? 'Working…' : `Confirm — ${verb === 'reject' ? 'Reject' : 'Ask for more proof'}`}</span>
-                          </button>
-                          <button type="button" className="btn ghost tiny" disabled={working}
-                            onClick={() => { setVerb(null); setReason(''); }}>
-                            <span>Cancel</span>
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-                {error && <p className="card-error" role="status">{IC.alert}<span>{error}</span></p>}
-              </div>
-            </div>
-          </td>
-        </tr>
-      )}
     </tbody>
   );
 }

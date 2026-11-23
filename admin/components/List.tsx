@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { IC } from '@/lib/icons';
 
 /**
@@ -63,5 +64,27 @@ export function Act({
     >
       {IC[icon]}
     </button>
+  );
+}
+
+/**
+ * The same glyph, but it goes somewhere instead of doing something. Row
+ * details are pages now, so the icons that used to expand a row navigate.
+ */
+export function ActLink({
+  to, icon, label, disabled, tone,
+}: {
+  to: string; icon: keyof typeof IC; label: string; disabled?: boolean; tone?: 'dead';
+}) {
+  if (disabled) {
+    return <Act icon={icon} label={`${label} (not on this seat)`} onClick={() => {}} disabled />;
+  }
+  return (
+    <Link
+      href={to} className="iact" title={label} aria-label={label}
+      style={tone === 'dead' ? { color: '#A3121A' } : undefined}
+    >
+      {IC[icon]}
+    </Link>
   );
 }

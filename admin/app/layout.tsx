@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { ReactNode } from 'react';
 import './globals.css';
+import { ConfirmProvider } from '@/components/Confirm';
 import { SessionProvider } from '@/lib/session';
 
 export const metadata: Metadata = {
@@ -14,7 +15,9 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
       <body>
-        <SessionProvider>{children}</SessionProvider>
+        <SessionProvider>
+          <ConfirmProvider>{children}</ConfirmProvider>
+        </SessionProvider>
       </body>
     </html>
   );

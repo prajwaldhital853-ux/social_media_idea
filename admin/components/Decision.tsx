@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useConfirm } from '@/components/Confirm';
 import { ApiError } from '@/lib/api';
 import { IC } from '@/lib/icons';
 import { useSession } from '@/lib/session';
@@ -53,15 +54,18 @@ const KEY_LABEL: Record<string, string> = {
 };
 
 export default function DecisionBar({
-  actions, permission, run, onDone, footnote,
+  actions, permission, run, onDone, footnote, target,
 }: {
   actions: Verb[];
   permission: string | null;
   run: (verb: Verb, reason: string, notice: string) => Promise<Outcome>;
   onDone: (out: Outcome) => void;
   footnote?: string;
+  /** What the seat is about to change, named in the confirmation. */
+  target?: string;
 }) {
   const { can } = useSession();
+  const confirm = useConfirm();
   const [open, setOpen] = useState<Verb | null>(null);
   const [reason, setReason] = useState('');
   const [notice, setNotice] = useState('');
@@ -84,6 +88,15 @@ export default function DecisionBar({
   };
 
   const submit = async (verb: Verb, reasonText: string, noticeText: string) => {
+    const spec = VERBS[verb];
+    // The click that decides is never the click that sends.
+    const sure = await confirm({
+      title: `${spec.label}${target ? ` — ${target}` : ''}?`,
+      body: spec.help,
+      confirmLabel: spec.label,
+      tone: spec.tone === 'danger' ? 'danger' : 'primary',
+    });
+    if (!sure) return;
     setBusy(true);
     setError(null);
     try {

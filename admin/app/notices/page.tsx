@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Banner from '@/components/Banner';
 import ConsoleShell from '@/components/ConsoleShell';
+import { useConfirm } from '@/components/Confirm';
 import { Chips, More } from '@/components/List';
 import { api } from '@/lib/api';
 import { IC } from '@/lib/icons';
@@ -49,10 +50,18 @@ function AttachDesk({ busy, onDone }: {
   const [reason, setReason] = useState('');
   const [sending, setSending] = useState(false);
   const { noteGate } = useSession();
+  const confirm = useConfirm();
 
   const ready = ident.trim() !== '' && text.trim() !== '' && reason.trim() !== '';
 
   const send = async () => {
+    const sure = await confirm({
+      title: `Put this notice on ${kind}:${ident.trim()}?`,
+      body: 'The sentence is shown to everyone who reaches that post, comment, listing or account, and it is written to the record under your name. It stays up until a seat withdraws it.',
+      confirmLabel: 'Put it up',
+      tone: 'amber',
+    });
+    if (!sure) return;
     setSending(true);
     try {
       const out = await api<{ detail?: string }>('admin/notices/attach/', {
@@ -139,6 +148,7 @@ function AttachDesk({ busy, onDone }: {
 
 export default function NoticesPage() {
   const { noteGate } = useSession();
+  const confirm = useConfirm();
   const [rows, setRows] = useState<NoticeRow[] | null>(null);
   const [cursor, setCursor] = useState<string | null>(null);
   const [q, setQ] = useState('');
@@ -200,7 +210,13 @@ export default function NoticesPage() {
   };
 
   const withdraw = async (notice: NoticeRow) => {
-    if (!window.confirm('Take this notice down? It stays on the record, marked withdrawn.')) return;
+    const sure = await confirm({
+      title: 'Withdraw this notice?',
+      body: `The sentence about @${notice.about} stops showing to the community. It stays on the record, marked withdrawn, with your name on it.`,
+      confirmLabel: 'Withdraw',
+      tone: 'danger',
+    });
+    if (!sure) return;
     setBusy(true);
     setBanner(null);
     try {

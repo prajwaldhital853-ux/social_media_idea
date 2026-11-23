@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import Banner from '@/components/Banner';
 import ConsoleShell from '@/components/ConsoleShell';
+import { useConfirm } from '@/components/Confirm';
 import { api } from '@/lib/api';
 import { IC } from '@/lib/icons';
 import { ago } from '@/lib/time';
@@ -37,6 +38,7 @@ const groupOf = (key: string) => (key === 'promo_global_pause' ? 'switch' : ORDE
 
 export default function AlgorithmScreen() {
   const { noteGate } = useSession();
+  const confirm = useConfirm();
   const [desk, setDesk] = useState<AlgorithmDesk | null>(null);
   const [quote, setQuote] = useState<ReachConfig | null>(null);
   const [draft, setDraft] = useState<Record<string, string>>({});
@@ -77,6 +79,13 @@ export default function AlgorithmScreen() {
 
   const save = async () => {
     if (!desk) return;
+    const sure = await confirm({
+      title: `Rewrite what the feed is built from (${touched.length} line(s))?`,
+      body: 'The next feed any member opens is ranked with these numbers. If Global pause is on, nothing is ranked at all until it is put back — these dials change what everyone sees, with no warning to them.',
+      confirmLabel: 'Save the dials',
+      tone: 'amber',
+    });
+    if (!sure) return;
     setBusy(true);
     setBanner(null);
     try {

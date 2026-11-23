@@ -521,6 +521,38 @@ export interface PersonDetail {
   notices: NoticeBrief[];
   audit: AuditBrief[];
   can: PersonVerbs;
+  /** What the account has put on the platform, newest first. */
+  posts: PersonPost[];
+  comments: PersonComment[];
+  listings: PersonListing[];
+}
+
+/** One post, as the record page lists it. */
+export interface PersonPost {
+  id: string;
+  text: string;
+  state: string;
+  audience: string;
+  created_at: string;
+  likes: number;
+  comments: number;
+}
+
+export interface PersonComment {
+  id: string;
+  text: string;
+  state: string;
+  created_at: string;
+  post: string;
+}
+
+export interface PersonListing {
+  id: string;
+  title: string;
+  price: string;
+  currency: string;
+  state: string;
+  created_at: string;
 }
 
 /** The server's answer to one verb, including what the guards refused. */

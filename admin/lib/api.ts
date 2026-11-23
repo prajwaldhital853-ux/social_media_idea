@@ -131,8 +131,12 @@ async function send<T>(path: string, init: RequestInit): Promise<T> {
   const data = text ? safeParse(text) : {};
 
   if (!response.ok) {
+    const detail = String(data.detail || `The request failed (${response.status}).`);
+    // A 500 says nothing anybody can act on, but the API stamps the same id into
+    // its own log line — quoting it turns a screenshot into one search.
+    const rid = String(data.request_id || '');
     throw new ApiError(
-      String(data.detail || `The request failed (${response.status}).`),
+      response.status >= 500 && rid ? `${detail} (id ${rid})` : detail,
       String(data.code || 'error'),
       response.status,
       data,

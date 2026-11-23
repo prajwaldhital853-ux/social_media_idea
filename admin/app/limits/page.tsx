@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import Banner from '@/components/Banner';
 import ConsoleShell from '@/components/ConsoleShell';
+import { useConfirm } from '@/components/Confirm';
 import { api } from '@/lib/api';
 import { bytes } from '@/lib/format';
 import { IC } from '@/lib/icons';
@@ -28,6 +29,7 @@ import { LimitsConfig, LimitsDesk, SettingLine } from '@/lib/types';
 
 export default function LimitsScreen() {
   const { noteGate } = useSession();
+  const confirm = useConfirm();
   const [desk, setDesk] = useState<LimitsDesk | null>(null);
   const [quote, setQuote] = useState<LimitsConfig | null>(null);
   const [draft, setDraft] = useState<Record<string, string>>({});
@@ -62,6 +64,13 @@ export default function LimitsScreen() {
   const drifted = lines.filter(item => String(item.value) !== String(item.default));
 
   const save = async () => {
+    const sure = await confirm({
+      title: `Save ${touched.length} post limit(s)?`,
+      body: 'From the next request, that is how many posts, comments or messages an account of each kind is allowed. Anyone already at the new number is stopped immediately — they are not told in advance.',
+      confirmLabel: 'Save and enforce',
+      tone: 'amber',
+    });
+    if (!sure) return;
     setBusy(true);
     try {
       const body = touched.reduce((all, item) => ({ ...all, [item.key]: valueOf(item) }), {} as Record<string, string>);

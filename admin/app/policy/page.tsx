@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import Banner from '@/components/Banner';
 import ConsoleShell from '@/components/ConsoleShell';
+import { useConfirm } from '@/components/Confirm';
 import { api } from '@/lib/api';
 import { num } from '@/lib/format';
 import { IC } from '@/lib/icons';
@@ -127,10 +128,26 @@ function TermPanel({
   const [note, setNote] = useState('');
   const [editing, setEditing] = useState<number | null>(null);
   const [draft, setDraft] = useState({ text: '', note: '' });
+  const confirm = useConfirm();
+
+  const remove = async (title: string, body: string, run: () => Promise<void>) => {
+    if (await confirm({ title, body, confirmLabel: 'Remove', tone: 'danger' })) await run();
+  };
+
+  const put = async (title: string, body: string, run: () => Promise<void>) => {
+    if (await confirm({ title, body, confirmLabel: 'Save', tone: 'amber' })) await run();
+  };
 
   const add = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!text.trim()) return;
+    const sure = await confirm({
+      title: `Put “${text.trim()}” on the ${KIND_LABEL[kind]} list?`,
+      body: 'From the next save, anything carrying it is marked for a person to look at. It is a flag, not a takedown — nothing comes down by itself.',
+      confirmLabel: 'Add it',
+      tone: 'amber',
+    });
+    if (!sure) return;
     await onAdd(text.trim(), note.trim());
     setText('');
     setNote('');
@@ -202,8 +219,12 @@ function TermPanel({
                       <button
                         type="button" className="btn primary tiny" disabled={busy || !draft.text.trim()}
                         onClick={() => {
-                          onSave(row.id, { text: draft.text.trim(), note: draft.note.trim() }, `“${draft.text.trim().toLowerCase()}”`);
-                          setEditing(null);
+                          void put(`Rewrite “${row.text}”?`,
+                            'What is already marked keeps its record. From the next scan this is the phrase the filter looks for.',
+                            async () => {
+                              await onSave(row.id, { text: draft.text.trim(), note: draft.note.trim() }, `“${draft.text.trim().toLowerCase()}”`);
+                              setEditing(null);
+                            });
                         }}
                       >
                         {IC.check}<span>Save</span>
@@ -233,7 +254,13 @@ function TermPanel({
                           </button>
                           <button
                             type="button" className="btn ghost tiny" disabled={busy}
-                            onClick={() => onSave(row.id, { is_active: !row.is_active }, row.text)}
+                            onClick={() => void put(
+                              row.is_active ? `Stop enforcing “${row.text}”?` : `Enforce “${row.text}” again?`,
+                              row.is_active
+                                ? 'The phrase stops marking anything new from the next scan. Posts already flagged keep their record.'
+                                : 'From the next scan, anything carrying it is pulled aside for a person to read.',
+                              () => onSave(row.id, { is_active: !row.is_active }, row.text),
+                            )}
                             title={row.is_active ? 'Stop marking the queue, keep the entry' : 'Start enforcing it again'}
                           >
                             <span>{row.is_active ? 'Turn off' : 'Turn on'}</span>
@@ -241,8 +268,9 @@ function TermPanel({
                           <button
                             type="button" className="btn danger outline tiny" disabled={busy}
                             onClick={() => {
-                              if (!window.confirm(`Remove “${row.text}” from the list? Past decisions keep their audit row.`)) return;
-                              onDelete(row.id, `“${row.text}”`);
+                              void remove(`Remove “${row.text}” from the list?`,
+                                'Past decisions keep their audit row, but the phrase stops marking anything new.',
+                                () => onDelete(row.id, `“${row.text}”`));
                             }}
                           >
                             {IC.x}<span>Remove</span>
@@ -274,6 +302,21 @@ function CategoryTable({
   const [name, setName] = useState('');
   const [editing, setEditing] = useState<number | null>(null);
   const [draft, setDraft] = useState({ name: '', sort_order: 10 });
+  const confirm = useConfirm();
+
+  const del = async (row: CategoryRow) => {
+    const sure = await confirm({
+      title: `Delete the ${row.name} shelf?`,
+      body: 'Listings already filed under it keep their text but stop being categorised, and nobody can file a new one there. Hide it instead if sellers still use it.',
+      confirmLabel: 'Delete',
+      tone: 'danger',
+    });
+    if (sure) await onDelete(row.id, row.name);
+  };
+
+  const put = async (title: string, body: string, run: () => Promise<void>) => {
+    if (await confirm({ title, body, confirmLabel: 'Save', tone: 'amber' })) await run();
+  };
 
   return (
     <section className="panel" data-list="categories">
@@ -291,10 +334,17 @@ function CategoryTable({
       {can && (
         <form
           className="term-add"
-          onSubmit={event => {
+          onSubmit={async event => {
             event.preventDefault();
             if (!name.trim()) return;
-            onAdd(name.trim());
+            const sure = await confirm({
+              title: `Add “${name.trim()}” to the shelves?`,
+              body: 'Sellers can file a new listing there from the next page load. Nothing already filed under another category moves.',
+              confirmLabel: 'Add the category',
+              tone: 'amber',
+            });
+            if (!sure) return;
+            await onAdd(name.trim());
             setName('');
           }}
         >
@@ -369,8 +419,12 @@ function CategoryTable({
                           <button
                             type="button" className="btn primary tiny" disabled={busy || !draft.name.trim()}
                             onClick={() => {
-                              onSave(row.id, { name: draft.name.trim(), sort_order: draft.sort_order }, draft.name.trim());
-                              setEditing(null);
+                              void put(`Rename the ${row.name} shelf?`,
+                                'Listings already filed there follow the new word. Nothing is moved to a different shelf, and the order decides where buyers see it.',
+                                async () => {
+                                  await onSave(row.id, { name: draft.name.trim(), sort_order: draft.sort_order }, draft.name.trim());
+                                  setEditing(null);
+                                });
                             }}
                           >
                             {IC.check}<span>Save</span>
@@ -383,7 +437,13 @@ function CategoryTable({
                       {can && (
                         <button
                           type="button" className={`btn ${row.is_active ? 'ghost' : 'primary'} tiny`} disabled={busy}
-                          onClick={() => onSave(row.id, { is_active: !row.is_active }, row.name)}
+                          onClick={() => void put(
+                            row.is_active ? `Hide the ${row.name} shelf?` : `Show the ${row.name} shelf again?`,
+                            row.is_active
+                              ? 'Sellers can no longer file here, but the listings already on it stay exactly where buyers found them.'
+                              : 'It goes back on the category list sellers choose from when they file something.',
+                            () => onSave(row.id, { is_active: !row.is_active }, row.name),
+                          )}
                         >
                           <span>{row.is_active ? 'Hide' : 'Show'}</span>
                         </button>
@@ -391,10 +451,7 @@ function CategoryTable({
                       {can && (
                         <button
                           type="button" className="btn danger outline tiny" disabled={busy}
-                          onClick={() => {
-                            if (!window.confirm(`Delete ${row.name}? Listings already filed under it keep their text.`)) return;
-                            onDelete(row.id, row.name);
-                          }}
+                          onClick={() => { void del(row); }}
                         >
                           {IC.x}<span>Delete</span>
                         </button>

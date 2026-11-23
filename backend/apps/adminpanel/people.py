@@ -351,6 +351,21 @@ def detail(user):
         'person': row(user, _pile_for([user.pk]).get(user.pk)),
         'holdings': holdings(user),
         'ledger': ledger_rows(user),
+        # Everything the account has ever put on the platform, newest first. A seat
+        # deciding a bar has to be able to read the sentences, not just count them.
+        'posts': [{
+            'id': str(item.pk), 'text': item.text[:280], 'state': item.status,
+            'audience': item.audience, 'created_at': item.created_at,
+            'likes': item.like_count, 'comments': item.comment_count,
+        } for item in Post.objects.filter(author=user).order_by('-created_at')[:25]],
+        'comments': [{
+            'id': str(item.pk), 'text': item.text[:280], 'state': item.status,
+            'created_at': item.created_at, 'post': str(item.post_id),
+        } for item in Comment.objects.filter(author=user).order_by('-created_at')[:25]],
+        'listings': [{
+            'id': str(item.pk), 'title': item.title, 'price': str(item.price),
+            'currency': item.currency, 'state': item.status, 'created_at': item.created_at,
+        } for item in Listing.objects.filter(seller=user).order_by('-created_at')[:25]],
         'reports': [{
             'id': report.pk, 'reason': report.reason, 'details': report.details,
             'status': report.status, 'created_at': report.created_at,

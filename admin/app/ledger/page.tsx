@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Banner from '@/components/Banner';
+import { useConfirm } from '@/components/Confirm';
 import ConsoleShell from '@/components/ConsoleShell';
 import { Chips, More } from '@/components/List';
 import { api } from '@/lib/api';
@@ -226,8 +227,16 @@ function Adjust({ onWritten, noteGate }: {
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const confirm = useConfirm();
 
   const move = async () => {
+    const sure = await confirm({
+      title: `${direction === 'credit' ? 'Credit' : 'Take'} ${amount.trim()} coins ${direction === 'credit' ? 'to' : 'from'} @${username.trim()}?`,
+      body: 'This writes a row into their wallet by hand. It is not an edit of anything that already happened, it cannot be deleted, and the only way back is another row in the other direction. The reason goes on the audit with your name on it.',
+      confirmLabel: direction === 'credit' ? 'Write the credit' : 'Write the debit',
+      tone: 'danger',
+    });
+    if (!sure) return;
     setBusy(true);
     setError(null);
     try {
