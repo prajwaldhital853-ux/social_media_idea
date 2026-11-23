@@ -956,12 +956,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   /**
-   * The names a card prints under its icons — you, then people you follow, then
-   * everyone else, three at most.
+   * The names a card prints under its icons — you, then the people you follow.
    *
-   * The server sends this order on the page, but a reaction pressed since that
-   * page arrived is not in it yet, so the viewer's own row is always rebuilt
-   * from the local cache rather than trusted from the wire.
+   * A stranger is not a name worth printing: the reader already knows how many
+   * people reacted, and the row is about the ones they chose to keep near them.
+   * The server sends its preview in the same order (you, followed, everyone
+   * else), so dropping the last bucket here cannot hide a followed person —
+   * they were always printed before the strangers.
    */
   const reactionPeople = (postId: string): { id: string; name: string; kind: ReactionKind; me: boolean }[] => {
     const self = currentMe();
@@ -988,6 +989,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
     }
     return rows
+      .filter(r => bucket(r.id) < 2)
       .sort((a, b) => bucket(a.id) - bucket(b.id) || b.at - a.at)
       .slice(0, 3)
       .map(({ id, name, kind, me }) => ({ id, name, kind, me }));

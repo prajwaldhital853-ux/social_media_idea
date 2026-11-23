@@ -7662,10 +7662,10 @@ button.profile-stat:hover b, a.profile-stat:hover b { color: var(--red); }
 .reaction-chip { display: inline-flex; flex: none; }
 /* The ring is what makes three discs read as three different things people felt
    instead of one smear of colour where they overlap. */
-.reaction-chip + .reaction-chip { margin-left: -6px; }
+.reaction-chip + .reaction-chip { margin-left: -5px; }
 .reaction-chip .reaction-art {
-  width: 21px;
-  height: 21px;
+  width: 18px;
+  height: 18px;
   border-radius: 50%;
   border: 1.5px solid var(--paper);
   background: var(--paper);
@@ -7719,7 +7719,7 @@ button.profile-stat:hover b, a.profile-stat:hover b { color: var(--red); }
 @media (max-width: 768px) {
   .reaction-row { margin: -1px 0 -5px; }
   .reaction-summary { font-size: 14px; }
-  .reaction-chip .reaction-art { width: 24px; height: 24px; }
+  .reaction-chip .reaction-art { width: 21px; height: 21px; }
   .post-actions .reaction-trigger.action-btn { min-height: 44px; padding: 6px 15px 6px 9px; }
   .post-actions .reaction-trigger.action-btn .reaction-art { width: 26px; height: 26px; }
 }
