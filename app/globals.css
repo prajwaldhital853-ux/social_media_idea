@@ -7595,3 +7595,214 @@ button.profile-stat:hover b, a.profile-stat:hover b { color: var(--red); }
 .about-list dd { font-size: 15.5px; }
 .about-card h2 { font-size: 17px; }
 .about-card p { font-size: 15px; line-height: 1.6; }
+
+/* ===== What a post says about its reactions ===== */
+
+/* The crowd's line, above the buttons that answer only for the reader. It
+   hangs in the buttons' own left gutter and pulls itself up into the card's
+   vertical gap, because it belongs to them and not to the caption. */
+.reaction-row {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  margin: -1px 0 -6px;
+  padding: 0 2px;
+}
+
+.reaction-summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  max-width: 100%;
+  margin-left: -7px;
+  padding: 4px 7px;
+  border: 0;
+  border-radius: 9px;
+  background: none;
+  color: var(--ink);
+  font-size: 13.5px;
+  font-weight: 600;
+  text-align: left;
+}
+
+.reaction-summary:hover { background: var(--tint); }
+.reaction-summary:hover .reaction-names { text-decoration: underline; }
+
+.reaction-stack { display: inline-flex; align-items: center; flex: none; }
+.reaction-chip { display: inline-flex; flex: none; }
+/* The ring is what makes three discs read as three different things people felt
+   instead of one smear of colour where they overlap. */
+.reaction-chip + .reaction-chip { margin-left: -6px; }
+.reaction-chip .reaction-art {
+  width: 21px;
+  height: 21px;
+  border-radius: 50%;
+  border: 1.5px solid var(--paper);
+  background: var(--paper);
+}
+
+.reaction-names {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* The one button in the row that carries a colour of its own, because it is the
+   one that answers for a feeling rather than a chore. */
+.post-actions .reaction-trigger.action-btn {
+  min-width: 0;
+  min-height: 40px;
+  gap: 6px;
+  padding: 5px 13px 5px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.post-actions .reaction-trigger.action-btn:hover { background: var(--tint); border-color: var(--muted); }
+
+.post-actions .reaction-trigger.action-btn.reacted {
+  background: var(--brand-tint);
+  border-color: var(--brand-ring);
+  color: var(--brand);
+}
+
+.post-actions .reaction-trigger.action-btn .reaction-art { width: 22px; height: 22px; }
+.post-actions .reaction-trigger.action-btn > span { font-variant-numeric: tabular-nums; }
+
+/* The count moving under a thumb that just changed hands is the whole receipt
+   for the tap; without it the reaction looks like it has not landed yet. */
+.reaction-trigger.pop .reaction-art,
+.reaction-trigger.pop > span { animation: reactionPunch 0.28s cubic-bezier(0.2, 0.8, 0.3, 1.4); }
+@keyframes reactionPunch {
+  0% { transform: none; }
+  38% { transform: scale(1.26); }
+  100% { transform: none; }
+}
+
+@media (min-width: 1024px) {
+  .reaction-row { margin: -3px 0 -9px; }
+}
+
+@media (max-width: 768px) {
+  .reaction-row { margin: -1px 0 -5px; }
+  .reaction-summary { font-size: 14px; }
+  .reaction-chip .reaction-art { width: 24px; height: 24px; }
+  .post-actions .reaction-trigger.action-btn { min-height: 44px; padding: 6px 15px 6px 9px; }
+  .post-actions .reaction-trigger.action-btn .reaction-art { width: 26px; height: 26px; }
+}
+
+/* ===== Everyone who reacted ===== */
+
+.reactors-overlay {
+  z-index: 1200;
+  align-items: flex-end;
+  justify-content: center;
+  background: rgba(6, 8, 11, 0.55);
+}
+
+.reactors-sheet {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 100%;
+  min-height: 42svh;
+  max-height: 82svh;
+  margin: 0;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  overflow: hidden;
+  border-radius: 18px 18px 0 0;
+  box-shadow: 0 -8px 40px rgba(0, 0, 0, 0.35);
+  animation: sheetRise 0.24s cubic-bezier(0.2, 0.85, 0.25, 1);
+}
+
+@keyframes sheetRise { from { transform: translateY(100%); } to { transform: none; } }
+
+.reactors-sheet .modal-header { flex: none; padding-bottom: 6px; border-bottom: 0; }
+.reactors-sheet .modal-header b { font-size: 15.5px; }
+
+.reactors-tabs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  padding: 0 12px 10px;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--line);
+  scrollbar-width: none;
+}
+.reactors-tabs::-webkit-scrollbar { display: none; }
+
+.reactors-tabs button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: none;
+  padding: 6px 12px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 12.5px;
+  font-weight: 700;
+}
+.reactors-tabs button:hover { background: var(--tint); color: var(--ink); }
+.reactors-tabs button .reaction-art { width: 18px; height: 18px; }
+.reactors-tabs button span { font-variant-numeric: tabular-nums; }
+.reactors-tabs button.on {
+  background: var(--brand-tint);
+  border-color: var(--brand-ring);
+  color: var(--brand-d);
+}
+
+.reactors-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding: 4px 6px calc(12px + env(safe-area-inset-bottom, 0px));
+}
+
+.reactor-row { padding: 7px 8px; }
+.reactor-row .people-meta b { font-size: 14.5px; }
+.reactor-kind { display: inline-flex; flex: none; margin-right: 2px; }
+.reactor-kind .reaction-art { width: 26px; height: 26px; }
+
+.reactors-loading {
+  width: 24px;
+  height: 24px;
+  margin: 10px auto 6px;
+  border-radius: 50%;
+  border: 3px solid var(--line);
+  border-top-color: var(--brand);
+  animation: reelSpin 0.8s linear infinite;
+}
+
+/* A desk reader wants a framed dialog the size of its contents; a hand wants the
+   whole bottom of the screen, where the thumb already is. */
+@media (min-width: 769px) {
+  .reactors-overlay { align-items: center; padding: 20px; }
+
+  .reactors-sheet {
+    width: 460px;
+    min-height: 320px;
+    max-height: 70vh;
+    padding-bottom: 0;
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    box-shadow: var(--shadow-lg);
+    animation: scaleIn 0.2s ease;
+  }
+
+  .reactors-list { padding-bottom: 10px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reactors-sheet { animation: none; }
+  .reaction-trigger.pop .reaction-art,
+  .reaction-trigger.pop > span { animation: none; }
+}

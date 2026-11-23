@@ -41,6 +41,8 @@ interface AppContextType {
   myReaction: (targetType: Target, targetId: string) => ReactionKind | null;
   reactionCount: (targetType: Target, targetId: string) => number;
   reactionMix: (targetType: Target, targetId: string) => { kind: ReactionKind; n: number }[];
+  reactionPeople: (postId: string) => { id: string; name: string; kind: ReactionKind; me: boolean }[];
+  myPostReaction: (postId: string) => ReactionKind | null;
   toggleSave: (pid: string) => Promise<void>;
   isSaved: (pid: string) => boolean;
   sharePost: (pid: string) => Promise<void>;
@@ -941,6 +943,56 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return Object.entries(kinds).map(([kind, n]) => ({ kind: kind as ReactionKind, n })).sort((a, b) => reactionRank(a.kind) - reactionRank(b.kind));
   };
 
+  /** The viewer's own take on a post, whether they pressed it on the card or on a photo. */
+  const myPostReaction = (postId: string): ReactionKind | null => {
+    const direct = myReaction('post', postId);
+    if (direct) return direct;
+    const post = db.posts.find(p => p.id === postId);
+    for (let position = 0; position < (post?.media?.length || 0); position += 1) {
+      const mine = myReaction('media', `${postId}#m${position}`);
+      if (mine) return mine;
+    }
+    return null;
+  };
+
+  /**
+   * The names a card prints under its icons — you, then people you follow, then
+   * everyone else, three at most.
+   *
+   * The server sends this order on the page, but a reaction pressed since that
+   * page arrived is not in it yet, so the viewer's own row is always rebuilt
+   * from the local cache rather than trusted from the wire.
+   */
+  const reactionPeople = (postId: string): { id: string; name: string; kind: ReactionKind; me: boolean }[] => {
+    const self = currentMe();
+    const post = db.posts.find(p => p.id === postId);
+    if (!post) return [];
+    const bucket = (uid: string) => (self && uid === self.id ? 0 : followState(uid) === 'following' ? 1 : 2);
+    const rows: { id: string; name: string; kind: ReactionKind; me: boolean; at: number }[] = [];
+    const mine = myPostReaction(postId);
+    if (self && mine) rows.push({ id: self.id, name: self.name, kind: mine, me: true, at: Date.now() });
+    if (serverMode && post.people?.length) {
+      for (const person of post.people) {
+        if (self && person.id === self.id) continue;
+        rows.push({ ...person, at: 0 });
+      }
+    } else {
+      const seen = new Set(rows.map(r => r.id));
+      for (const r of db.reactions) {
+        if (seen.has(r.uid)) continue;
+        const onPost = r.targetType === 'post' && r.targetId === postId;
+        const onMedia = r.targetType === 'media' && r.targetId.startsWith(`${postId}#m`);
+        if (!onPost && !onMedia) continue;
+        seen.add(r.uid);
+        rows.push({ id: r.uid, name: db.users.find(u => u.id === r.uid)?.name || '', kind: r.kind, me: !!self && r.uid === self.id, at: r.ts });
+      }
+    }
+    return rows
+      .sort((a, b) => bucket(a.id) - bucket(b.id) || b.at - a.at)
+      .slice(0, 3)
+      .map(({ id, name, kind, me }) => ({ id, name, kind, me }));
+  };
+
   const react = async (targetType: Target, targetId: string, kind: ReactionKind) => {
     const self = currentMe();
     if (!self) return;
@@ -1381,7 +1433,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         db, setDb, me, isAdmin, isStaff, t, feature,
         addPost, updatePost, deletePost, addComment, deleteComment,
         toggleFollow, isFollowing, followState, incomingRequests, acceptRequest, declineRequest, mutualIds,
-        react, myReaction, reactionCount, reactionMix, toggleSave, isSaved, toggleListingSave, isListingSaved,
+        react, myReaction, reactionCount, reactionMix, reactionPeople, myPostReaction, toggleSave, isSaved, toggleListingSave, isListingSaved,
         sharePost, countView, blockUser, unblockUser, isBlocked, blockedIds,
         notify, markAllRead, markRead, sendMessage, markThreadRead, addReport, logAudit,
         requestPromotion, cancelPromotion, activePromo, promoEligible,

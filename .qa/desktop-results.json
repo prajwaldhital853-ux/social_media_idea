@@ -140,7 +140,7 @@
     {
       "name": "mobile: the inbox stays a single column with no thread pane",
       "pass": true,
-      "detail": "{\"rows\":10,\"mainHidden\":true,\"topbarHidden\":true,\"search\":true,\"head\":true,\"waitedMs\":535}"
+      "detail": "{\"rows\":10,\"mainHidden\":true,\"topbarHidden\":true,\"search\":true,\"head\":true,\"waitedMs\":389}"
     },
     {
       "name": "mobile: a thread is still full width with its back button",
@@ -150,7 +150,7 @@
     {
       "name": "mobile: the feed keeps its own sheet and loads posts",
       "pass": true,
-      "detail": "{\"bg\":\"rgb(255, 255, 255)\",\"posts\":10,\"waitedMs\":192}"
+      "detail": "{\"bg\":\"rgb(255, 255, 255)\",\"posts\":10,\"waitedMs\":274}"
     },
     {
       "name": "mobile: the For you / Following band thins on scroll without losing its place",

@@ -1,0 +1,46 @@
+PASS  desktop: the demo account signs in against /api/auth/  — /
+PASS  desktop: the session is the account that signed in  — "sita"
+PASS  desktop: the feed renders a keyset page of real posts  — screen 10, page 11
+PASS  desktop: scrolling the feed walks cursors, not windows of the cache  — 11 -> 81
+PASS  desktop: reels come from the video keyset stream  — screen 10 slides / 10 videos, api 10 posts
+PASS  desktop: the reel counter reads the server page
+PASS  desktop: the reels page carries no sort control
+PASS  desktop: the oldest-first cursor walks the feed backwards  — oldest head 2026-07-25T09:03:40.646723Z vs newest page tail 2026-11-22T09:31:47.092705Z, ascending true
+PASS  desktop: a deep-linked post hydrates by id  — Nabin Karkiat Pashupatinath feeling tiredFollow25 JulThe hil
+PASS  desktop: the post page is a centered card on the canvas, not a sheet  — {"vw":1440,"shell":{"x":360,"w":720},"mosaic":{"x":376,"w":656,"radius":"14px"},"caption":{"x":428,"w":604},"leftGap":360,"rightGap":360}
+PASS  desktop: post media sits inside the card in its rounded frame  — {"x":376,"w":656,"radius":"14px"}
+PASS  desktop: the caption keeps a readable measure inside the card  — {"x":428,"w":604}
+PASS  desktop: a comment is written to /api/comments/ and rendered from it  — {"id":"2124","text":true}
+PASS  desktop: the comment survives a server-side read back  — 10 top-level rows
+PASS  desktop: the comment is still there after a reload
+PASS  desktop: sorting by oldest reads the ascending page  — screen Sita Karkimobile-mwrsuiae16h agoReplyDel vs mobile-mwrsuiae
+PASS  desktop: the marketplace grid opens on the page the server chose  — screen 20, api 10, drift at -1, has_more true
+PASS  desktop: the marketplace grid walks its cursor  — 20 -> 32
+PASS  desktop: a deep-linked listing hydrates by id  — Solar lantern with USB port vs Solar lantern with USB port
+PASS  desktop: the listing page knows its seller  — SKSita Karki@sita1 Listings
+PASS  desktop: profile totals come from the profile row  — 40 Posts | 18 Followers | 8 Following vs followers=18
+PASS  desktop: the followers list pages people with a cursor  — first 10, api page 10, walked 18, server total 18
+PASS  desktop: an author with a shelf of reels exists  — sita, 10 clips, head bumped to beat 28 views
+PASS  desktop: the profile leads its reels with three quiet words  — ["Most views","Latest","Oldest"] on ["Latest"], {"size":11.5,"opacity":0.72,"bg":"rgba(0, 0, 0, 0)","height":22}
+PASS  desktop: the shelf opens on the newest-first page  — http://localhost:3001/media/demo/clip-flower.mp4 http://localhost:3001/media/demo/clip-big_buck_bunny.mp4 http://localhost:3001/media/demo/clip-sample_640x360.mp4
+PASS  desktop: "Most views" re-sorts the shelf onto its own page  — shelf /media/demo/clip-sintel-720.mp4,/media/demo/clip-flower.mp4 vs page /media/demo/clip-sintel-720.mp4,/media/demo/clip-flower.mp4 vs latest /media/demo/clip-flower.mp4,/media/demo/clip-big_buck_bunny.mp4
+PASS  desktop: the watched clip now leads the shelf  — /video/612-0 vs the clip with the most views, 612
+PASS  desktop: "Oldest" hands the shelf to the ascending page  — shelf /media/demo/clip-sintel-720.mp4,/media/demo/clip-flower.mp4 vs page /media/demo/clip-sintel-720.mp4,/media/demo/clip-flower.mp4
+PASS  desktop: people search hits /api/users/
+PASS  desktop: the searched person is the account itself  — Sita Karki@sita
+PASS  desktop: the top bar badges match the unread counters  — screen ["2"] vs api [2]
+PASS  desktop: a chat partner exists for the thread test  — arjun
+PASS  desktop: twelve messages land on the thread endpoint  — {"sent":12,"status":200}
+PASS  desktop: the inbox leads its threads with the conversation just written  — first thread row: Arjun Thapajust nowYou: intg older 11✓ | top row: Arjun Thapajust nowYou: intg older 11✓
+PASS  desktop: the thread opens on the newest keyset page  — 12 bubbles, load-more 1, tail "intg older 11just now✓✓"
+PASS  desktop: "load more" prepends an older page of the thread  — 12 -> 20
+PASS  desktop: loading older rows keeps the reader where they were  — 827 -> 827
+PASS  desktop: opening a thread marks it read on the server  — {"readCalls":0}
+PASS  desktop: notifications render the server page  — 10 rows vs page of 10
+PASS  desktop: saved posts come from /api/saved/posts/  — 2 vs 2
+PASS  mobile: the feed pages with cursors on a phone  — 10 -> 81
+PASS  mobile: the thread loads older messages on a phone  — 10 -> 20
+PASS  mobile: a comment sent from a phone reaches the server
+PASS  mobile: reels stream on a phone  — 10
+
+44/44 integration checks green.

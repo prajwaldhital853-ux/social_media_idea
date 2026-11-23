@@ -63,7 +63,7 @@
     {
       "name": "desktop: a comment is written to /api/comments/ and rendered from it",
       "pass": true,
-      "detail": "{\"id\":\"2122\",\"text\":true}"
+      "detail": "{\"id\":\"2124\",\"text\":true}"
     },
     {
       "name": "desktop: the comment survives a server-side read back",
@@ -78,7 +78,7 @@
     {
       "name": "desktop: sorting by oldest reads the ascending page",
       "pass": true,
-      "detail": "screen Sita Karkimobile-mwrsuiae6h agoReplyDele vs mobile-mwrsuiae"
+      "detail": "screen Sita Karkimobile-mwrsuiae16h agoReplyDel vs mobile-mwrsuiae"
     },
     {
       "name": "desktop: the marketplace grid opens on the page the server chose",
@@ -113,7 +113,7 @@
     {
       "name": "desktop: an author with a shelf of reels exists",
       "pass": true,
-      "detail": "sita, 10 clips, head bumped to beat 26 views"
+      "detail": "sita, 10 clips, head bumped to beat 28 views"
     },
     {
       "name": "desktop: the profile leads its reels with three quiet words",
@@ -173,12 +173,12 @@
     {
       "name": "desktop: the thread opens on the newest keyset page",
       "pass": true,
-      "detail": "10 bubbles, load-more 1, tail \"intg older 11just now✓✓\""
+      "detail": "12 bubbles, load-more 1, tail \"intg older 11just now✓✓\""
     },
     {
       "name": "desktop: \"load more\" prepends an older page of the thread",
       "pass": true,
-      "detail": "10 -> 20"
+      "detail": "12 -> 20"
     },
     {
       "name": "desktop: loading older rows keeps the reader where they were",

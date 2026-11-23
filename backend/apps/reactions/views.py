@@ -1,11 +1,16 @@
+import base64
+import json
+
 from django.db import IntegrityError, transaction
-from django.db.models import F
+from django.db.models import Count, F
+from django.utils.dateparse import parse_datetime
 from rest_framework import status, viewsets
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import BasePermission, IsAuthenticated, IsAuthenticatedOrReadOnly, SAFE_METHODS
 from rest_framework.response import Response
 
 from apps.comments.models import Comment
+from apps.common.api import person, reactor_page, reactions_of_target
 from apps.notifications.services import notify
 from apps.posts.models import Post, PostMedia
 from apps.posts.views import visible_posts
@@ -148,3 +153,62 @@ def toggle_off(request):
             return Response({'detail': 'No reaction to remove.'}, status=404)
         _adjust_counter(target_type, target_id, -1)
     return Response({'detail': 'Reaction removed.'})
+
+
+REACTOR_PAGE_SIZE = 12
+
+
+def _reactor_token(reaction):
+    payload = json.dumps([reaction.bucket, reaction.created_at.isoformat(), reaction.pk], separators=(',', ':'))
+    return base64.urlsafe_b64encode(payload.encode()).decode().rstrip('=')
+
+
+def _reactor_cursor(raw):
+    if not raw:
+        return None
+    try:
+        padded = raw + '=' * (-len(raw) % 4)
+        bucket, stamp, pk = json.loads(base64.urlsafe_b64decode(padded))
+        return int(bucket), parse_datetime(stamp), int(pk)
+    except (ValueError, TypeError):
+        return None
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticatedOrReadOnly])
+def reactors(request):
+    """Who reacted, one page at a time, in the order the card above printed them.
+
+    `counts` rides along so the sheet's tabs can be labelled without a second
+    round trip, and a target nobody may read answers with an empty page rather
+    than a list of strangers.
+    """
+    target_type = request.query_params.get('target_type') or 'post'
+    target_id = request.query_params.get('target_id')
+    if not target_id or not readable_target(request.user, target_type, target_id):
+        return Response({'detail': 'No such target.'}, status=status.HTTP_404_NOT_FOUND)
+    base = reactions_of_target(target_type, target_id)
+    counts = {row['kind']: row['n'] for row in base.values('kind').annotate(n=Count('id'))}
+    rows = reactor_page(
+        request,
+        base,
+        kind=request.query_params.get('kind'),
+        cursor=_reactor_cursor(request.query_params.get('cursor')),
+        size=REACTOR_PAGE_SIZE,
+    )
+    has_more = len(rows) > REACTOR_PAGE_SIZE
+    rows = rows[:REACTOR_PAGE_SIZE]
+    me_id = request.user.pk if request.user.is_authenticated else None
+    results = []
+    for reaction in rows:
+        who = person(reaction.user)
+        who['kind'] = reaction.kind
+        who['followed'] = reaction.bucket == 1
+        who['me'] = reaction.user.pk == me_id
+        results.append(who)
+    return Response({
+        'results': results,
+        'next': _reactor_token(rows[-1]) if has_more and rows else None,
+        'counts': counts,
+        'total': sum(counts.values()),
+    })

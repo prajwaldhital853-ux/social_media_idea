@@ -1,0 +1,195 @@
+{
+  "post": {
+    "id": "45",
+    "total": 26,
+    "kinds": {
+      "love": 6,
+      "like": 12,
+      "sad": 5,
+      "haha": 3
+    },
+    "expected": [
+      "like",
+      "love",
+      "sad"
+    ]
+  },
+  "results": [
+    {
+      "name": "desktop: the row sits above the buttons and the buttons print no second mix",
+      "pass": true,
+      "detail": "{\"above\":true,\"mixes\":0}"
+    },
+    {
+      "name": "desktop: the chips are the three most-used kinds, in that order",
+      "pass": true,
+      "detail": "screen \"like,love,sad\" — server \"like,love,sad\" of {\"love\":6,\"like\":12,\"sad\":5,\"haha\":3}"
+    },
+    {
+      "name": "desktop: the chips overlap and each wears a thin ring",
+      "pass": true,
+      "detail": "{\"overlapPx\":6,\"ring\":{\"width\":\"1px\",\"radius\":\"50%\",\"color\":\"rgb(0, 0, 0)\"}}"
+    },
+    {
+      "name": "desktop: the names are one line, cut with an ellipsis",
+      "pass": true,
+      "detail": "{\"oneLine\":true,\"ellipsis\":true}"
+    },
+    {
+      "name": "desktop: the crowd is named as \"… and N others\"",
+      "pass": true,
+      "detail": "Arjun Thapa, Prakash and 24 others"
+    },
+    {
+      "name": "desktop: the pill is a rounded pill holding one icon and the total",
+      "pass": true,
+      "detail": "{\"radius\":999,\"text\":\"26\",\"reacted\":false,\"art\":null,\"icons\":1}"
+    },
+    {
+      "name": "desktop: the pill counts the same crowd the row names",
+      "pass": true,
+      "detail": "26 vs server 26"
+    },
+    {
+      "name": "desktop: the ring is the page’s own ground in either theme",
+      "pass": true,
+      "detail": "{\"ring\":\"rgb(0, 0, 0)\",\"ground\":\"rgb(0, 0, 0)\"}"
+    },
+    {
+      "name": "desktop: a tap changes the icon and the count at once, and keeps them",
+      "pass": true,
+      "detail": "26 -> 27 -> 27"
+    },
+    {
+      "name": "desktop: a short tap never opens the picker",
+      "pass": true,
+      "detail": "0 trays"
+    },
+    {
+      "name": "desktop: the names lead with \"You\" once the reader has reacted",
+      "pass": true,
+      "detail": "You, Arjun and 25 others"
+    },
+    {
+      "name": "desktop: holding about four tenths of a second opens the picker above the pill",
+      "pass": true,
+      "detail": "0 tray at 240ms, then \"Like/Love/Haha/Wow/Sad\""
+    },
+    {
+      "name": "desktop: a second reaction replaces the first, and the pill wears its colour",
+      "pass": true,
+      "detail": "{\"art\":\"love\",\"text\":\"27\",\"color\":\"rgb(182, 55, 64)\",\"tray\":false}"
+    },
+    {
+      "name": "desktop: choosing the same reaction again takes it off",
+      "pass": true,
+      "detail": "26 -> 26, reacted false"
+    },
+    {
+      "name": "desktop: a failed reaction undoes itself and says so",
+      "pass": true,
+      "detail": "optimistic 27, back to 26, toast \"The server is not answering right now. Wait a few seconds and try again.\""
+    },
+    {
+      "name": "desktop: hovering opens the picker and walking away closes it",
+      "pass": true,
+      "detail": "1 on hover, 0 after leaving"
+    },
+    {
+      "name": "desktop: the row opens the list of everyone who reacted",
+      "pass": true,
+      "detail": "{\"rows\":12,\"status\":200}"
+    },
+    {
+      "name": "desktop: on a desk it is a framed dialog centered on the page",
+      "pass": true,
+      "detail": "{\"x\":490,\"y\":135,\"w\":460,\"bottom\":765}"
+    },
+    {
+      "name": "desktop: the tabs are All plus one per kind, each with its count",
+      "pass": true,
+      "detail": "{\"tabs\":[\"All26\",\"12\",\"6\",\"3\",\"5\"],\"counts\":{\"haha\":3,\"like\":12,\"love\":6,\"sad\":5},\"total\":26}"
+    },
+    {
+      "name": "desktop: every row has an avatar, a name, its reaction and a Follow button",
+      "pass": true,
+      "detail": "{\"avatar\":true,\"name\":\"Prakash Neupane\",\"handle\":\"@prakash\",\"kind\":true,\"follow\":\"Following\"}"
+    },
+    {
+      "name": "desktop: the list opens on one page of people, not the whole crowd",
+      "pass": true,
+      "detail": "12 rows of 26"
+    },
+    {
+      "name": "desktop: the list pages to the end without printing a person twice",
+      "pass": true,
+      "detail": "{\"rows\":25,\"unique\":25,\"total\":26}"
+    },
+    {
+      "name": "desktop: a tab shows that reaction and nothing else",
+      "pass": true,
+      "detail": "{\"rows\":6,\"kinds\":[\"love\",\"love\",\"love\",\"love\",\"love\",\"love\"],\"love\":6}"
+    },
+    {
+      "name": "desktop: a Follow pressed in the list lands there and then",
+      "pass": true,
+      "detail": "{\"after\":\"Following\",\"accepted\":true,\"requested\":false}"
+    },
+    {
+      "name": "desktop: Escape puts the list away",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile: a phone prints the same row above its buttons",
+      "pass": true,
+      "detail": "{\"chips\":[\"love\",\"sad\",\"like\"],\"names\":\"Hemant Siwakoti, Bibek and 13 others\",\"oneLine\":true,\"pillHeight\":44,\"pillWidth\":77,\"radius\":999}"
+    },
+    {
+      "name": "mobile: the pill is a thumb-sized rounded pill",
+      "pass": true,
+      "detail": "{\"h\":44,\"w\":77,\"r\":999}"
+    },
+    {
+      "name": "mobile: the list is a sheet the width of the phone, resting on its bottom edge",
+      "pass": true,
+      "detail": "{\"x\":0,\"w\":390,\"bottom\":844,\"top\":152,\"rows\":12,\"tabs\":[\"All26\",\"12\",\"6\",\"3\",\"5\"]}"
+    },
+    {
+      "name": "mobile: the sheet pages on a phone too",
+      "pass": true,
+      "detail": "{\"rows\":25,\"unique\":25}"
+    },
+    {
+      "name": "mobile: a tab filters the sheet on a phone",
+      "pass": true,
+      "detail": "like: like,like,like,like,like,like,like,like,like,like,like,like"
+    },
+    {
+      "name": "mobile: a tap above the sheet puts it away",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "mobile: a tap reacts at once and never raises the picker",
+      "pass": true,
+      "detail": "26 -> 27, 0 trays"
+    },
+    {
+      "name": "mobile: a long press raises the picker and leaves it there to choose from",
+      "pass": true,
+      "detail": "1 during the hold, 1 after release, chose love"
+    },
+    {
+      "name": "mobile: the phone and the server still agree after all that",
+      "pass": true,
+      "detail": "26 -> 27 -> 26"
+    },
+    {
+      "name": "no console or HTTP errors during the run",
+      "pass": true,
+      "detail": ""
+    }
+  ],
+  "errors": []
+}
