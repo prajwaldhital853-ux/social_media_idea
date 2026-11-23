@@ -3,6 +3,7 @@ import random
 from datetime import timedelta
 
 from django.conf import settings
+from django.core import signing
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.core.validators import validate_email
 from django.db import IntegrityError, transaction
@@ -31,6 +32,10 @@ OTP_MAX_ATTEMPTS = 5
 # a scripted address cannot use the mailer as a firehose, and the counter is shown
 # rather than guessed at by the client.
 RESEND_SECONDS = 120
+# The window between proving the code and choosing the password. Long enough to
+# type twice, short enough that an abandoned reset is not a standing invitation.
+RESET_TICKET_SECONDS = 900
+RESET_TICKET_SALT = 'accounts.reset'
 # A refresh call lives at most TIMEOUT_MS (12s on the client) in flight, so two
 # tabs racing each other are this close together; anything presenting a retired
 # token later than that is not the same browser finishing a request.
@@ -518,19 +523,15 @@ def reset_request(request):
 @api_view(['POST'])
 @permission_classes([AllowAny])
 @authentication_classes([])
-def reset_confirm(request):
-    """Step two: the code, the new password, and every old seat revoked.
+def reset_verify(request):
+    """The code on its own, which buys the right to choose a password.
 
-    Whoever was guessing has had the address proved against them, so the row keeps
-    its history — but no session they had already opened survives this call.
+    Splitting the proof from the change is what lets the screen ask for one thing
+    at a time, and it keeps the code out of the call that actually writes a
+    password — that one carries a signed ticket instead.
     """
     challenge = request.data.get('challenge')
     enforce(f'reset-verify:{challenge}', 10, 600)
-    email_hint = _email(request.data.get('email'))
-    # Only worth an address-shaped bucket when the client names an address; an
-    # anonymous key would pool every reset in the world into one limiter.
-    if email_hint:
-        enforce(f'reset-tries:{email_hint}', 15, 1800)
     otp = EmailOTP.objects.filter(pk=challenge, purpose='reset', consumed_at__isnull=True).select_related('user').first()
     if not otp or otp.expires_at < timezone.now():
         return Response({'detail': 'Code expired. Request a new one.'}, status=400)
@@ -542,6 +543,38 @@ def reset_confirm(request):
         otp.attempts += 1
         otp.save(update_fields=['attempts'])
         return Response({'detail': 'Wrong code.', 'attempts_left': OTP_MAX_ATTEMPTS - otp.attempts}, status=400)
+    return Response({
+        'verified': True,
+        'detail': 'Code confirmed. Choose a new password.',
+        'ticket': signing.dumps({'otp': otp.pk, 'user': otp.user_id}, salt=RESET_TICKET_SALT),
+        'ticket_in': RESET_TICKET_SECONDS,
+    })
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+@authentication_classes([])
+def reset_confirm(request):
+    """Step three: the new password, spent against the ticket the code earned.
+
+    Whoever was guessing has had the address proved against them, so the row keeps
+    its history — but no session they had already opened survives this call.
+    """
+    challenge = request.data.get('challenge')
+    email_hint = _email(request.data.get('email'))
+    # Only worth an address-shaped bucket when the client names an address; an
+    # anonymous key would pool every reset in the world into one limiter.
+    if email_hint:
+        enforce(f'reset-tries:{email_hint}', 15, 1800)
+    try:
+        payload = signing.loads(str(request.data.get('ticket') or ''), salt=RESET_TICKET_SALT, max_age=RESET_TICKET_SECONDS)
+    except signing.BadSignature:
+        payload = None
+    if not payload or str(payload.get('otp')) != str(challenge):
+        return Response({'detail': 'Confirm the code first.'}, status=400)
+    otp = EmailOTP.objects.filter(pk=challenge, purpose='reset', consumed_at__isnull=True).select_related('user').first()
+    if not otp:
+        return Response({'detail': 'Code expired. Request a new one.'}, status=400)
     password = str(request.data.get('password') or '')
     bad = passwords.refusal(password, otp.user)
     if bad:

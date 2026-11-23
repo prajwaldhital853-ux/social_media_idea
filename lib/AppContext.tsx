@@ -114,8 +114,10 @@ interface AppContextType {
   googleSignIn: (token: { id_token?: string; demo?: { email: string; name: string; sub: string } }) => Promise<AuthResult>;
   /** Step one of a forgotten password: mail a code to the address. */
   requestPasswordReset: (email: string) => Promise<CodeResult>;
-  /** Step two: the code plus the new password, which signs nobody in. */
-  confirmPasswordReset: (challenge: string | number, code: string, password: string, email?: string) => Promise<AuthResult>;
+  /** Step two: the code alone, which buys the ticket the password is spent on. */
+  verifyResetCode: (challenge: string | number, code: string) => Promise<AuthResult & { ticket?: string }>;
+  /** Step three: the new password, for nobody but this address's owner. */
+  confirmPasswordReset: (challenge: string | number, password: string, ticket: string, email?: string) => Promise<AuthResult>;
   updateProfile: (patch: Record<string, any>) => Promise<void>;
   /** Step one: the typed word goes to the server, which mails the code. */
   requestAccountDeletion: (confirm: string) => Promise<{ challenge?: number; dev_code?: string; detail?: string }>;
@@ -668,13 +670,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  /** Step two: the code and the new password. The session is not reopened here. */
+  /** Step two: the code on its own. A right code buys a ticket, not a session. */
+  const verifyResetCode = async (
+    challenge: string | number, code: string,
+  ): Promise<AuthResult & { ticket?: string }> => {
+    try {
+      const data = await api.post('/api/auth/reset/verify/', { challenge, code, device_id: api.deviceId() });
+      return { ok: true, status: 200, detail: data?.detail, ticket: data?.ticket };
+    } catch (err) {
+      return authResult(err);
+    }
+  };
+
+  /** Step three: the new password, spent against the ticket the code earned. */
   const confirmPasswordReset = async (
-    challenge: string | number, code: string, password: string, email = '',
+    challenge: string | number, password: string, ticket: string, email = '',
   ): Promise<AuthResult> => {
     try {
       const data = await api.post('/api/auth/reset/confirm/', {
-        challenge, code, password, email, device_id: api.deviceId(),
+        challenge, password, ticket, email, device_id: api.deviceId(),
       });
       return { ok: true, status: 200, detail: data?.detail };
     } catch (err) {
@@ -1709,7 +1723,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         confirmBox, showConfirm, hideConfirm,
         ready, waking, serverMode, resync, merge,
         signin, signupAccount, verifyCode, resendCode, googleSignIn,
-        requestPasswordReset, confirmPasswordReset,
+        requestPasswordReset, verifyResetCode, confirmPasswordReset,
         updateProfile, requestAccountDeletion, confirmAccountDeletion, loadPerson, loadEntity,
       }}
     >

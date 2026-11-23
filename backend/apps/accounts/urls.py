@@ -12,6 +12,7 @@ urlpatterns = [
     path('auth/unlock/', views.unlock_request),
     path('auth/unlock/confirm/', views.unlock_confirm),
     path('auth/reset/', views.reset_request),
+    path('auth/reset/verify/', views.reset_verify),
     path('auth/reset/confirm/', views.reset_confirm),
     path('auth/google/', views.google),
     path('auth/me/', views.me),

@@ -1,4 +1,5 @@
 from celery import shared_task
+from django.conf import settings
 from django.core.mail import send_mail
 
 from apps.common.mail import send_off_request
@@ -13,13 +14,15 @@ def send_otp_email(email, code, purpose, minutes=10):
         'reset': 'Reset your Exposing password',
         'admin_reset': 'Reset your Exposing staff password',
     }
+    # No try/except: this runs on the mail thread, where a raised SMTP error is the
+    # only thing that reaches the log, and a silent one is a code nobody received.
     send_mail(
         subjects.get(purpose, 'Your Exposing code'),
         f'Your code is {code}. It expires in {minutes} minutes. '
         'If you did not request it, ignore this email.',
-        'no-reply@exposing.app',
+        settings.DEFAULT_FROM_EMAIL,
         [email],
-        fail_silently=True,
+        fail_silently=False,
     )
 
 
