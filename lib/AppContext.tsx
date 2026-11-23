@@ -102,6 +102,10 @@ interface AppContextType {
   resendCode: (challenge: string | number) => Promise<CodeResult>;
   googleSignIn: (token: { id_token?: string; demo?: { email: string; name: string; sub: string } }) => Promise<AuthResult>;
   updateProfile: (patch: Record<string, any>) => Promise<void>;
+  /** Step one: the typed word goes to the server, which mails the code. */
+  requestAccountDeletion: (confirm: string) => Promise<{ challenge?: number; dev_code?: string; detail?: string }>;
+  /** Step two: the code deletes the account, its rows and its pictures. */
+  confirmAccountDeletion: (challenge: number, code: string) => Promise<void>;
   loadPerson: (username: string) => Promise<PersonRead | null>;
   /** Pull one post or listing by id so a detail page opened cold still renders. */
   loadEntity: (kind: 'post' | 'listing', id: string) => Promise<'ok' | 'missing' | 'error'>;
@@ -629,6 +633,34 @@ export function AppProvider({ children }: { children: ReactNode }) {
       forgetLists('feed');
       forgetLists('profile-posts');
     }
+  };
+
+  const requestAccountDeletion = async (confirm: string) => {
+    if (!API_ENABLED) return { detail: 'Demo accounts are kept in this browser only.' };
+    return api.post<{ challenge?: number; dev_code?: string; detail?: string }>('/api/auth/delete/request/', { confirm });
+  };
+
+  const confirmAccountDeletion = async (challenge: number, code: string) => {
+    const self = currentMe();
+    if (API_ENABLED) {
+      await api.post('/api/auth/delete/confirm/', { challenge, code });
+    } else if (self) {
+      // No server to ask: forget the account and everything this browser kept.
+      setDb(prev => ({
+        ...prev,
+        meId: null,
+        users: prev.users.filter(u => u.id !== self.id),
+        posts: prev.posts.filter(p => p.uid !== self.id),
+        comments: prev.comments.filter(c => c.uid !== self.id),
+        follows: prev.follows.filter(f => f.follower !== self.id && f.following !== self.id),
+        unread: undefined,
+      }));
+    }
+    setDb(prev => ({ ...prev, meId: null, unread: undefined }));
+    setDrawerOpen(false);
+    forgetLists();
+    router.push('/');
+    showToast(t('accountDeleted'));
   };
 
   /**
@@ -1485,7 +1517,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         toast, showToast,
         ready, waking, serverMode, resync, merge,
         signin, signupAccount, verifyCode, resendCode, googleSignIn,
-        updateProfile, loadPerson, loadEntity,
+        updateProfile, requestAccountDeletion, confirmAccountDeletion, loadPerson, loadEntity,
       }}
     >
       {children}

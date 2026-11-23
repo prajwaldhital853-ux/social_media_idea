@@ -82,6 +82,21 @@ export default function EditProfileModal({ onClose }: { onClose: () => void }) {
     }
   };
 
+  /** Deleting a picture is its own action, not a side effect of saving the form. */
+  const removeImage = async (kind: 'avatar' | 'cover') => {
+    setBusy(true);
+    setError('');
+    try {
+      await updateProfile({ [kind]: '' });
+      if (kind === 'avatar') setAvatar(''); else setCover('');
+      showToast(t('profileUpdated'));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'That picture could not be removed.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) {
@@ -137,6 +152,11 @@ export default function EditProfileModal({ onClose }: { onClose: () => void }) {
               {IC.camera}
               <span>{uploading ? `Uploading ${uploading}%` : busy ? '…' : t('changePhoto')}</span>
             </button>
+            {avatar && (
+              <button type="button" className="edit-remove-btn" disabled={busy} onClick={() => { void removeImage('avatar'); }}>
+                {IC.x}<span>{t('removePhoto')}</span>
+              </button>
+            )}
             <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={e => { openCrop(e.target.files?.[0], 'avatar'); e.target.value = ''; }} />
           </div>
           <div className="edit-cover-row">
@@ -147,7 +167,11 @@ export default function EditProfileModal({ onClose }: { onClose: () => void }) {
               {IC.camera}
               <span>{uploading ? `Uploading ${uploading}%` : busy ? '…' : t('changeCover')}</span>
             </button>
-            {cover && <button type="button" className="edit-cover-clear" onClick={() => setCover('')} aria-label={t('close')}>{IC.x}</button>}
+            {cover && (
+              <button type="button" className="edit-remove-btn" disabled={busy} onClick={() => { void removeImage('cover'); }}>
+                {IC.x}<span>{t('removeCover')}</span>
+              </button>
+            )}
             <input ref={coverRef} type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={e => { openCrop(e.target.files?.[0], 'cover'); e.target.value = ''; }} />
           </div>
           <label className="field">

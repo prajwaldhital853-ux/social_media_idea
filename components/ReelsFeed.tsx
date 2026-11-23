@@ -14,6 +14,7 @@ import Avatar from './Avatar';
 import VerifiedBadge from './VerifiedBadge';
 import ReactionButton from './ReactionButton';
 import ReportModal from './ReportModal';
+import ShareDialog from './ShareDialog';
 import Toast from './Toast';
 import MobileNav from './MobileNav';
 import NavRail from './NavRail';
@@ -34,7 +35,7 @@ export default function ReelsFeed({ initialKey }: { initialKey?: string }) {
   const router = useRouter();
   const {
     db, me, feature, toggleSave, isSaved, toggleFollow, isFollowing, serverMode,
-    sharePost, countView, blockUser, isBlocked, showToast, t,
+    sharePost, countView, blockUser, isBlocked, t,
   } = useApp();
   const [index, setIndex] = useState(0);
   const [commentsOpen, setCommentsOpen] = useState(false);
@@ -43,6 +44,7 @@ export default function ReelsFeed({ initialKey }: { initialKey?: string }) {
   const [menuFor, setMenuFor] = useState<string | null>(null);
   const [buffering, setBuffering] = useState(false);
   const [reporting, setReporting] = useState<string | null>(null);
+  const [sharing, setSharing] = useState<ReelSlide | null>(null);
   const [ready, setReady] = useState<Record<string, boolean>>({});
   const bufferHandlers = useRef<Record<string, (waiting: boolean) => void>>({});
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -198,21 +200,8 @@ export default function ReelsFeed({ initialKey }: { initialKey?: string }) {
     return bufferHandlers.current[key];
   };
 
-  const shareReel = async (slide: ReelSlide) => {
-    const url = `${window.location.origin}/video/${slide.post.id}-${slide.mediaIndex}`;
-    let handed = false;
-    try {
-      if (navigator.share) {
-        await navigator.share({ title: `${slide.author.name} on Exposing`, text: slide.post.text.slice(0, 140), url });
-        handed = true;
-      } else {
-        await navigator.clipboard.writeText(url);
-        handed = true;
-        showToast(t('linkCopied'));
-      }
-    } catch { /* the sheet was closed; nothing left the phone */ }
-    if (handed) void sharePost(slide.post.id);
-  };
+  // Opening the sheet is free; the tally moves when the clip is actually handed on.
+  const shareReel = (slide: ReelSlide) => setSharing(slide);
 
   return (
     <div className="reels-page">
@@ -374,6 +363,19 @@ export default function ReelsFeed({ initialKey }: { initialKey?: string }) {
         )}
         {commentsOpen && current && <Comments postId={current.post.id} onClose={() => setCommentsOpen(false)} />}
         {reporting && <ReportModal type="post" targetId={reporting} onClose={() => setReporting(null)} />}
+        <ShareDialog
+          open={!!sharing}
+          url={`${typeof window === 'undefined' ? '' : window.location.origin}/video/${sharing?.post.id}-${sharing?.mediaIndex}`}
+          title={`${sharing?.author.name || sharing?.author.username || ''} on Exposing`}
+          text={(sharing?.post.text || '').slice(0, 140)}
+          preview={sharing ? {
+            title: sharing.author.name || sharing.author.username,
+            subtitle: sharing.post.text.slice(0, 120),
+            video: sharing.media.src || undefined,
+          } : undefined}
+          onShared={() => { if (sharing) void sharePost(sharing.post.id); }}
+          onClose={() => setSharing(null)}
+        />
       </div>
       <div className="reels-nav">
         <NavRail />

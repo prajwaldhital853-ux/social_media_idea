@@ -64,6 +64,26 @@ export async function postMetadata(id: string): Promise<Metadata> {
   );
 }
 
+/** `/video/<postId>-<index>`: the reel's own card, so a clip pasted into
+ *  WhatsApp shows its face rather than the site's default banner. */
+export async function reelMetadata(key: string): Promise<Metadata> {
+  const id = key.includes('-') ? key.slice(0, key.lastIndexOf('-')) : key;
+  const row = await read(`/api/posts/${id}/`);
+  const path = `/video/${key}`;
+  if (!row) return card('Reel on Exposing', DESCRIPTION, path, [], 'article');
+  const who = clip(row.author_name || row.author_username, 50);
+  const video = (row.media || []).find((m: any) => m.kind === 'video');
+  const picture = (row.media || []).find((m: any) => m.kind !== 'video' && (m.url || m.file));
+  const images = video?.thumbnail_url ? [abs(video.thumbnail_url)] : picture ? [abs(picture.url || picture.file)] : [];
+  return card(
+    clip(`${who} — Reel on Exposing`, 90),
+    clip(row.text) || 'Watch this clip on Exposing.',
+    path,
+    images,
+    'article',
+  );
+}
+
 export async function profileMetadata(username: string): Promise<Metadata> {
   const row = await read(`/api/profiles/${username}/`);
   const path = `/u/${username}`;

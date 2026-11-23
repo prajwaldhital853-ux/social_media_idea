@@ -59,7 +59,10 @@ class DeviceTrust(models.Model):
 
 
 class EmailOTP(models.Model):
-    PURPOSES = [('login', 'New device login'), ('unlock', 'Account unlock'), ('verify', 'Email verification')]
+    PURPOSES = [
+        ('login', 'New device login'), ('unlock', 'Account unlock'),
+        ('verify', 'Email verification'), ('delete', 'Account deletion'),
+    ]
 
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='otps')
     purpose = models.CharField(max_length=10, choices=PURPOSES)

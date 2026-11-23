@@ -14,6 +14,7 @@ import ReactionButton from './ReactionButton';
 import ReactionSummary from './ReactionSummary';
 import ReportModal from './ReportModal';
 import PromoteModal from './PromoteModal';
+import ShareDialog from './ShareDialog';
 import { IC } from '@/lib/icons';
 
 interface PostCardProps {
@@ -102,6 +103,7 @@ export default function PostCard({ post, author, featured }: PostCardProps) {
   const [promoting, setPromoting] = useState(false);
   const [whyOpen, setWhyOpen] = useState(false);
   const [promoHidden, setPromoHidden] = useState(false);
+  const [sharing, setSharing] = useState(false);
   const warmed = useRef(false);
 
   const promo = activePromo('post', post.id);
@@ -128,32 +130,27 @@ export default function PostCard({ post, author, featured }: PostCardProps) {
   const openMedia = (index: number) => router.push(`/post/${post.id}/media/${index}`);
   const openReel = (index: number) => router.push(`/video/${post.id}-${index}`);
 
-  const handleShare = async (e?: React.MouseEvent, copyOnly = false) => {
+  // Opening the sheet is not a share; the counter moves only when the reader
+  // actually sends it to a person or hands the link to another app.
+  const handleShare = (e?: React.MouseEvent) => {
     e?.preventDefault();
     e?.stopPropagation();
-    const url = `${window.location.origin}/post/${post.id}`;
-    let handed = false;
-    try {
-      if (navigator.share && !copyOnly) {
-        await navigator.share({ title: `${author.name} on Exposing`, text: post.text.slice(0, 140), url });
-        handed = true;
-      } else {
-        await navigator.clipboard.writeText(url);
-        handed = true;
-        showToast(t('linkCopied'));
-      }
-    } catch {
-      // The reader closed the share sheet, so nothing was handed over and nothing is counted.
-      try {
-        await navigator.clipboard.writeText(url);
-        handed = true;
-        showToast(t('linkCopied'));
-      } catch {
-        showToast(url);
-      }
-    }
-    if (handed) void sharePost(post.id);
+    setSharing(true);
   };
+
+  const copyShareLink = async () => {
+    const url = `${window.location.origin}/post/${post.id}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      showToast(t('linkCopied'));
+      void sharePost(post.id);
+    } catch {
+      showToast(url);
+    }
+  };
+
+  const firstPicture = (post.media || []).find(m => m.type === 'image' && (m.src || m.gen));
+  const firstClip = (post.media || []).find(m => m.type === 'video' && m.src);
 
   const media = (post.media || []).filter(m => m.src || m.gen);
   const single = media.length === 1;
@@ -240,7 +237,7 @@ export default function PostCard({ post, author, featured }: PostCardProps) {
               </button>
               {menuOpen && (
                 <div className="post-menu" onClick={e => e.stopPropagation()}>
-                  {menuItem(t('copyLink'), () => { void handleShare(undefined, true); })}
+                  {menuItem(t('copyLink'), () => { void copyShareLink(); })}
                   {own && !me?.private && db.settings.features.promotion && menuItem(t('promote'), () => setPromoting(true))}
                   {own && menuItem(t('edit'), () => openComposer(post.id))}
                   {own && menuItem(t('del'), () => { if (window.confirm(t('confirmDelete'))) deletePost(post.id); }, true)}
@@ -331,6 +328,20 @@ export default function PostCard({ post, author, featured }: PostCardProps) {
 
       {reporting && <ReportModal type="post" targetId={post.id} onClose={() => setReporting(false)} />}
       {promoting && <PromoteModal targetType="post" targetId={post.id} onClose={() => setPromoting(false)} />}
+      <ShareDialog
+        open={sharing}
+        url={`${typeof window === 'undefined' ? '' : window.location.origin}/post/${post.id}`}
+        title={`${author.name || author.username} on Exposing`}
+        text={post.text.slice(0, 140)}
+        preview={{
+          title: author.name || author.username,
+          subtitle: post.text.slice(0, 120),
+          image: firstPicture ? (firstPicture.src || firstPicture.gen) : undefined,
+          video: !firstPicture && firstClip ? firstClip.src : undefined,
+        }}
+        onShared={() => { void sharePost(post.id); }}
+        onClose={() => setSharing(false)}
+      />
     </article>
   );
 

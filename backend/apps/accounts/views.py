@@ -70,6 +70,36 @@ def _make_otp(user, purpose, device_id=''):
     return otp, code
 
 
+def _media_key(url):
+    """The MediaBlob key inside a stored media url, or '' for an outside file."""
+    marker = '/media/'
+    text = url or ''
+    if marker not in text:
+        return ''
+    return text.split(marker, 1)[1].split('?', 1)[0]
+
+
+def _purge_media(user):
+    """Delete the pictures this account uploaded before the row that names them.
+
+    Cascades cover every table that points at the user, but an upload's key has
+    no owner column, so the urls have to be collected while the profile and the
+    posts are still there.
+    """
+    from apps.common.models import MediaBlob
+
+    urls = []
+    profile = getattr(user, 'profile', None)
+    if profile:
+        urls += [profile.avatar_url, profile.cover_url]
+    urls += list(user.posts.values_list('media__url', flat=True))
+    urls += list(user.listings.values_list('images__url', flat=True))
+    keys = {_media_key(url) for url in urls}
+    keys.discard('')
+    if keys:
+        MediaBlob.objects.filter(key__in=keys).delete()
+
+
 def _otp_response(otp, code):
     body = {'challenge': otp.pk, 'expires_in': OTP_MINUTES * 60}
     if settings.DEBUG or getattr(settings, 'EXPOSING_OTP_VISIBLE', False):
@@ -270,6 +300,14 @@ def _verify_otp(request, force_purpose=None):
     otp.save(update_fields=['consumed_at'])
     user = otp.user
     device_id = otp.device_id or _device_id(request)
+    if otp.purpose == 'delete':
+        # The row goes first, then the pictures it pointed at: a cascade cannot
+        # reach MediaBlob, and a blob left behind is somebody's face in a table
+        # nobody can see it from.
+        _purge_media(user)
+        user.delete()
+        response = Response({'detail': 'Your account and all of its data have been deleted.'})
+        return clear_auth_cookies(response)
     if otp.purpose == 'unlock':
         user.failed_attempts = 0
         user.locked_until = None
@@ -360,6 +398,27 @@ def unlock_request(request):
 @authentication_classes([])
 def unlock_confirm(request):
     return _verify_otp(request, force_purpose='unlock')
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def account_delete_request(request):
+    """Step one of a deletion: the word, then a code to the address on file.
+
+    The typed word is checked here rather than in the browser so a stray POST
+    cannot start the clock on somebody's account.
+    """
+    enforce(f'account-delete:{request.user.pk}', 5, 600)
+    if str(request.data.get('confirm') or '').strip().upper() != 'DELETE':
+        return Response({'detail': 'Type DELETE to confirm.'}, status=400)
+    otp, code = _make_otp(request.user, 'delete')
+    return Response({'detail': 'A deletion code is on its way to your email.', **_otp_response(otp, code)})
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def account_delete_confirm(request):
+    return _verify_otp(request, force_purpose='delete')
 
 
 GOOGLE_CERTS_URL = 'https://www.googleapis.com/oauth2/v3/certs'

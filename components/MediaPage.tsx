@@ -9,6 +9,7 @@ import { IC } from '@/lib/icons';
 import AutoVideo from './AutoVideo';
 import Comments from './Comments';
 import ReactionButton from './ReactionButton';
+import ShareDialog from './ShareDialog';
 import Toast from './Toast';
 
 interface MediaPageProps {
@@ -18,7 +19,7 @@ interface MediaPageProps {
 
 export default function MediaPage({ postId, initialIndex }: MediaPageProps) {
   const router = useRouter();
-  const { db, me, isStaff, showToast, t } = useApp();
+  const { db, me, isStaff, t, sharePost } = useApp();
   const post = db.posts.find(p => p.id === postId);
   // A direct link to /post/<id>/media/<n> has no list behind it; ask for the row.
   const { remote, pull } = useRemoteRow('post', postId, !!post);
@@ -27,6 +28,7 @@ export default function MediaPage({ postId, initialIndex }: MediaPageProps) {
   const start = Math.max(0, Math.min(initialIndex, Math.max(0, media.length - 1)));
   const [index, setIndex] = useState(start);
   const [commentsIndex, setCommentsIndex] = useState<number | null>(null);
+  const [sharing, setSharing] = useState<number | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const indexRef = useRef(start);
   const [mounted, setMounted] = useState(false);
@@ -103,15 +105,7 @@ export default function MediaPage({ postId, initialIndex }: MediaPageProps) {
     }
   };
 
-  const share = async (i: number) => {
-    const url = `${window.location.origin}/post/${postId}/media/${i}`;
-    try {
-      await navigator.clipboard.writeText(url);
-      showToast(t('linkCopied'));
-    } catch {
-      showToast(url);
-    }
-  };
+  const share = (i: number) => setSharing(i);
 
   return (
     <div className="media-page">
@@ -167,6 +161,20 @@ export default function MediaPage({ postId, initialIndex }: MediaPageProps) {
           {commentsIndex !== null && (
             <Comments postId={postId} mediaIndex={commentsIndex} onClose={() => setCommentsIndex(null)} />
           )}
+          <ShareDialog
+            open={sharing !== null}
+            url={`${typeof window === 'undefined' ? '' : window.location.origin}/post/${postId}/media/${sharing}`}
+            title="Photo on Exposing"
+            text={(post?.text || '').slice(0, 140)}
+            preview={sharing !== null ? {
+              title: 'Photo on Exposing',
+              subtitle: (post?.text || '').slice(0, 120),
+              image: media[sharing]?.type === 'image' ? (media[sharing]?.src || media[sharing]?.gen) : undefined,
+              video: media[sharing]?.type === 'video' ? media[sharing]?.src : undefined,
+            } : undefined}
+            onShared={() => { void sharePost(postId); }}
+            onClose={() => setSharing(null)}
+          />
         </>
       ) : remote === 'loading' ? (
         <p className="media-page-empty">Loading…</p>
