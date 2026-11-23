@@ -89,7 +89,12 @@ export default function Feed() {
           <div className="sk-lines wide"><i /><i /></div>
         </div>
       ) : posts.length === 0 ? (
-        <div className="feed-empty"><p>{t('followingEmpty')}</p><Link href="/explore">{t('findPeople')}</Link></div>
+        // Two different empties: an empty follow list, and a full one whose
+        // accounts have simply not posted. Only the first is a hint to search.
+        <div className="feed-empty">
+          <p>{tab === 'following' && followingIds.size > 0 ? t('followingQuiet') : t('followingEmpty')}</p>
+          <Link href="/explore">{t('findPeople')}</Link>
+        </div>
       ) : posts.slice(0, limit).map(post => {
         const author = db.users.find(u => u.id === post.uid);
         return author ? <PostCard key={post.id} post={post} author={author} /> : null;
