@@ -12,7 +12,7 @@ import { KEY } from '@/lib/utils';
 import { IC } from '@/lib/icons';
 
 export default function SettingsPage() {
-  const { db, me, t, theme, toggleTheme, updateLang, setDb, showToast, showConfirm, logout, updateProfile, serverMode, ready } = useApp();
+  const { db, me, t, theme, toggleTheme, updateLang, setDb, showToast, showConfirm, logout, updateProfile, serverMode, ready, incomingRequests } = useApp();
   const [editing, setEditing] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -61,6 +61,8 @@ export default function SettingsPage() {
     });
   };
 
+  const pendingRequests = incomingRequests().length;
+
   return (
     <AppShell>
       <header className="header home-header">
@@ -107,6 +109,15 @@ export default function SettingsPage() {
               <small>@{me.username} · {me.email}</small>
             </span>
             <button type="button" className="ghost-btn" onClick={() => setEditing(true)}>{t('editProfile')}</button>
+          </div>
+          <div className="settings-row">
+            <span className="settings-row-copy">
+              <b>{t('followRequests')}</b>
+            </span>
+            <Link href={`/u/${me.username}/followers`} className="ghost-btn">
+              {IC.user}{t('seeAll')}
+              {pendingRequests > 0 && <span className="settings-count">{pendingRequests}</span>}
+            </Link>
           </div>
         </section>
 
