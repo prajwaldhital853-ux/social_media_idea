@@ -63,7 +63,7 @@
     {
       "name": "desktop: a comment is written to /api/comments/ and rendered from it",
       "pass": true,
-      "detail": "{\"id\":\"2126\",\"text\":true}"
+      "detail": "{\"id\":\"2128\",\"text\":true}"
     },
     {
       "name": "desktop: the comment survives a server-side read back",
@@ -108,12 +108,12 @@
     {
       "name": "desktop: the followers list pages people with a cursor",
       "pass": true,
-      "detail": "first 18, api page 10, walked 18, server total 18"
+      "detail": "first 10, api page 10, walked 18, server total 18"
     },
     {
       "name": "desktop: an author with a shelf of reels exists",
       "pass": true,
-      "detail": "sita, 10 clips, head bumped to beat 30 views"
+      "detail": "sita, 10 clips, head bumped to beat 33 views"
     },
     {
       "name": "desktop: the profile leads its reels with three quiet words",
@@ -173,17 +173,17 @@
     {
       "name": "desktop: the thread opens on the newest keyset page",
       "pass": true,
-      "detail": "12 bubbles, load-more 1, tail \"intg older 11just now✓✓\""
+      "detail": "10 bubbles, load-more 1, tail \"intg older 11just now✓\""
     },
     {
       "name": "desktop: \"load more\" prepends an older page of the thread",
       "pass": true,
-      "detail": "12 -> 20"
+      "detail": "10 -> 20"
     },
     {
       "name": "desktop: loading older rows keeps the reader where they were",
       "pass": true,
-      "detail": "827 -> 827"
+      "detail": "721 -> 721"
     },
     {
       "name": "desktop: opening a thread marks it read on the server",

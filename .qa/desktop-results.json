@@ -65,7 +65,7 @@
     {
       "name": "desktop: the marketplace uses everything right of the rail",
       "pass": true,
-      "detail": "{\"mainW\":1160,\"cols\":4,\"cards\":30,\"calm\":false,\"pageToggle\":false,\"overflow\":false}"
+      "detail": "{\"mainW\":1160,\"cols\":4,\"cards\":21,\"calm\":false,\"pageToggle\":false,\"overflow\":false}"
     },
     {
       "name": "desktop: the marketplace header does not duplicate the top bar mode switch",
@@ -140,7 +140,7 @@
     {
       "name": "mobile: the inbox stays a single column with no thread pane",
       "pass": true,
-      "detail": "{\"rows\":10,\"mainHidden\":true,\"topbarHidden\":true,\"search\":true,\"head\":true,\"waitedMs\":540}"
+      "detail": "{\"rows\":10,\"mainHidden\":true,\"topbarHidden\":true,\"search\":true,\"head\":true,\"waitedMs\":555}"
     },
     {
       "name": "mobile: a thread is still full width with its back button",
@@ -150,7 +150,7 @@
     {
       "name": "mobile: the feed keeps its own sheet and loads posts",
       "pass": true,
-      "detail": "{\"bg\":\"rgb(255, 255, 255)\",\"posts\":10,\"waitedMs\":141}"
+      "detail": "{\"bg\":\"rgb(255, 255, 255)\",\"posts\":10,\"waitedMs\":134}"
     },
     {
       "name": "mobile: the For you / Following band thins on scroll without losing its place",
