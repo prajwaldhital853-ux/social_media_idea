@@ -95,7 +95,7 @@ function FeedFollow({ author }: { author: User }) {
 
 export default function PostCard({ post, author, featured }: PostCardProps) {
   const router = useRouter();
-  const { db, me, t, deletePost, toggleSave, isSaved, sharePost, openComposer, activePromo, promoEligible, showToast, reactionCount } = useApp();
+  const { db, me, t, deletePost, toggleSave, isSaved, sharePost, openComposer, activePromo, promoEligible, showToast, showConfirm, reactionCount } = useApp();
   const [menuOpen, setMenuOpen] = useState(false);
   const [showComments, setShowComments] = useState(false);
   const [reporting, setReporting] = useState(false);
@@ -243,7 +243,7 @@ export default function PostCard({ post, author, featured }: PostCardProps) {
                   {menuItem(t('copyLink'), () => { void handleShare(undefined, true); })}
                   {own && !me?.private && db.settings.features.promotion && menuItem(t('promote'), () => setPromoting(true))}
                   {own && menuItem(t('edit'), () => openComposer(post.id))}
-                  {own && menuItem(t('del'), () => { if (window.confirm(t('confirmDelete'))) deletePost(post.id); }, true)}
+                  {own && menuItem(t('del'), () => showConfirm(t('confirmDelete'), () => deletePost(post.id)), true)}
                   {!own && me && menuItem(t('report'), () => setReporting(true))}
                   {!own && !me && menuItem(t('report'), () => router.push('/login'))}
                 </div>

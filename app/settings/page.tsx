@@ -12,7 +12,7 @@ import { KEY } from '@/lib/utils';
 import { IC } from '@/lib/icons';
 
 export default function SettingsPage() {
-  const { db, me, t, theme, toggleTheme, updateLang, setDb, showToast, logout, updateProfile, serverMode, ready } = useApp();
+  const { db, me, t, theme, toggleTheme, updateLang, setDb, showToast, showConfirm, logout, updateProfile, serverMode, ready } = useApp();
   const [editing, setEditing] = useState(false);
 
   if (!me) {
@@ -54,9 +54,10 @@ export default function SettingsPage() {
   };
 
   const resetDemo = () => {
-    if (!window.confirm(`${t('resetDemo')}? ${t('resetDemoHint')}`)) return;
-    localStorage.removeItem(KEY);
-    window.location.reload();
+    showConfirm(`${t('resetDemo')}? ${t('resetDemoHint')}`, () => {
+      localStorage.removeItem(KEY);
+      window.location.reload();
+    });
   };
 
   return (
