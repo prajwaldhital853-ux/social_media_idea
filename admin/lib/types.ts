@@ -309,6 +309,7 @@ export interface NoticeRow {
   target_type: ContentKind;
   target_id: string;
   about: string;
+  audience: 'public' | 'private';
   text: string;
   reason: string;
   actor: string | null;

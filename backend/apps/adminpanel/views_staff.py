@@ -9,13 +9,14 @@ call instead of lingering until the token expires.
 import re
 
 from django.db.models import Q
-from django.contrib.auth.password_validation import validate_password
-from django.core.exceptions import ValidationError
+from django.core.exceptions import ValidationError as DjangoValidationError
+from django.core.validators import validate_email
 from django.utils import timezone
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from apps.accounts import passwords
 from apps.accounts.models import RefreshSession, User
 
 from . import rbac
@@ -231,12 +232,21 @@ def staff_create(request):
         return rbac.denial('permission_required', f'A {caller.effective_role} may only create Moderator seats.')
     if User.objects.filter(username__iexact=username).exists():
         return Response({'detail': f'The username {username} is already taken on the platform.'}, status=409)
-    if email and User.objects.filter(email__iexact=email).exists():
-        return Response({'detail': 'That email address already belongs to an account.'}, status=409)
+    # The address is not a nicety. Staff sign in with it and nothing else, and it
+    # is the only way back for a seat that has lost its password — a seat without
+    # one can only be repaired by somebody else's hand.
+    if not email:
+        return Response({'detail': 'A seat needs an email address: it is what signs the person in '
+                                   'and the only way they recover a lost password.'}, status=400)
     try:
-        validate_password(password)
-    except ValidationError as exc:
-        return Response({'detail': ' '.join(exc.messages)}, status=400)
+        validate_email(email)
+    except DjangoValidationError:
+        return Response({'detail': 'That is not an email address.'}, status=400)
+    if User.objects.filter(email__iexact=email).exists():
+        return Response({'detail': 'That email address already belongs to an account.'}, status=409)
+    bad = passwords.strength(password)
+    if bad:
+        return Response({'detail': bad}, status=400)
 
     user = User.objects.create(
         username=username, email=email, first_name=name,
@@ -244,6 +254,7 @@ def staff_create(request):
     )
     user.set_password(password)
     user.save(update_fields=['password'])
+    passwords.remember(user)
 
     staff = StaffAccount.for_user(user)
     staff.role = role

@@ -22,6 +22,11 @@ LOGOUT_URL = '/api/admin/session/logout/'
 EPOCH = datetime(1970, 1, 1, tzinfo=clock.utc)
 
 
+def mail(username):
+    """The console door is opened by the address on the seat, never the handle."""
+    return username if '@' in username else f'{username}@test.local'
+
+
 def carry(client, response):
     """Keep what the response set: the test client hands back cookies, not state.
 
@@ -45,7 +50,7 @@ def with_csrf(client):
 
 def first_sign_in(client, username='owner'):
     """The very first staff sign-in: password, enrolment QR, code. Returns (granted, started)."""
-    started = client.post(LOGIN_URL, {'username': username, 'password': PASSWORD}, format='json')
+    started = client.post(LOGIN_URL, {'email': mail(username), 'password': PASSWORD}, format='json')
     carry(client, started)
     secret = started.data['totp']['secret']
     granted = client.post(VERIFY_URL, {'code': totp.totp(secret)}, format='json')
@@ -55,7 +60,7 @@ def first_sign_in(client, username='owner'):
 
 def code_sign_in(client, code, username='owner'):
     """Every later sign-in: password, then the code the authenticator is showing."""
-    started = client.post(LOGIN_URL, {'username': username, 'password': PASSWORD}, format='json')
+    started = client.post(LOGIN_URL, {'email': mail(username), 'password': PASSWORD}, format='json')
     carry(client, started)
     granted = client.post(VERIFY_URL, {'code': code}, format='json')
     carry(client, granted)
@@ -107,20 +112,20 @@ class AdminSignInTests(TestCase):
         return APIClient()
 
     def test_ordinary_user_never_reaches_the_console_door(self):
-        response = self.jar().post(LOGIN_URL, {'username': 'plainmember', 'password': PASSWORD}, format='json')
+        response = self.jar().post(LOGIN_URL, {'email': mail('plainmember'), 'password': PASSWORD}, format='json')
         self.assertEqual(response.status_code, 401)
         self.assertNotIn(SETUP_COOKIE, response.cookies)
 
     def test_wrong_password_and_unknown_account_read_identically(self):
         client = self.jar()
-        known = client.post(LOGIN_URL, {'username': 'owner', 'password': 'not-the-password'}, format='json')
-        ghost = client.post(LOGIN_URL, {'username': 'ghost', 'password': 'not-the-password'}, format='json')
+        known = client.post(LOGIN_URL, {'email': mail('owner'), 'password': 'not-the-password'}, format='json')
+        ghost = client.post(LOGIN_URL, {'email': mail('ghost'), 'password': 'not-the-password'}, format='json')
         self.assertEqual(known.status_code, ghost.status_code)
         self.assertEqual(known.data['detail'], ghost.data['detail'])
 
     def test_enrolment_happens_before_any_session_is_minted(self):
         client = self.jar()
-        started = client.post(LOGIN_URL, {'username': 'owner', 'password': PASSWORD}, format='json')
+        started = client.post(LOGIN_URL, {'email': mail('owner'), 'password': PASSWORD}, format='json')
         self.assertEqual(started.status_code, 202)
         self.assertEqual(started.data['code'], 'two_factor_enrolment')
         self.assertTrue(started.data['totp']['otpauth_url'].startswith('otpauth://totp/Exposing:owner?secret='))
@@ -147,14 +152,14 @@ class AdminSignInTests(TestCase):
     def test_a_later_sign_in_asks_for_a_code_not_an_enrolment(self):
         client = self.jar()
         first_sign_in(client)
-        again = client.post(LOGIN_URL, {'username': 'owner', 'password': PASSWORD}, format='json')
+        again = client.post(LOGIN_URL, {'email': mail('owner'), 'password': PASSWORD}, format='json')
         self.assertEqual(again.status_code, 202)
         self.assertEqual(again.data['code'], 'two_factor_required')
         self.assertNotIn('totp', again.data)
 
     def test_five_wrong_codes_lock_the_authenticator(self):
         client = self.jar()
-        started = client.post(LOGIN_URL, {'username': 'owner', 'password': PASSWORD}, format='json')
+        started = client.post(LOGIN_URL, {'email': mail('owner'), 'password': PASSWORD}, format='json')
         carry(client, started)
         for _ in range(5):
             self.assertEqual(client.post(VERIFY_URL, {'code': '123456'}, format='json').status_code, 401)

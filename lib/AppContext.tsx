@@ -189,6 +189,10 @@ export interface AuthResult {
   banScope?: string;
   /** The account was made by Google and has no password to type. */
   googleOnly?: boolean;
+  /** The seat is closed by staff, so no credential opens it. */
+  suspended?: boolean;
+  suspendedUntil?: number;
+  permanent?: boolean;
   attemptsLeft?: number;
   detail?: string;
   errors?: Record<string, string[]>;
@@ -558,6 +562,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         banned: !!err.data?.banned,
         banScope: err.data?.scope || undefined,
         googleOnly: !!err.data?.google_only,
+        suspended: !!err.data?.suspended,
+        suspendedUntil: at(err.data?.suspended_until),
+        permanent: !!err.data?.permanent,
         attemptsLeft: err.data?.attempts_left,
       };
     }
