@@ -34,8 +34,13 @@ class ListingSerializer(serializers.ModelSerializer):
         return value
 
     def validate_images(self, value):
-        if len(value) > 4:
-            raise serializers.ValidationError('At most 4 photos per listing.')
+        if len(value) > 5:
+            raise serializers.ValidationError('At most 5 photos per listing.')
+        return value
+
+    def validate_description(self, value):
+        if len((value or '').split()) > 500:
+            raise serializers.ValidationError('Description must be 500 words or fewer.')
         return value
 
     def create(self, validated_data):
