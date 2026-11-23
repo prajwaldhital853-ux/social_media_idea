@@ -9,6 +9,7 @@ import VerifiedBadge from '@/components/VerifiedBadge';
 import ListingForm from '@/components/ListingForm';
 import PromoteModal from '@/components/PromoteModal';
 import ReportModal from '@/components/ReportModal';
+import ShareDialog from '@/components/ShareDialog';
 import { useApp } from '@/lib/AppContext';
 import { useRemoteRow } from '@/lib/useRemoteRow';
 import { api } from '@/lib/api';
@@ -26,6 +27,7 @@ export default function ListingPage() {
   const [editing, setEditing] = useState(false);
   const [promote, setPromote] = useState(false);
   const [report, setReport] = useState(false);
+  const [sharing, setSharing] = useState(false);
   const [descOpen, setDescOpen] = useState(false);
   const [descTall, setDescTall] = useState(false);
   const descRef = useRef<HTMLParagraphElement>(null);
@@ -109,16 +111,6 @@ export default function ListingPage() {
   const contact = () => {
     if (!me) { router.push('/login'); return; }
     router.push(`/messages/${seller?.username || listing.uid}`);
-  };
-
-  const share = async () => {
-    const url = `${window.location.origin}/marketplace/${listing.id}`;
-    try {
-      await navigator.clipboard.writeText(url);
-      showToast(t('linkCopied'));
-    } catch {
-      showToast(url);
-    }
   };
 
   const save = () => {
@@ -219,7 +211,7 @@ export default function ListingPage() {
                   <button type="button" className={`ghost-btn ${saved ? 'saved-on' : ''}`} onClick={save} aria-pressed={saved}>
                     {IC.bookmark}<span>{saved ? t('saved') : t('saveListing')}</span>
                   </button>
-                  <button type="button" className="ghost-btn" onClick={() => void share()}>{IC.share}{t('share')}</button>
+                  <button type="button" className="ghost-btn" onClick={() => setSharing(true)}>{IC.share}{t('share')}</button>
                   <button type="button" className="ghost-btn" onClick={() => me ? setReport(true) : router.push('/login')}>{IC.flag}{t('report')}</button>
                 </>
               )}
@@ -247,6 +239,19 @@ export default function ListingPage() {
       {editing && mine && <ListingForm listingId={listing.id} onClose={() => setEditing(false)} onSaved={() => setEditing(false)} />}
       {promote && <PromoteModal targetType="listing" targetId={listing.id} defaultCategory={listing.category} onClose={() => setPromote(false)} />}
       {report && <ReportModal type="listing" targetId={listing.id} onClose={() => setReport(false)} />}
+      <ShareDialog
+        open={sharing}
+        url={`${typeof window === 'undefined' ? '' : window.location.origin}/marketplace/${listing.id}`}
+        title={`${seller?.name || seller?.username || listing.title} on Exposing`}
+        text={listing.desc.slice(0, 140)}
+        preview={{
+          title: listing.title,
+          subtitle: `NPR ${listing.price.toLocaleString('en-US')}${listing.location ? ` · ${listing.location}` : ''}`,
+          image: current?.src || images[0]?.src,
+        }}
+        onShared={() => { /* no share counter on a listing */ }}
+        onClose={() => setSharing(false)}
+      />
     </AppShell>
   );
 }

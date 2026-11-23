@@ -35,7 +35,7 @@ export default function ReelsFeed({ initialKey }: { initialKey?: string }) {
   const router = useRouter();
   const {
     db, me, feature, toggleSave, isSaved, toggleFollow, isFollowing, serverMode,
-    sharePost, countView, blockUser, isBlocked, t, showToast,
+    sharePost, countView, blockUser, isBlocked, t,
   } = useApp();
   const [index, setIndex] = useState(0);
   const [commentsOpen, setCommentsOpen] = useState(false);
@@ -200,22 +200,9 @@ export default function ReelsFeed({ initialKey }: { initialKey?: string }) {
     return bufferHandlers.current[key];
   };
 
-  // Opening the sheet is free; the tally moves when the clip is actually handed on.
+  // The menu hands out the same sheet the rail does: a reel is shared to people
+  // and apps, not just pasted as a link on the clipboard.
   const shareReel = (slide: ReelSlide) => setSharing(slide);
-
-  // A post's menu hands out a link without opening the sheet. The reel's menu
-  // had speed, Report and Block, so the one thing a reader wants on a phone —
-  // send this clip somewhere — was missing.
-  const copyReelLink = async (slide: ReelSlide) => {
-    const url = `${window.location.origin}/video/${slide.post.id}-${slide.mediaIndex}`;
-    try {
-      await navigator.clipboard.writeText(url);
-      showToast(t('linkCopied'));
-      void sharePost(slide.post.id);
-    } catch {
-      showToast(url);
-    }
-  };
 
   return (
     <div className="reels-page">
@@ -259,8 +246,8 @@ export default function ReelsFeed({ initialKey }: { initialKey?: string }) {
                   )}
                   {menuFor === slide.key && (
                     <div className="reel-menu" role="dialog" aria-label={t('reelOptions')} onClick={e => e.stopPropagation()}>
-                      <button type="button" className="reel-menu-item" onClick={() => { setMenuFor(null); void copyReelLink(slide); }}>
-                        {t('copyLink')}
+                      <button type="button" className="reel-menu-item" onClick={() => { setMenuFor(null); shareReel(slide); }}>
+                        {t('share')}
                       </button>
                       <div className="reel-menu-row">
                         <span className="reel-menu-label">{t('playbackSpeed')}</span>
