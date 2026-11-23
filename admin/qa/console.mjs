@@ -2394,11 +2394,16 @@ try {
       && refusedReach.body.campaign.status === 'ended',
     `${refusedReach.status} · ${refusedReach.body.refunded} back · ${refusedReach.body.campaign.status_label}`);
   const refundRows = await walletRows(REACH.refuse);
+  const refundRow = refundRows.find(row => row.note.includes(`campaign ${refuseRow}`));
+  // Asserted on the row rather than on the length of the list: "one more row than
+  // before" is satisfied by any row that happens to arrive, while the claim is that
+  // THIS refund was written — a credit, the sum the run never got, named after the
+  // campaign it answers and the seat who signed it, and newest on the payer's ledger.
   ok('the refund is a real ledger row through the wallet, and the note says which campaign it answers',
-    refundRows.length === purseBefore.length + 1
-      && refundRows[0].kind === 'credit' && Number(refundRows[0].amount) === 180
-      && refundRows[0].note.includes(`campaign ${refuseRow}`) && refundRows[0].note.includes(OWNER),
-    refundRows.length ? `${refundRows[0].kind} ${refundRows[0].amount} · ${refundRows[0].note}` : 'no row written');
+    !!refundRow && refundRows[0] === refundRow && refundRow.kind === 'credit'
+      && Number(refundRow.amount) === 180 && refundRow.note.includes(OWNER),
+    `#${refuseRow} · ${refundRows.length} rows, was ${purseBefore.length} · `
+      + (refundRows[0] ? `${refundRows[0].kind} ${refundRows[0].amount} · ${refundRows[0].note}` : 'no row written'));
   await shot(owner, 'reach-2-refund-paper');
 
   // 11.4 — pause holds the reservation; a stop has to say what happens to the money.
@@ -3025,6 +3030,16 @@ try {
       && fileProof.status === 200 && /text\/csv/.test(fileProof.type) && fileProof.rows > 0
       && fileProof.head.startsWith('id,created_at,username') && fileProof.filename.startsWith('exposing-coin_ledger-'),
     `${fileProof.filename} · ${fileProof.rows} rows · ${fileProof.head.slice(0, 40)}`);
+  const headFits = await owner.evaluate(() => {
+    // Measured on the paragraph, not on the note inside it: an inline `<em>` reports
+    // no width at all (both numbers come back 0), so a check written against it passes
+    // on a page that is overflowing. The block is the box the text can escape.
+    const line = document.querySelector('[data-saved="users"]');
+    return line ? { wide: line.scrollWidth, box: line.clientWidth } : null;
+  });
+  ok('the header line the file begins with is printed inside the panel, not run past its edge',
+    !!headFits && headFits.box > 0 && headFits.wide <= headFits.box + 1,
+    headFits ? `${headFits.wide}px of text in a ${headFits.box}px box` : 'no header line was shown');
   const takenNote = await until(owner, '[data-list="exports-taken"]', 'exposing-users-');
   ok('building a file of other people’s email addresses is a staff action, and the screen shows the record of it',
     takenNote.includes('sita') && takenNote.includes('every row the table holds'),
