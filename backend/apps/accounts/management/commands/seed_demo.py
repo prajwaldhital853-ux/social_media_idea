@@ -3,11 +3,13 @@
     manage.py seed_demo --purge      wipe the junk and lay a fresh showcase
     manage.py seed_demo              seeds only when the showcase is missing
 
-The showcase is 36 named Nepali members, 500 photo posts (single and multi
-image), 110 reels whose clips are cached first-party under MEDIA_ROOT/demo, and
-the follow, comment, reaction, message, listing, wallet and moderation rows that
-put those posts inside a real network. One ``random.Random`` drives every choice,
-so a rebuild produces the same demo instead of a new one to re-test.
+The showcase is 36 named Nepali members, 16 photo posts (single and multi image)
+and 4 reels whose clips are cached first-party under MEDIA_ROOT/demo, and the
+follow, comment, reaction, message, listing, wallet and moderation rows that put
+those posts inside a real network. Twenty media is what a hosted demo can carry
+on a free tier; ``--photos 500 --reels 110`` lays the big one locally. One
+``random.Random`` drives every choice, so a rebuild produces the same demo
+instead of a new one to re-test.
 """
 
 import random
@@ -81,12 +83,15 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument('--purge', action='store_true', help='Delete all content and re-seed.')
-        parser.add_argument('--photos', type=int, default=500, help='Photo posts to write.')
-        parser.add_argument('--reels', type=int, default=110, help='Reels to write.')
+        parser.add_argument('--photos', type=int, default=16, help='Photo posts to write.')
+        parser.add_argument('--reels', type=int, default=4, help='Reels to write.')
+        parser.add_argument('--prune-clips', action='store_true',
+                            help='Delete cached demo reels this seed will not use, from MEDIA_ROOT/demo only.')
 
     def handle(self, *args, **options):
         self.photos = options['photos']
         self.reels = options['reels']
+        self.prune_clips = options['prune_clips']
         self.rng = random.Random(SEED)
         self.now = timezone.now().replace(microsecond=0)
         self.decks = {}
@@ -315,11 +320,26 @@ class Command(BaseCommand):
         )
 
     def ensure_clips(self):
-        """Cache the demo reels first-party so no clip depends on a third host."""
+        """Cache the demo reels first-party so no clip depends on a third host.
+
+        Only as many distinct files as the reels spread over, because every one of
+        them is a fetch and megabytes on a hosted disk — and a reel is happy to
+        reuse a clip it already has.
+        """
         folder = Path(settings.MEDIA_ROOT) / 'demo'
         folder.mkdir(parents=True, exist_ok=True)
+        # Two are the floor: the showcase post and the single-video post on page
+        # one want different clips, however few reels are asked for.
+        wanted = CLIPS[:max(2, min(len(CLIPS), self.reels))]
+        if self.prune_clips:
+            keep = {name for name, _ in wanted}
+            for stale in folder.glob('*.mp4'):
+                if stale.name in keep:
+                    continue
+                stale.unlink()
+                self.stdout.write(f'Pruned {stale.name} from the media disk')
         clips, saved = [], []
-        for name, sources in CLIPS:
+        for name, sources in wanted:
             target = folder / name
             if not target.exists():
                 self.stdout.write(f'Fetching demo clip {name}')
