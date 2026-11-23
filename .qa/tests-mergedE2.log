@@ -1,0 +1,380 @@
+D:\social_medial\backend\.venv\Lib\site-packages\django\core\handlers\base.py:63: UserWarning: No directory at: D:\social_medial-wt\agent-b\backend\staticfiles\
+  mw_instance = middleware(adapted_handler)
+Creating test database for alias 'default'...
+Found 584 test(s).
+System check identified no issues (0 silenced).
+2026-11-23 10:52:15,627 WARNING [0e7d53c17a0041be] exposing.request: GET /api/auth/me/ -> 401 in 0ms
+..2026-11-23 10:52:15,776 WARNING [42141f6e7c084218] exposing.request: GET /api/auth/me/ -> 401 in 0ms
+2026-11-23 10:52:15,776 WARNING [5d292ffafa2a4df7] exposing.request: POST /api/auth/login/ -> 401 in 0ms
+.D:\social_medial\backend\.venv\Lib\site-packages\django\core\handlers\base.py:63: UserWarning: No directory at: D:\social_medial-wt\agent-b\backend\staticfiles\
+  mw_instance = middleware(adapted_handler)
+2026-11-23 10:52:15,910 WARNING [abcf0135df924e70] exposing.request: POST /api/auth/google/ -> 503 in 0ms
+2026-11-23 10:52:15,910 ERROR [-] django.request: Service Unavailable: /api/auth/google/
+.2026-11-23 10:52:16,016 WARNING [a429e69a8d314971] exposing.request: POST /api/auth/login/ -> 400 in 0ms
+.2026-11-23 10:52:16,034 WARNING [bf4065cd5d6145b8] exposing.request: POST /api/auth/login/ -> 401 in 16ms
+2026-11-23 10:52:16,047 WARNING [9c1e143393df4458] exposing.request: POST /api/auth/login/ -> 401 in 0ms
+2026-11-23 10:52:16,051 WARNING [6b3a9e1c8358437c] exposing.request: POST /api/auth/login/ -> 423 in 0ms
+2026-11-23 10:52:16,065 WARNING [d5b52579ce244424] exposing.request: POST /api/auth/login/ -> 401 in 15ms
+.2026-11-23 10:52:16,084 WARNING [7c3c0af167bc4ab1] exposing.request: POST /api/auth/login/ -> 401 in 0ms
+2026-11-23 10:52:16,093 WARNING [39198a6bbec9430e] exposing.request: POST /api/auth/login/ -> 401 in 0ms
+2026-11-23 10:52:16,100 WARNING [922197f52b754797] exposing.request: POST /api/auth/login/ -> 423 in 14ms
+.2026-11-23 10:52:16,157 WARNING [7b5ad8423c4a4b7d] exposing.request: POST /api/auth/login/ -> 401 in 16ms
+2026-11-23 10:52:16,166 WARNING [57fae6cbfc4e4ef9] exposing.request: POST /api/auth/login/ -> 401 in 0ms
+2026-11-23 10:52:16,168 WARNING [e056fd2a8e2b4484] exposing.request: POST /api/auth/login/ -> 423 in 0ms
+2026-11-23 10:52:16,179 WARNING [1696b7aca1d44ca6] exposing.request: POST /api/auth/login/ -> 423 in 14ms
+2026-11-23 10:52:16,183 WARNING [3b1ecffa69f546e6] exposing.request: POST /api/auth/login/ -> 423 in 0ms
+2026-11-23 10:52:16,184 WARNING [a6a0f6fe24be46f8] exposing.request: POST /api/auth/login/ -> 423 in 0ms
+2026-11-23 10:52:16,195 WARNING [6ab877ef781c40bc] exposing.request: POST /api/auth/login/ -> 423 in 15ms
+2026-11-23 10:52:16,199 WARNING [b398ef0a87a34b5f] exposing.request: POST /api/auth/login/ -> 423 in 0ms
+2026-11-23 10:52:16,200 WARNING [312b557bcbb54c42] exposing.request: POST /api/auth/login/ -> 423 in 0ms
+2026-11-23 10:52:16,210 WARNING [9c85e858e2b84bd9] exposing.request: POST /api/auth/login/ -> 423 in 16ms
+2026-11-23 10:52:16,212 WARNING [76577e1a8d6448c5] exposing.request: POST /api/auth/login/ -> 429 in 0ms
+..2026-11-23 10:52:16,297 WARNING [6561895319434abd] exposing.request: POST /api/auth/login/ -> 403 in 0ms
+.2026-11-23 10:52:16,317 WARNING [4fa534ed7c0e4d77] exposing.request: POST /api/auth/login/ -> 401 in 15ms
+2026-11-23 10:52:16,323 WARNING [19e5a946132d432e] exposing.request: POST /api/auth/login/ -> 401 in 0ms
+2026-11-23 10:52:16,332 WARNING [ed413c3537bf4104] exposing.request: POST /api/auth/login/ -> 423 in 16ms
+2026-11-23 10:52:16,335 WARNING [f2528b1036e64e0c] exposing.request: POST /api/auth/login/ -> 423 in 0ms
+.2026-11-23 10:52:16,351 WARNING [45f30a27484e4082] exposing.request: POST /api/auth/unlock/ -> 400 in 0ms
+..2026-11-23 10:52:16,416 WARNING [b5e126f919f041a6] exposing.request: POST /api/auth/login/ -> 403 in 0ms
+.2026-11-23 10:52:16,449 WARNING [1c773c2d2002459d] exposing.request: POST /api/auth/login/ -> 400 in 0ms
+2026-11-23 10:52:16,459 WARNING [0d766e710bfa4ae5] exposing.request: POST /api/auth/login/ -> 400 in 0ms
+..2026-11-23 10:52:17,191 WARNING [b7b8ecf704a74fce] exposing.request: POST /api/auth/login/ -> 401 in 140ms
+.2026-11-23 10:52:17,460 WARNING [3f809b4ed04c44bc] exposing.request: POST /api/posts/ -> 403 in 0ms
+2026-11-23 10:52:17,462 WARNING [dd267f2708a64421] exposing.request: POST /api/posts/ -> 403 in 0ms
+..2026-11-23 10:52:17,493 WARNING [d695de75a17245dc] exposing.request: POST /api/posts/ -> 401 in 0ms
+...2026-11-23 10:52:17,873 WARNING [0e4352a20ec24eb5] exposing.request: GET /api/auth/me/ -> 401 in 0ms
+2026-11-23 10:52:17,873 WARNING [61eb0d9163cb477e] exposing.request: POST /api/auth/refresh/ -> 401 in 0ms
+..2026-11-23 10:52:18,007 WARNING [82e413ba3c304885] exposing.request: POST /api/auth/refresh/ -> 401 in 16ms
+..2026-11-23 10:52:18,171 WARNING [239825713a0d49ab] exposing.request: POST /api/auth/otp/ -> 400 in 16ms
+2026-11-23 10:52:18,190 WARNING [5b09cb8340fd4ec8] exposing.request: POST /api/auth/otp/ -> 400 in 0ms
+2026-11-23 10:52:18,205 WARNING [53b4b6c9081d4808] exposing.request: POST /api/auth/otp/ -> 400 in 16ms
+2026-11-23 10:52:18,205 WARNING [2baaed7c1991443a] exposing.request: POST /api/auth/otp/ -> 400 in 0ms
+2026-11-23 10:52:18,205 WARNING [6a5d7efd2d44443e] exposing.request: POST /api/auth/otp/ -> 400 in 0ms
+2026-11-23 10:52:18,205 WARNING [6840887813ca453c] exposing.request: POST /api/auth/otp/ -> 400 in 0ms
+2026-11-23 10:52:18,223 WARNING [afec62bee0f74d92] exposing.request: POST /api/auth/otp/ -> 400 in 0ms
+.2026-11-23 10:52:18,287 WARNING [8e2b637ce39e453d] exposing.request: POST /api/auth/otp/resend/ -> 429 in 16ms
+.2026-11-23 10:52:18,357 WARNING [3d1c6e6939264410] exposing.request: POST /api/auth/signup/ -> 429 in 0ms
+.2026-11-23 10:52:18,373 WARNING [b87a11a054634243] exposing.request: GET /api/auth/me/ -> 401 in 0ms
+.2026-11-23 10:52:18,423 WARNING [3627824523334717] exposing.request: POST /api/auth/signup/ -> 400 in 14ms
+2026-11-23 10:52:18,423 WARNING [970eb9b8107c4e30] exposing.request: POST /api/auth/signup/ -> 400 in 0ms
+2026-11-23 10:52:18,423 WARNING [4da16610923a44f5] exposing.request: POST /api/auth/signup/ -> 400 in 0ms
+2026-11-23 10:52:18,423 WARNING [af000f29ac964be6] exposing.request: POST /api/auth/signup/ -> 400 in 0ms
+2026-11-23 10:52:18,423 WARNING [968b8ba14c674cee] exposing.request: POST /api/auth/signup/ -> 400 in 0ms
+2026-11-23 10:52:18,438 WARNING [793d479a8cc64f4f] exposing.request: POST /api/auth/signup/ -> 400 in 0ms
+2026-11-23 10:52:18,457 WARNING [904aa80f773c4f97] exposing.request: POST /api/auth/signup/ -> 400 in 0ms
+2026-11-23 10:52:18,474 WARNING [5f4ea2d174b444ff] exposing.request: POST /api/auth/signup/ -> 400 in 14ms
+.2026-11-23 10:52:18,490 WARNING [48e9f340d2f3422d] exposing.request: POST /api/auth/otp/ -> 400 in 0ms
+.........2026-11-23 10:52:20,188 WARNING [923af94f066042f4] exposing.request: GET /api/admin/audit/?since=last+tuesday -> 400 in 0ms
+...2026-11-23 10:52:20,738 WARNING [acfe4678d73e4b6a] exposing.request: GET /api/admin/audit/ -> 403 in 15ms
+..2026-11-23 10:52:20,949 WARNING [0336b311b3934017] exposing.request: GET /api/admin/audit/ -> 401 in 0ms
+2026-11-23 10:52:20,972 WARNING [13757761062845bd] exposing.request: GET /api/admin/audit/ -> 403 in 0ms
+....2026-11-23 10:52:21,468 WARNING [bbf070902c9f4201] exposing.request: POST /api/admin/audit/ -> 405 in 0ms
+2026-11-23 10:52:21,470 WARNING [9a8272430b9d4ca1] exposing.request: PUT /api/admin/audit/ -> 405 in 14ms
+2026-11-23 10:52:21,470 WARNING [321836a209604cb0] exposing.request: DELETE /api/admin/audit/ -> 405 in 0ms
+....2026-11-23 10:52:22,211 WARNING [151d6af48696405d] exposing.request: POST /api/admin/coins/2/reject/ -> 400 in 31ms
+..2026-11-23 10:52:22,552 WARNING [c875839d683345f1] exposing.request: POST /api/admin/coins/6/refund/ -> 400 in 14ms
+....2026-11-23 10:52:23,002 WARNING [3c229ee96ec34e00] exposing.request: POST /api/admin/coins/14/approve/ -> 409 in 16ms
+.2026-11-23 10:52:23,235 WARNING [2dec35f4d5c74406] exposing.request: POST /api/admin/coins/ledger/adjust/ -> 400 in 30ms
+.2026-11-23 10:52:23,328 WARNING [f45956be7cc14287] exposing.request: POST /api/admin/coins/ledger/adjust/ -> 400 in 0ms
+..2026-11-23 10:52:23,485 WARNING [bd5bd71adce24024] exposing.request: POST /api/admin/coins/ledger/adjust/ -> 400 in 14ms
+2026-11-23 10:52:23,485 WARNING [bff7a5a28aa84020] exposing.request: POST /api/admin/coins/ledger/adjust/ -> 404 in 0ms
+...2026-11-23 10:52:23,836 WARNING [2875cd515f644093] exposing.request: POST /api/admin/coins/desk/ -> 400 in 16ms
+2026-11-23 10:52:23,852 WARNING [7cc71dbab29849fb] exposing.request: POST /api/admin/coins/desk/ -> 400 in 14ms
+.2026-11-23 10:52:23,918 WARNING [5f8e1047d97347ae] exposing.request: POST /api/admin/coins/desk/ -> 400 in 0ms
+..2026-11-23 10:52:24,157 WARNING [d99cdb87087c43c9] exposing.request: POST /api/admin/coins/qr/ -> 400 in 16ms
+..2026-11-23 10:52:24,420 WARNING [18f6a41ca14c4a92] exposing.request: POST /api/admin/coins/desk/ -> 400 in 16ms
+...2026-11-23 10:52:24,752 WARNING [871f5908a5fe45d0] exposing.request: GET /api/admin/coins/32/receipt/?t=eyJyIjozMSwidSI6MjA1fQ:1xVMGy:_KAqCcjeCJwwB3P9qf3ZM18DmkkZNIaDWyjESm0Y5kI -> 403 in 31ms
+.2026-11-23 10:52:24,833 WARNING [0dff2fa252544a67] exposing.request: GET /api/admin/coins/34/receipt/ -> 400 in 16ms
+.2026-11-23 10:52:24,918 WARNING [f0a2e9adf5784f9e] exposing.request: GET /api/admin/coins/36/receipt/?t=eyJyIjozNiwidSI6MjEzfQ:1xVMGy:Gtovj3pzuE56ideIitds90EPpw2uutJeEWKn5AAAAAA -> 410 in 16ms
+..2026-11-23 10:52:25,222 WARNING [4361152e47d24328] exposing.request: GET /api/admin/coins/40/receipt-link/ -> 404 in 14ms
+..........2026-11-23 10:52:26,597 WARNING [8a2d2d78ab834040] exposing.request: GET /api/admin/coins/ -> 403 in 0ms
+2026-11-23 10:52:26,615 WARNING [061a6c700b934000] exposing.request: GET /api/admin/coins/ledger/ -> 403 in 15ms
+2026-11-23 10:52:26,615 WARNING [29f530a505994047] exposing.request: GET /api/admin/coins/desk/ -> 403 in 0ms
+2026-11-23 10:52:26,615 WARNING [4557047ebd874242] exposing.request: GET /api/admin/coins/ -> 403 in 0ms
+.2026-11-23 10:52:26,731 WARNING [8cb083a37bca406a] exposing.request: GET /api/admin/coins/58/receipt/?t=eyJyIjo1OCwidSI6MjY1fQ:1xVMH0:PJB9U5V0mKWli0IbDKcGE77gDz2mj394dlcMY9xXUMY -> 403 in 14ms
+.2026-11-23 10:52:26,865 WARNING [2cedd24575d944bc] exposing.request: POST /api/admin/coins/60/approve/ -> 403 in 15ms
+.2026-11-23 10:52:26,949 WARNING [f04f2c7d8eeb448a] exposing.request: GET /api/admin/coins/desk/ -> 403 in 0ms
+..2026-11-23 10:52:27,215 WARNING [5e093561895d48b6] exposing.request: POST /api/admin/exports/users/?raw=1 -> 406 in 0ms
+.2026-11-23 10:52:27,282 WARNING [0f48ec1214f44ff0] exposing.request: GET /api/admin/exports/ -> 403 in 0ms
+2026-11-23 10:52:27,300 WARNING [d7f7346a20894118] exposing.request: POST /api/admin/exports/users/ -> 403 in 31ms
+.2026-11-23 10:52:27,365 WARNING [2c1e9f641d224c6a] exposing.request: GET /api/admin/exports/ -> 403 in 0ms
+.......2026-11-23 10:52:28,221 WARNING [1c80cedc93914000] exposing.request: POST /api/admin/exports/salaries/ -> 404 in 14ms
+.......2026-11-23 10:52:29,028 WARNING [d287129dbb974320] exposing.request: POST /api/admin/exports/users/ -> 400 in 14ms
+....2026-11-23 10:52:29,363 WARNING [73338e9cd6cc490c] exposing.request: POST /api/admin/exports/users/ -> 400 in 15ms
+......2026-11-23 10:52:29,962 WARNING [75df080f75db4a96] exposing.request: GET /api/admin/limits/ -> 401 in 0ms
+2026-11-23 10:52:29,977 WARNING [66da7d6146cc4f1f] exposing.request: GET /api/admin/limits/ -> 403 in 0ms
+.2026-11-23 10:52:30,046 WARNING [5cae4baf259148f3] exposing.request: GET /api/admin/limits/ -> 403 in 0ms
+2026-11-23 10:52:30,046 WARNING [4a073e4748ef43c1] exposing.request: POST /api/admin/limits/ -> 403 in 0ms
+....2026-11-23 10:52:30,345 WARNING [aa24b525ab3d495f] exposing.request: POST /api/admin/limits/ -> 400 in 31ms
+.2026-11-23 10:52:30,395 WARNING [87ff7ebd436041ae] exposing.request: POST /api/admin/limits/ -> 400 in 0ms
+.2026-11-23 10:52:30,460 WARNING [fc66746321624bd2] exposing.request: POST /api/admin/limits/ -> 400 in 16ms
+..2026-11-23 10:52:30,578 WARNING [b8b2b2db0ec442fc] exposing.request: POST /api/admin/limits/ -> 400 in 0ms
+2026-11-23 10:52:30,595 WARNING [f74a419404b34e1e] exposing.request: POST /api/admin/limits/ -> 400 in 0ms
+2026-11-23 10:52:30,610 WARNING [e45ad2314271482e] exposing.request: POST /api/admin/limits/ -> 400 in 14ms
+...................2026-11-23 10:52:40,277 WARNING [3a2ce90273f74536] exposing.request: GET /api/admin/overview/ -> 403 in 0ms
+.2026-11-23 10:52:40,316 WARNING [4446a8cba5964f30] exposing.request: GET /api/admin/overview/ -> 401 in 0ms
+2026-11-23 10:52:40,332 WARNING [62e03173cd424454] exposing.request: GET /api/admin/overview/ -> 403 in 16ms
+........................2026-11-23 10:52:44,547 WARNING [db7973d9fc864bfd] exposing.request: POST /api/admin/people/doomed/delete/ -> 400 in 0ms
+2026-11-23 10:52:44,565 WARNING [304314556f084dcd] exposing.request: POST /api/admin/people/doomed/delete/ -> 400 in 30ms
+.2026-11-23 10:52:44,882 WARNING [945d4873304548f5] exposing.request: POST /api/admin/people/coin_holder/delete/ -> 400 in 16ms
+2026-11-23 10:52:44,915 WARNING [3116188fa7e04d6a] exposing.request: POST /api/admin/people/coin_holder/delete/ -> 400 in 16ms
+2026-11-23 10:52:44,948 WARNING [1f7ff3d29c08415e] exposing.request: POST /api/admin/people/coin_holder/delete/ -> 400 in 30ms
+..2026-11-23 10:52:45,132 WARNING [20d4619875bb4ed5] exposing.request: POST /api/admin/people/desk_admin/delete/ -> 400 in 0ms
+2026-11-23 10:52:45,148 WARNING [fdf1bd933d824225] exposing.request: POST /api/admin/people/client_owner/delete/ -> 400 in 14ms
+.2026-11-23 10:52:45,281 WARNING [17cffe20ce054550] exposing.request: GET /api/admin/people/?status=on_fire -> 400 in 0ms
+2026-11-23 10:52:45,296 WARNING [b4648bdeeee44d84] exposing.request: GET /api/admin/people/?provider=mysteries -> 400 in 16ms
+...2026-11-23 10:52:46,079 WARNING [5297b3b7df5e485a] exposing.request: GET /api/admin/people/nobody_here/ -> 404 in 0ms
+....2026-11-23 10:52:46,847 WARNING [0f3786d9f2e04b62] exposing.request: POST /api/admin/people/flagged_person/clear-flags/ -> 400 in 31ms
+..2026-11-23 10:52:47,279 WARNING [0e5ac1be33c74a66] exposing.request: POST /api/admin/people/ordinary/suspend/ -> 403 in 14ms
+2026-11-23 10:52:47,279 WARNING [2b88af5cc77f45b4] exposing.request: POST /api/admin/people/ordinary/warn/ -> 403 in 0ms
+.2026-11-23 10:52:47,927 WARNING [fc031611fb4f42d8] exposing.request: GET /api/admin/people/ -> 401 in 0ms
+.2026-11-23 10:52:48,062 WARNING [f367523d595a47c7] exposing.request: GET /api/admin/people/ -> 403 in 0ms
+..2026-11-23 10:52:48,396 WARNING [e54cf6cf03984de6] exposing.request: POST /api/admin/people/ordinary/suspend/ -> 400 in 14ms
+.2026-11-23 10:52:48,500 WARNING [e20d7ccddb4f40ba] exposing.request: GET /api/auth/me/ -> 401 in 0ms
+.2026-11-23 10:52:48,644 WARNING [a8f0bab67207457e] exposing.request: POST /api/admin/people/ordinary/suspend/ -> 400 in 14ms
+2026-11-23 10:52:48,659 WARNING [d5d1b3182bc94e21] exposing.request: POST /api/admin/people/ordinary/suspend/ -> 400 in 16ms
+2026-11-23 10:52:48,678 WARNING [d613f10d34454a27] exposing.request: POST /api/admin/people/ordinary/suspend/ -> 400 in 14ms
+.2026-11-23 10:52:48,761 WARNING [95685ae7c155431b] exposing.request: POST /api/admin/people/desk_admin/suspend/ -> 400 in 16ms
+2026-11-23 10:52:48,795 WARNING [08afeb783031422c] exposing.request: POST /api/admin/people/client_owner/suspend/ -> 400 in 31ms
+.2026-11-23 10:52:48,928 WARNING [bcf8f698d36b434a] exposing.request: POST /api/admin/people/ordinary/reinstate/ -> 400 in 0ms
+..2026-11-23 10:52:49,325 WARNING [d047954262564e33] exposing.request: POST /api/admin/people/shopkeeper/verify/ -> 400 in 15ms
+.2026-11-23 10:52:49,465 WARNING [73f92b7889e94954] exposing.request: POST /api/admin/people/shopkeeper/verify/ -> 400 in 16ms
+...2026-11-23 10:52:49,944 WARNING [240cdb70b9ea4fd6] exposing.request: POST /api/admin/people/warned_person/warn/ -> 400 in 15ms
+...2026-11-23 10:52:50,293 WARNING [0d538b93943e4207] exposing.request: POST /api/admin/promotions/algorithm/ -> 400 in 16ms
+.2026-11-23 10:52:50,360 WARNING [f53fd4489fe44edd] exposing.request: POST /api/admin/promotions/algorithm/ -> 400 in 0ms
+2026-11-23 10:52:50,375 WARNING [88d4721f4ab84ec2] exposing.request: POST /api/admin/promotions/algorithm/ -> 400 in 0ms
+2026-11-23 10:52:50,399 WARNING [83f2815d716b43e1] exposing.request: POST /api/admin/promotions/algorithm/ -> 400 in 31ms
+.2026-11-23 10:52:50,474 WARNING [d86c6b7ff4564980] exposing.request: POST /api/admin/promotions/algorithm/ -> 400 in 14ms
+...2026-11-23 10:52:50,676 WARNING [bf08deae196a4d8b] exposing.request: POST /api/admin/promotions/algorithm/ -> 400 in 14ms
+..2026-11-23 10:52:50,975 WARNING [393f05d49afb4717] exposing.request: POST /api/admin/promotions/25/approve/ -> 400 in 14ms
+.2026-11-23 10:52:51,042 WARNING [7e7cd53cc0c64404] exposing.request: POST /api/admin/promotions/26/reject/ -> 400 in 16ms
+....2026-11-23 10:52:51,474 WARNING [ac009732ee1f493a] exposing.request: POST /api/admin/promotions/31/stop/ -> 400 in 14ms
+.2026-11-23 10:52:51,573 WARNING [76fe7103ae084edc] exposing.request: POST /api/admin/promotions/32/approve/ -> 409 in 0ms
+2026-11-23 10:52:51,593 WARNING [d6be6bc47e2f4023] exposing.request: POST /api/admin/promotions/32/pause/ -> 409 in 16ms
+2026-11-23 10:52:51,609 WARNING [27cd70bae2c84fc2] exposing.request: POST /api/admin/promotions/32/resume/ -> 409 in 14ms
+2026-11-23 10:52:51,624 WARNING [f73c06c2c13b4bc6] exposing.request: POST /api/admin/promotions/32/reject/ -> 409 in 15ms
+2026-11-23 10:52:51,625 WARNING [7b58b7ddaf424601] exposing.request: POST /api/admin/promotions/32/stop/ -> 409 in 0ms
+.2026-11-23 10:52:51,706 WARNING [1750f8b29cce4a47] exposing.request: POST /api/admin/promotions/33/refund/ -> 400 in 0ms
+.2026-11-23 10:52:51,773 WARNING [79be355d97fd49f3] exposing.request: POST /api/admin/promotions/35/approve/ -> 409 in 0ms
+2026-11-23 10:52:51,809 WARNING [80d7fe909d204d59] exposing.request: POST /api/admin/promotions/36/resume/ -> 409 in 14ms
+..2026-11-23 10:52:51,966 WARNING [d4dd66bfc60a4a92] exposing.request: GET /api/admin/promotions/999999/ -> 404 in 0ms
+2026-11-23 10:52:51,974 WARNING [0b90dca27d634af8] exposing.request: POST /api/admin/promotions/999999/approve/ -> 404 in 14ms
+.2026-11-23 10:52:52,064 WARNING [249861c9fa2c4df8] exposing.request: POST /api/admin/promotions/39/resume/ -> 400 in 15ms
+2026-11-23 10:52:52,124 WARNING [9f1c90db07c148f1] exposing.request: POST /api/admin/promotions/39/pause/ -> 400 in 15ms
+........2026-11-23 10:52:53,140 WARNING [20c7694196204524] exposing.request: POST /api/admin/promotions/packages/ -> 400 in 0ms
+2026-11-23 10:52:53,157 WARNING [5c4724ec4ed849ee] exposing.request: POST /api/admin/promotions/packages/ -> 400 in 14ms
+2026-11-23 10:52:53,157 WARNING [677b407754604ee7] exposing.request: POST /api/admin/promotions/packages/ -> 400 in 0ms
+.....2026-11-23 10:52:53,756 WARNING [f578b56f19694301] exposing.request: GET /api/admin/promotions/?state=urgent -> 400 in 0ms
+......2026-11-23 10:52:54,872 WARNING [3ba588057b5f4659] exposing.request: GET /api/admin/promotions/ -> 403 in 0ms
+2026-11-23 10:52:54,888 WARNING [4a1d8bad7787453d] exposing.request: GET /api/admin/promotions/packages/ -> 403 in 16ms
+2026-11-23 10:52:54,890 WARNING [035c8ee95b454bd0] exposing.request: GET /api/admin/promotions/algorithm/ -> 403 in 0ms
+2026-11-23 10:52:54,890 WARNING [eb78eed0345c4b54] exposing.request: GET /api/admin/promotions/ -> 403 in 0ms
+.2026-11-23 10:52:55,097 WARNING [29fef45cea7a4670] exposing.request: POST /api/admin/promotions/64/reject/ -> 403 in 14ms
+..2026-11-23 10:52:55,439 WARNING [8dfd6526f4094ded] exposing.request: GET /api/admin/promotions/packages/ -> 403 in 0ms
+2026-11-23 10:52:55,460 WARNING [cf8fe7c4f71d4f4f] exposing.request: GET /api/admin/promotions/algorithm/ -> 403 in 16ms
+......2026-11-23 10:52:56,486 WARNING [b72d236cf3bf4a11] exposing.request: POST /api/admin/review/58/decide/ -> 403 in 15ms
+.2026-11-23 10:52:56,605 WARNING [bae76509202940bf] exposing.request: POST /api/admin/review/59/decide/ -> 400 in 14ms
+.2026-11-23 10:52:56,719 WARNING [b90de31a097c4b40] exposing.request: POST /api/admin/review/60/decide/ -> 403 in 16ms
+.2026-11-23 10:52:56,886 WARNING [4d2e5c758d914de9] exposing.request: POST /api/admin/review/62/decide/ -> 400 in 16ms
+2026-11-23 10:52:56,889 WARNING [dcbe659eccf34abe] exposing.request: POST /api/admin/review/62/decide/ -> 400 in 0ms
+2026-11-23 10:52:56,919 WARNING [299639612e4d40e3] exposing.request: POST /api/admin/review/62/decide/ -> 400 in 31ms
+..2026-11-23 10:52:57,153 WARNING [850732b511944239] exposing.request: POST /api/admin/review/66/decide/ -> 400 in 14ms
+2026-11-23 10:52:57,175 WARNING [19e104d6b36e48f7] exposing.request: POST /api/admin/review/999999/decide/ -> 404 in 31ms
+.2026-11-23 10:52:57,334 WARNING [7d5d6bc3181f4d3c] exposing.request: POST /api/admin/review/70/decide/ -> 400 in 16ms
+.2026-11-23 10:52:57,485 WARNING [5454e954b7b84612] exposing.request: POST /api/admin/review/72/decide/ -> 400 in 0ms
+.2026-11-23 10:52:57,568 WARNING [dcc1d2931fdb4e88] exposing.request: POST /api/admin/review/73/decide/ -> 400 in 15ms
+.2026-11-23 10:52:57,686 WARNING [7d3d7f2a9fb64cb0] exposing.request: POST /api/admin/review/75/decide/ -> 400 in 14ms
+..2026-11-23 10:52:57,984 WARNING [4e40677c14844570] exposing.request: POST /api/admin/notices/attach/ -> 400 in 14ms
+2026-11-23 10:52:57,986 WARNING [ac0b9f7ef59a44f3] exposing.request: POST /api/admin/notices/attach/ -> 400 in 0ms
+2026-11-23 10:52:58,004 WARNING [619872f8cc0144ef] exposing.request: POST /api/admin/notices/attach/ -> 400 in 16ms
+.2026-11-23 10:52:58,088 WARNING [12aa3b80234241f4] exposing.request: GET /api/admin/notices/ -> 403 in 16ms
+..2026-11-23 10:52:58,340 WARNING [e5da7b04ccdd4598] exposing.request: POST /api/admin/notices/attach/ -> 403 in 16ms
+2026-11-23 10:52:58,375 WARNING [60d82458cbaf4494] exposing.request: POST /api/admin/notices/attach/ -> 403 in 0ms
+.2026-11-23 10:52:58,519 WARNING [c17e3764ad324fab] exposing.request: GET /api/notices/shop/1/ -> 400 in 0ms
+..2026-11-23 10:52:58,801 WARNING [f54deee0b0754601] exposing.request: POST /api/admin/notices/attach/ -> 400 in 14ms
+.2026-11-23 10:52:58,918 WARNING [b30e009831e7465e] exposing.request: POST /api/admin/notices/attach/ -> 404 in 16ms
+2026-11-23 10:52:58,918 WARNING [ac5d36bca8834b2e] exposing.request: POST /api/admin/notices/attach/ -> 400 in 0ms
+2026-11-23 10:52:58,934 WARNING [10903028e13b4f80] exposing.request: POST /api/admin/notices/attach/ -> 400 in 14ms
+.2026-11-23 10:52:59,051 WARNING [2820da5cb34c4270] exposing.request: POST /api/admin/notices/13/withdraw/ -> 400 in 14ms
+2026-11-23 10:52:59,051 WARNING [a2a45668e963404c] exposing.request: POST /api/admin/notices/999999/withdraw/ -> 404 in 0ms
+.2026-11-23 10:52:59,234 WARNING [079747c891e641ee] exposing.request: POST /api/admin/policy/terms/ -> 400 in 14ms
+2026-11-23 10:52:59,268 WARNING [eeb8c80c619544eb] exposing.request: POST /api/admin/policy/terms/ -> 400 in 31ms
+2026-11-23 10:52:59,268 WARNING [a61178579c0d419c] exposing.request: POST /api/admin/policy/terms/ -> 400 in 0ms
+2026-11-23 10:52:59,285 WARNING [0f10dcf7801e4760] exposing.request: POST /api/admin/policy/terms/ -> 400 in 16ms
+.2026-11-23 10:52:59,401 WARNING [47216df61e6e424b] exposing.request: POST /api/admin/policy/terms/3/ -> 400 in 14ms
+2026-11-23 10:52:59,401 WARNING [48ef815633c94da0] exposing.request: POST /api/admin/policy/terms/4/ -> 400 in 0ms
+2026-11-23 10:52:59,417 WARNING [2c5d59f4306c4a9d] exposing.request: POST /api/admin/policy/terms/999999/ -> 404 in 16ms
+.2026-11-23 10:52:59,533 WARNING [835a5ff15b1e4456] exposing.request: POST /api/admin/policy/categories/ -> 400 in 16ms
+2026-11-23 10:52:59,550 WARNING [36b192313e454a04] exposing.request: POST /api/admin/policy/categories/ -> 400 in 14ms
+2026-11-23 10:52:59,600 WARNING [8a195624d56a4b49] exposing.request: POST /api/admin/policy/categories/2/ -> 400 in 14ms
+2026-11-23 10:52:59,684 WARNING [ced925c0c6c4451f] exposing.request: DELETE /api/admin/policy/categories/999999/ -> 404 in 14ms
+.2026-11-23 10:52:59,751 WARNING [86f3c3f8ef3e43cc] exposing.request: POST /api/admin/policy/terms/ -> 403 in 0ms
+2026-11-23 10:52:59,766 WARNING [e8328502298e4aae] exposing.request: POST /api/admin/policy/categories/ -> 403 in 0ms
+....2026-11-23 10:53:00,267 WARNING [c16c9855a06e4bdc] exposing.request: GET /api/admin/review/ -> 403 in 0ms
+..2026-11-23 10:53:00,549 WARNING [0215405ad58e4cb7] exposing.request: GET /api/admin/review/?target=shop -> 400 in 0ms
+2026-11-23 10:53:00,567 WARNING [c39aa92122ba471c] exposing.request: GET /api/admin/review/?status=someday -> 400 in 15ms
+.2026-11-23 10:53:00,615 WARNING [3631ec3d7c7844dc] exposing.request: GET /api/admin/review/ -> 401 in 0ms
+2026-11-23 10:53:00,615 WARNING [215132e48f0a47b0] exposing.request: GET /api/admin/review/ -> 403 in 0ms
+....2026-11-23 10:53:01,103 WARNING [353a9f9f59b74af8] exposing.request: GET /api/admin/content/?type=listing -> 403 in 14ms
+....2026-11-23 10:53:01,748 WARNING [dddcbf1f2a044a17] exposing.request: POST /api/admin/content/post/112/ -> 400 in 15ms
+2026-11-23 10:53:01,768 WARNING [91772d0117504bab] exposing.request: POST /api/admin/content/user/1084/ -> 400 in 31ms
+2026-11-23 10:53:01,778 WARNING [f2306d510fb74a17] exposing.request: POST /api/admin/content/post/999999/ -> 400 in 0ms
+.2026-11-23 10:53:01,865 WARNING [a880f616df684497] exposing.request: GET /api/admin/content/?type=shop -> 400 in 0ms
+2026-11-23 10:53:01,882 WARNING [7b9add84eef244b3] exposing.request: GET /api/admin/content/?state=gone -> 400 in 16ms
+......2026-11-23 10:53:02,215 WARNING [17a25a7362e84e13] exposing.request: GET /api/admin/session/ -> 403 in 16ms
+.2026-11-23 10:53:02,240 WARNING [a217727cd91e40c2] exposing.request: GET /api/admin/session/ -> 403 in 15ms
+.2026-11-23 10:53:02,333 WARNING [7cdaa08c3b054cea] exposing.request: POST /api/admin/session/verify/ -> 401 in 16ms
+.2026-11-23 10:53:02,389 WARNING [899f23dc65c44743] exposing.request: GET /api/admin/session/ -> 403 in 0ms
+.2026-11-23 10:53:02,449 WARNING [79cd6162c52d4eec] exposing.request: GET /api/admin/session/ -> 403 in 0ms
+.2026-11-23 10:53:02,505 WARNING [0345adc9744a401b] exposing.request: GET /api/admin/session/ -> 403 in 16ms
+.2026-11-23 10:53:02,548 WARNING [2135626ba5644796] exposing.request: POST /api/admin/session/verify/ -> 401 in 0ms
+.2026-11-23 10:53:02,603 WARNING [5a0aad16949746b1] exposing.request: POST /api/admin/session/verify/ -> 401 in 0ms
+2026-11-23 10:53:02,608 WARNING [23d2d4cdc45c4c52] exposing.request: POST /api/admin/session/verify/ -> 401 in 0ms
+2026-11-23 10:53:02,616 WARNING [88a0a2287a814c17] exposing.request: POST /api/admin/session/verify/ -> 401 in 15ms
+2026-11-23 10:53:02,624 WARNING [42081f846a6c4473] exposing.request: POST /api/admin/session/verify/ -> 401 in 0ms
+2026-11-23 10:53:02,635 WARNING [15215077cd094026] exposing.request: POST /api/admin/session/verify/ -> 401 in 16ms
+2026-11-23 10:53:02,642 WARNING [14a49f63d7fb4766] exposing.request: POST /api/admin/session/verify/ -> 423 in 14ms
+.2026-11-23 10:53:02,699 WARNING [4b9345f242234086] exposing.request: GET /api/admin/session/ -> 401 in 0ms
+.2026-11-23 10:53:02,715 WARNING [899b28329e944a41] exposing.request: POST /api/admin/session/login/ -> 401 in 0ms
+...2026-11-23 10:53:02,832 WARNING [58a551b7b0554eb1] exposing.request: POST /api/admin/session/login/ -> 401 in 16ms
+2026-11-23 10:53:02,837 WARNING [fe02e598d6c240f9] exposing.request: POST /api/admin/session/login/ -> 401 in 0ms
+..............2026-11-23 10:53:04,596 WARNING [84f3ac1763a940f5] exposing.request: GET /api/admin/spam/flags/ -> 403 in 31ms
+....2026-11-23 10:53:05,212 WARNING [087f0b76b8504347] exposing.request: POST /api/admin/spam/ -> 400 in 16ms
+.2026-11-23 10:53:05,311 WARNING [bb31233a24ee4504] exposing.request: GET /api/admin/spam/ -> 403 in 14ms
+.2026-11-23 10:53:05,377 WARNING [4d35dbf0d8914dac] exposing.request: POST /api/admin/spam/ -> 400 in 0ms
+..2026-11-23 10:53:05,561 WARNING [655f0b90a91d4f83] exposing.request: GET /api/admin/spam/ -> 401 in 0ms
+2026-11-23 10:53:05,578 WARNING [72c00382b8ac45be] exposing.request: GET /api/admin/spam/ -> 403 in 0ms
+.2026-11-23 10:53:05,645 WARNING [111910a8d4c6467d] exposing.request: POST /api/admin/spam/ -> 400 in 0ms
+...........2026-11-23 10:53:07,942 WARNING [d760cb7cf0b543cb] exposing.request: GET /api/admin/permissions/ -> 403 in 15ms
+.2026-11-23 10:53:08,009 WARNING [558d0b6692cd414b] exposing.request: POST /api/admin/staff/night_mod/ -> 400 in 0ms
+....2026-11-23 10:53:08,276 WARNING [349a37fa90444c17] exposing.request: GET /api/admin/staff/ -> 403 in 0ms
+.2026-11-23 10:53:08,425 WARNING [fc55b2f5f34444ee] exposing.request: GET /api/admin/session/ -> 403 in 0ms
+.2026-11-23 10:53:08,492 WARNING [8289f486cc26435b] exposing.request: POST /api/admin/staff/grant/ -> 403 in 0ms
+..2026-11-23 10:53:08,757 WARNING [81a0088484b64504] exposing.request: GET /api/admin/session/ -> 403 in 0ms
+.2026-11-23 10:53:08,841 WARNING [26e2dbec46164484] exposing.request: POST /api/admin/staff/client_owner/revoke/ -> 403 in 16ms
+.2026-11-23 10:53:08,941 WARNING [ecbe678846a241a9] exposing.request: POST /api/admin/staff/grant/ -> 403 in 15ms
+2026-11-23 10:53:08,958 WARNING [8eb5c27e873d4251] exposing.request: POST /api/admin/staff/grant/ -> 403 in 16ms
+.2026-11-23 10:53:09,025 WARNING [7c761ec9f9c9415e] exposing.request: POST /api/admin/staff/client_owner/ -> 400 in 14ms
+.2026-11-23 10:53:09,158 WARNING [39b9e7f9f58c4401] exposing.request: POST /api/admin/session/login/ -> 401 in 0ms
+..2026-11-23 10:53:09,341 WARNING [4121edb24df24c04] exposing.request: POST /api/admin/staff/client_owner/ -> 400 in 31ms
+.2026-11-23 10:53:09,506 WARNING [e0cf524f3dba435e] exposing.request: POST /api/admin/staff/client_owner/reset-two-factor/ -> 403 in 16ms
+.......backup: ok at 2026-11-01 03:04 UTC (first word). replayed Open the alerts desk to see what the console makes of it.
+web: ok at 2026-11-23 05:08 UTC (first word). 200 in 90 ms Open the alerts desk to see what the console makes of it.
+web: ok at 2026-11-23 05:08 UTC (report 2). 200 in 110 ms Counts {"p95_ms": 110}. Open the alerts desk to see what the console makes of it.
+backup: ok at 2026-11-23 05:08 UTC (first word). nightly dump, 2.1 GB Open the alerts desk to see what the console makes of it.
+jobs: ok at 2026-11-23 05:08 UTC (first word). 3 workers up Open the alerts desk to see what the console makes of it.
+2026-11-23 10:53:11,006 WARNING [5481d82152e646b1] exposing.request: GET /api/admin/alerts/?status=disappeared -> 400 in 0ms
+..2026-11-23 10:53:11,856 WARNING [ee3db86feac34772] exposing.request: POST /api/admin/alerts/999999/mark/ -> 404 in 14ms
+2026-11-23 10:53:12,369 WARNING [e7fd02851fe64e4e] exposing.request: POST /api/admin/alerts/77/mark/ -> 400 in 15ms
+..............................2026-11-23 10:53:33,070 WARNING [eefb8d97eeaa4762] exposing.request: POST /api/admin/alerts/thresholds/ -> 400 in 15ms
+.2026-11-23 10:53:33,153 WARNING [b5d627fbaf174040] exposing.request: POST /api/admin/alerts/thresholds/ -> 400 in 0ms
+.2026-11-23 10:53:33,219 WARNING [e815840a4b9e42d4] exposing.request: GET /api/admin/alerts/ -> 401 in 0ms
+2026-11-23 10:53:33,244 WARNING [3641ba9563d845ca] exposing.request: GET /api/admin/alerts/ -> 403 in 0ms
+.2026-11-23 10:53:33,324 WARNING [709945f8138445d5] exposing.request: POST /api/admin/alerts/thresholds/ -> 400 in 15ms
+...2026-11-23 10:53:34,901 WARNING [ae6acb73809a4057] exposing.request: GET /api/admin/alerts/ -> 403 in 0ms
+2026-11-23 10:53:34,916 WARNING [ff026c541b9e4a0e] exposing.request: POST /api/admin/alerts/scan/ -> 403 in 16ms
+2026-11-23 10:53:34,917 WARNING [80f6fbb779524951] exposing.request: POST /api/admin/alerts/thresholds/ -> 403 in 0ms
+.......2026-11-23 10:53:35,517 WARNING [a3446a2b256545b2] exposing.request: GET /api/admin/welcome/ -> 403 in 0ms
+2026-11-23 10:53:35,517 WARNING [033d14eb34404474] exposing.request: POST /api/admin/welcome/ -> 403 in 0ms
+.2026-11-23 10:53:35,584 WARNING [f8ceb6a39e2e4f99] exposing.request: GET /api/admin/welcome/ -> 403 in 16ms
+..2026-11-23 10:53:35,801 WARNING [3170074cbeca4d64] exposing.request: POST /api/admin/welcome/ -> 400 in 14ms
+.2026-11-23 10:53:35,932 WARNING [3fb5608cca64476a] exposing.request: POST /api/admin/welcome/ -> 400 in 14ms
+...2026-11-23 10:53:36,356 WARNING [1e823414313c4781] exposing.request: POST /api/admin/welcome/ -> 400 in 14ms
+.......2026-11-23 10:53:37,030 WARNING [095af4b8a4ed429d] exposing.request: DELETE /api/comments/27/ -> 403 in 14ms
+.2026-11-23 10:53:37,146 WARNING [8dfcc0d6bb4e4440] exposing.request: POST /api/comments/ -> 400 in 0ms
+..........2026-11-23 10:53:37,748 WARNING [f93f6a8c2fbf45d3] exposing.request: GET /media/demo/nope.mp4 -> 404 in 30ms
+.2026-11-23 10:53:37,748 WARNING [afb4d813292d40c0] exposing.request: GET /media/demo/page.html -> 404 in 0ms
+..2026-11-23 10:53:37,764 WARNING [b6616cc65a064acc] exposing.request: GET /media/demo/clip.mp4 -> 416 in 0ms
+............2026-11-23 10:53:38,097 ERROR [38bb5e5868ef4efc] django.request: Internal Server Error: /api/health/
+Traceback (most recent call last):
+  File "D:\social_medial\backend\.venv\Lib\site-packages\django\core\handlers\exception.py", line 56, in inner
+    response = get_response(request)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "D:\social_medial\backend\.venv\Lib\site-packages\django\core\handlers\base.py", line 199, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\social_medial\backend\.venv\Lib\site-packages\django\views\decorators\csrf.py", line 64, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\social_medial\backend\.venv\Lib\site-packages\django\views\generic\base.py", line 105, in view
+    return self.dispatch(request, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\social_medial\backend\.venv\Lib\site-packages\rest_framework\views.py", line 526, in dispatch
+    response = self.handle_exception(exc)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\social_medial\backend\.venv\Lib\site-packages\rest_framework\views.py", line 474, in handle_exception
+    self.raise_uncaught_exception(exc)
+  File "D:\social_medial\backend\.venv\Lib\site-packages\rest_framework\views.py", line 485, in raise_uncaught_exception
+    raise exc
+  File "D:\social_medial\backend\.venv\Lib\site-packages\rest_framework\views.py", line 523, in dispatch
+    response = handler(request, *args, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\social_medial\backend\.venv\Lib\site-packages\rest_framework\decorators.py", line 50, in handler
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "D:\social_medial-wt\agent-b\backend\apps\common\health.py", line 81, in health
+    return Response(probe())
+                    ^^^^^^^
+  File "D:\py312\Lib\unittest\mock.py", line 1139, in __call__
+    return self._mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\py312\Lib\unittest\mock.py", line 1143, in _mock_call
+    return self._execute_mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\py312\Lib\unittest\mock.py", line 1198, in _execute_mock_call
+    raise effect
+RuntimeError: boom
+2026-11-23 10:53:38,231 WARNING [38bb5e5868ef4efc] exposing.request: GET /api/health/ -> 500 in 125ms
+.2026-11-23 10:53:38,231 WARNING [a11f4aef3f584d41] exposing.request: GET /api/sync/ -> 401 in 0ms
+....2026-11-23 10:53:38,353 WARNING [bf07dafe8cb748cb] exposing.request: GET /api/sync/ -> 401 in 0ms
+.....2026-11-23 10:53:38,848 WARNING [36cf69d6db774091] exposing.request: GET /api/posts/184/ -> 404 in 14ms
+2026-11-23 10:53:38,848 WARNING [10cba6f1e46e4ba6] exposing.request: POST /api/follows/ -> 403 in 0ms
+..2026-11-23 10:53:38,896 WARNING [98f8bf7607c647cd] exposing.request: POST /api/blocks/ -> 400 in 0ms
+....2026-11-23 10:53:39,347 WARNING [a39133b57d764728] exposing.request: POST /api/follows/requests/30/accept/ -> 404 in 0ms
+.....2026-11-23 10:53:39,597 WARNING [e735542a3e6e4c05] exposing.request: POST /api/follows/ -> 400 in 14ms
+....2026-11-23 10:53:39,997 WARNING [c6e9d41dd2de47ee] exposing.request: PATCH /api/marketplace/32/ -> 403 in 0ms
+..2026-11-23 10:53:40,127 WARNING [1224348e25b14ea8] exposing.request: POST /api/marketplace/ -> 400 in 16ms
+..2026-11-23 10:53:40,244 WARNING [70a12eba410247f1] exposing.request: GET /api/marketplace/37/ -> 404 in 0ms
+.2026-11-23 10:53:40,294 WARNING [d111902fef0d4e63] exposing.request: POST /api/marketplace/38/sold/ -> 404 in 0ms
+..2026-11-23 10:53:40,684 WARNING [7c78d5ea86354592] exposing.request: POST /api/messages/msgb/ -> 400 in 0ms
+2026-11-23 10:53:40,696 WARNING [7c572db7504e4dbd] exposing.request: POST /api/messages/msga/ -> 400 in 15ms
+2026-11-23 10:53:40,696 WARNING [5fbd0a446505493e] exposing.request: POST /api/messages/msgb/ -> 400 in 0ms
+..........2026-11-23 10:53:42,661 WARNING [3c8b19b9154c45e2] exposing.request: GET /api/messages/sseb/stream/ -> 401 in 16ms
+2026-11-23 10:53:42,676 WARNING [e233a7e0ad274e51] exposing.request: GET /api/messages/nobody-here/stream/ -> 404 in 14ms
+2026-11-23 10:53:42,677 WARNING [a819aa1537cf48ea] exposing.request: GET /api/messages/ssea/stream/ -> 404 in 0ms
+.2026-11-23 10:53:42,775 WARNING [1e72a444ee9a45bd] exposing.request: GET /api/moderation/reports/ -> 403 in 0ms
+.2026-11-23 10:53:42,827 WARNING [f6ae81fd05854bda] exposing.request: GET /api/moderation/audit/ -> 403 in 0ms
+.2026-11-23 10:53:42,907 WARNING [c5018a6195d24f7c] exposing.request: POST /api/moderation/reports/165/resolve/ -> 400 in 0ms
+.2026-11-23 10:53:42,950 WARNING [81867569c47c498a] exposing.request: POST /api/moderation/reports/166/remove/ -> 403 in 0ms
+2026-11-23 10:53:42,954 WARNING [97f9ccb1de16413c] exposing.request: POST /api/moderation/users/modauthor/suspend/ -> 403 in 0ms
+.....2026-11-23 10:53:43,637 WARNING [18aeb5f25a21482d] exposing.request: GET /api/notifications/stream/ -> 429 in 16ms
+..2026-11-23 10:53:44,509 WARNING [1bb6c64414264682] exposing.request: GET /api/notifications/stream/ -> 401 in 16ms
+...............2026-11-23 10:53:46,382 WARNING [4799fd400ed1447a] exposing.request: DELETE /api/posts/253/ -> 403 in 16ms
+..2026-11-23 10:53:46,680 WARNING [ca154e6db4bc48c9] exposing.request: POST /api/posts/264/view/ -> 404 in 0ms
+.......2026-11-23 10:53:47,954 WARNING [47c705fb18ba4308] exposing.request: POST /api/posts/299/share/ -> 404 in 0ms
+....2026-11-23 10:53:48,512 WARNING [06e099e6e8c549d9] exposing.request: PATCH /api/profiles/profileowner/ -> 403 in 0ms
+...2026-11-23 10:53:48,831 WARNING [4d05b21c823c4162] exposing.request: POST /api/promotions/ -> 400 in 31ms
+.....2026-11-23 10:53:49,596 WARNING [af508f92c893401a] exposing.request: POST /api/promotions/85/pause/ -> 404 in 14ms
+.2026-11-23 10:53:49,681 WARNING [0ba86a22198745e9] exposing.request: POST /api/promotions/ -> 400 in 14ms
+2026-11-23 10:53:49,687 WARNING [8ff02f64155b4a02] exposing.request: POST /api/promotions/ -> 400 in 0ms
+.2026-11-23 10:53:49,888 WARNING [ea778c8a0f894096] exposing.request: POST /api/promotions/86/resume/ -> 400 in 0ms
+......2026-11-23 10:53:50,884 WARNING [e1f77af2f3484650] exposing.request: POST /api/reactions/ -> 404 in 16ms
+.2026-11-23 10:53:51,003 WARNING [d42474bdc74e42f7] exposing.request: DELETE /api/reactions/toggle/ -> 404 in 16ms
+...2026-11-23 10:53:51,403 WARNING [9a8f622599454840] exposing.request: GET /api/reactions/people/?target_type=post&target_id=330 -> 404 in 0ms
+......2026-11-23 10:53:52,353 WARNING [30eb7440bb884803] exposing.request: POST /api/saved/posts/ -> 404 in 14ms
+...2026-11-23 10:53:52,609 WARNING [060e2b16a6f2401d] exposing.request: POST /api/saved/posts/ -> 400 in 14ms
+2026-11-23 10:53:52,674 WARNING [f97b5a2898f843eb] exposing.request: DELETE /api/saved/posts/340/ -> 404 in 0ms
+...2026-11-23 10:53:52,983 WARNING [d0ba06a857e243d8] exposing.request: POST /api/wallet/requests/71/approve/ -> 403 in 0ms
+2026-11-23 10:53:53,050 WARNING [67061c297e9c44ac] exposing.request: POST /api/wallet/requests/71/approve/ -> 404 in 14ms
+....................Purged 1 seeded demo members and all generated content. 1 signed-up accounts were left alone.
+2026-11-23 10:54:30,780 WARNING [fa56b10a09174293] exposing.request: DELETE /api/reactions/toggle/ -> 404 in 108ms
+2026-11-23 10:54:30,820 WARNING [4ddea83318604757] exposing.request: DELETE /api/reactions/toggle/ -> 404 in 203ms
+2026-11-23 10:54:30,932 WARNING [e86985324044416b] exposing.request: DELETE /api/reactions/toggle/ -> 404 in 343ms
+2026-11-23 10:54:30,989 WARNING [9ddbc9fd16ec4f3c] exposing.request: DELETE /api/reactions/toggle/ -> 404 in 218ms
+2026-11-23 10:54:31,071 WARNING [3cc4cc53a35143d5] exposing.request: DELETE /api/reactions/toggle/ -> 404 in 343ms
+....
+----------------------------------------------------------------------
+Ran 584 tests in 148.484s
+
+OK
+Destroying test database for alias 'default'...

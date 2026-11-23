@@ -1,0 +1,48 @@
+PASS  desktop: sign-in card shows email + password with real autofill hints  — {"title":"Sign in to Exposing","inputs":[{"type":"email","placeholder":"Email","autocomplete":"email"},{"type":"password","placeholder":"Password","autocomplete":"current-password"}]}
+PASS  desktop: only a Google button this server can finish is offered  — Continue with a demo Google account
+PASS  desktop: sign-in offers the demo account and no unlock detour  — {"title":"Sign in to Exposing","inputs":[{"type":"email","placeholder":"Email","autocomplete":"email"},{"type":"password","placeholder":"Password","autocomplete":"current-password"}],"google":"Continu
+PASS  desktop: submit starts disabled and the card fits without sideways scroll  — {"disabled":true,"overflow":false}
+PASS  desktop: the button waits for both fields instead of firing an empty request  — {"disabled":true,"errors":0,"requests":0}
+PASS  desktop: an unknown account gets the server detail, not a fake success  — No account matches those credentials.
+PASS  desktop: the demo chip signs a borrowed laptop straight in without a code step  — {"path":"/","toast":"Welcome, Sita Karki."}
+PASS  desktop: the HttpOnly cookie carries the session /api/auth/me/ reads  — {"status":200,"u":"sita"}
+PASS  desktop: a reload restores the signed-in app instead of the login wall  — /
+PASS  desktop: settings shows the server-owned account and a seeded member that skips the device code  — {"handle":true,"email":true,"verified":true,"twoStep":"false","resetDemo":false}
+PASS  desktop: the demo-data reset is hidden while the API owns the data  — {"resetDemo":false}
+PASS  desktop: turning two-step over is written to the server and survives a reload  — {"afterFlip":"true","afterReload":"true"}
+PASS  desktop: two-step goes back off, so the demo account stays one tap away  — false
+PASS  desktop: log out clears the cookies and lands on the sign-in card  — {"landed":true,"me":401}
+PASS  desktop: the hydration endpoint stays closed after logout  — 401
+PASS  desktop: signup creates the account and asks to confirm the email  — {"title":"Confirm it is you","detail":"We emailed a 6-digit code to qatdziu@demo.test. Enter it to activate the account.","hint":"Sent to qatdziu@demo.test","meta":"Code expires in
+PASS  desktop: the code step counts down and offers resend + back  — {"meta":"Code expires in 10:00","links":["Resend code","Back to sign in"]}
+PASS  desktop: the DEBUG mailer exposes the code as a one-tap chip  — Demo mailer code: 146956
+PASS  desktop: signup alone does not open a session  — {"me":401,"user":null}
+PASS  desktop: a wrong code is rejected with code-scoped tries left  — Wrong code. 4 tries left before this code stops working.
+PASS  desktop: a rejected code leaves the visitor signed out  — {"me":401,"user":null}
+PASS  desktop: resend rotates the challenge and restarts the clock  — {"was":"Demo mailer code: 146956","meta":"Code expires in 10:00","dev":"Demo mailer code: 696244","code":""}
+PASS  desktop: the verified code completes signup and opens the session  — {"id":48,"username":"qatdziu","email":"qatdziu@demo.test","name":"QA Tester","first_name":"QA","last_name":"Tester","bio":"","avatar":"","cover":"","location":"","province":"","website":"","phone":"","links":[],"role":"user","is_staff":false,"is_superuser":false,"verified":false,"emailVerified":true,"provider":"email","dob":"1996-04-02","country":"Nepal","city":"","private":false,"twoStep":true,"notifyEmail":true,"joined":"2026-11-23T05:17:57.541952Z","coins":0,"susp":null,"lockedUntil":null}
+PASS  desktop: one wrong password reports the plural attempts left  — Wrong password. 2 attempts left before the account locks.
+PASS  desktop: a failed password never opens a session
+PASS  desktop: the last try before lock reads in the singular  — Wrong password. 1 attempt left before the account locks.
+PASS  desktop: the third wrong password locks the card and starts the five-minute clock  — {"title":"Account locked","detail":"Too many wrong passwords. The lock lifts on its own after 5 minutes.","clock":"You can try again in 5:00.","time":"5:00","forms":0,"codes":0}
+PASS  desktop: the lock says it lifts on its own, with no unlock code to chase  — Too many wrong passwords. The lock lifts on its own after 5 minutes.
+PASS  desktop: the cooloff counts down while the visitor waits  — You can try again in 5:00. -> 4:58
+PASS  desktop: the right password is still refused while the cooloff runs  — {"armed":true,"title":"Account locked","detail":"Too many wrong passwords. The lock lifts on its own after 5 minutes.","clock":"You can try again in 4:56.","time":"4:56","forms":0,"codes":0,"logins":["423 {\"detail\":\"Too many wrong passwords. Try again in 5 minutes.\",\"locked\":true,\"locked_until\""]}
+PASS  desktop: a locked sign-in never opens a session
+PASS  setup: an account exists whose email was never confirmed  — {"challenge":32,"expires_in":600,"dev_code":"661240"}
+PASS  desktop: an unverified address is named, not mistaken for a wrong password  — {"notice":"That email address is not verified yet, so it cannot sign in. We just sent a fresh code to it.","title":"Confirm it is you","wrongPassword":false}
+PASS  desktop: that card resends the confirmation code  — {"links":["Resend code in 30s","Back to sign in"],"was":"Demo mailer code: 564461","now":"Demo mailer code: 151855"}
+PASS  desktop: walking away from the unverified card leaves nobody signed in  — {"me":401,"form":true}
+PASS  desktop: a known Google identity on a new device gets the code step, not a session  — {"title":"Confirm it is you","detail":"We emailed a 6-digit code to finish signing in on this device.","hint":"Sent to guest@demo.test","meta":"Code expires in 
+PASS  desktop: the confirmed Google code opens the session for the demo identity  — {"path":"/","me":200,"email":"guest@demo.test"}
+PASS  desktop: refresh rotates the session and the cookie still authenticates  — {"refresh":200,"me":200}
+PASS  desktop: after a refresh the browser still passes CSRF on writes  — {"status":201,"id":618}
+PASS  desktop: the language choice survives navigation  — {"title":"Exposing मा साइन इन","placeholder":"इमेल","demo":"डेमो खाता प्रयोग गर्नुहोस्sita@demo.test · exposing-demo-1 — पोस्ट, कुराकानी, रिल र सूची भरिएको।"}
+PASS  desktop: the demo chip is offered in Nepali too  — डेमो खाता प्रयोग गर्नुहोस्sita@demo.test · exposing-demo-1 — पोस्ट, कुराकानी, रिल र सूची भरिएको।
+PASS  desktop: the lockout copy is translated too  — {"title":"खाता लक भयो","detail":"धेरै पटक गलत पासवर्ड भयो। ५ मिनेटपछि लक आफैँ खुल्छ।","clock":"फेरि प्रयास गर्न 4:02 बाँकी छ।","time":"4:02","forms":0,"codes":0}
+PASS  mobile: sign-in fits 390px with tap targets a thumb can hit  — {"overflow":false,"submitH":51,"inputH":47,"googleH":67,"demoH":85}
+PASS  mobile: one tap on the demo chip opens the feed on a phone-sized screen  — {"path":"/","overflow":false}
+PASS  mobile: signing out from settings returns to the sign-in card  — landed: true
+PASS  integration: the auth pass produced no unexpected console, page or HTTP errors
+
+46/46 auth assertions passed

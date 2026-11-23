@@ -1,0 +1,37 @@
+PASS  desktop: the row sits above the buttons and the buttons print no second mix  — {"above":true,"mixes":0}
+PASS  desktop: the chips are the three most-used kinds, in that order  — screen "like,love,sad" — server "like,love,sad" of {"love":6,"like":12,"sad":5,"haha":3}
+PASS  desktop: the chips overlap and each wears a thin ring  — {"overlapPx":6,"ring":{"width":"1px","radius":"50%","color":"rgb(0, 0, 0)"}}
+PASS  desktop: the names are one line, cut with an ellipsis  — {"oneLine":true,"ellipsis":true}
+PASS  desktop: the crowd is named as "… and N others"  — Arjun Thapa, Prakash and 24 others
+PASS  desktop: the pill is a rounded pill holding one icon and the total  — {"radius":999,"text":"26","reacted":false,"art":null,"icons":1}
+PASS  desktop: the pill counts the same crowd the row names  — 26 vs server 26
+PASS  desktop: the ring is the page’s own ground in either theme  — {"ring":"rgb(0, 0, 0)","ground":"rgb(0, 0, 0)"}
+PASS  desktop: a tap changes the icon and the count at once, and keeps them  — 26 -> 27 -> 27
+PASS  desktop: a short tap never opens the picker  — 0 trays
+PASS  desktop: the names lead with "You" once the reader has reacted  — You, Arjun and 25 others
+PASS  desktop: holding about four tenths of a second opens the picker above the pill  — 0 tray at 240ms, then "Like/Love/Haha/Wow/Sad"
+PASS  desktop: a second reaction replaces the first, and the pill wears its colour  — {"art":"love","text":"27","color":"rgb(182, 55, 64)","tray":false}
+PASS  desktop: choosing the same reaction again takes it off  — 26 -> 26, reacted false
+PASS  desktop: a failed reaction undoes itself and says so  — optimistic 27, back to 26, toast "The server is not answering right now. Wait a few seconds and try again."
+PASS  desktop: hovering opens the picker and walking away closes it  — 1 on hover, 0 after leaving
+PASS  desktop: the row opens the list of everyone who reacted  — {"rows":12,"status":200}
+PASS  desktop: on a desk it is a framed dialog centered on the page  — {"x":490,"y":135,"w":460,"bottom":765}
+PASS  desktop: the tabs are All plus one per kind, each with its count  — {"tabs":["All26","12","6","3","5"],"counts":{"haha":3,"like":12,"love":6,"sad":5},"total":26}
+PASS  desktop: every row has an avatar, a name, its reaction and a Follow button  — {"avatar":true,"name":"Prakash Neupane","handle":"@prakash","kind":true,"follow":"Following"}
+PASS  desktop: the list opens on one page of people, not the whole crowd  — 12 rows of 26
+PASS  desktop: the list pages to the end without printing a person twice  — {"rows":25,"unique":25,"total":26}
+PASS  desktop: a tab shows that reaction and nothing else  — {"rows":6,"kinds":["love","love","love","love","love","love"],"love":6}
+PASS  desktop: a Follow pressed in the list lands there and then  — {"after":"Following","accepted":true,"requested":false}
+PASS  desktop: Escape puts the list away
+PASS  mobile: a phone prints the same row above its buttons  — {"chips":["love","sad","like"],"names":"Hemant Siwakoti, Bibek and 13 others","oneLine":true,"pillHeight":44,"pillWidth":77,"radius":999}
+PASS  mobile: the pill is a thumb-sized rounded pill  — {"h":44,"w":77,"r":999}
+PASS  mobile: the list is a sheet the width of the phone, resting on its bottom edge  — {"x":0,"w":390,"bottom":844,"top":152,"rows":12,"tabs":["All26","12","6","3","5"]}
+PASS  mobile: the sheet pages on a phone too  — {"rows":25,"unique":25}
+PASS  mobile: a tab filters the sheet on a phone  — like: like,like,like,like,like,like,like,like,like,like,like,like
+PASS  mobile: a tap above the sheet puts it away
+PASS  mobile: a tap reacts at once and never raises the picker  — 26 -> 27, 0 trays
+PASS  mobile: a long press raises the picker and leaves it there to choose from  — 1 during the hold, 1 after release, chose love
+PASS  mobile: the phone and the server still agree after all that  — 26 -> 27 -> 26
+PASS  no console or HTTP errors during the run
+
+35/35 reaction checks green.

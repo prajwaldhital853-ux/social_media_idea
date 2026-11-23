@@ -147,6 +147,7 @@ export function mapPost(row: any): Post {
     shares: amount(row.share_count),
     views: amount(row.views),
     reactionKinds: row.reaction_kinds || undefined,
+    people: (row.reaction_people || []).map((p: any) => ({ id: idOf(p.id), name: p.name, kind: reactionKind(p.kind), me: !!p.me })),
     category: row.category || undefined,
     promoted: !!row.promoted,
   };

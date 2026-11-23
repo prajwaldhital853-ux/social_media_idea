@@ -70,6 +70,8 @@ export interface Post {
   views?: number;
   /** {kind: count} in API mode; undefined in demo mode (count the reaction rows instead). */
   reactionKinds?: Record<string, number>;
+  /** The first people who reacted, in the order the card prints them. */
+  people?: { id: string; name: string; kind: ReactionKind; me: boolean }[];
   promoted?: boolean;
 }
 

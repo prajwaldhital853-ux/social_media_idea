@@ -1,0 +1,55 @@
+(node:19272) [DEP0190] DeprecationWarning: Passing args to a child process with shell option true can lead to security vulnerabilities, as the arguments are not escaped, only concatenated.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+  ▲ Next.js 14.2.5
+
+   Creating an optimized production build ...
+ ✓ Compiled successfully
+   Linting and checking validity of types ...
+   Collecting page data ...
+   Generating static pages (0/23) ...
+   Generating static pages (5/23) 
+   Generating static pages (11/23) 
+   Generating static pages (17/23) 
+ ✓ Generating static pages (23/23)
+   Finalizing page optimization ...
+   Collecting build traces ...
+
+Route (app)                              Size     First Load JS
+┌ ○ /                                    1.42 kB         162 kB
+├ ○ /_not-found                          137 B          87.2 kB
+├ ○ /admin                               6.41 kB         154 kB
+├ ○ /apple-icon.png                      0 B                0 B
+├ ○ /create                              3.99 kB         152 kB
+├ ○ /explore                             2.05 kB         162 kB
+├ ○ /icon.png                            0 B                0 B
+├ ○ /legal/cookies                       1.83 kB         150 kB
+├ ○ /legal/privacy                       2.55 kB         150 kB
+├ ○ /legal/terms                         2.75 kB         151 kB
+├ ○ /legal/user-policy                   2.37 kB         150 kB
+├ ○ /login                               4.34 kB         134 kB
+├ ○ /marketplace                         4.46 kB         152 kB
+├ ƒ /marketplace/[id]                    4.87 kB         153 kB
+├ ○ /messages                            1.9 kB          150 kB
+├ ƒ /messages/[uid]                      4.35 kB         152 kB
+├ ○ /notifications                       1.63 kB         149 kB
+├ ƒ /post/[id]                           1.11 kB         162 kB
+├ ƒ /post/[id]/media/[index]             3.6 kB          146 kB
+├ ○ /profile                             321 B           123 kB
+├ ○ /saved                               1.57 kB         162 kB
+├ ○ /settings                            1.73 kB         152 kB
+├ ○ /signup                              4.48 kB         139 kB
+├ ƒ /u/[username]                        4.76 kB         168 kB
+├ ƒ /u/[username]/followers              150 B           150 kB
+├ ƒ /u/[username]/following              149 B           150 kB
+├ ○ /video                               149 B           152 kB
+├ ƒ /video/[key]                         148 B           152 kB
+└ ○ /wallet                              3.88 kB         152 kB
++ First Load JS shared by all            87.1 kB
+  ├ chunks/23-13664f1f9ec4c965.js        31.5 kB
+  ├ chunks/fd9d1056-3271c84ca4f889f9.js  53.6 kB
+  └ other shared chunks (total)          1.95 kB
+
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+

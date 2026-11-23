@@ -11,6 +11,7 @@ import Avatar from './Avatar';
 import VerifiedBadge from './VerifiedBadge';
 import PostVideo from './PostVideo';
 import ReactionButton from './ReactionButton';
+import ReactionSummary from './ReactionSummary';
 import ReportModal from './ReportModal';
 import PromoteModal from './PromoteModal';
 import { IC } from '@/lib/icons';
@@ -286,8 +287,14 @@ export default function PostCard({ post, author, featured }: PostCardProps) {
         </div>
       )}
 
+      {(reactionCount('post', post.id) + mediaLikes) > 0 && (
+        <div className="reaction-row" onClick={e => e.stopPropagation()}>
+          <ReactionSummary postId={post.id} extraCount={mediaLikes} />
+        </div>
+      )}
+
       <div className="post-actions" onClick={e => e.stopPropagation()}>
-        <ReactionButton targetType="post" targetId={post.id} extraCount={mediaLikes} showMix />
+        <ReactionButton targetType="post" targetId={post.id} extraCount={mediaLikes} />
         <button
           type="button"
           className={`action-btn ${showComments ? 'on' : ''}`}

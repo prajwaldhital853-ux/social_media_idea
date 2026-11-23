@@ -77,7 +77,7 @@
   {
     "name": "desktop: signup creates the account and asks to confirm the email",
     "pass": true,
-    "detail": "{\"title\":\"Confirm it is you\",\"detail\":\"We emailed a 6-digit code to qa15yx3@demo.test. Enter it to activate the account.\",\"hint\":\"Sent to qa15yx3@demo.test\",\"meta\":\"Code expires in"
+    "detail": "{\"title\":\"Confirm it is you\",\"detail\":\"We emailed a 6-digit code to qatdziu@demo.test. Enter it to activate the account.\",\"hint\":\"Sent to qatdziu@demo.test\",\"meta\":\"Code expires in"
   },
   {
     "name": "desktop: the code step counts down and offers resend + back",
@@ -87,7 +87,7 @@
   {
     "name": "desktop: the DEBUG mailer exposes the code as a one-tap chip",
     "pass": true,
-    "detail": "Demo mailer code: 025931"
+    "detail": "Demo mailer code: 146956"
   },
   {
     "name": "desktop: signup alone does not open a session",
@@ -107,12 +107,12 @@
   {
     "name": "desktop: resend rotates the challenge and restarts the clock",
     "pass": true,
-    "detail": "{\"was\":\"Demo mailer code: 025931\",\"meta\":\"Code expires in 10:00\",\"dev\":\"Demo mailer code: 470518\",\"code\":\"\"}"
+    "detail": "{\"was\":\"Demo mailer code: 146956\",\"meta\":\"Code expires in 10:00\",\"dev\":\"Demo mailer code: 696244\",\"code\":\"\"}"
   },
   {
     "name": "desktop: the verified code completes signup and opens the session",
     "pass": true,
-    "detail": "{\"id\":42,\"username\":\"qa15yx3\",\"email\":\"qa15yx3@demo.test\",\"name\":\"QA Tester\",\"first_name\":\"QA\",\"last_name\":\"Tester\",\"bio\":\"\",\"avatar\":\"\",\"cover\":\"\",\"location\":\"\",\"province\":\"\",\"website\":\"\",\"phone\":\"\",\"links\":[],\"role\":\"user\",\"is_staff\":false,\"is_superuser\":false,\"verified\":false,\"emailVerified\":true,\"provider\":\"email\",\"dob\":\"1996-04-02\",\"country\":\"Nepal\",\"city\":\"\",\"private\":false,\"twoStep\":true,\"notifyEmail\":true,\"joined\":\"2026-11-22T16:07:57.112338Z\",\"coins\":0,\"susp\":null,\"lockedUntil\":null}"
+    "detail": "{\"id\":48,\"username\":\"qatdziu\",\"email\":\"qatdziu@demo.test\",\"name\":\"QA Tester\",\"first_name\":\"QA\",\"last_name\":\"Tester\",\"bio\":\"\",\"avatar\":\"\",\"cover\":\"\",\"location\":\"\",\"province\":\"\",\"website\":\"\",\"phone\":\"\",\"links\":[],\"role\":\"user\",\"is_staff\":false,\"is_superuser\":false,\"verified\":false,\"emailVerified\":true,\"provider\":\"email\",\"dob\":\"1996-04-02\",\"country\":\"Nepal\",\"city\":\"\",\"private\":false,\"twoStep\":true,\"notifyEmail\":true,\"joined\":\"2026-11-23T05:17:57.541952Z\",\"coins\":0,\"susp\":null,\"lockedUntil\":null}"
   },
   {
     "name": "desktop: one wrong password reports the plural attempts left",
@@ -147,7 +147,7 @@
   {
     "name": "desktop: the right password is still refused while the cooloff runs",
     "pass": true,
-    "detail": "{\"armed\":true,\"title\":\"Account locked\",\"detail\":\"Too many wrong passwords. The lock lifts on its own after 5 minutes.\",\"clock\":\"You can try again in 4:55.\",\"time\":\"4:55\",\"forms\":0,\"codes\":0,\"logins\":[\"423 {\\\"detail\\\":\\\"Too many wrong passwords. Try again in 5 minutes.\\\",\\\"locked\\\":true,\\\"locked_until\\\"\"]}"
+    "detail": "{\"armed\":true,\"title\":\"Account locked\",\"detail\":\"Too many wrong passwords. The lock lifts on its own after 5 minutes.\",\"clock\":\"You can try again in 4:56.\",\"time\":\"4:56\",\"forms\":0,\"codes\":0,\"logins\":[\"423 {\\\"detail\\\":\\\"Too many wrong passwords. Try again in 5 minutes.\\\",\\\"locked\\\":true,\\\"locked_until\\\"\"]}"
   },
   {
     "name": "desktop: a locked sign-in never opens a session",
@@ -157,7 +157,7 @@
   {
     "name": "setup: an account exists whose email was never confirmed",
     "pass": true,
-    "detail": "{\"challenge\":14,\"expires_in\":600,\"dev_code\":\"172329\"}"
+    "detail": "{\"challenge\":32,\"expires_in\":600,\"dev_code\":\"661240\"}"
   },
   {
     "name": "desktop: an unverified address is named, not mistaken for a wrong password",
@@ -167,7 +167,7 @@
   {
     "name": "desktop: that card resends the confirmation code",
     "pass": true,
-    "detail": "{\"links\":[\"Resend code in 30s\",\"Back to sign in\"],\"was\":\"Demo mailer code: 417710\",\"now\":\"Demo mailer code: 282105\"}"
+    "detail": "{\"links\":[\"Resend code in 30s\",\"Back to sign in\"],\"was\":\"Demo mailer code: 564461\",\"now\":\"Demo mailer code: 151855\"}"
   },
   {
     "name": "desktop: walking away from the unverified card leaves nobody signed in",
@@ -192,7 +192,7 @@
   {
     "name": "desktop: after a refresh the browser still passes CSRF on writes",
     "pass": true,
-    "detail": "{\"status\":201,\"id\":615}"
+    "detail": "{\"status\":201,\"id\":618}"
   },
   {
     "name": "desktop: the language choice survives navigation",
@@ -207,7 +207,7 @@
   {
     "name": "desktop: the lockout copy is translated too",
     "pass": true,
-    "detail": "{\"title\":\"खाता लक भयो\",\"detail\":\"धेरै पटक गलत पासवर्ड भयो। ५ मिनेटपछि लक आफैँ खुल्छ।\",\"clock\":\"फेरि प्रयास गर्न 3:54 बाँकी छ।\",\"time\":\"3:54\",\"forms\":0,\"codes\":0}"
+    "detail": "{\"title\":\"खाता लक भयो\",\"detail\":\"धेरै पटक गलत पासवर्ड भयो। ५ मिनेटपछि लक आफैँ खुल्छ।\",\"clock\":\"फेरि प्रयास गर्न 4:02 बाँकी छ।\",\"time\":\"4:02\",\"forms\":0,\"codes\":0}"
   },
   {
     "name": "mobile: sign-in fits 390px with tap targets a thumb can hit",
