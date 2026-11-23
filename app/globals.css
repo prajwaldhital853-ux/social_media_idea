@@ -1401,7 +1401,10 @@ a:focus:not(:focus-visible) {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 100;
+  /* Reels and the media viewer are fixed full-screen pages at 1200, and every
+     sheet is portaled onto <body> beside them — a lower number buries the
+     dialog under the video it was opened from. */
+  z-index: 1300;
   animation: fadeIn 0.2s ease;
 }
 
@@ -8066,7 +8069,7 @@ button.profile-stat:hover b, a.profile-stat:hover b { color: var(--red); }
 /* ===== Everyone who reacted ===== */
 
 .reactors-overlay {
-  z-index: 1200;
+  z-index: 1320;
   align-items: flex-end;
   justify-content: center;
   background: rgba(6, 8, 11, 0.55);
@@ -8199,7 +8202,7 @@ button.profile-stat:hover b, a.profile-stat:hover b { color: var(--red); }
    drags inside is the picture they keep. The box is measured in JS because the
    stage is letterboxed to one aspect at any viewport, which max-width and
    max-height cannot both express. */
-.cropper-overlay { z-index: 130; }
+.cropper-overlay { z-index: 1360; }
 
 .image-cropper {
   width: min(400px, 84%);
