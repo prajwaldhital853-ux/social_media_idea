@@ -36,8 +36,13 @@ export default function UserProfilePage() {
   const [stats, setStats] = useState<{ posts: number; followers: number; following: number } | null>(null);
   const [personRead, setPersonRead] = useState(!serverMode);
 
-  const own = me?.id === user?.id;
-  const locked = !!user?.private && !own && !isFollowing(user.id);
+  // The owner is the handle, not one id: a thin card that carries no id of its
+  // own lands in the cache under a second key and would demote my own page to a
+  // stranger's. Until the session is read nobody knows whose page this is, so
+  // the row shows a placeholder rather than a button saying the wrong thing.
+  const who = !!me || ready;
+  const own = !!me && (me.id === user?.id || me.username.toLowerCase() === username.toLowerCase());
+  const locked = !!user?.private && who && !own && !isFollowing(user.id);
 
   const authorPosts = useList(
     'profile-posts',
@@ -276,6 +281,8 @@ export default function UserProfilePage() {
                 <button type="button" className="follow-btn" onClick={() => setEditing(true)}>{IC.user}<span>{t('editProfile')}</span></button>
                 <button type="button" className="ghost-btn" onClick={() => openComposer(null)}>{IC.plus}<span>{t('post')}</span></button>
               </>
+            ) : !who ? (
+              <span className="profile-actions-wait" aria-hidden="true" />
             ) : (
               <>
                 <button

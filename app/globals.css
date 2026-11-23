@@ -6136,6 +6136,9 @@ textarea {
 }
 .lightbox figcaption { font-size: 13.5px; color: rgba(255, 255, 255, .82); text-align: center; }
 .profile-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; padding-bottom: 6px; flex-wrap: wrap; }
+/* The shape of the button that is about to arrive, so the head does not jump
+   while the session is still being restored on a hard load. */
+.profile-actions-wait { width: 128px; height: 36px; border-radius: 9999px; background: var(--line); }
 .profile-name {
   flex-basis: 100%; margin: 2px 0 0; font-size: 24px; font-weight: 850; line-height: 1.2;
   display: flex; align-items: center; gap: 7px;

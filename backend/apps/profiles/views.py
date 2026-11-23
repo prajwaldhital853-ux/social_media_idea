@@ -132,7 +132,10 @@ def profile_detail(request, username):
     data['joined'] = user.date_joined
     data['locked'] = not full
     if not full:
-        data = {k: data[k] for k in ('username', 'name', 'avatar_url', 'verified', 'is_private', 'locked', 'followers', 'following', 'posts')}
+        # Even a withheld card has to carry the id: without it the client cannot
+        # tell this person from the row a feed already holds, and the follow
+        # button would have no subject to send to.
+        data = {k: data[k] for k in ('id', 'username', 'name', 'avatar_url', 'verified', 'is_private', 'locked', 'followers', 'following', 'posts')}
     return Response(data)
 
 
