@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import Banner from '@/components/Banner';
 import ConsoleShell from '@/components/ConsoleShell';
 import { ApiError, api } from '@/lib/api';
 import { num } from '@/lib/format';
@@ -110,11 +111,7 @@ export default function PackagesScreen() {
         </button>
       )}
     >
-      {banner && (
-        <p className={`banner banner-${banner.kind}`} role="status">
-          {banner.kind === 'ok' ? IC.check : IC.alert}<span>{banner.text}</span>
-        </p>
-      )}
+      <Banner banner={banner} />
 
       {errors.length > 0 && (
         <section className="panel" data-pkg-errors>

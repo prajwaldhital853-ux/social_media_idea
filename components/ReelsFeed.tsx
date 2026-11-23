@@ -212,7 +212,6 @@ export default function ReelsFeed({ initialKey }: { initialKey?: string }) {
             {IC.home}
           </button>
           <span className="reel-title">Reels</span>
-          {slides.length > 0 && <span className="reel-count">{index + 1} / {slides.length}</span>}
         </div>
         {feature('video') && slides.length > 0 ? (
           <div className="reels-scroll" ref={scrollRef} onScroll={onScroll}>

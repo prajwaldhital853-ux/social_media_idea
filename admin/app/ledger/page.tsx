@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import Banner from '@/components/Banner';
 import ConsoleShell from '@/components/ConsoleShell';
 import { Chips, More } from '@/components/List';
 import { api } from '@/lib/api';
@@ -129,11 +130,7 @@ export default function LedgerScreen() {
         </span>
       </div>
 
-      {banner && (
-        <p className={`banner banner-${banner.kind}`} role="status">
-          {banner.kind === 'ok' ? IC.check : IC.alert}<span>{banner.text}</span>
-        </p>
-      )}
+      <Banner banner={banner} />
 
       {page && (
         <p className="facets" data-totals>

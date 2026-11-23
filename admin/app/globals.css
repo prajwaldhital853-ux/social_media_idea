@@ -423,57 +423,49 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, .btn:focus-vi
 
 .login {
   display: grid;
-  grid-template-columns: 1.05fr 1fr;
+  grid-template-columns: 0.85fr 1.15fr;
   min-height: 100vh;
+  min-height: 100dvh;
   gap: 0;
 }
 
+/* One flat panel, logo at the top, one useful sentence at the bottom, and
+   nothing in between — the sign-in form is the thing a staff member reads. */
 .login-brand {
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  gap: 14px;
-  padding: 56px clamp(28px, 6vw, 84px);
+  justify-content: space-between;
+  gap: 24px;
+  padding: 38px clamp(24px, 4vw, 56px);
   color: var(--side-ink);
-  background:
-    radial-gradient(1100px 460px at 12% -10%, rgba(182, 55, 64, 0.5), transparent 60%),
-    linear-gradient(160deg, #14161A 0%, #1C1F24 60%, #23252b 100%);
+  background: var(--side);
 }
 
-.login-brand h1 { font-size: 30px; letter-spacing: -0.03em; }
-.login-kicker { margin-top: -10px; color: var(--side-muted); font-size: 12.5px; letter-spacing: 0.16em; text-transform: uppercase; }
-.login-brand > p { max-width: 46ch; color: #cdd3da; font-size: 14px; }
-.login-mark {
-  display: grid;
-  place-items: center;
-  width: 46px;
-  height: 46px;
-  border-radius: 14px;
-  color: #fff;
-  background: var(--brand);
-  box-shadow: 0 8px 26px rgba(182, 55, 64, 0.45);
-  animation: pop 0.4s var(--ease) both;
-}
-.login-mark svg { width: 24px; height: 24px; }
-
-.login-points {
-  list-style: none;
-  margin: 6px 0 0;
-  padding: 0;
+.login-lockup {
   display: flex;
   flex-direction: column;
-  gap: 11px;
+  gap: 14px;
+  font-weight: 400;
 }
 
-.login-points li {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  color: #b9c1cb;
-  font-size: 12.8px;
+.login-logo { display: block; width: 168px; height: auto; }
+
+.login-kicker {
+  padding-top: 12px;
+  border-top: 1px solid var(--side-line);
+  color: var(--side-muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
 }
 
-.login-points svg { color: var(--amber); flex: none; }
+.login-brand-foot {
+  max-width: 30ch;
+  color: var(--side-muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
 
 .login-side {
   display: grid;
@@ -652,8 +644,48 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, .btn:focus-vi
 
 .banner svg { flex: none; margin-top: 1px; width: 15px; height: 15px; }
 
-.banner-ok { color: var(--green-ink); background: var(--green-tint); border-color: rgba(0, 163, 108, 0.25); }
 .banner-bad { color: #8a090b; background: var(--red-tint); border-color: rgba(228, 1, 4, 0.22); }
+
+/* An action that worked is announced once, quietly, in the same small dark pill
+   the platform uses — it must not push the list down or stay on the screen. */
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 26px;
+  z-index: 1800;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: min(560px, calc(100vw - 28px));
+  padding: 9px 8px 9px 16px;
+  border-radius: 9999px;
+  background: var(--ink);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.35;
+  box-shadow: 0 12px 32px rgba(10, 12, 16, 0.3);
+  transform: translateX(-50%) translateY(14px);
+  opacity: 0;
+  transition: transform 0.24s var(--ease), opacity 0.24s var(--ease);
+}
+
+.toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+
+.toast-x {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #fff;
+  font-size: 17px;
+  line-height: 1;
+  opacity: 0.6;
+}
+
+.toast-x:hover { opacity: 1; }
 
 /* ── the table every list screen is drawn with ───────────── */
 /* One record per row, one action per icon, and the header row
@@ -1943,9 +1975,34 @@ button.key:hover { border-color: #c3c9d1; color: var(--ink); background: #F7F8FA
 }
 
 @media (max-width: 900px) {
-  .login { grid-template-columns: 1fr; }
-  .login-brand { padding: 34px 24px; }
-  .login-points { display: none; }
+  .login { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+  .login-brand {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 13px 18px;
+  }
+  .login-lockup { flex-direction: row; align-items: baseline; gap: 10px; }
+  .login-logo { width: 112px; }
+  .login-kicker { padding-top: 0; border-top: 0; font-size: 10px; }
+  .login-brand-foot { display: none; }
+  .login-side { padding: 26px 16px 40px; }
+}
+
+/* A phone is where a moderator actually answers a flag, so the widest parts of
+   the sign-in flow — the QR, the ten codes, the two escape links — stack. */
+@media (max-width: 560px) {
+  .login-card { padding: 20px 16px; border-radius: 14px; }
+  .step-head h2 { font-size: 17px; }
+  .qr-row { flex-direction: column; }
+  .qr { width: 100%; max-width: 216px; height: auto; }
+  .qr-empty { width: 100%; max-width: 216px; height: 216px; }
+  .qr-manual code { font-size: 12px; }
+  .codes-grid { grid-template-columns: 1fr; }
+  .codes-actions { flex-direction: column; }
+  .back-row { flex-direction: column; align-items: flex-start; gap: 10px; }
+  .toast { bottom: 16px; font-size: 12.5px; }
 }
 
 @media (max-width: 780px) {

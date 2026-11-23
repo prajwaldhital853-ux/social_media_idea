@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import Banner from '@/components/Banner';
 import ConsoleShell from '@/components/ConsoleShell';
 import { api } from '@/lib/api';
 import { IC } from '@/lib/icons';
@@ -61,11 +62,7 @@ export default function WelcomePage() {
         </button>
       )}
     >
-      {banner && (
-        <p className={`banner banner-${banner.kind}`} role="status">
-          {banner.kind === 'ok' ? IC.check : IC.alert}<span>{banner.text}</span>
-        </p>
-      )}
+      <Banner banner={banner} />
 
       {!desk ? (
         <div className="skeleton-stack">
