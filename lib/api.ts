@@ -84,7 +84,10 @@ function withQuery(path: string, query?: Query): string {
   return qs ? `${path}?${qs}` : path;
 }
 
-let refreshing: Promise<boolean> | null = null;
+/** What the server said about this session when we asked it to be extended. */
+type RefreshOutcome = 'ok' | 'rejected' | 'unreachable';
+
+let refreshing: Promise<RefreshOutcome> | null = null;
 
 /** How long one call may take before the screen says so out loud. */
 const TIMEOUT_MS = 12000;
@@ -95,6 +98,14 @@ const POLL_MS = 2000;
 const UPLOAD_TIMEOUT_MS = 10 * 60 * 1000;
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
+
+/**
+ * Signing in again after a stall that was really a sleeping server costs a second
+ * session row at worst, which beats refusing a password the user typed correctly.
+ * Code entry is deliberately absent: its replay would present a spent one-time
+ * code, and a comment replayed twice is a comment the author has to go delete.
+ */
+const REPLAYABLE_PATHS = new Set(['/api/auth/login/', '/api/auth/logout/', '/api/auth/refresh/']);
 
 const wakeListeners = new Set<(waking: boolean) => void>();
 let wakeUp: Promise<boolean> | null = null;
@@ -150,11 +161,25 @@ function wake(): Promise<boolean> {
   return wakeUp;
 }
 
-async function refreshSession(): Promise<boolean> {
+/** Django answers every failure with JSON, so anything else is a proxy talking. */
+async function classifyRefresh(res: Response): Promise<RefreshOutcome> {
+  if (res.ok) return 'ok';
+  const text = await res.text();
+  if (res.status >= 500 || !text.trimStart().startsWith('{')) return 'unreachable';
+  return 'rejected';
+}
+
+/**
+ * Ask for a new pair of cookies, and keep the three answers distinct. A refresh
+ * that was never answered says nothing about whether this session is still
+ * valid, and pretending otherwise is what logged people out of a good session
+ * every time the server took a nap.
+ */
+function refreshSession(): Promise<RefreshOutcome> {
   if (!refreshing) {
     refreshing = attempt('/api/auth/refresh/', { method: 'POST' }, TIMEOUT_MS)
-      .then(res => res.ok)
-      .catch(() => false)
+      .then(classifyRefresh)
+      .catch(() => 'unreachable' as const)
       .finally(() => { refreshing = null; });
   }
   return refreshing;
@@ -216,15 +241,23 @@ async function send(path: string, init: RequestInit, refresh = true, replay = tr
   if (unanswered && replay) {
     // A call that ran to its own timeout may already have been carried out, so a
     // write is replayed only when the proxy answered for a server that never saw it.
-    const replayable = res !== null || !timedOut || SAFE_METHODS.has((init.method || 'GET').toUpperCase());
+    const method = (init.method || 'GET').toUpperCase();
+    const replayable = res !== null || !timedOut || SAFE_METHODS.has(method) || REPLAYABLE_PATHS.has(path.split('?')[0]);
     if (!replayable || !(await wake())) throw offline(timedOut);
     return send(path, init, refresh, false);
   }
   if (!res) throw offline(timedOut);
 
-  const refreshable = refresh && res.status === 401 && !path.startsWith('/api/auth/');
-  if (refreshable && await refreshSession()) {
-    return send(path, init, false, replay);
+  // /api/auth/me/ is the one auth call that must refresh: it is how a reload
+  // finds out who is signed in, and refusing to extend the session there is what
+  // left a perfectly live seat reading as a signed-out page for 15 minutes.
+  const refreshable = refresh && res.status === 401 && (!path.startsWith('/api/auth/') || path === '/api/auth/me/');
+  if (refreshable) {
+    const outcome = await refreshSession();
+    if (outcome === 'ok') return send(path, init, false, replay);
+    // Nobody answered, so nobody said this session is over: report the network
+    // and leave the signed-in state alone rather than throwing the 401 onward.
+    if (outcome === 'unreachable') throw offline(false);
   }
   if (!res.ok) {
     const error = new ApiError(res.status, data);
@@ -303,7 +336,7 @@ export const api = {
           const data = readBody(xhr.responseText || '', xhr.status < 400, xhr.status);
           if (xhr.status >= 400) {
             if (retry && xhr.status === 401) {
-              void refreshSession().then(ok => (ok ? go(false) : fail(xhr.status, data)));
+              void refreshSession().then(outcome => (outcome === 'ok' ? go(false) : fail(xhr.status, data)));
               return;
             }
             fail(xhr.status, data);

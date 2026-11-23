@@ -27,6 +27,10 @@ LOCK_THRESHOLD = 3
 LOCK_MINUTES = 5
 OTP_MINUTES = 10
 OTP_MAX_ATTEMPTS = 5
+# A refresh call lives at most TIMEOUT_MS (12s on the client) in flight, so two
+# tabs racing each other are this close together; anything presenting a retired
+# token later than that is not the same browser finishing a request.
+ROTATION_GRACE = timedelta(seconds=15)
 
 logger = logging.getLogger(__name__)
 
@@ -299,9 +303,24 @@ def refresh(request):
     if not token:
         return Response({'detail': 'No refresh token.'}, status=401)
     payload = decode_token(token, 'refresh')
-    session = RefreshSession.objects.filter(jti=payload['jti'], revoked_at__isnull=True).select_related('user').first()
+    session = RefreshSession.objects.filter(jti=payload['jti']).select_related('user').first()
     if not session or session.expires_at < timezone.now():
         return Response({'detail': 'Session revoked or expired. Sign in again.'}, status=401)
+    if session.revoked_at:
+        # Rotation retires the row it consumed, so a second tab whose request was
+        # already in flight presents the token the first tab just replaced. That
+        # tab is the same browser on the same device, and signing it out would end
+        # a session the user never asked to end. A lock-out or a sign-out leaves
+        # no live sibling behind, so it stays fatal.
+        now = timezone.now()
+        if now - session.revoked_at > ROTATION_GRACE:
+            return Response({'detail': 'Session revoked or expired. Sign in again.'}, status=401)
+        session = RefreshSession.objects.filter(
+            user=session.user, device_id=session.device_id, revoked_at__isnull=True,
+            expires_at__gt=now, created_at__gte=session.revoked_at - ROTATION_GRACE,
+        ).order_by('-created_at').first()
+        if not session:
+            return Response({'detail': 'Session revoked or expired. Sign in again.'}, status=401)
     session.revoked_at = timezone.now()
     session.save(update_fields=['revoked_at'])
     resp = Response({'refreshed': True})
