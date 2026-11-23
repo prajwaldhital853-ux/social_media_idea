@@ -1,0 +1,156 @@
+"""Contract 6.9 — the spam desk: what one person may do, and how content is pulled.
+
+Three kinds of answer live in one screen because a moderator thinks about them
+together. *Rates* are how often an account may act; *new-account rules* are what a
+day-old account may not do yet; *the pile* is how many people have to say a post is
+bad before the platform takes it out of the feed without waiting for a person.
+
+The first four rate numbers are the ones the site already refuses requests on today,
+written down here so a seat can see them in one place. The rest are published at
+`GET /api/spam/config/` for the site's own views to enforce — the door is what makes
+"no code changes" true, and the desk prints what that door answers so nobody has to
+believe a save banner.
+
+`report_threshold()` reads a seat's typed answer ahead of the environment value the
+server was started with: `EXPOSING_REPORT_THRESHOLD` is a decision somebody made on
+a deploy, and a desk that quietly re-derived 3 from its own defaults would overrule
+it without saying so.
+"""
+
+from django.conf import settings as django_settings
+
+from . import policy, rbac, settings_store
+from .journal import record
+from .models import PolicyTerm
+
+# Which knobs the desk shows, under which heading, in the order it shows them.
+BLOCKS = (
+    ('rate', 'How often one person may act', (
+        'spam_signup_per_hour', 'spam_login_per_minute', 'spam_share_per_minute', 'spam_view_per_minute',
+        'spam_post_per_hour', 'spam_post_per_day', 'spam_comment_per_hour', 'spam_follow_per_hour',
+    )),
+    ('new', 'What a new account may not do yet', (
+        'spam_new_account_hours', 'spam_new_account_posts', 'spam_new_account_verify',
+    )),
+    ('pile', 'How content leaves the feed without a person', (
+        'alert_report_pile', 'spam_autohide', 'spam_link_block',
+    )),
+)
+
+# The four limits the site enforces where it answers the request, from its own code.
+ENFORCED = ('spam_signup_per_hour', 'spam_login_per_minute', 'spam_share_per_minute', 'spam_view_per_minute')
+
+WRITABLE = {key for _block, _label, keys in BLOCKS for key in keys}
+
+
+def report_threshold():
+    """Distinct open reporters that pull a post out of the feed on their own."""
+    started = int(getattr(django_settings, 'EXPOSING_REPORT_THRESHOLD', 3))
+    return max(1, int(settings_store.written('alert_report_pile', started)))
+
+
+def links(active_only=False):
+    rows = PolicyTerm.objects.filter(kind=PolicyTerm.Kind.LINK).select_related('created_by')
+    if active_only:
+        rows = rows.filter(is_active=True)
+    return [policy.row_term(row) for row in rows]
+
+
+def blocked_links():
+    return list(PolicyTerm.objects.filter(
+        kind=PolicyTerm.Kind.LINK, is_active=True,
+    ).values_list('text', flat=True))
+
+
+def _as_int(value):
+    try:
+        return max(0, int(float(value)))
+    except (TypeError, ValueError):
+        return None
+
+
+def desk(staff=None):
+    """The whole desk: every knob with its provenance, the lists it points at."""
+    by_key = {item['key']: item for item in settings_store.lines_group('safety')}
+    blocks = [{
+        'id': block,
+        'label': label,
+        'lines': [{**by_key[key], 'enforced': key in ENFORCED} for key in keys],
+    } for block, label, keys in BLOCKS]
+    return {
+        'blocks': blocks,
+        'threshold': report_threshold(),
+        'autohide': by_key['spam_autohide']['value'],
+        'block_links': by_key['spam_link_block']['value'],
+        'words': PolicyTerm.objects.filter(kind=PolicyTerm.Kind.WORD, is_active=True).count(),
+        'items': PolicyTerm.objects.filter(kind=PolicyTerm.Kind.ITEM, is_active=True).count(),
+        'links': links(),
+        'enforced': list(ENFORCED),
+        'can_write_links': rbac.can(staff, 'blocked_words') if staff is not None else False,
+    }
+
+
+def write(actor, posted):
+    """Move the knobs. Only what came back is written, so the audit row names the
+    rules that actually changed instead of everything the desk had open."""
+    cached = settings_store.cached()
+    updates, bad = {}, []
+    for key, value in (posted or {}).items():
+        if key not in WRITABLE:
+            continue
+        spec = cached[key]
+        if spec['type'] == 'bool':
+            # A switch off is written as `0`, not as a blank: a blank means
+            # "nobody has touched this", which would put the shipped default back on
+            # the screen that just switched it off. Only matters for a knob whose
+            # default is on — which is exactly what auto-hide is.
+            updates[key] = '1' if str(value).strip().lower() in ('1', 'true', 'yes', 'on') else '0'
+            continue
+        if str(value).strip() == '':
+            updates[key] = ''
+            continue
+        number = _as_int(value)
+        if number is None:
+            bad.append(f'{spec["label"]} has to be a whole number.')
+            continue
+        if key == 'alert_report_pile' and number < 2:
+            # One reporter is not a pile: a threshold of 1 makes every single
+            # complaint an automatic takedown, with nobody having agreed to it.
+            bad.append('Two people is the smallest pile this desk will pull content for.')
+            continue
+        if number > 100000:
+            bad.append(f'{spec["label"]} is far past any number this desk means.')
+            continue
+        updates[key] = str(number)
+    if bad:
+        return 400, {'errors': bad, 'detail': ' '.join(bad)}
+    if not updates:
+        return 400, {'detail': 'Nothing to save — no rule has been changed.'}
+    settings_store.write(actor, updates)
+    labels = [cached[key]['label'] for key in updates]
+    record(actor, 'spam_settings', 'spam and auto-hide controls',
+           'Changed ' + ', '.join(label.lower() for label in labels) + '.')
+    return 200, {
+        'detail': 'Saved ' + ', '.join(label.lower() for label in labels)
+                  + '. The platform publishes the new rules at /api/spam/config/.',
+        'changed': list(updates),
+        'config': public_config(),
+    }
+
+
+def public_config():
+    """What the member site needs to honour the desk — no login, no seat."""
+    values = settings_store.values()
+    limits = {key: values[key] for key, _label, keys in BLOCKS for key in keys if key != 'alert_report_pile'}
+    return {
+        'limits': limits,
+        'new_account': {
+            'hold_hours': values['spam_new_account_hours'],
+            'posts_per_day': values['spam_new_account_posts'],
+            'verify_first': bool(values['spam_new_account_verify']),
+        },
+        'auto_hide': {'enabled': bool(values['spam_autohide']), 'reports': report_threshold()},
+        'link_block': bool(values['spam_link_block']),
+        'blocked_links': blocked_links(),
+        'blocked_words': policy.words(),
+    }

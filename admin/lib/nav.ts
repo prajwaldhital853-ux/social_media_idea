@@ -47,6 +47,15 @@ export const NAV: NavGroup[] = [
     ],
   },
   {
+    id: 'safety',
+    label: 'Safety',
+    items: [
+      { href: '/spam', label: 'Spam rules', icon: 'shield', permission: 'spam_settings' },
+      { href: '/flags', label: 'Flagged pile', icon: 'alert', permission: 'reports' },
+      { href: '/alerts', label: 'Automated alerts', icon: 'pulse', permission: 'alerts' },
+    ],
+  },
+  {
     id: 'money',
     label: 'Money',
     items: [
@@ -69,6 +78,15 @@ export const NAV: NavGroup[] = [
     label: 'Platform',
     items: [
       { href: '/welcome', label: 'First-load wording', icon: 'chat', permission: 'welcome_text' },
+      { href: '/limits', label: 'Post limits', icon: 'sliders', permission: 'post_limits' },
+    ],
+  },
+  {
+    id: 'records',
+    label: 'Records',
+    items: [
+      { href: '/audit', label: 'Audit log', icon: 'disk', permission: 'audit' },
+      { href: '/exports', label: 'CSV exports', icon: 'download', permission: 'exports' },
     ],
   },
   {
@@ -107,11 +125,16 @@ export function requires(pathname: string): string | null {
 }
 
 /**
- * Whether a route an alert points at exists yet. The dashboard links an alert to
- * the screen that clears it, but that screen may be next week's section — so a
- * route that has not shipped is named in the alert instead of linked to a 404.
+ * Whether this seat may open a route an alert points at. The dashboard links an
+ * alert to the screen that clears it, and two different things make a screen
+ * unreachable: it may not have shipped yet, or it may have shipped and be a door
+ * this seat was never given. Both read the same way to the person looking — a name
+ * instead of a link — because a link that lands on a 404 or on "not on your seat"
+ * sends a moderator to knock on a door instead of telling them who holds the key.
  */
-export function shipped(href: string): boolean {
+export function shipped(href: string, permissions: string[] = [], role = ''): boolean {
   const pathname = (href.split('?')[0] || '/').replace(/\/$/, '') || '/';
-  return NAV.some(group => group.items.some(item => pathname === item.href));
+  const hit = NAV.flatMap(group => group.items).find(item => pathname === item.href);
+  if (!hit) return false;
+  return role === 'superadmin' || !hit.permission || permissions.includes(hit.permission);
 }

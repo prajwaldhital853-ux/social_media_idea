@@ -1,7 +1,8 @@
 from django.urls import path
 
-from . import (views_coins, views_overview, views_people, views_promotions, views_review, views_session,
-               views_staff, views_welcome)
+from . import (views_alerts, views_audit, views_coins, views_export, views_limits, views_overview,
+               views_people, views_promotions, views_review, views_safety, views_session, views_staff,
+               views_welcome)
 
 urlpatterns = [
     path('admin/session/', views_session.admin_session),
@@ -60,4 +61,21 @@ urlpatterns = [
     path('admin/promotions/', views_promotions.promotion_queue),
     path('admin/promotions/<int:pk>/<str:action>/', views_promotions.promotion_decide),
     path('promotions/config/', views_promotions.promotion_config),
+    # Contract 6.9. `admin/spam/` is the desk, `spam/config/` is what the member site
+    # reads from it, and the three lists below are what the pile and the checks
+    # produce. The exports door answers as a file, not as JSON, so a seat gets the
+    # CSV the contract promises rather than a screen's worth of text to copy.
+    path('admin/spam/', views_safety.spam_desk),
+    path('admin/spam/flags/', views_safety.flagged),
+    path('spam/config/', views_safety.spam_config),
+    path('admin/alerts/', views_alerts.alert_desk),
+    path('admin/alerts/scan/', views_alerts.alert_scan),
+    path('admin/alerts/thresholds/', views_alerts.alert_thresholds),
+    path('admin/alerts/<int:pk>/mark/', views_alerts.alert_mark),
+    path('admin/audit/', views_audit.audit_trail),
+    path('admin/exports/', views_export.export_index),
+    path('admin/exports/<str:dataset>/', views_export.export_build),
+    # Contract 6.10: the size of one post, and the open door the composer reads it from.
+    path('admin/limits/', views_limits.limits_desk),
+    path('limits/config/', views_limits.limits_config),
 ]

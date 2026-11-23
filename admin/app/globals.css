@@ -1874,6 +1874,42 @@ button.key:hover { border-color: #c3c9d1; color: var(--ink); background: #F7F8FA
 
 .algo-switch > span { margin: 0; }
 
+/* ── contract 6.9/6.10: the safety, records and limits screens ─────────── */
+
+/* A number the site already refuses, marked beside the box so a seat knows which
+   rules are enforcement today and which are a promise the site has yet to read. */
+.desk-live { color: var(--green-ink); font-style: normal; font-weight: 650; }
+
+.field input[data-enforced='1'] { border-color: rgba(0, 163, 108, 0.45); }
+
+/* A date pair reads as one question, so the two boxes are one field. */
+.dates {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.dates input { width: 116px; padding: 5px 8px; font-size: 12.2px; }
+
+/* A command a seat has to type somewhere else — kept monospaced and copyable. */
+.cmd {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11.4px;
+  color: #2b3038;
+  background: #EDEFF2;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 2px 6px;
+  overflow-wrap: anywhere;
+}
+
+/* A setting that no longer matches the number the contract shipped with. */
+.term.moved { background: var(--amber-tint); }
+
+.term.moved .term-text::after { content: ' ·'; color: var(--amber-ink); }
+
 @media (max-width: 1180px) {
   .pk-head, .pk-row { grid-template-columns: minmax(170px, 1fr) minmax(190px, 1fr) minmax(150px, 1fr); }
   .pk-head span:nth-child(4), .pk-bought { display: none; }

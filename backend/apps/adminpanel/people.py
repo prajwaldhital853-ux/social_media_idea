@@ -37,7 +37,7 @@ from apps.posts.models import Post
 from apps.promotions.models import Promotion
 from apps.wallet.models import CoinRequest, Transaction, Wallet
 
-from . import rbac, settings_store
+from . import rbac, settings_store, spam
 from .journal import record
 from .models import PublicNotice, StaffAccount
 
@@ -61,8 +61,13 @@ class Refused(ValueError):
 
 
 def threshold():
-    """How many distinct reporters pull a post out of the feed on their own."""
-    return int(getattr(django_settings, 'EXPOSING_REPORT_THRESHOLD', 3))
+    """How many distinct reporters pull a post out of the feed on their own.
+
+    Contract 6.9 makes this a knob on the spam desk rather than a deploy, so the
+    desk's answer is what every screen in the console counts with — the server's
+    own starting value still stands until somebody turns it.
+    """
+    return spam.report_threshold()
 
 
 # ---------------------------------------------------------------- the read side
@@ -382,14 +387,18 @@ def ends_at(days=None, until=None, permanent=False, now=None):
         return PERMANENT_UNTIL
     raw = str(until or '').strip()
     if raw:
-        moment = parse_datetime(raw)
-        if moment is None:
-            day = parse_date(raw)
-            moment = _end_of_day(day) if day else None
+        # A date with no clock on it means the whole day to the person who typed it
+        # into "suspend until", so the end lands on its last second. `parse_datetime`
+        # happily reads a bare date as midnight, which would lift a suspension a day
+        # early, so the day-only shape is split off before it sees one.
+        if ':' not in raw and len(raw) <= 10:
+            moment = _end_of_day(parse_date(raw))
+        else:
+            moment = parse_datetime(raw)
+            if moment is not None and timezone.is_naive(moment):
+                moment = timezone.make_aware(moment, UTC)
         if moment is None:
             raise Refused('That is not a date. Pick one, or give a number of days.')
-        if timezone.is_naive(moment):
-            moment = timezone.make_aware(moment, UTC)
         if moment <= now:
             raise Refused('The end of a suspension has to be in the future.')
         return moment

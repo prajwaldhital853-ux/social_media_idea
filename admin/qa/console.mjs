@@ -594,6 +594,8 @@ try {
 
   const screenOf = href => (href.split('?')[0] || '/').replace(/\/$/, '') || '/';
   const raised = dash.alerts.recent.filter(row => row.href);
+  const actionable = raised.filter(row => row.status === 'open');
+  const settledRows = raised.filter(row => row.status !== 'open');
   const dead = await owner.evaluate(() => ({
     tiles: [...document.querySelectorAll('.tile-link')].map(a => a.getAttribute('href')),
     alerts: [...document.querySelectorAll('.alert-go')].map(a => a.getAttribute('href')),
@@ -606,11 +608,16 @@ try {
   ok('every link the dashboard hands out opens a real screen',
     targets.length > 0 && linkCodes.every(code => code === 200),
     `${targets.length} links: ${[...new Set(linkCodes)].join(', ')} — ${dead.screens.length} screens on this seat`);
-  ok('an alert whose screen has not been built yet is named, not linked to a 404',
-    dead.screens.includes('/reports') && dead.alerts.length > 0
-      && dead.alerts.every(href => dead.screens.includes(screenOf(href)))
-      && dead.named.length === raised.length - dead.alerts.length && dead.named.length > 0,
-    `${dead.alerts.length} of ${raised.length} alerts link to the queue, ${dead.named.length} name their screen: ${dead.named.join(', ')}`);
+  // A Client holds every screen, so on this seat "the screen has not been built" is
+  // never the reason a row has no button: only a condition somebody already dealt
+  // with is allowed to name its screen instead of linking to it.
+  ok('an open alert is taken to the screen that fixes it, and every one of those screens is on this seat',
+    dead.screens.includes('/reports') && actionable.length > 0
+      && dead.alerts.length === actionable.length
+      && actionable.every(row => dead.screens.includes(screenOf(row.href)))
+      && dead.named.length === settledRows.length,
+    `${dead.alerts.length} of ${raised.length} alerts link out to ${[...new Set(raised.map(row => screenOf(row.href)))].join(', ')}, `
+    + `${dead.named.length} name the screen of an alert already decided: ${dead.named.join(', ')}`);
   const pills = await many(owner, '.alert .pill');
   ok('the alert feed carries its severity and status on every row',
     pills.length === dash.alerts.recent.length
@@ -648,6 +655,28 @@ try {
   ok('a Moderator gets the same dashboard, because the role ships with it',
     modGate.status === 200 && modTiles.join(',') === TILES, `HTTP ${modGate.status}, ${modTiles.length} cards`);
   await shot(mod, 'moderator-5-dashboard');
+
+  // The same alerts on a seat that holds four of the seven screens they point at.
+  // `shipped()` decides button-or-label per seat, so the drawer is the only honest
+  // list of what this person may open — and a button that walks a Moderator to a
+  // door answering 403 is worse than the plain word it is replaced with.
+  const modSeat = (await statusOf(mod, '/api/admin/session/')).body;
+  const modScreens = await mod.$$eval('.side-nav a', nodes => nodes.map(node => node.getAttribute('href')));
+  const modRaised = await mod.evaluate(() => ({
+    links: [...document.querySelectorAll('.alert-go')].map(a => a.getAttribute('href')),
+    named: [...document.querySelectorAll('.alert-here')].map(node => node.textContent.trim()),
+  }));
+  const modOpen = dash.alerts.recent.filter(row => row.href && row.status === 'open');
+  const onSeat = modOpen.filter(row => modScreens.includes(screenOf(row.href)));
+  const clientKeys = (await statusOf(owner, '/api/admin/session/')).body.permissions.length;
+  ok('a Moderator is offered an alert only for a screen that seat actually holds',
+    clientKeys > modSeat.permissions.length && modScreens.length < dead.screens.length
+      && modRaised.links.length === onSeat.length && onSeat.length < modOpen.length
+      && modRaised.named.length === modOpen.length - onSeat.length + settledRows.length,
+    `${onSeat.length} of ${modOpen.length} alert buttons survive the seat, and ${modRaised.named.length} rows name their screen instead: ${modRaised.named.join(', ')}`);
+  ok('and the rows it does open are the same numbers the Client was shown',
+    (await mod.$$eval('.alert', nodes => nodes.length)) === dash.alerts.recent.length,
+    `${dash.alerts.recent.length} rows on both seats, ${modSeat.permissions.length} screens on this one`);
 
   // ── 6. ending a seat takes the console away immediately ────────────────────
   await owner.bringToFront();
@@ -2638,6 +2667,467 @@ try {
   const shutAgain = await statusOf(mod, '/api/admin/promotions/');
   ok('taking the screen back is the same one click, so a promotion desk can be closed for the night',
     shutAgain.status === 403, `${shutAgain.status} after the grant was withdrawn`);
+
+  // ── 12. the safety desk, the pile, the alerts, the log, the files, the sizes ──
+  //
+  // Contracts 6.9 and 6.10 walk in the order a seat actually does them: read the log
+  // before anything has been touched, so the gap list is the honest one; turn the
+  // rules; watch the flagged pile move with the number; run the checks; take a file;
+  // then read the log again and find that every click above wrote its own row.
+  //
+  // The fixture for this section is `admin/qa/watch_seed.py`: four reporters on one
+  // hidden post, two on a live one, three each on a comment and a listing, three on a
+  // post that no longer exists, and four outside reporters each given a different
+  // answer — one healthy, one gone quiet, one counting trouble, one never wired in.
+
+  /**
+   * A file, asked for the way the screen asks for it.
+   *
+   * `again()` retries, and a retried build would hand the audit log a second
+   * download that no person took, so this one answers exactly once and keeps the
+   * headers the server set rather than the numbers the page already knew.
+   */
+  const rawFile = (page, apiPath, payload = {}) => page.evaluate(async (target, sent) => {
+    const csrf = (document.cookie.match(/(?:^|;\s*)exposing_csrf=([^;]*)/) || [])[1] || '';
+    const res = await fetch(target, {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        Accept: 'text/csv, application/json', 'Content-Type': 'application/json', 'X-CSRF-Token': decodeURIComponent(csrf),
+      },
+      body: JSON.stringify(sent),
+    });
+    const text = await res.text();
+    return {
+      status: res.status,
+      type: res.headers.get('Content-Type') || '',
+      filename: ((res.headers.get('Content-Disposition') || '').match(/filename="([^"]+)"/) || [])[1] || '',
+      rows: Number(res.headers.get('X-Export-Rows') || 0),
+      truncated: res.headers.get('X-Export-Truncated') === '1',
+      said: text.slice(0, 240),
+      head: text.split('\n')[0] || '',
+    };
+  }, apiPath, payload);
+
+  const watchPile = async () => (await statusOf(owner, '/api/admin/spam/flags/?page=0')).body;
+  // Only the rows this file's own accounts own, because the demo seed has a pile of
+  // its own and a count that includes it would be a count of somebody else's work.
+  const ownPile = desk => desk.content.filter(row => row.owner && row.owner.username === 'qa_peek_host');
+
+  await owner.goto(`${BASE}/audit`, { waitUntil: 'domcontentloaded' });
+  await owner.waitForSelector('[data-list="audit"] .entry', { timeout: 40000 });
+  const logShape = await owner.evaluate(() => ({
+    pens: document.querySelectorAll('[data-list="audit"] button').length,
+    families: document.querySelectorAll('.filters .fchip').length,
+    tiles: document.querySelectorAll('[data-entry]').length,
+  }));
+  ok('the audit log opens as evidence, not as a workspace: rows listed, families filterable, not one pen',
+    logShape.pens === 0 && logShape.families > 6 && logShape.tiles > 0,
+    `${logShape.pens} buttons in the table · ${logShape.families} family filters · ${logShape.tiles} rows`);
+
+  const gapFirst = await lineText(owner, '[data-missing-families]');
+  ok('a screen that counts zeroes can tell a quiet month from a hole in the logging, and says which families they are',
+    gapFirst.includes('alerts') && gapFirst.includes('data exports')
+      && !gapFirst.includes('coins and payments') && !gapFirst.includes('staff and access'),
+    gapFirst.replace(/\s+/g, ' ').slice(0, 180));
+
+  await clearAndType(owner, '.toolbar .search input', 'safety watch');
+  const systemLine = await until(owner, '[data-list="audit"] .entry', 'the platform itself');
+  ok('a row the platform wrote itself is named as one, instead of leaving the Who column blank',
+    systemLine.includes('the platform itself') && systemLine.includes('no account behind it')
+      && systemLine.includes('auto hide post'),
+    systemLine.replace(/\s+/g, ' ').slice(0, 150));
+
+  await clearAndType(owner, '.toolbar .search input', '');
+  await clearAndType(owner, '.toolbar .dates input:nth-of-type(2)', 'november');
+  const dateRefused = await expectBad(owner, 'Give a date as');
+  ok('a date typed in words is refused in words, before the screen shows an empty table that looks like a quiet year',
+    dateRefused.includes('2026-11-22'), dateRefused.replace(/\s+/g, ' ').slice(0, 140));
+  await clearAndType(owner, '.toolbar .dates input:nth-of-type(2)', '2020-01-01');
+  await owner.waitForFunction(() => (document.querySelector('[data-totals]') || {}).textContent
+    && document.querySelector('[data-totals]').textContent.includes('0 entries match'), { timeout: 40000 });
+  const logEmpty = await text(owner, '[data-totals]');
+  ok('and a window that holds nothing says so as a window, with the whole log still counted beside it',
+    logEmpty.startsWith('0 entries match this filter') && logEmpty.includes('rows in the log since it began'),
+    logEmpty.replace(/\s+/g, ' ').slice(0, 160));
+  await waitGone(owner, '[data-list="audit"]');
+  await clearAndType(owner, '.toolbar .dates input:nth-of-type(2)', '');
+  await owner.waitForSelector('[data-list="audit"] .entry', { timeout: 40000 });
+  await shot(owner, 'safety-1-audit-gap');
+
+  await owner.goto(`${BASE}/flags`, { waitUntil: 'domcontentloaded' });
+  await owner.waitForSelector('[data-totals]', { timeout: 40000 });
+  const pileRead = await watchPile();
+  const mineThree = ownPile(pileRead);
+  const pileTold = await text(owner, '[data-totals]');
+  ok('the pile screen leads with the number that decides it, and the number is the rule on the spam desk',
+    pileRead.threshold === 3 && pileTold.includes('a pile of 3 distinct reporters')
+      && (await owner.$('[data-totals] a[href="/spam"]')) !== null,
+    pileTold.replace(/\s+/g, ' ').slice(0, 140));
+  ok('the pile lists what the number reached, and keeps the four states apart instead of flattening them into one list',
+    mineThree.length === 3
+      && mineThree.filter(row => row.kind === 'post' && row.live === false).length === 1
+      && mineThree.filter(row => row.live === true).length === 2
+      && mineThree.every(row => row.reporters >= 3),
+    `${mineThree.length} of this fixture’s rows over the pile · `
+      + `${mineThree.filter(row => row.live).length} still in the feed`);
+  ok('auto-hide has only ever looked at posts, and the screen says so rather than implying a comment was judged',
+    mineThree.filter(row => row.kind !== 'post').every(row => row.state_word === 'in the feed' && row.live === true),
+    mineThree.map(row => `${row.kind}:${row.state_word || row.state}`).join(' · '));
+  const lostTarget = (pileRead.content || []).find(row => row.gone);
+  ok('a report outlives the thing it pointed at: the complaints on a deleted post stay on the list, named as gone',
+    !!lostTarget && lostTarget.owner === null && lostTarget.state === 'gone',
+    lostTarget ? `target ${lostTarget.id} with ${lostTarget.reporters} reporters` : 'no deleted target listed');
+  const pileQuiet = await owner.evaluate(() => ({
+    rows: document.querySelectorAll('[data-flag]').length,
+    held: [...document.querySelectorAll('[data-flag] [data-where]')].map(node => node.dataset.where),
+  }));
+  ok('what the list says about each target is what the platform actually did to it, row for row',
+    pileQuiet.rows === (pileRead.content || []).length && pileQuiet.held.includes('hidden')
+      && pileQuiet.held.includes('gone'),
+    `${pileQuiet.rows} rows · ${[...new Set(pileQuiet.held)].join(', ')}`);
+  await shot(owner, 'safety-2-flags');
+
+  await owner.goto(`${BASE}/spam`, { waitUntil: 'domcontentloaded' });
+  await owner.waitForSelector('[data-knob="alert_report_pile"] input', { timeout: 40000 });
+  const ruleBoxes = await owner.evaluate(() => ({
+    knobs: document.querySelectorAll('[data-spam="rules"] [data-knob]').length,
+    told: [...document.querySelectorAll('[data-spam="rules"] .desk-live')].map(node => node.textContent.trim()),
+  }));
+  ok('the spam desk is a screen of rules, and the four the site already refuses on are marked as refused-on',
+    ruleBoxes.knobs === 14 && ruleBoxes.told.length === 4
+      && ruleBoxes.told.every(line => line.includes('the site refuses this at its own door today')),
+    `${ruleBoxes.knobs} knobs · ${ruleBoxes.told.length} marked as already enforced`);
+
+  const quoteOpen = await statusOf(unseated, '/api/spam/config/');
+  ok('what the desk publishes is readable with nobody signed in, because that is the half that makes "no code changes" true',
+    quoteOpen.status === 200 && quoteOpen.body.auto_hide.reports === 3
+      && quoteOpen.body.limits.spam_signup_per_hour === 3,
+    `${quoteOpen.status} · pile ${quoteOpen.body.auto_hide && quoteOpen.body.auto_hide.reports}`);
+
+  await clearAndType(owner, '[data-knob="alert_report_pile"] input', '4');
+  await tap(owner, '[data-spam-save]');
+  const pileSaved = await expectBanner(owner, 'Saved reports before content is pulled');
+  ok('the number that decides what is pulled is a box, and saving it is written as a change to that box',
+    pileSaved.includes('/api/spam/config/'), pileSaved.replace(/\s+/g, ' ').slice(0, 150));
+  const quoteFive = await statusOf(unseated, '/api/spam/config/');
+  ok('a stranger is told the new rule on the next request, without anybody deploying anything',
+    quoteFive.body.auto_hide.reports === 4, `the open door now answers a pile of ${quoteFive.body.auto_hide.reports}`);
+  const deskCrossed = await statusOf(owner, '/api/admin/alerts/');
+  const pileDial = (deskCrossed.body.thresholds || []).find(item => item.key === 'alert_report_pile');
+  ok('and the other desk that reads the same rule sees the number the first one wrote',
+    pileDial && String(pileDial.value) === '4' && !!pileDial.set,
+    pileDial ? `the alerts desk reads ${pileDial.value}, written by ${pileDial.by}` : 'no shared dial');
+
+  await clearAndType(owner, '[data-knob="alert_report_pile"] input', '5');
+  await tap(owner, '[data-spam-save]');
+  await expectBanner(owner, 'Saved');
+  const pileFive = ownPile(await watchPile());
+  ok('raise the pile and the list shrinks by itself: at five reporters nothing here is over the line',
+    pileFive.length === 0, `${pileFive.length} of the fixture’s targets at or over five`);
+
+  const tightPile = await postOf(owner, '/api/admin/spam/', { alert_report_pile: 1 });
+  ok('a pile of one is refused out loud, because one complaint has never been a consensus',
+    tightPile.status === 400 && tightPile.body.detail.includes('Two people is the smallest pile'),
+    `${tightPile.status} — ${String(tightPile.body.detail).slice(0, 90)}`);
+  const stillDesk = await postOf(owner, '/api/admin/spam/', {});
+  ok('saving a desk nobody moved is refused rather than written to the log as a change',
+    stillDesk.status === 400 && stillDesk.body.detail.includes('no rule has been changed'),
+    `${stillDesk.status} — ${String(stillDesk.body.detail).slice(0, 80)}`);
+
+  await clearAndType(owner, '[data-knob="alert_report_pile"] input', '');
+  await tap(owner, '[data-spam-save]');
+  await expectBanner(owner, 'Saved');
+  const pileHome = await watchPile();
+  ok('a rule can be given back to the platform, and the desk then says it is the number the site was built with',
+    pileHome.threshold === 3 && ownPile(pileHome).length === 3,
+    `back to a pile of ${pileHome.threshold}`);
+
+  await tap(owner, '[data-knob="spam_autohide"] .moves button:nth-of-type(2)');
+  await tap(owner, '[data-spam-save]');
+  await expectBanner(owner, 'Saved');
+  const autoQuiet = await until(owner, '[data-live="auto_hide"]', 'off — every report waits');
+  const warnSaid = await lineText(owner, '[data-autohide-off]');
+  const spamDoor = await statusOf(unseated, '/api/spam/config/');
+  ok('switching auto-hide off is said three ways: the desk warns, the screen repeats, the open door agrees',
+    warnSaid.includes('Auto-hide is off') && autoQuiet.includes('off — every report waits for a person')
+      && spamDoor.body.auto_hide.enabled === false,
+    `the door answers enabled ${spamDoor.body.auto_hide.enabled}`);
+  await tap(owner, '[data-knob="spam_autohide"] .moves button:nth-of-type(1)');
+  await tap(owner, '[data-spam-save]');
+  await expectBanner(owner, 'Saved');
+  const autoBack = await until(owner, '[data-live="auto_hide"]', 'distinct reporters');
+  ok('and putting it back is the same two clicks, with the number it pulls on printed beside it',
+    autoBack.includes('on 3 distinct reporters'), autoBack.replace(/\s+/g, ' ').slice(0, 110));
+  await shot(owner, 'safety-3-spam');
+
+  await owner.goto(`${BASE}/alerts`, { waitUntil: 'domcontentloaded' });
+  await owner.waitForSelector('[data-alerts="wires"] [data-wire]', { timeout: 40000 });
+  const wireRows = await owner.$$eval('[data-wire]', nodes => nodes.map(node => ({
+    key: node.dataset.wire, wired: node.dataset.wired, said: node.textContent.replace(/\s+/g, ' ').trim(),
+  })));
+  ok('the four conditions nothing outside this codebase reports on are listed as wires, not as zeroes',
+    wireRows.length === 4 && wireRows.filter(row => row.wired === '1').length === 3
+      && wireRows.some(row => row.key === 'jobs' && row.wired === '0' && row.said.includes('never reported in')),
+    wireRows.map(row => `${row.key}:${row.wired}`).join(' '));
+  const wireCommand = await lineText(owner, '[data-alerts="wires"] .panel-foot');
+  ok('a wire comes with the exact command that would connect it, so the gap is somebody’s five-second job',
+    wireCommand.includes('python manage.py adminpulse') && wireCommand.includes('--state=ok'),
+    wireCommand.replace(/\s+/g, ' ').slice(0, 130));
+  const backupWire = wireRows.find(row => row.key === 'backup');
+  ok('heard from, then gone quiet, is told apart from never heard of — the backup wire says when it last spoke',
+    !!backupWire && backupWire.wired === '1' && backupWire.said.includes('last heard from')
+      && backupWire.said.includes('nightly dump'),
+    backupWire ? backupWire.said.slice(0, 120) : 'no backup wire');
+
+  const liveBefore = (await statusOf(owner, '/api/admin/alerts/?status=open')).body;
+  const errorsFired = liveBefore.rows.find(row => row.key === 'errors:backlog');
+  const backupFired = liveBefore.rows.find(row => row.key === 'backup:stale');
+  ok('a collector reporting 47 errors an hour against a dial of 20 becomes an alert a seat can see',
+    !!errorsFired && errorsFired.severity === 'critical' && errorsFired.title.includes('47 waiting'),
+    errorsFired ? `${errorsFired.title} → ${errorsFired.href}` : 'the error count raised nothing');
+  ok('and a backup that stopped talking raises its own trouble, linked to the screen a restore would come from',
+    !!backupFired && backupFired.severity === 'critical' && backupFired.href === '/exports'
+      && backupFired.title.includes('No word about backups for'),
+    backupFired ? backupFired.title : 'the silent backup raised nothing');
+
+  await clearAndType(owner, '[data-knob="alert_error_rate"] input', '100');
+  await tap(owner, '[data-thresholds-save]');
+  const dialSaved = await expectBanner(owner, 'Saved app errors in an hour');
+  ok('the dial that decides when something becomes an alert is a box on this desk too',
+    dialSaved.includes('closes whatever it no longer believes'), dialSaved.replace(/\s+/g, ' ').slice(0, 150));
+  const scanRan = await answered(owner, '[data-scan]', 'Run the checks', '/api/admin/alerts/scan/');
+  ok('a check runs because a person pressed it, and the screen says what was still true after that run',
+    scanRan.status === 200 && scanRan.body.detail.includes('condition(s) true'),
+    `${scanRan.status} · ${String(scanRan.body.detail).slice(0, 110)}`);
+  const liveRaised = (await statusOf(owner, '/api/admin/alerts/?status=open')).body;
+  ok('and the dial that was just moved is honoured by the very next scan: at 100 an hour, 47 is not an alert',
+    !liveRaised.rows.some(row => row.key === 'errors:backlog'),
+    `${liveRaised.rows.length} conditions still true after raising the dial`);
+
+  await clearAndType(owner, '[data-knob="alert_error_rate"] input', '20');
+  await tap(owner, '[data-thresholds-save]');
+  await expectBanner(owner, 'Saved');
+  await answered(owner, '[data-scan]', 'Run the checks', '/api/admin/alerts/scan/');
+  const liveBack = (await statusOf(owner, '/api/admin/alerts/?status=open')).body;
+  const errorsAgain = liveBack.rows.find(row => row.key === 'errors:backlog');
+  ok('put the dial back and the condition returns by itself — resolving is not the same as fixing',
+    !!errorsAgain && errorsAgain.status === 'open' && errorsAgain.occurrences > 1,
+    errorsAgain ? `back as ${errorsAgain.status} after ${errorsAgain.occurrences} times true` : 'it did not come back');
+
+  const ackTarget = liveBack.rows.find(row => row.key === 'backup:stale');
+  ok('and the trouble a seat has to act on is the one still listed as open after every scan above',
+    !!ackTarget && ackTarget.status === 'open', ackTarget ? `${ackTarget.key} ${ackTarget.status}`
+      : 'nothing in the backup family was open to acknowledge');
+  await owner.reload({ waitUntil: 'domcontentloaded' });
+  await owner.waitForSelector('[data-scan]', { timeout: 40000 });
+  await tap(owner, `[data-ack="${ackTarget.id}"]`);
+  const ackSaid = await expectBanner(owner, 'Acknowledged by');
+  ok('acknowledging says a person has read it, and says plainly that it did not make it less true',
+    ackSaid.includes('Still true until the next scan') && ackSaid.includes('sita'),
+    ackSaid.replace(/\s+/g, ' ').slice(0, 130));
+  const ackedPill = await until(owner, `[data-alert="${ackTarget.id}"] .pill`, 'acked');
+  ok('the row the desk just acknowledged is the row the list now shows as acknowledged',
+    ackedPill === 'acked', `the pill reads ${ackedPill}`);
+  await tap(owner, `[data-resolve="${ackTarget.id}"]`);
+  const resolvedSaid = await expectBanner(owner, 'Resolved by');
+  ok('resolving by hand is allowed, and is labelled as a claim about the condition rather than about the job',
+    resolvedSaid.includes('comes back on its own if the condition is still true'),
+    resolvedSaid.replace(/\s+/g, ' ').slice(0, 130));
+  await shot(owner, 'safety-4-alerts');
+
+  await owner.goto(`${BASE}/limits`, { waitUntil: 'domcontentloaded' });
+  await owner.waitForSelector('[data-knob="limit_photo_count"] input', { timeout: 40000 });
+  const sixNumbers = await owner.$$eval('[data-limits="sizes"] [data-knob] input', nodes => nodes.map(node => ({
+    key: node.name, value: node.value, dflt: node.dataset.default,
+  })));
+  ok('contract 6.10’s five defaults are six boxes on a settings screen, each showing the number the clause named',
+    sixNumbers.length === 6
+      && sixNumbers.every(box => box.value === box.dflt)
+      && sixNumbers.find(box => box.key === 'limit_text_chars').dflt === '2000'
+      && sixNumbers.find(box => box.key === 'limit_photo_count').dflt === '4'
+      && sixNumbers.find(box => box.key === 'limit_photo_mb').dflt === '5'
+      && sixNumbers.find(box => box.key === 'limit_video_seconds').dflt === '60'
+      && sixNumbers.find(box => box.key === 'limit_video_mb').dflt === '150',
+    sixNumbers.map(box => `${box.key}=${box.dflt}`).join(' '));
+  const sizesOpen = await statusOf(unseated, '/api/limits/config/');
+  ok('a composer is told the same six numbers without signing in, in the units it needs them in',
+    sizesOpen.status === 200 && sizesOpen.body.text.characters === 2000
+      && sizesOpen.body.photo.per_post === 4 && sizesOpen.body.photo.each_bytes === 5242880
+      && sizesOpen.body.video.seconds === 60,
+    `${sizesOpen.status} · ${JSON.stringify(sizesOpen.body.photo)}`);
+
+  await clearAndType(owner, '[data-knob="limit_photo_count"] input', '6');
+  await clearAndType(owner, '[data-knob="limit_video_mb"] input', '400');
+  await tap(owner, '[data-limits-save]');
+  const sizesSaved = await expectBanner(owner, 'Saved');
+  ok('a limit raised past what the server can honour is saved, and the banner is the one that admits it',
+    sizesSaved.includes('turned away by the upload endpoint') && sizesSaved.includes('150 MB'),
+    sizesSaved.replace(/\s+/g, ' ').slice(0, 180));
+  const sizesPublished = await statusOf(unseated, '/api/limits/config/');
+  await owner.waitForFunction(() => (document.querySelector('[data-drifted]') || {}).textContent
+    && document.querySelector('[data-drifted]').textContent.includes('2 of the six'), { timeout: 40000 });
+  const driftSaid = await text(owner, '[data-drifted]');
+  ok('the roomier composer is the rule the site is told now, and the screen still names the ceiling it cannot lift',
+    sizesPublished.body.photo.per_post === 6 && sizesPublished.body.video.each_mb === 400
+      && driftSaid.includes('150 → 400'),
+    driftSaid.replace(/\s+/g, ' ').slice(0, 170));
+  const outOfRange = await postOf(owner, '/api/admin/limits/', { limit_photo_count: 99 });
+  ok('a number that would break the composer is refused with the range it broke, not accepted as a stricter rule',
+    outOfRange.status === 400 && outOfRange.body.detail.includes('between 1 and 20'),
+    `${outOfRange.status} — ${String(outOfRange.body.detail).slice(0, 90)}`);
+  const notANumber = await postOf(owner, '/api/admin/limits/', { limit_text_chars: 'two thousand' });
+  ok('and a limit typed in words is refused in words, so no screen downstream has to render an `abc`',
+    notANumber.status === 400 && notANumber.body.detail.includes('whole number'),
+    `${notANumber.status} — ${String(notANumber.body.detail).slice(0, 90)}`);
+
+  await clearAndType(owner, '[data-knob="limit_photo_count"] input', '4');
+  await clearAndType(owner, '[data-knob="limit_video_mb"] input', '150');
+  await tap(owner, '[data-limits-save]');
+  await expectBanner(owner, 'Saved');
+  const sizesBack = await until(owner, '[data-live="photo"]', '4 per post');
+  const drifted = await owner.evaluate(() => document.querySelectorAll('[data-drifted], [data-oversized]').length);
+  ok('giving the six numbers back leaves nothing behind: no drift note, no ceiling warning, the clause’s own defaults',
+    drifted === 0 && sizesBack.includes('5 MB') && sizesBack.includes('5242880') === false,
+    `${drifted} warnings left · ${sizesBack.replace(/\s+/g, ' ').slice(0, 90)}`);
+  await shot(owner, 'safety-5-limits');
+
+  await owner.goto(`${BASE}/exports`, { waitUntil: 'domcontentloaded' });
+  await owner.waitForSelector('[data-list="exports"] .entry', { timeout: 40000 });
+  const fiveFiles = await owner.$$eval('[data-export]', nodes => nodes.map(node => node.dataset.export));
+  const capSaid = await lineText(owner, '[data-totals]');
+  const countSaid = await text(owner, '.toolbar-count');
+  ok('the five files the contract names are the five on the screen, in the order an accountant asks for them',
+    fiveFiles.join(',') === 'users,reports,coin_requests,coin_ledger,promotions'
+      && capSaid.includes('50,000') && /\d[\d,]* rows across the five files/.test(countSaid),
+    `${fiveFiles.join(', ')} · ${countSaid.replace(/\s+/g, ' ').slice(0, 60)} · ${capSaid.replace(/\s+/g, ' ').slice(0, 70)}`);
+
+  await clearAndType(owner, '.toolbar .dates input:nth-of-type(1)', '2026-11-20');
+  await clearAndType(owner, '.toolbar .dates input:nth-of-type(2)', '2026-11-01');
+  const windowBad = await expectBad(owner, 'first date is after the second');
+  ok('a window typed backwards is refused in words instead of handing over an empty file that looks like a quiet month',
+    windowBad.includes('would hold nothing'), windowBad.replace(/\s+/g, ' ').slice(0, 120));
+  await clearAndType(owner, '.toolbar .dates input:nth-of-type(1)', '');
+  await clearAndType(owner, '.toolbar .dates input:nth-of-type(2)', '');
+  // Blanking the two dates re-counts the five files, and a re-count deliberately
+  // greys out every Download while it runs — `busy` is one flag for reads and builds
+  // alike. So the click waits for the button to be clickable again, not for the line
+  // above the table: that line had already been the whole table once, so it never
+  // goes back to its spinner and a wait on it passes a second before the click would
+  // have landed on a disabled button.
+  await owner.waitForSelector('[data-download="users"]:not([disabled])', { timeout: 40000 });
+  await tap(owner, '[data-download="users"]');
+  await owner.waitForSelector('[data-saved="users"]', { timeout: 40000 });
+  const fileTaken = await text(owner, '[data-saved="users"]');
+  const fileProof = await rawFile(owner, '/api/admin/exports/coin_ledger/?raw=1');
+  ok('one click hands over the real file: the name and the count come from the headers the server set, not the page',
+    fileTaken.includes('exposing-users-') && fileTaken.includes(' rows, ') && !fileTaken.includes('undefined')
+      && fileProof.status === 200 && /text\/csv/.test(fileProof.type) && fileProof.rows > 0
+      && fileProof.head.startsWith('id,created_at,username') && fileProof.filename.startsWith('exposing-coin_ledger-'),
+    `${fileProof.filename} · ${fileProof.rows} rows · ${fileProof.head.slice(0, 40)}`);
+  const takenNote = await until(owner, '[data-list="exports-taken"]', 'exposing-users-');
+  ok('building a file of other people’s email addresses is a staff action, and the screen shows the record of it',
+    takenNote.includes('sita') && takenNote.includes('every row the table holds'),
+    takenNote.replace(/\s+/g, ' ').slice(-150));
+  const unknownFile = await rawFile(owner, '/api/admin/exports/names/?raw=1');
+  ok('and there is no sixth file to ask for: a dataset that is not one of the five is named back as a list',
+    unknownFile.status === 404 && unknownFile.said.includes('Choose one of'),
+    `${unknownFile.status} — ${unknownFile.said.slice(0, 90)}`);
+  await shot(owner, 'safety-6-exports');
+
+  await owner.goto(`${BASE}/audit`, { waitUntil: 'domcontentloaded' });
+  await owner.waitForSelector('[data-list="audit"] .entry', { timeout: 40000 });
+  const gapClosed = await statusOf(owner, '/api/admin/audit/');
+  const stillGaps = (gapClosed.body.facets.families || []).filter(row => row.contract && row.n === 0);
+  const gapLeft = await owner.evaluate(() => document.querySelectorAll('[data-missing-families]').length);
+  ok('the walkthrough closed the gap it opened with: every family the contract names now carries at least one row',
+    stillGaps.length === 0 && gapLeft === 0,
+    stillGaps.map(row => row.label).join(', ') || 'all nine families written');
+
+  const verbsWritten = {};
+  for (const verb of ['spam_settings', 'alert_scan', 'alert_thresholds', 'alert_ack', 'alert_resolve',
+    'post_limits', 'export_csv']) {
+    const read = await statusOf(owner, `/api/admin/audit/?action=${verb}`);
+    verbsWritten[verb] = (read.body.results || []).length;
+  }
+  ok('every action this desk took wrote its own row, with the seat’s name and the reason typed with it',
+    Object.entries(verbsWritten).every(([, n]) => n > 0),
+    Object.entries(verbsWritten).map(([verb, n]) => `${verb} ${n}`).join(' · '));
+
+  const fileInLog = await statusOf(owner, '/api/admin/audit/?q=exposing-users');
+  const fileRow = (fileInLog.body.results || [])[0];
+  ok('a file handed over a month from now is findable by its own filename, because the name is on the row',
+    (fileInLog.body.results || []).length > 0 && !!fileRow && fileRow.action === 'export_csv'
+      && fileRow.actor === 'sita' && String(fileRow.detail).includes('.csv'),
+    fileRow ? `${fileRow.actor} ${fileRow.action} — ${String(fileRow.detail).slice(0, 90)}` : 'the search found nothing');
+
+  await chip(owner, 'alerts', '/api/admin/audit/');
+  await until(owner, '[data-list="audit"] .entry', 'alert');
+  const alertVerbs = await many(owner, '[data-list="audit"] .verb');
+  ok('the family filter is a filter: every row it leaves is an alert action, and none of them is a coin or a campaign',
+    alertVerbs.length > 0 && alertVerbs.every(verb => verb.startsWith('alert')),
+    `${alertVerbs.length} rows · ${[...new Set(alertVerbs)].join(', ').slice(0, 110)}`);
+  await shot(owner, 'safety-7-audit-closed');
+
+  const shutDoors = [
+    ['/spam', 'spam_settings'], ['/alerts', 'alerts'], ['/audit', 'audit'],
+    ['/exports', 'exports'], ['/limits', 'post_limits'],
+  ];
+  for (const [gateRoute, gateKey] of shutDoors) {
+    const doorRead = await statusOf(mod, `/api/admin/${gateRoute.replace('/', '')}/`);
+    await mod.goto(`${BASE}${gateRoute}`, { waitUntil: 'domcontentloaded' });
+    await mod.waitForSelector('.panel.blocked', { timeout: 40000 });
+    const doorSeen = await mod.evaluate(() => ({
+      knobs: document.querySelectorAll('[data-knob]').length,
+      rows: document.querySelectorAll('[data-list] .entry').length,
+      said: document.querySelector('.panel.blocked').textContent.replace(/\s+/g, ' ').trim(),
+    }));
+    ok(`a Moderator is stopped at ${gateRoute} by the seat, not by a spinner: the door names ${gateKey} and the screen names nothing to type into`,
+      doorRead.status === 403 && doorRead.body.permission === gateKey
+        && doorSeen.knobs === 0 && doorSeen.rows === 0 && doorSeen.said.includes('Not on your seat'),
+      `${doorRead.status} ${doorRead.body.permission || 'allowed'} · ${doorSeen.knobs} knobs rendered`);
+  }
+  const pileShared = await statusOf(mod, '/api/admin/spam/flags/');
+  const rulesShut = await statusOf(mod, '/api/admin/spam/');
+  ok('the pile a moderator works from stays open to a moderator; only the rules behind it are a Client’s',
+    pileShared.status === 200 && pileShared.body.threshold === 3 && rulesShut.status === 403
+      && rulesShut.body.permission === 'spam_settings',
+    `flags ${pileShared.status} at a pile of ${pileShared.body.threshold} · rules ${rulesShut.status}`);
+  await mod.goto(`${BASE}/flags`, { waitUntil: 'domcontentloaded' });
+  await mod.waitForSelector('[data-totals]', { timeout: 40000 });
+  const pileForSeat = await mod.evaluate(() => ({
+    rows: document.querySelectorAll('[data-flag]').length,
+    link: !!document.querySelector('[data-totals] a[href="/spam"]'),
+  }));
+  ok('and the link that would take a moderator to the desk they cannot open is the one thing the screen does not hide',
+    pileForSeat.rows > 0 && pileForSeat.link === true,
+    `${pileForSeat.rows} rows · the spam desk ${pileForSeat.link ? 'is' : 'is not'} offered`);
+  await shot(mod, 'safety-8-gated');
+
+  await owner.emulateMediaFeatures([{ name: 'prefers-reduced-motion', value: 'no-preference' }]);
+  await owner.goto(`${BASE}/overview`, { waitUntil: 'domcontentloaded' });
+  await owner.waitForSelector('.tile', { timeout: 40000 });
+  const motionLoud = await owner.evaluate(() => {
+    const style = getComputedStyle(document.querySelector('.tile'));
+    return { name: style.animationName, seconds: style.animationDuration };
+  });
+  await owner.emulateMediaFeatures([{ name: 'prefers-reduced-motion', value: 'reduce' }]);
+  await owner.reload({ waitUntil: 'domcontentloaded' });
+  await owner.waitForSelector('.tile', { timeout: 40000 });
+  const motionCalm = await owner.evaluate(() => {
+    const style = getComputedStyle(document.querySelector('.tile'));
+    return { name: style.animationName, seconds: style.animationDuration };
+  });
+  // Compared in milliseconds, because the sheet writes `.01ms` and Chrome answers in
+  // seconds: `getComputedStyle` normalises `animation-duration` to `1e-05s`, so a
+  // check spelled `0.01ms` fails on a rule that is doing exactly what it says.
+  const asMs = value => (/ms$/.test(value) ? parseFloat(value) : parseFloat(value) * 1000);
+  ok('the animations are decoration that stands down when asked: reduced motion keeps the same entrance and gives it almost no time',
+    asMs(motionLoud.seconds) === 300 && motionCalm.name === motionLoud.name
+      && asMs(motionCalm.seconds) < 1,
+    `${motionLoud.name} ${motionLoud.seconds} → ${motionCalm.name} ${motionCalm.seconds}`);
+  await owner.emulateMediaFeatures([]);
+
   await unseated.close();
 } catch (err) {
   ok('the walkthrough completed', false, `${err.message}`);

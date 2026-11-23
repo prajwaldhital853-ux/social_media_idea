@@ -288,7 +288,7 @@ def _term_write(request, pk=None):
     if term is None:
         kind = str(data.get('kind') or PolicyTerm.Kind.WORD).strip()
         if kind not in dict(PolicyTerm.Kind.choices):
-            return Response({'detail': 'Choose a blocked word or a prohibited item.'}, status=400)
+            return Response({'detail': 'Choose a blocked word, a prohibited item or a blocked link.'}, status=400)
         text = policy.normalize(data.get('text'))
         if not text:
             return Response({'detail': 'Write the word or the thing.'}, status=400)

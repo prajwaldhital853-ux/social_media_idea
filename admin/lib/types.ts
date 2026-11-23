@@ -175,7 +175,10 @@ export interface Overview {
   windows: { today: string; week: string; month: string; series_days: number };
   tiles: Tile[];
   health: { state: HealthCheck['state']; checks: HealthCheck[] };
-  alerts: { counts: { open: number; acked: number; resolved: number }; recent: AlertRow[] };
+  alerts: {
+    counts: { open: number; acked: number; resolved: number; attention: number; unwired: number };
+    recent: AlertRow[];
+  };
   thresholds: Record<string, Threshold>;
 }
 
@@ -766,4 +769,212 @@ export interface ReachConfig {
   global_pause: boolean;
   packages: PromoPackage[];
   packages_edited: boolean;
+}
+
+/** --- contract 6.9: spam rules, the flagged pile, alerts, audit, exports ---- */
+
+/** One heading of the spam desk: a name and the knobs that belong under it. */
+export interface SpamBlock {
+  id: 'rate' | 'new' | 'pile';
+  label: string;
+  lines: (SettingLine & { enforced: boolean })[];
+}
+
+export interface SpamDesk {
+  blocks: SpamBlock[];
+  threshold: number;
+  autohide: boolean;
+  block_links: boolean;
+  words: number;
+  items: number;
+  links: (Omit<TermRow, 'kind'> & { kind: string })[];
+  enforced: string[];
+  can_write_links: boolean;
+  detail?: string;
+  changed?: string[];
+  config?: SpamConfig;
+  errors?: string[];
+}
+
+/** What the member site is told, with nobody signed in. */
+export interface SpamConfig {
+  limits: Record<string, string | number | boolean>;
+  new_account: { hold_hours: number; posts_per_day: number; verify_first: boolean };
+  auto_hide: { enabled: boolean; reports: number };
+  link_block: boolean;
+  blocked_links: string[];
+  blocked_words: string[];
+}
+
+/** One target the pile has already pulled out of the feed. */
+export interface FlagRow {
+  kind: ContentKind;
+  label: string;
+  id: string;
+  state: string;
+  live: boolean;
+  gone: boolean;
+  state_word?: string;
+  owner: PersonRef | null;
+  reporters: number;
+  reports: number;
+  newest: string;
+  reasons: { reason: string; n: number }[];
+}
+
+export interface FlaggedPage {
+  generated_at: string;
+  threshold: number;
+  content: FlagRow[];
+  content_page: number;
+  content_more: boolean;
+  accounts: PersonRow[];
+  accounts_total: number;
+  words: number;
+  links: number;
+  can_review: boolean;
+}
+
+/** One outside reporter: the wire, and whether anything has ever spoken on it. */
+export interface AlertPulse {
+  key: string;
+  label: string;
+  severity: AlertRow['severity'];
+  href: string;
+  wired: boolean;
+  state: string;
+  detail: string;
+  counts: Record<string, number>;
+  stamped_at: string | null;
+  stamps: number;
+  quiet_after: number | null;
+  quiet_unit: string;
+  counted: string | null;
+  counted_at: number | null;
+  command: string;
+  silent: string;
+}
+
+export interface AlertKind {
+  kind: string;
+  label: string;
+  n: number;
+  active: number;
+  resolved: number;
+}
+
+export interface AlertDesk {
+  generated_at: string;
+  counts: {
+    open: number; acked: number; resolved: number; attention: number; unwired: number;
+  };
+  rows: AlertRow[];
+  kinds: AlertKind[];
+  thresholds: SettingLine[];
+  pulses: AlertPulse[];
+  statuses: { id: string; label: string }[];
+  severities: { id: string; label: string }[];
+  shown: number;
+  health: Overview['health'];
+  detail?: string;
+}
+
+export interface AlertScan {
+  detail: string;
+  raised: AlertRow[];
+  counts: AlertDesk['counts'];
+  feed: AlertRow[];
+}
+
+/** One row of the append-only log: who, when, what, and the reason typed with it. */
+export interface AuditLine {
+  id: number;
+  actor: string | null;
+  by: string;
+  action: string;
+  family: string;
+  target: string;
+  detail: string;
+  created_at: string;
+}
+
+export interface AuditFacets {
+  families: { id: string; label: string; n: number; contract: boolean }[];
+  actors: { actor: string; n: number }[];
+  actions: { action: string; n: number }[];
+}
+
+export interface AuditSummary {
+  entries: number;
+  people: number;
+  system: number;
+  newest: string | null;
+}
+
+export interface AuditPage extends Page<AuditLine> {
+  generated_at: string;
+  facets: AuditFacets;
+  summary: AuditSummary;
+  whole: AuditSummary;
+  filters: Record<string, string>;
+  contract: string[];
+}
+
+/** One of the five files, with what it would hold before it is built. */
+export interface ExportFile {
+  id: string;
+  label: string;
+  blurb: string;
+  columns: string[];
+  rows: number;
+}
+
+export interface ExportIndex {
+  files: ExportFile[];
+  labels: { id: string; label: string; blurb: string }[];
+  window: { since: string | null; until: string | null };
+  cap: number;
+  taken: AuditLine[];
+  columns_of: Record<string, string[]>;
+  detail?: string;
+}
+
+export interface ExportBuilt {
+  filename: string;
+  dataset: string;
+  rows: number;
+  columns: string[];
+  truncated: boolean;
+  detail: string;
+  csv: string;
+  taken_at: string;
+}
+
+/** --- contract 6.10: the size of one post ---------------------------------- */
+
+export interface LimitsBlock {
+  id: 'text' | 'photo' | 'video';
+  label: string;
+  lines: (SettingLine & { range: number[] })[];
+}
+
+export interface LimitsConfig {
+  text: { characters: number };
+  photo: { per_post: number; each_mb: number; each_bytes: number };
+  video: { per_post: number; seconds: number; each_mb: number; each_bytes: number };
+  server_upload_mb: number;
+}
+
+export interface LimitsDesk {
+  blocks: LimitsBlock[];
+  contract: Record<string, number>;
+  server: { upload_mb: number; kinds: string[] };
+  published: LimitsConfig;
+  oversized: string[];
+  can_write: boolean;
+  detail?: string;
+  changed?: string[];
+  warnings?: string[];
+  config?: LimitsConfig;
+  errors?: string[];
 }
