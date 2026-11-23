@@ -11,6 +11,11 @@ logger = logging.getLogger('exposing.request')
 # browser, a newline, 4 KB of script) is ignored and a fresh id is minted.
 INBOUND_ID = re.compile(r'^[A-Za-z0-9._-]{1,64}$')
 
+# A visitor who is not signed in still asks the server who they are, and the honest
+# answer is a 401. Writing that to the log as a warning put one line per anonymous
+# page load beside the failures someone actually has to read.
+QUIET_PROBES = ('/api/auth/refresh/', '/api/auth/me/', '/api/admin/session/')
+
 _request_id = contextvars.ContextVar('exposing_request_id', default='')
 
 
@@ -68,8 +73,10 @@ class RequestIdMiddleware:
             response['X-Request-Id'] = request.request_id
             elapsed = int((time.monotonic() - started) * 1000)
             if response.status_code >= 400:
-                logger.warning('%s %s -> %s in %dms', request.method, request.get_full_path(),
-                               response.status_code, elapsed)
+                expected = response.status_code == 401 and request.path_info in QUIET_PROBES
+                logger.log(logging.INFO if expected else logging.WARNING,
+                           '%s %s -> %s in %dms', request.method, request.get_full_path(),
+                           response.status_code, elapsed)
             elif elapsed >= 3000:
                 # A request that worked but took seconds is the prelude to the
                 # next "it is stuck on Checking" report. Log it while it is boring.

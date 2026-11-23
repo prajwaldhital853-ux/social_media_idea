@@ -39,6 +39,9 @@ export default function SignupPage() {
   const [legalOk, setLegalOk] = useState(false);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  // Google keeps its own flag: the chooser is the visitor's next step, not a wait on
+  // this form, so the submit button must not start spinning on its behalf.
+  const [googleBusy, setGoogleBusy] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [code, setCode] = useState<{ challenge: string; expiresAt?: number; devCode?: string } | null>(null);
 
@@ -170,7 +173,7 @@ export default function SignupPage() {
 
   const startGoogle = async () => {
     setError('');
-    setBusy(true);
+    setGoogleBusy(true);
     try {
       if (db.settings.googleClientId) {
         const res = await googleSignIn({ id_token: await requestGoogleToken(db.settings.googleClientId) });
@@ -196,7 +199,7 @@ export default function SignupPage() {
     } catch (err) {
       setError((err as Error)?.message || t('googleUnavailable'));
     } finally {
-      setBusy(false);
+      setGoogleBusy(false);
     }
   };
 
@@ -245,8 +248,10 @@ export default function SignupPage() {
         {waking ? <p className="auth-notice" role="status">{t('waking')}</p> : null}
 
         {showGoogle && (
-          <button type="button" className="social-btn" onClick={startGoogle} disabled={busy}>
-            {IC.g}<span>{db.settings.googleClientId ? t('google') : feature('googleDemo') ? t('demoGoogle') : t('google')}</span>
+          <button type="button" className={`social-btn ${googleBusy ? 'checking' : ''}`} onClick={startGoogle}
+            disabled={busy || googleBusy} aria-busy={googleBusy}>
+            {googleBusy ? <span className="btn-spin" aria-hidden="true" /> : IC.g}
+            <span>{googleBusy ? t('checking') : db.settings.googleClientId ? t('google') : feature('googleDemo') ? t('demoGoogle') : t('google')}</span>
           </button>
         )}
         {feature('facebookLogin') && !API_ENABLED && (

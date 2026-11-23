@@ -1469,6 +1469,35 @@ a:focus:not(:focus-visible) {
   flex: none;
 }
 
+/* Google's own wait lives on Google's own button: the mark gives way to a ring,
+   because what is pending is Google's window and not this form. */
+.social-btn.checking svg {
+  display: none;
+}
+
+.social-btn.checking {
+  color: var(--muted);
+  cursor: progress;
+}
+
+.btn-spin {
+  width: 17px;
+  height: 17px;
+  flex: none;
+  border: 2px solid var(--line);
+  border-top-color: #4285F4;
+  border-radius: 50%;
+  animation: btn-spin 0.75s linear infinite;
+}
+
+@keyframes btn-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .btn-spin { animation-duration: 2s; }
+}
+
 .login-footer {
   margin-top: 16px;
   font-size: 14px;
