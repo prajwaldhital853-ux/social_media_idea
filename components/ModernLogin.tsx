@@ -6,7 +6,7 @@ import AuthCode from './AuthCode';
 import BrandLogo from './BrandLogo';
 import { AuthResult, useApp } from '@/lib/AppContext';
 import { API_ENABLED } from '@/lib/api';
-import { requestGoogleToken } from '@/lib/google';
+import GoogleButton from '@/components/GoogleButton';
 
 type Step =
   | { kind: 'form' }
@@ -201,15 +201,27 @@ export default function ModernLogin() {
     }
   };
 
+  // Google's own button hands back the token; this is the half that spends it.
+  const googleToken = async (token: string) => {
+    setError('');
+    setGoogleBusy(true);
+    try {
+      const res = await googleSignIn({ id_token: token });
+      if (res) afterAuth(res);
+    } catch (err) {
+      setError((err as Error)?.message || t('googleUnavailable'));
+    } finally {
+      setGoogleBusy(false);
+    }
+  };
+
   const google = async () => {
     setError('');
     setGoogleBusy(true);
     try {
-      const res = db.settings.googleClientId
-        ? await googleSignIn({ id_token: await requestGoogleToken(db.settings.googleClientId) })
-        : feature('googleDemo') && db.settings.demoGoogle
-          ? await googleSignIn({ demo: db.settings.demoGoogle })
-          : null;
+      const res = feature('googleDemo') && db.settings.demoGoogle
+        ? await googleSignIn({ demo: db.settings.demoGoogle })
+        : null;
       if (res) afterAuth(res);
       else if (!API_ENABLED) {
         const user = db.users.find(u => u.provider === 'google') || db.users[0];
@@ -243,7 +255,10 @@ export default function ModernLogin() {
         {waking ? <p className="auth-notice" role="status">{t('waking')}</p> : null}
 
         {step.kind === 'form' && lockedFor === null ? <>
-          {showGoogle && (
+          {showGoogle && db.settings.googleClientId && (
+            <GoogleButton clientId={db.settings.googleClientId} onToken={googleToken} onError={setError} fallback={null} />
+          )}
+          {showGoogle && !db.settings.googleClientId && (
             <button type="button" className={`social-btn ${googleBusy ? 'checking' : ''}`} onClick={google}
               disabled={busy || googleBusy} aria-busy={googleBusy}>
               {googleBusy ? <span className="btn-spin" aria-hidden="true" /> : null}
