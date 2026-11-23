@@ -31,8 +31,23 @@ COIN_PRICE = 10
 DEMO_GOOGLE = {'email': 'guest@demo.test', 'name': 'Guest Demo', 'sub': 'demo-google-guest'}
 
 
+def shelf():
+    """The packages the site sells right now: the console's shelf when a seat has
+    edited one, the shipped list otherwise.
+
+    The storefront and the delivery engine have to read the same shelf. A payer
+    quoted "up to 40,000 people" by a page that was edited, while the feed measures
+    the run against the shipped number, is a campaign that quietly never finishes.
+    """
+    try:
+        from apps.adminpanel import promotions as desk
+        return desk.packages()
+    except Exception:  # noqa: BLE001 - no settings table yet means the shipped shelf stands
+        return PACKAGE_CATALOG
+
+
 def package_by_id(package_id):
-    for pack in PACKAGE_CATALOG:
+    for pack in shelf():
         if pack['id'] == package_id:
             return pack
     return None
@@ -56,7 +71,7 @@ def features():
 def client_config():
     return {
         'features': features(),
-        'packages': PACKAGE_CATALOG,
+        'packages': shelf(),
         'categories': MARKETPLACE_CATEGORIES,
         'countries': COUNTRIES,
         'minAge': MIN_AGE,

@@ -96,16 +96,21 @@ def promotion_list(request):
 @api_view(['POST'])
 @permission_classes([IsAuthenticatedOrReadOnly])
 def promotion_track(request, pk):
-    """Count what a campaign actually did — the only writer of these two counters."""
+    """Count a click on a paid card.
+
+    An impression is no longer something a caller can report. The feed writes one
+    ledger row per person per day when it actually puts the card on the screen
+    (`services.serving`), and the counter on the campaign is what those rows add up
+    to — a reach number a stranger could POST to is not one a payer can be billed
+    against.
+    """
     promo = Promotion.objects.filter(pk=pk).first()
     if not promo:
         return Response({'detail': 'No such promotion.'}, status=404)
     event = request.data.get('event')
-    if event == 'impression':
-        Promotion.objects.filter(pk=pk).update(impressions=F('impressions') + 1)
-    elif event == 'click':
+    if event == 'click':
         Promotion.objects.filter(pk=pk).update(clicks=F('clicks') + 1)
-    else:
+    elif event != 'impression':
         return Response({'detail': 'Unknown event.'}, status=400)
     promo.refresh_from_db()
     return Response({'id': promo.pk, 'impressions': promo.impressions, 'clicks': promo.clicks})

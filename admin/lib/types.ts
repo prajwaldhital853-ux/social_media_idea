@@ -755,6 +755,11 @@ export interface PromoRow {
   coins: string;
   impressions: number;
   clicks: number;
+  /** What the package promised, what the ledger has handed out, and how many
+   *  separate people that reached — `people` is only answered on one campaign. */
+  reach_bought: number;
+  delivered: number;
+  people: number | null;
   created_at: string;
   ends_at: string | null;
   age_hours: number;
@@ -805,6 +810,7 @@ export interface PackageDesk {
 export interface AlgorithmDesk {
   lines: SettingLine[];
   weights: Record<string, number>;
+  target: number;
   floor: number;
   caps: { daily: number; repeat: number; gap: number };
   global_pause: boolean;
@@ -820,6 +826,7 @@ export interface AlgorithmDesk {
 /** What the member site is told, with nobody signed in. */
 export interface ReachConfig {
   weights: Record<string, number>;
+  target: number;
   floor: number;
   caps: { daily: number; repeat: number; gap: number };
   global_pause: boolean;

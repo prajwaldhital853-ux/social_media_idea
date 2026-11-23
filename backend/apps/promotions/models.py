@@ -37,3 +37,39 @@ class Promotion(models.Model):
 
     def __str__(self):
         return f'Promo {self.target_type}:{self.target_id} ({self.status})'
+
+
+class PromoImpression(models.Model):
+    """One paid card one person was actually shown, on the day it happened.
+
+    `Promotion.impressions` is a tally, and a tally cannot answer the two
+    questions the reach controls ask: has this person already had this campaign
+    today, and has this campaign spent the audience its package promised. Each
+    serve writes one row here, and the counter on the campaign is what these rows
+    add up to — so a number a payer was charged for is a number that can be shown
+    to have happened.
+    """
+
+    promotion = models.ForeignKey(Promotion, on_delete=models.CASCADE, related_name='impression_rows')
+    viewer = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='promo_impressions',
+    )
+    day = models.DateField()
+    served_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-served_at']
+        constraints = [
+            # One campaign reaches one person once a day: a second showing on the
+            # same day is the repeat the desk sets a limit on, not reach.
+            models.UniqueConstraint(
+                fields=['promotion', 'viewer', 'day'], name='promo_once_per_person_per_day',
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['viewer', '-day'], name='promo_seen_by_person'),
+            models.Index(fields=['promotion', '-day'], name='promo_delivered_on'),
+        ]
+
+    def __str__(self):
+        return f'Promo {self.promotion_id} shown to {self.viewer_id} on {self.day}'

@@ -25,7 +25,8 @@ import { AlgorithmDesk, ReachConfig, SettingLine } from '@/lib/types';
 
 const ORDER = [
   'algo_weight_like', 'algo_weight_comment', 'algo_weight_save', 'algo_weight_watch',
-  'algo_relevance_floor', 'promo_daily_cap', 'promo_repeat_limit', 'promo_organic_gap',
+  'algo_weight_follow', 'promo_weight_target', 'algo_relevance_floor', 'promo_daily_cap',
+  'promo_repeat_limit', 'promo_organic_gap',
 ];
 
 const GROUPS: Record<string, string> = {
@@ -34,7 +35,7 @@ const GROUPS: Record<string, string> = {
   switch: 'The whole platform',
 };
 
-const groupOf = (key: string) => (key === 'promo_global_pause' ? 'switch' : ORDER.indexOf(key) < 4 ? 'weight' : 'gate');
+const groupOf = (key: string) => (key === 'promo_global_pause' ? 'switch' : ORDER.indexOf(key) < 6 ? 'weight' : 'gate');
 
 export default function AlgorithmScreen() {
   const { noteGate } = useSession();
@@ -238,6 +239,12 @@ export default function AlgorithmScreen() {
                       </div>
                     </li>
                   ))}
+                  <li className="term" data-live="target">
+                    <div className="term-body">
+                      <b className="term-text">{labelFor('promo_weight_target')}</b>
+                      <em className="term-note">{quote.target} points per filter matched</em>
+                    </div>
+                  </li>
                   <li className="term" data-live="floor">
                     <div className="term-body">
                       <b className="term-text">Lowest score worth showing</b>
