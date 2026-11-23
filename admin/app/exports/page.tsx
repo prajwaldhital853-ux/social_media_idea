@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ConsoleShell from '@/components/ConsoleShell';
 import { api, saveFile, SavedFile } from '@/lib/api';
 import { num } from '@/lib/format';
@@ -30,6 +30,7 @@ export default function ExportsScreen() {
   const [banner, setBanner] = useState<{ kind: 'ok' | 'bad'; text: string } | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [saved, setSaved] = useState<Record<string, SavedFile>>({});
+  const seq = useRef(0);
 
   const query = useMemo(() => {
     const params = new URLSearchParams();
@@ -40,14 +41,24 @@ export default function ExportsScreen() {
   }, [since, until]);
 
   const load = useCallback(async () => {
+    // One request per keystroke, and the answers come back in no particular order:
+    // typing `2026-11-20` sends `2`, then `20`, then `202`… and every one of those is
+    // a date the door refuses. Without a sequence number an old refusal can land after
+    // the real answer and become the sentence on the screen, so a window typed
+    // backwards would be reported as a badly spelled date.
+    const mine = seq.current + 1;
+    seq.current = mine;
     setBusy('read');
     try {
-      setIndex(await api<ExportIndex>(`admin/exports/${query}`));
+      const next = await api<ExportIndex>(`admin/exports/${query}`);
+      if (seq.current !== mine) return;
+      setIndex(next);
       setBanner(null);
     } catch (err) {
+      if (seq.current !== mine) return;
       if (!noteGate(err)) setBanner({ kind: 'bad', text: (err as Error).message });
     } finally {
-      setBusy(null);
+      if (seq.current === mine) setBusy(null);
     }
   }, [query, noteGate]);
 
