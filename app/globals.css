@@ -234,15 +234,18 @@ a:focus:not(:focus-visible) {
   text-decoration: none;
 }
 
-/* More, Wallet, Settings, Post and the reader's own face form a stack at the
-   foot of the rail; the free space sits between it and the nav, so the column
-   ends at the account row rather than trailing off. */
+/* More, Wallet, Settings, Post and the reader's own face continue the nav's
+   list: the column is packed from the top, so no band of empty space cuts in
+   between Marketplace and More. */
 .rail-foot {
-  margin-top: auto;
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
+
+/* The one break in the column sits under the list, above the button that asks
+   for a new post — not cut into the middle of the nav. */
+.rail-foot .post-btn { margin-top: 18px; }
 
 .rail-bottom {
   display: flex;
