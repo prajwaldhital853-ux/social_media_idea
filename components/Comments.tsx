@@ -235,7 +235,16 @@ export default function Comments({ postId, onClose, mediaIndex }: { postId: stri
         <Avatar user={author} size={isReply ? 26 : 30} />
         <div className="comments-content">
           <div className="comment-bubble">
-            <div><b>{author.name}</b>{author.verified && <VerifiedBadge size={13} />}{isAuthor && <span className="comment-author-badge">{t('author')}</span>}</div>
+            <div>
+              <b>{author.name}</b>
+              {author.verified && <VerifiedBadge size={13} />}
+              {isAuthor && (
+                <span className="comment-author-badge">
+                  <span className="comment-author-badge-icon">{IC.edit}</span>
+                  {t('author')}
+                </span>
+              )}
+            </div>
             <p><CommentText text={comment.text} replyToName={replyToName} /></p>
             {kinds.length > 0 && (
               <span className="comment-bubble-reactions">
