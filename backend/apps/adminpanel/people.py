@@ -30,6 +30,7 @@ from apps.accounts import safety
 from apps.accounts.models import RefreshSession, User
 from apps.comments.models import Comment
 from apps.common.api import person
+from apps.common.mail import send_off_request
 from apps.marketplace.models import Listing
 from apps.moderation.models import AuditLog, Report
 from apps.notifications.services import notify
@@ -465,7 +466,7 @@ def enforcement_email(user, subject, body):
     contact = contact_lines()
     if contact:
         lines.append('Questions or an appeal? ' + ' · '.join(contact))
-    send_activity_email.delay(user.email, subject, '\n\n'.join(lines), support_link())
+    send_off_request(send_activity_email, user.email, subject, '\n\n'.join(lines), support_link())
     return {'to': user.email, 'subject': subject}
 
 

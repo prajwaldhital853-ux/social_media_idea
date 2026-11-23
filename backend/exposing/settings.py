@@ -245,6 +245,20 @@ DEFAULT_EMAIL_BACKEND = EMAIL_BACKEND
 # to hold a sign-up request open until the proxy gave up — which is the spinner,
 # not a bug in the form. Ten seconds is longer than any working send.
 EMAIL_TIMEOUT = float(os.environ.get('EMAIL_TIMEOUT') or '10')
+# Providers differ in their API and nothing of theirs is worth a dependency: they
+# all speak SMTP, so the dashboard picks the host and the key. Both encryption
+# flags stay False when unset, because the text 'False' is truthy in Python.
+EMAIL_HOST = os.environ.get('EMAIL_HOST') or 'localhost'
+EMAIL_PORT = int(os.environ.get('EMAIL_PORT') or '25')
+EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER') or ''
+EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD') or ''
+EMAIL_USE_TLS = (os.environ.get('EMAIL_USE_TLS') or '').lower() in ('1', 'true', 'yes')
+EMAIL_USE_SSL = (os.environ.get('EMAIL_USE_SSL') or '').lower() in ('1', 'true', 'yes')
+# Resend, Postmark and the rest refuse a letter whose sender is not a domain that
+# was proved in their dashboard, so the address is a setting and not a string in
+# the call — one key per deployment decides who the mail is from.
+DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL') or 'no-reply@exposing.app'
+SERVER_EMAIL = DEFAULT_FROM_EMAIL
 GOOGLE_CLIENT_ID = os.environ.get('GOOGLE_CLIENT_ID', '')
 # Emails quote a link back to the site; on Render the frontend lives on another
 # host, so this is the browser origin rather than the API's own.
