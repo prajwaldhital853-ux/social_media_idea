@@ -14,6 +14,12 @@ import CreateChooser from './CreateChooser';
 
 const WARM_ROUTES = ['/explore', '/video', '/marketplace', '/create', '/notifications', '/messages', '/wallet', '/saved', '/settings', '/signup', '/login'];
 
+// Every page mounts its own shell, so a shell that paints nothing until an
+// effect has run drops the top bar, the rail and the page for a frame on each
+// navigation — which reads as a refresh. One boot per session is all that
+// hydration needs, because the server bundle never runs the effect.
+let booted = false;
+
 interface AppShellProps {
   children: ReactNode;
 }
@@ -33,8 +39,11 @@ export default function AppShell({ children }: AppShellProps) {
   const messengerPage = pathname === '/messages' || pathname.startsWith('/messages/');
   // Browsing listings is a grid, not a column: it reads better edge to edge.
   const marketPage = pathname === '/marketplace' || pathname.startsWith('/marketplace/');
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
+  const [mounted, setMounted] = useState(booted);
+  useEffect(() => {
+    booted = true;
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     if (!mounted) return;

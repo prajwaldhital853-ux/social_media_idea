@@ -21,7 +21,7 @@ import { Listing, Post, User } from '@/lib/types';
 export default function UserProfilePage() {
   const params = useParams();
   const router = useRouter();
-  const { db, me, t, isFollowing, followState, toggleFollow, showToast, openComposer, serverMode, loadPerson, ready, updateProfile } = useApp();
+  const { db, me, t, isFollowing, followState, requestFrom, followBack, toggleFollow, showToast, openComposer, serverMode, loadPerson, ready, updateProfile } = useApp();
   const username = String(params.username || '');
   const user = db.users.find(u => u.username.toLowerCase() === username.toLowerCase());
   const [tab, setTab] = useState<'posts' | 'reels' | 'photos' | 'about' | 'listings'>('posts');
@@ -121,6 +121,11 @@ export default function UserProfilePage() {
   const following = isFollowing(user.id);
   const fState = followState(user.id);
   const followsMe = !!me && db.follows.some(f => f.follower === user.id && f.following === me.id && f.status !== 'pending');
+  // A request from them that is still waiting turns this button into the answer
+  // to it. The plain follow tap could not do that job: with a request of my own
+  // still standing it would cancel mine instead of accepting theirs.
+  const asked = requestFrom(user.id);
+  const askBack = !!asked && fState !== 'following';
   const suspended = !!user.susp && (user.susp.until === null || user.susp.until > Date.now());
   const followers = db.follows.filter(f => f.following === user.id && f.status !== 'pending').map(f => db.users.find(u => u.id === f.follower)).filter((u): u is User => !!u);
   const followingList = db.follows.filter(f => f.follower === user.id && f.status !== 'pending').map(f => db.users.find(u => u.id === f.following)).filter((u): u is User => !!u);
@@ -275,10 +280,10 @@ export default function UserProfilePage() {
               <>
                 <button
                   type="button"
-                  className={`follow-btn ${following ? 'on' : ''} ${fState === 'pending' ? 'pending' : ''}`}
-                  onClick={() => needSession(() => { void toggleFollow(user.id); })}
+                  className={`follow-btn ${following ? 'on' : ''} ${askBack ? '' : fState === 'pending' ? 'pending' : ''}`}
+                  onClick={() => needSession(() => { void (askBack ? followBack(user.id) : toggleFollow(user.id)); })}
                 >
-                  {fState === 'following' ? t('unfollow') : fState === 'pending' ? t('requested') : user.private ? t('requestFollow') : followsMe ? t('followBack') : t('follow')}
+                  {askBack ? t('followBack') : fState === 'following' ? t('unfollow') : fState === 'pending' ? t('requested') : user.private ? t('requestFollow') : followsMe ? t('followBack') : t('follow')}
                 </button>
                 <button type="button" className="ghost-btn" onClick={() => needSession(() => router.push(`/messages/${user.username}`))}>
                   {IC.msg}<span>{t('message')}</span>
