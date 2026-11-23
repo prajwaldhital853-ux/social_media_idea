@@ -55,10 +55,15 @@ export default function ImageCropper({ src, name, ratio, round, max, onCancel, o
     if (!stage) return;
     const measure = () => {
       const r = stage.getBoundingClientRect();
-      let w = r.width;
+      const css = getComputedStyle(stage);
+      // The stage is border-box, so its own padding is not room the picture may
+      // fill; without this the frame ran into the edge of the card.
+      const padX = parseFloat(css.paddingLeft) + parseFloat(css.paddingRight);
+      const padY = parseFloat(css.paddingTop) + parseFloat(css.paddingBottom);
+      let w = Math.max(0, r.width - padX);
       let h = w / ratio;
-      if (h > r.height) {
-        h = r.height;
+      if (h > r.height - padY) {
+        h = r.height - padY;
         w = h * ratio;
       }
       setSize({ w: Math.max(0, Math.round(w)), h: Math.max(0, Math.round(h)) });

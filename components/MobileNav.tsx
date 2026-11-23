@@ -30,12 +30,15 @@ export default function MobileNav({ barOnly = false }: { barOnly?: boolean }) {
     return () => window.removeEventListener('scroll', onScroll);
   }, [pathname]);
 
+  const profileHref = me ? `/u/${me.username}` : '/login';
   const tabs = [
-    { href: '/', label: t('home'), icon: IC.home },
-    ...(feature('video') ? [{ href: '/video', label: t('video'), icon: IC.video }] : []),
-    { href: '/messages', label: 'Chat', icon: IC.msg },
-    ...(feature('marketplace') ? [{ href: '/marketplace', label: t('marketplace'), icon: IC.store }] : []),
-    { href: '/profile', label: t('profile'), icon: IC.user }
+    { href: '/', label: t('home'), icon: IC.home, self: false },
+    ...(feature('video') ? [{ href: '/video', label: t('video'), icon: IC.video, self: false }] : []),
+    { href: '/messages', label: 'Chat', icon: IC.msg, self: false },
+    ...(feature('marketplace') ? [{ href: '/marketplace', label: t('marketplace'), icon: IC.store, self: false }] : []),
+    // The tab is the profile itself. Routing it through /profile rendered an
+    // empty page for a beat and then replaced it, which read as a refresh.
+    { href: profileHref, label: t('profile'), icon: IC.user, self: true },
   ];
 
   if (focusedPage || inChat) return null;
@@ -44,7 +47,7 @@ export default function MobileNav({ barOnly = false }: { barOnly?: boolean }) {
     return (
       <nav className="mobile-nav" aria-label="Primary mobile navigation">
         {tabs.map(tab => {
-          const active = tab.href === '/' ? pathname === '/' : pathname.startsWith(tab.href) || (tab.href === '/profile' && pathname === `/u/${me?.username}`);
+          const active = tab.href === '/' ? pathname === '/' : tab.self ? pathname === profileHref : pathname.startsWith(tab.href);
           return <Link key={tab.href} href={tab.href} aria-label={tab.label} aria-current={active ? 'page' : undefined} title={tab.label} className={`mnav-tab ${active ? 'active' : ''}`}>
             {tab.icon}
           </Link>;
@@ -79,7 +82,7 @@ export default function MobileNav({ barOnly = false }: { barOnly?: boolean }) {
 
       <nav className="mobile-nav" aria-label="Primary mobile navigation">
         {tabs.map(tab => {
-          const active = tab.href === '/' ? pathname === '/' : pathname.startsWith(tab.href) || (tab.href === '/profile' && pathname === `/u/${me?.username}`);
+          const active = tab.href === '/' ? pathname === '/' : tab.self ? pathname === profileHref : pathname.startsWith(tab.href);
           return <Link key={tab.href} href={tab.href} aria-label={tab.label} aria-current={active ? 'page' : undefined} title={tab.label} className={`mnav-tab ${active ? 'active' : ''}`}>
             {tab.icon}
           </Link>;

@@ -33,6 +33,9 @@ interface AppContextType {
   toggleFollow: (targetId: string) => Promise<void>;
   isFollowing: (targetId: string) => boolean;
   followState: (targetId: string) => 'none' | 'pending' | 'following';
+  /** A request from that account to follow me that is still waiting. */
+  requestFrom: (targetId: string) => Follow | null;
+  followBack: (targetId: string) => Promise<void>;
   incomingRequests: () => Follow[];
   acceptRequest: (followerId: string) => Promise<void>;
   declineRequest: (followerId: string) => Promise<void>;
@@ -870,6 +873,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return edge.status === 'pending' ? 'pending' : 'following';
   };
 
+  const requestFrom = (targetId: string): Follow | null => {
+    const self = currentMe();
+    if (!self) return null;
+    return db.follows.find(f => f.follower === targetId && f.following === self.id && f.status === 'pending') || null;
+  };
+
   const incomingRequests = () => {
     const self = currentMe();
     return self ? db.follows.filter(f => f.following === self.id && f.status === 'pending') : [];
@@ -935,6 +944,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
           return;
         }
       }
+      // Following them is also the answer to any request they still hold on
+      // me, which is how two private accounts reach a mutual follow without
+      // either hunting through a followers list. The API settles the same edge
+      // and sends its own notification; notify() is a no-op there.
+      const asked = edgeOf(targetId, self.id);
+      if (asked && asked.status === 'pending') {
+        putEdge({ ...asked, status: 'accepted' });
+        notify(targetId, 'follow', 'accepted your follow request', `/u/${self.username}`, self.username);
+      }
       if (pending) showToast('Follow request sent.');
     } finally {
       followInFlight.current.delete(targetId);
@@ -974,6 +992,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const acceptRequest = (followerId: string) => moderateRequest(followerId, true);
   const declineRequest = (followerId: string) => moderateRequest(followerId, false);
+
+  /**
+   * The one tap a normal app gives back: yes to the person who asked to follow
+   * me, then follow them if I have not already asked. The ordinary follow
+   * button cannot do this in that state — with a request of my own still
+   * standing, its toggle would cancel it instead.
+   */
+  const followBack = async (targetId: string) => {
+    if (requestFrom(targetId)) await moderateRequest(targetId, true);
+    if (followState(targetId) === 'none') await toggleFollow(targetId);
+  };
 
   const myReaction = (targetType: Target, targetId: string) => {
     const self = currentMe();
@@ -1518,7 +1547,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       value={{
         db, setDb, me, isAdmin, isStaff, t, feature,
         addPost, updatePost, deletePost, addComment, deleteComment,
-        toggleFollow, isFollowing, followState, incomingRequests, acceptRequest, declineRequest, mutualIds,
+        toggleFollow, isFollowing, followState, requestFrom, followBack, incomingRequests, acceptRequest, declineRequest, mutualIds,
         react, myReaction, reactionCount, reactionMix, reactionPeople, myPostReaction, toggleSave, isSaved, toggleListingSave, isListingSaved,
         sharePost, countView, blockUser, unblockUser, isBlocked, blockedIds,
         notify, markAllRead, markRead, sendMessage, markThreadRead, addReport, logAudit,

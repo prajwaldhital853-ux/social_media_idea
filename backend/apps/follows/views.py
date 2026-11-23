@@ -56,6 +56,17 @@ def follow(request):
         verb = 'requested to follow you' if private else 'started following you'
         notify(target, request.user, kind, f'{request.user.username} {verb}.', 'user', request.user.pk)
         email_activity(target, request.user, kind)
+    # Following somebody who had asked to follow me is the answer to that
+    # request. Leaving it pending would strand two private accounts, each
+    # waiting on a button the other never sees.
+    asked = Follow.objects.filter(
+        follower=target, followee=request.user, status=Follow.Status.PENDING
+    ).first()
+    if asked is not None:
+        asked.status = Follow.Status.ACCEPTED
+        asked.save(update_fields=['status'])
+        notify(target, request.user, 'follow_accept',
+               f'{request.user.username} accepted your follow request.', 'user', request.user.pk)
     return Response({'status': edge.status, 'created': created}, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
 
 
