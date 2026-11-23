@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from apps.common.api import post_page_reactions
+from apps.common.api import notice_map, post_page_reactions
 
 from .models import Post, PostMedia
 
@@ -17,6 +17,7 @@ class PostListSerializer(serializers.ListSerializer):
     def to_representation(self, data):
         posts = list(data.all() if hasattr(data, 'all') else data)
         self.context['_reactions'] = post_page_reactions(self.context.get('request'), posts)
+        self.context['_notices'] = notice_map('post', [post.pk for post in posts])
         return [self.child.to_representation(post) for post in posts]
 
 
@@ -34,6 +35,7 @@ class PostSerializer(serializers.ModelSerializer):
     reaction_kinds = serializers.SerializerMethodField()
     media_reaction_kinds = serializers.SerializerMethodField()
     reaction_people = serializers.SerializerMethodField()
+    notices = serializers.SerializerMethodField()
 
     class Meta:
         model = Post
@@ -43,6 +45,7 @@ class PostSerializer(serializers.ModelSerializer):
             'mood', 'place', 'category', 'activity', 'like_count', 'comment_count', 'share_count', 'views',
             'edited', 'created_at', 'updated_at', 'media',
             'my_reaction', 'my_media_reactions', 'reaction_kinds', 'media_reaction_kinds', 'reaction_people',
+            'notices',
         ]
         read_only_fields = ['id', 'author', 'status', 'activity', 'like_count', 'comment_count',
                             'share_count', 'views', 'edited', 'created_at', 'updated_at']
@@ -72,6 +75,12 @@ class PostSerializer(serializers.ModelSerializer):
 
     def get_reaction_people(self, obj):
         return self._reactions()['people'].get(str(obj.pk), [])
+
+    def get_notices(self, obj):
+        # A page fills this once; a single read asks for its own row.
+        if '_notices' not in self.context:
+            self.context['_notices'] = notice_map('post', [obj.pk])
+        return self.context['_notices'].get(str(obj.pk), [])
 
     def create(self, validated_data):
         media_data = validated_data.pop('media', [])

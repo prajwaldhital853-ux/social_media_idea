@@ -15,6 +15,7 @@ import { useRemoteRow } from '@/lib/useRemoteRow';
 import { api } from '@/lib/api';
 import { forgetLists } from '@/lib/lists';
 import { IC } from '@/lib/icons';
+import NoticeBanner from '@/components/NoticeBanner';
 import { ago } from '@/lib/utils';
 import type { Listing } from '@/lib/types';
 
@@ -164,6 +165,7 @@ export default function ListingPage() {
           </div>
 
           <div className="listing-info">
+            <NoticeBanner notices={listing.notices} full/>
             <div className="listing-price-row">
               <b className="listing-price">NPR {listing.price.toLocaleString('en-US')}</b>
               {listing.status === 'sold' && <span className="status-chip">{t('sold')}</span>}

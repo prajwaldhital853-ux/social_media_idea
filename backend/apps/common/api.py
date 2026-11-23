@@ -221,3 +221,31 @@ def post_page_reactions(request, posts):
         'media_kinds': kind_counts('media', media_ids),
         'people': post_page_people(request, post_ids, media_ids),
     }
+
+
+def notice_map(kind, ids):
+    """The public notices a seat has left standing on a page of content.
+
+    Almost nothing carries a notice, so a page of forty posts must not spend
+    forty queries to find out it has none. The console writes these rows; this is
+    the only way a member reads one, and it reads the newest sentence first.
+    """
+    from apps.adminpanel.models import PublicNotice
+
+    keys = [str(pk) for pk in ids if pk not in (None, '')]
+    if not keys:
+        return {}
+    grouped = {}
+    rows = (PublicNotice.objects
+            .filter(target_type=kind, target_id__in=keys, is_live=True)
+            .select_related('actor')
+            .order_by('-created_at'))
+    for row in rows:
+        grouped.setdefault(row.target_id, []).append({
+            'id': row.pk,
+            'text': row.text,
+            'reason': row.reason,
+            'by': row.actor.username if row.actor else 'staff',
+            'at': row.created_at,
+        })
+    return grouped

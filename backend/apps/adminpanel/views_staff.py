@@ -34,6 +34,9 @@ _LAST_CLIENT = {
     'detail': 'The Client needs at least one superadmin seat. Appoint one first.',
 }
 _NO_SEAT = {'detail': 'That account never held a seat.'}
+# The literal sub-paths under the roster. They are not usernames, and a seat that
+# reaches one of them on an API too old to own it must be told the API is old.
+RESERVED = frozenset({'create', 'grant'})
 
 
 def _row(staff):
@@ -91,7 +94,16 @@ def _target(request, username):
     Moderator reaches nobody.
     """
     caller = request.staff_account
-    user = User.objects.filter(username=username).first()
+    # `create` and `grant` are doors of their own, but they also sit under this
+    # address. An API started before they landed resolves them here instead, and
+    # the seat is then told a person called "create" does not exist.
+    if username.lower() in RESERVED:
+        return None, caller, Response(
+            {'detail': 'This API does not have that staff door yet — restart it or deploy the '
+                       'current build, then try again.'},
+            status=409,
+        )
+    user = User.objects.filter(username__iexact=username).first()
     if user is None:
         return None, caller, Response({'detail': 'No such account.'}, status=404)
     staff = StaffAccount.objects.filter(user=user).first()
@@ -122,7 +134,14 @@ def staff_directory(request):
     rows = StaffAccount.objects.select_related('user', 'granted_by')
     query = (request.query_params.get('q') or '').strip()
     if query:
-        rows = rows.filter(Q(user__username__icontains=query) | Q(user__email__icontains=query))
+        # The box says name, username or email, so all three are searched. A seat
+        # that knows a colleague as Sita should not have to remember the handle
+        # they signed up with to find their row.
+        rows = rows.filter(
+            Q(user__username__icontains=query) | Q(user__email__icontains=query)
+            | Q(user__first_name__icontains=query) | Q(user__last_name__icontains=query)
+            | Q(user__profile__display_name__icontains=query)
+        )
     state = request.query_params.get('status')
     if state == 'enabled':
         rows = rows.filter(is_enabled=True)
@@ -144,9 +163,13 @@ def staff_grant(request):
         return Response({'detail': 'Choose the account by username.'}, status=400)
     if role not in ROLES:
         return Response({'detail': 'Choose superadmin, admin or moderator.'}, status=400)
-    user = User.objects.filter(username=username).first()
+    user = User.objects.filter(username__iexact=username).first()
     if user is None:
-        return Response({'detail': 'No such account.'}, status=404)
+        return Response(
+            {'detail': f'There is no @{username} on the platform. Somebody without an account '
+                       'yet gets a seat from “A new staff account”, which writes the account too.'},
+            status=404,
+        )
     caller = request.staff_account
     existing, _caller, error = _target(request, username)
     if error is not None:

@@ -4,15 +4,16 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import Banner from '@/components/Banner';
 import ConsoleShell from '@/components/ConsoleShell';
+import { useConfirm } from '@/components/Confirm';
 import { statePill } from '@/components/ContentCard';
 import { PeoplePicks } from '@/components/Find';
-import { ActLink, Chips, More } from '@/components/List';
+import { Act, ActLink, Chips, More } from '@/components/List';
 import { api } from '@/lib/api';
 import { num } from '@/lib/format';
 import { IC } from '@/lib/icons';
 import { ago } from '@/lib/time';
 import { useSession } from '@/lib/session';
-import { ContentKind, ShelfPage, ShelfRow } from '@/lib/types';
+import { ContentKind, Outcome, ShelfPage, ShelfRow } from '@/lib/types';
 
 const TYPES: { id: ContentKind; label: string; key: string }[] = [
   { id: 'post', label: 'Posts', key: 'content' },
@@ -209,7 +210,15 @@ export default function ContentPage() {
                 <th style={{ width: '7%' }} aria-label="Actions"/>
               </tr>
             </thead>
-            {rows.map(row => <ShelfCase key={row.target} row={row}/>)}
+            {rows.map(row => (
+              <ShelfCase
+                key={row.target} row={row}
+                onWarn={(text, bad) => {
+                  setBanner({ kind: bad ? 'bad' : 'ok', text });
+                  if (!bad) load();
+                }}
+              />
+            ))}
           </table>
           <More hasMore={!!cursor} busy={busy} onMore={older} label="Show older"/>
         </div>
@@ -223,8 +232,17 @@ export default function ContentPage() {
  * the reports behind it and the five verbs live on the page the row opens, which
  * is the same page a report queue row opens — a seat should not have to remember
  * which desk it came from to decide about one post.
+ *
+ * The warning is the one verb short enough to sign here: a seat who has found the
+ * post and knows the sentence should not have to open a page to say it.
  */
-function ShelfCase({ row }: { row: ShelfRow }) {
+function ShelfCase({ row, onWarn }: { row: ShelfRow; onWarn: (text: string, bad?: boolean) => void }) {
+  const { can, noteGate } = useSession();
+  const [asking, setAsking] = useState(false);
+  const [notice, setNotice] = useState('');
+  const [reason, setReason] = useState('');
+  const [busy, setBusy] = useState(false);
+  const confirm = useConfirm();
   const chips = [
     row.pile.open > 0 ? `${row.pile.open} open report${row.pile.open === 1 ? '' : 's'}` : null,
     row.campaigns > 0 ? `${row.campaigns} campaign running` : null,
@@ -235,6 +253,34 @@ function ShelfCase({ row }: { row: ShelfRow }) {
       .filter(Boolean).join(' — ')
     : '';
   const href = `/review/${row.target.replace(':', '/')}`;
+  const [kind, , targetId] = row.target.split(':');
+  const mayWarn = row.actions.includes('warn') && can(row.permission || 'content');
+
+  const warn = async () => {
+    const sure = await confirm({
+      title: `Put a public warning on ${row.target}?`,
+      body: 'The content stays up and everyone who reaches it reads your sentence above it. '
+        + 'The author also gets a private warning, and the audit row keeps your name with it.',
+      confirmLabel: 'Put it up',
+      tone: 'amber',
+    });
+    if (!sure) return;
+    setBusy(true);
+    try {
+      const out = await api<Outcome>(`admin/content/${kind}/${targetId}/`, {
+        method: 'POST',
+        body: { action: 'warn', notice: notice.trim(), reason: reason.trim() },
+      });
+      setAsking(false);
+      setNotice('');
+      setReason('');
+      onWarn(out.detail);
+    } catch (err) {
+      if (!noteGate(err)) onWarn((err as Error).message, true);
+    } finally {
+      setBusy(false);
+    }
+  };
 
   return (
     <tbody className="case" data-case={row.target}>
@@ -263,8 +309,49 @@ function ShelfCase({ row }: { row: ShelfRow }) {
         <td className="dim">{ago(row.content.created_at)}</td>
         <td><div className="grid-acts">
           <ActLink to={href} icon="eye" label="Open this row"/>
+          {mayWarn && (
+            <Act
+              icon="mega" label={asking ? 'Close the warning' : 'Warn about this'}
+              onClick={() => setAsking(value => !value)} disabled={busy}
+            />
+          )}
         </div></td>
       </tr>
+      {asking && (
+        <tr className="grid-ask">
+          <td colSpan={7}>
+            <div className="ask">
+              <label className="field grow">
+                <span>The sentence everyone reads over this {KIND_LABEL[kind] || kind}</span>
+                <textarea
+                  rows={2} value={notice} maxLength={240} autoFocus
+                  placeholder="e.g. This post has been flagged as misleading. Read the author's correction before sharing it."
+                  onChange={event => setNotice(event.target.value)}
+                />
+              </label>
+              <label className="field grow">
+                <span>Why — said to the author privately (optional)</span>
+                <input
+                  value={reason} maxLength={500} placeholder="What about it broke the rules"
+                  onChange={event => setReason(event.target.value)}
+                />
+              </label>
+              <div className="ask-actions">
+                <button
+                  type="button" className="btn amber tiny" disabled={busy || notice.trim() === ''}
+                  onClick={warn}
+                >
+                  {IC.mega}<span>{busy ? 'Putting it up…' : 'Put the warning up'}</span>
+                </button>
+                <button type="button" className="btn ghost tiny" disabled={busy} onClick={() => setAsking(false)}>
+                  <span>Cancel</span>
+                </button>
+                <Link href={href} className="btn ghost tiny"><span>Open the whole case</span>{IC.chevron}</Link>
+              </div>
+            </div>
+          </td>
+        </tr>
+      )}
     </tbody>
   );
 }

@@ -8,7 +8,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
 from apps.accounts.models import User
-from apps.common.api import person
+from apps.common.api import notice_map, person
 from apps.common.pagination import KeysetPagination
 from apps.follows.models import Follow
 from apps.follows.suggest import suggested_accounts
@@ -137,11 +137,14 @@ def profile_detail(request, username):
     data.update(_counts(user, request.user))
     data['joined'] = user.date_joined
     data['locked'] = not full
+    # A notice about the account is read even by the visitor whose view is locked:
+    # it is about the account, not about the posts behind the lock.
+    data['notices'] = notice_map('user', [user.pk]).get(str(user.pk), [])
     if not full:
         # Even a withheld card has to carry the id: without it the client cannot
         # tell this person from the row a feed already holds, and the follow
         # button would have no subject to send to.
-        data = {k: data[k] for k in ('id', 'username', 'name', 'avatar_url', 'verified', 'is_private', 'locked', 'followers', 'following', 'posts')}
+        data = {k: data[k] for k in ('id', 'username', 'name', 'avatar_url', 'verified', 'is_private', 'locked', 'followers', 'following', 'posts', 'notices')}
     return Response(data)
 
 

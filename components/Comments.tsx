@@ -14,6 +14,7 @@ import Avatar from './Avatar';
 import VerifiedBadge from './VerifiedBadge';
 import ReactionButton from './ReactionButton';
 import ReactionIcon from './ReactionIcon';
+import NoticeBanner from './NoticeBanner';
 
 const SUGGESTIONS = ['Nice!', 'Beautiful!', 'Congrats!', 'Love this!', 'Amazing!', 'So good!', 'Well done!'];
 const EMOJIS = ['😀', '😂', '🥰', '😍', '😎', '🤩', '😢', '😡', '👍', '👏', '🙏', '🔥', '❤️', '💯', '🎉', '✨', '🌸', '🍜', '🏔️', '📸', '🥳', '😴', '🤔', '😅', '😊', '🙌', '👌', '✌️', '💖', '😭', '🤣', '💪', '😇', '🥺', '😤', '🤯', '😋', '😘', '😜', '🤗'];
@@ -236,6 +237,7 @@ export default function Comments({ postId, onClose, mediaIndex }: { postId: stri
       <div key={comment.id} data-comment={comment.id} className={`comments-row ${isReply ? 'reply' : ''}`}>
         <Avatar user={author} size={isReply ? 26 : 30} />
         <div className="comments-content">
+          <NoticeBanner notices={comment.notices}/>
           <div className="comment-bubble">
             <div>
               <b>{author.name}</b>

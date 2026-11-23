@@ -846,6 +846,10 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, .btn:focus-vi
 
 .grid-acts { display: flex; align-items: center; justify-content: flex-end; gap: 2px; white-space: nowrap; }
 
+/* The warning a seat signs without leaving the shelf: the row's own second line. */
+.grid-ask td { padding: 0 10px 12px; }
+.grid-ask .ask { animation: unfold 0.16s var(--ease) both; }
+
 .iact {
   display: grid;
   place-items: center;

@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next'
 import './globals.css'
 import { AppProvider } from '@/lib/AppContext'
 import ViewportSync from '@/components/ViewportSync'
+import WelcomeCard from '@/components/WelcomeCard'
 import { SITE_URL } from '@/lib/og'
 
 export const metadata: Metadata = {
@@ -48,6 +49,7 @@ export default function RootLayout({
         <AppProvider>
           <ViewportSync />
           {children}
+          <WelcomeCard />
         </AppProvider>
       </body>
     </html>

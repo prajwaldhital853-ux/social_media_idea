@@ -1470,6 +1470,20 @@ a:focus:not(:focus-visible) {
   fill: var(--ink);
 }
 
+/* The first-load card the console writes. */
+.welcome-card { max-width: 460px; padding: 26px 24px 20px; text-align: center; }
+.welcome-mark { width: 56px; height: 56px; border-radius: 16px; }
+.welcome-message { margin: 14px 0 0; font-size: 16px; line-height: 1.5; color: var(--ink); }
+.welcome-tagline { margin: 8px 0 0; font-size: 13px; color: var(--muted); }
+.welcome-contact { list-style: none; margin: 16px 0 0; padding: 12px 0 0; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 6px; }
+.welcome-contact li { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; }
+.welcome-contact li > span { color: var(--muted); }
+.welcome-go {
+  margin-top: 18px; width: 100%; padding: 11px 16px; border: 0; border-radius: 24px;
+  background: var(--brand); color: #fff; font-size: 14px; font-weight: 650; cursor: pointer;
+}
+.footer-tagline { margin: 0 0 6px; font-size: 12px; color: var(--muted); }
+
 /* Login Screen */
 .login-container {
   min-height: 100vh;
@@ -2620,6 +2634,22 @@ a.trend-item:hover { text-decoration: none; }
 .promoted-chip svg { width: 14px; height: 14px; }
 .promoted-why { font-size: 10px; padding: 2px; }
 .promoted-pop { position: absolute; top: 24px; left: 0; max-width: 300px; padding: 12px; z-index: 15; background: var(--paper); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow-lg); }
+
+/* A sentence staff put over one piece of content, read before the thing it warns about. */
+.notice-banner { display: flex; flex-direction: column; gap: 6px; margin: 0 0 10px; }
+.notice-line {
+  display: flex; align-items: flex-start; gap: 8px; margin: 0; padding: 8px 10px;
+  border: 1px solid var(--amber-tint); border-left: 3px solid var(--amber); border-radius: 10px;
+  background: var(--amber-tint); color: var(--amber-ink); font-size: 13px; line-height: 1.4;
+}
+.notice-mark { flex: none; display: inline-flex; margin-top: 1px; }
+.notice-mark svg { width: 15px; height: 15px; }
+.notice-body { display: flex; flex-direction: column; gap: 2px; }
+.notice-body b { font-weight: 650; }
+.notice-body em { font-style: normal; font-size: 12px; color: var(--muted); }
+.notice-by { font-size: 11px; color: var(--muted); }
+.comments-content > .notice-banner { margin: 0 0 4px; }
+.comments-content > .notice-banner .notice-line { font-size: 12px; padding: 6px 8px; }
 .desktop-compose { padding: 14px 16px; border-bottom: 1px solid var(--line); }
 .desktop-compose button { padding: 10px 16px; width: 100%; text-align: left; background: var(--surface); color: var(--muted); border-radius: 24px; }
 .feed-empty { padding: 32px 20px; color: var(--muted); font-size: 14px; }

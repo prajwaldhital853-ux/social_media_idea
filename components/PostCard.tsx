@@ -15,6 +15,7 @@ import ReactionSummary from './ReactionSummary';
 import ReportModal from './ReportModal';
 import PromoteModal from './PromoteModal';
 import ShareDialog from './ShareDialog';
+import NoticeBanner from './NoticeBanner';
 import { IC } from '@/lib/icons';
 
 interface PostCardProps {
@@ -184,6 +185,8 @@ export default function PostCard({ post, author, featured }: PostCardProps) {
 
   return (
     <article className={`post ${featured ? 'post-featured' : ''}`} onClick={onArticleClick} onPointerEnter={warmRoutes} onTouchStart={warmRoutes}>
+      <NoticeBanner notices={post.notices} full={featured}/>
+
       {promo && (
         <div className="promoted-row">
           <span className="promoted-chip">{IC.chart}{t('promoted')}</span>

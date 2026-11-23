@@ -28,6 +28,8 @@ export interface User {
   website?: string;
   phone?: string;
   links?: ProfileLink[];
+  /** What staff have said publicly about this account, newest first. */
+  notices?: Notice[];
   joined: number;
   coins: number;
   warning?: string | null;
@@ -44,6 +46,19 @@ export interface Suspension {
   reason: string;
 }
 
+/**
+ * A sentence a seat put over one piece of content. It is not a report and not a
+ * takedown: the thing stays up and everyone who reaches it reads this first.
+ */
+export interface Notice {
+  id: string;
+  text: string;
+  /** The reason the seat wrote for the record, shown under the sentence. */
+  reason?: string;
+  by?: string;
+  ts: number;
+}
+
 export interface Post {
   id: string;
   uid: string;
@@ -52,6 +67,8 @@ export interface Post {
   media: Media[];
   ts: number;
   status: 'live' | 'hidden' | 'removed';
+  /** What staff have said publicly about this card, newest first. */
+  notices?: Notice[];
   edited?: boolean;
   processingUntil?: number;
   removedReason?: string;
@@ -94,6 +111,8 @@ export interface Comment {
   text: string;
   ts: number;
   status: 'live' | 'removed';
+  /** What staff have said publicly about this comment, newest first. */
+  notices?: Notice[];
   likes?: number;
   replies?: number;
   /** True when the commenter owns the post — the server decides it, replies included. */
@@ -169,6 +188,8 @@ export interface Listing {
   media: Media[];
   ts: number;
   status: 'active' | 'sold' | 'hidden' | 'removed';
+  /** What staff have said publicly about this listing, newest first. */
+  notices?: Notice[];
   condition?: string;
   sellerName?: string;
   sellerUsername?: string;
@@ -268,6 +289,12 @@ export interface Settings {
   /** Set when the server has a real Google OAuth app; the SPA then loads GIS. */
   googleClientId?: string;
   demoGoogle?: { email: string; name: string; sub: string } | null;
+  /**
+   * The wording the console's desk writes for the first load: the sentence on
+   * the card, the line under it, and the contacts below that. Empty until a seat
+   * says something, because the platform's own wording is what the server sends.
+   */
+  wording?: { message?: string; tagline?: string; contact?: { label: string; value: string }[] };
 }
 
 export interface Database {
