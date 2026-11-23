@@ -16,7 +16,7 @@ declare global {
 const GIS_SRC = 'https://accounts.google.com/gsi/client';
 // Google can hand back nothing at all: the visitor closes the chooser, or this browser
 // cannot show it. Either way the button must stop saying "checking" and say something.
-const ANSWER_WAIT_MS = 15000;
+const ANSWER_WAIT_MS = 8000;
 
 function loadGis(): Promise<any> {
   if (window.google?.accounts?.id) return Promise.resolve(window.google.accounts.id);
@@ -58,6 +58,10 @@ async function gisId(clientId: string) {
       // Without this flag GIS shows its own One Tap overlay, which mobile browsers
       // suppress outright — the click looked like it did nothing.
       use_fedcm_for_prompt: true,
+      // Both flags, because this is a button the visitor pressed and not a page that
+      // displayed itself. One Tap keeps a per-day cooldown and goes quiet after a
+      // dismissal; the button path is the one Google says to use for a click.
+      use_fedcm_for_button: true,
       callback: (response: any) => {
         const hand = pending;
         pending = null;
@@ -89,7 +93,8 @@ export async function requestGoogleToken(clientId: string): Promise<string> {
     const timer = setTimeout(() => {
       if (!settled) {
         stop();
-        reject(new Error('Google did not answer. Try again, or sign in with your email.'));
+        reject(new Error('Google refused the sign-in. This site is probably not listed under '
+          + '"Authorised JavaScript origins" for that client id, or the client is still in Testing.'));
       }
     }, ANSWER_WAIT_MS);
     pending = {
