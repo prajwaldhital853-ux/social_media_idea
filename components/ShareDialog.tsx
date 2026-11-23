@@ -47,8 +47,11 @@ export default function ShareDialog({ open, url, title, text, preview, onShared,
   const { db, me, t, serverMode, sendMessage, showToast, merge } = useApp();
   const [query, setQuery] = useState('');
   const [found, setFound] = useState<User[] | null>(null);
-  const [confirmTo, setConfirmTo] = useState<User | null>(null);
-  const [busyId, setBusyId] = useState('');
+  // People are picked, not messaged: the sheet collects as many as the reader
+  // chooses and asks once before anything leaves.
+  const [picked, setPicked] = useState<User[]>([]);
+  const [confirming, setConfirming] = useState(false);
+  const [sending, setSending] = useState(false);
   const [recent, setRecent] = useState<string[]>([]);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -58,7 +61,8 @@ export default function ShareDialog({ open, url, title, text, preview, onShared,
     if (!open) return;
     setQuery('');
     setFound(null);
-    setConfirmTo(null);
+    setPicked([]);
+    setConfirming(false);
     setRecent(readRecent());
   }, [open]);
 
@@ -107,23 +111,35 @@ export default function ShareDialog({ open, url, title, text, preview, onShared,
 
   if (!open || typeof document === 'undefined') return null;
 
-  const sendTo = async (person: User) => {
-    setBusyId(person.id);
-    try {
-      // A search hit may be somebody the cache has never held; the message call
-      // resolves a person by id, so the row has to land first.
-      merge({ users: [person] });
-      await sendMessage(person.id, `${text || title}\n${url}`);
-      remember(person.username);
-      showToast(t('shareSent').replace('{name}', person.name || person.username));
-      onShared();
-      onClose();
-    } catch {
-      showToast(t('shareFailed'));
-    } finally {
-      setBusyId('');
-      setConfirmTo(null);
+  const togglePerson = (person: User) => {
+    setPicked(prev => prev.some(p => p.id === person.id)
+      ? prev.filter(p => p.id !== person.id)
+      : [...prev, person]);
+  };
+
+  // Search hits may be people the cache has never held; the message call
+  // resolves a person by id, so every row has to land first.
+  const sendToAll = async () => {
+    setSending(true);
+    let failed = 0;
+    for (const person of picked) {
+      try {
+        merge({ users: [person] });
+        await sendMessage(person.id, `${text || title}\n${url}`);
+        remember(person.username);
+      } catch {
+        failed += 1;
+      }
     }
+    setSending(false);
+    if (failed === picked.length) {
+      showToast(t('shareFailed'));
+      return;
+    }
+    if (picked.length === 1) showToast(t('shareSent').replace('{name}', picked[0].name || picked[0].username));
+    else showToast(t('shareSentMany').replace('{count}', String(picked.length)));
+    onShared();
+    onClose();
   };
 
   const openApp = (href: string) => {
@@ -182,7 +198,7 @@ export default function ShareDialog({ open, url, title, text, preview, onShared,
           <input
             type="search"
             value={query}
-            onChange={e => { setQuery(e.target.value); setConfirmTo(null); }}
+            onChange={e => { setQuery(e.target.value); setConfirming(false); }}
             placeholder={t('shareSearch')}
             autoComplete="off"
           />
@@ -207,14 +223,25 @@ export default function ShareDialog({ open, url, title, text, preview, onShared,
         )}
 
         <div className="share-people">
-          {confirmTo ? (
+          {confirming ? (
             <div className="share-confirm">
-              <Avatar user={confirmTo} size={64} />
-              <b>{t('shareConfirm').replace('{name}', confirmTo.name || confirmTo.username)}</b>
-              <span className="share-confirm-handle">@{confirmTo.username}</span>
+              <span className="share-confirm-faces">
+                {picked.slice(0, 4).map(person => <Avatar key={person.id} user={person} size={picked.length === 1 ? 64 : 44} />)}
+                {picked.length > 4 && <span className="share-confirm-more">+{picked.length - 4}</span>}
+              </span>
+              <b>
+                {picked.length === 1
+                  ? t('shareConfirm').replace('{name}', picked[0].name || picked[0].username)
+                  : t('shareConfirmMany').replace('{count}', String(picked.length))}
+              </b>
+              <span className="share-confirm-handle">
+                {picked.length === 1
+                  ? `@${picked[0].username}`
+                  : picked.map(p => p.name || p.username).join(', ')}
+              </span>
               <div className="share-confirm-actions">
-                <button type="button" className="ghost-btn" disabled={!!busyId} onClick={() => setConfirmTo(null)}>{t('cancel')}</button>
-                <button type="button" className="share-confirm-send" disabled={!!busyId} onClick={() => void sendTo(confirmTo)}>
+                <button type="button" className="ghost-btn" disabled={sending} onClick={() => setConfirming(false)}>{t('cancel')}</button>
+                <button type="button" className="share-confirm-send" disabled={sending} onClick={() => void sendToAll()}>
                   {IC.send}{t('send')}
                 </button>
               </div>
@@ -226,22 +253,36 @@ export default function ShareDialog({ open, url, title, text, preview, onShared,
                 <p className="share-empty">{t('shareSearch')}</p>
               ) : (
                 <div className="share-grid">
-                  {people.map(person => (
-                    <button
-                      type="button"
-                      key={person.username}
-                      className="share-person"
-                      onClick={() => setConfirmTo(person)}
-                    >
-                      <Avatar user={person} size={64} />
-                      <b>{person.name || person.username}</b>
-                    </button>
-                  ))}
+                  {people.map(person => {
+                    const on = picked.some(p => p.id === person.id);
+                    return (
+                      <button
+                        type="button"
+                        key={person.username}
+                        className={`share-person ${on ? 'selected' : ''}`}
+                        aria-pressed={on}
+                        onClick={() => togglePerson(person)}
+                      >
+                        <Avatar user={person} size={64} />
+                        <b>{person.name || person.username}</b>
+                        {on && <span className="share-person-pick">{IC.check}</span>}
+                      </button>
+                    );
+                  })}
                 </div>
               )}
             </>
           )}
         </div>
+
+        {picked.length > 0 && !confirming && (
+          <div className="share-sendbar">
+            <span className="share-sendbar-names">{picked.map(p => p.name || p.username).join(', ')}</span>
+            <button type="button" className="share-confirm-send" onClick={() => setConfirming(true)}>
+              {IC.send}{t('send')}
+            </button>
+          </div>
+        )}
 
         <div className="share-apps">
           <span className="share-section-label">{t('shareVia')}</span>
