@@ -140,8 +140,15 @@ def serve_media(request, path):
         raise Http404
 
     size = stat.st_size
-    etag = _etag(stat)
-    if _fresh(request, etag, stat.st_mtime):
+    try:
+        etag = _etag(stat)
+        cached = _fresh(request, etag, stat.st_mtime)
+    except Exception:
+        # Cache validators are an optimisation. If the filesystem hands back a
+        # stat this code cannot read, the picture still has to load, so the
+        # request falls through to the bytes with no validator at all.
+        etag, cached = '', False
+    if cached:
         # A rewatch of a cached reel used to read the file again. A 304 must not
         # repeat the entity headers, so it gets its own short response.
         response = HttpResponseNotModified()
@@ -178,8 +185,9 @@ def serve_media(request, path):
     response['Content-Disposition'] = 'inline'
     response['Accept-Ranges'] = 'bytes'
     response['Cache-Control'] = f'public, max-age={MAX_AGE}'
-    response['ETag'] = etag
-    response['Last-Modified'] = http_date(stat.st_mtime)
+    if etag:
+        response['ETag'] = etag
+        response['Last-Modified'] = http_date(stat.st_mtime)
     response['X-Content-Type-Options'] = 'nosniff'
     if status == 206:
         response['Content-Range'] = f'bytes {start}-{end}/{size}'
