@@ -137,7 +137,12 @@ SSE_INTERVAL = float(os.environ.get('EXPOSING_SSE_INTERVAL') or '2')
 # A thread is the one screen where two seconds reads as late: somebody is
 # waiting for a reply. Costs one indexed query a second per open thread.
 CHAT_SSE_INTERVAL = float(os.environ.get('EXPOSING_CHAT_SSE_INTERVAL') or '1')
-SSE_MAX_LIFE = float(os.environ.get('EXPOSING_SSE_MAX_LIFE') or '3300')
+# An open stream costs a task, a poll every tick and one of a user's stream
+# slots for as long as it lives. Both EventSource clients carry a cursor and
+# reopen on their own — the streams write `retry:` and read Last-Event-ID — so
+# ending one every five minutes costs the reader nothing, and an hour-long hold
+# no longer outlives a deploy.
+SSE_MAX_LIFE = float(os.environ.get('EXPOSING_SSE_MAX_LIFE') or '300')
 SSE_STREAMS_PER_USER = int(os.environ.get('EXPOSING_SSE_STREAMS') or '3')
 WS_SOCKETS_PER_USER = int(os.environ.get('EXPOSING_WS_SOCKETS') or '8')
 
@@ -194,7 +199,19 @@ CACHES = {
     'default': (
         {'BACKEND': 'django.core.cache.backends.redis.RedisCache', 'LOCATION': REDIS_URL}
         if REDIS_AVAILABLE else
-        {'BACKEND': 'django.core.cache.backends.locmem.LocMemCache', 'LOCATION': 'exposing'}
+        {
+            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+            'LOCATION': 'exposing',
+            # No Redis on the free tier, so throttle keys and cached fragments
+            # live in this heap and the ceiling has to be a number somebody
+            # chose: LocMem's own default is small enough that a minute of
+            # distinct IPs evicts each other's counters, and a limiter that
+            # cannot see its own keys is not one. Ten thousand counters is a
+            # couple of megabytes. A blank env value reads as unset, as every
+            # other value in this file does.
+            'MAX_ENTRIES': int(os.environ.get('DJANGO_CACHE_MAX_ENTRIES') or '10000'),
+            'CULL_FREQUENCY': int(os.environ.get('DJANGO_CACHE_CULL_FREQUENCY') or '3'),
+        }
     )
 }
 

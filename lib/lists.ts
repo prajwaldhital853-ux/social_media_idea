@@ -184,12 +184,23 @@ export function useList(key: string, def: ListDef, query?: Query, enabled = true
     () => IDLE,
   );
 
+  // An exhausted list that came back with no rows has not finished reading: the
+  // first thread, the first comment and the first post all arrive into exactly
+  // that state, and a screen that refuses to ask again shows "nothing yet" for
+  // the rest of the session. Re-armed once per mount, so an author who really
+  // has nothing does not re-read on every scroll.
+  const rearmed = useRef('');
   useEffect(() => {
     // Keyed on `loaded`, not just on mount: a list that is dropped while this
     // screen is open (marking a thread read forgets the inbox) has to come back
     // by itself, or the screen keeps showing a list nobody will ever refill.
-    if (enabled && !state.loaded) void loadAt(sk, defRef.current, queryRef.current);
-  }, [sk, enabled, state.loaded]);
+    if (!enabled) return;
+    if (!state.loaded) { void loadAt(sk, defRef.current, queryRef.current); return; }
+    if (state.done && !state.ids.length && rearmed.current !== sk) {
+      rearmed.current = sk;
+      void loadAt(sk, defRef.current, queryRef.current);
+    }
+  }, [sk, enabled, state.loaded, state.done, state.ids.length]);
 
   return {
     ids: state.ids,

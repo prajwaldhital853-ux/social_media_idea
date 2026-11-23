@@ -204,10 +204,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const dbRef = useRef(db);
   dbRef.current = db;
 
-  /** The bell stream survives navigation, so it reads the route through a ref too. */
-  const pathnameRef = useRef(pathname);
-  pathnameRef.current = pathname;
-
   /** Stable identity: screens list it in an effect's deps to fetch once per subject. */
   const merge = useCallback((frag: Fragment) => setDb(cur => applyFragment(cur, frag)), []);
 
@@ -332,12 +328,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
    */
   const pullBadges = useCallback(async () => {
     if (!API_ENABLED || !dbRef.current.meId) return;
+    const before = dbRef.current.unread;
+    const me = dbRef.current.meId;
     try {
       const row = await api.get<any>('/api/notifications/unread/');
-      setDb(prev => (prev.meId ? {
-        ...prev,
-        unread: { notifications: Number(row.unread) || 0, messages: Number(row.messages) || 0 },
-      } : prev));
+      const next = { notifications: Number(row.unread) || 0, messages: Number(row.messages) || 0 };
+      setDb(prev => (prev.meId ? { ...prev, unread: next } : prev));
+      // A badge that grew means rows exist that no list has been told about. The
+      // stream is the fast path for them, but a stream that is open and silent —
+      // buffered by a proxy, refused by a WSGI worker — would otherwise leave the
+      // reader staring at a number over an empty column.
+      if (before && next.messages > before.messages) void refreshList('inbox', inboxListDef(me || ''));
+      if (before && next.notifications > before.notifications) {
+        void refreshList('notifications', { path: '/notifications/', frag: notificationsFragment });
+      }
     } catch { /* a badge a beat behind is not worth interrupting anyone for */ }
   }, []);
 
@@ -380,12 +384,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       // The cache merges by id; the list's id order is what the popover renders.
       pushListRow('notifications', undefined, mapped.id);
       if (row.kind === 'message' && row.actor) {
-        // The tray just announced a conversation. When the reader is standing in
-        // the messages screen, the column beside it has to agree: the sender's
-        // row appears, even for a person never written to before, whose
-        // conversation did not exist when that column was read.
+        // The tray just announced a conversation. The column beside it has to
+        // agree, including for a person never written to before, whose thread
+        // did not exist when that column was last read.
         pushListRow('inbox', undefined, idOf(row.actor));
-        if (pathnameRef.current.startsWith('/messages')) void refreshList('inbox', inboxListDef(selfId));
+        // Not gated on the route any more: the top-bar popover reads the same
+        // list, so a thread that only refreshes while the reader is standing in
+        // /messages never reaches anyone who is not already there.
+        void refreshList('inbox', inboxListDef(selfId));
       }
       void pullBadges();
     };
@@ -395,6 +401,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       // refreshList, not a bare fetch: the popover renders the list's id order,
       // so the state has to be refilled, not just the cache beneath it.
       void refreshList('notifications', { path: '/notifications/', frag: notificationsFragment });
+      // The stream is the fast path for a new thread, but a stream that never
+      // opens — a WSGI worker refusing it, a proxy buffering it — must not also
+      // cost the reader the message itself. The fallback poll carries both lists.
+      void refreshList('inbox', inboxListDef(selfId));
     };
 
     const pollTick = () => {

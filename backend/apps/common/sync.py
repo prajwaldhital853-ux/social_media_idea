@@ -79,14 +79,19 @@ def _cards(ids):
     rows = (
         User.objects.filter(pk__in=ids)
         .select_related('profile')
-        .annotate(followers_count=Count('followers', filter=Q(followers__status='accepted'), distinct=True))
+        .annotate(
+            followers_count=Count('followers', filter=Q(followers__status='accepted'), distinct=True),
+            # Counted here rather than per card: this loop ran one COUNT for
+            # every person on the screen, up to four hundred on a cold app load.
+            following_count=Count('following', filter=Q(following__status='accepted'), distinct=True),
+        )
         .order_by('pk')[:GRAPH_LIMIT]
     )
     cards = []
     for row in rows:
         card = person(row)
         card['followers'] = row.followers_count
-        card['following'] = row.following.filter(status=Follow.Status.ACCEPTED).count()
+        card['following'] = row.following_count
         card['role'] = _role(row)
         cards.append(card)
     return cards

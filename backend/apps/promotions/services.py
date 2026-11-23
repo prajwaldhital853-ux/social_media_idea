@@ -31,14 +31,29 @@ def audience_matches(promo, user):
     return True
 
 
+INTEREST_WINDOW_DAYS = 30
+# interest_score runs on the first feed page, and a category's post ids are the
+# one input that grows with the platform rather than with the viewer. The score
+# only orders a couple of promotions, so it reads the newest slice of the
+# category: the alternative was pulling every id the category ever made into
+# memory and pasting them all into one IN list. Ordering by created_at lets the
+# newest-first index stop as soon as the slice is full.
+INTEREST_POSTS = 500
+
+
 def interest_score(user, category):
     """Recent engagement with same-category content: likes, saves, comments, reel watches."""
     from apps.posts.models import Post
     from apps.reactions.models import Reaction
     from apps.saved.models import SavedPost
-    since = timezone.now() - timedelta(days=30)
-    post_ids = Post.objects.filter(category=category).values_list('id', flat=True) if category else []
-    post_ids = [str(pk) for pk in post_ids]
+    since = timezone.now() - timedelta(days=INTEREST_WINDOW_DAYS)
+    post_ids = (
+        [
+            str(pk) for pk in Post.objects.filter(category=category)
+            .order_by('-created_at').values_list('id', flat=True)[:INTEREST_POSTS]
+        ]
+        if category else []
+    )
     likes = Reaction.objects.filter(user=user, target_type='post', target_id__in=post_ids, created_at__gte=since).count()
     comments = user.comments.filter(post__category=category, created_at__gte=since).count() if category else 0
     saves = SavedPost.objects.filter(user=user, post__category=category, created_at__gte=since).count() if category else 0
@@ -54,5 +69,8 @@ def promoted_for(user, limit=2):
         Q(ends_at__isnull=True) | Q(ends_at__gt=timezone.now())
     ).select_related('owner')
     matching = [p for p in promos if audience_matches(p, user)]
-    matching.sort(key=lambda p: interest_score(user, p.category), reverse=True)
+    # One score per category, not per promotion: half a dozen ads in one
+    # category used to mean the same four COUNTs six times over.
+    scores = {category: interest_score(user, category) for category in {p.category for p in matching}}
+    matching.sort(key=lambda p: scores[p.category], reverse=True)
     return matching[:limit]

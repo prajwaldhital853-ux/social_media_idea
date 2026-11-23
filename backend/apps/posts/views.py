@@ -1,4 +1,4 @@
-from django.db.models import F, Q
+from django.db.models import Exists, F, OuterRef, Q
 from rest_framework import status, viewsets
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.permissions import AllowAny, BasePermission, IsAuthenticatedOrReadOnly, SAFE_METHODS
@@ -6,10 +6,10 @@ from rest_framework.response import Response
 
 from apps.common.pagination import KeysetPagination
 from apps.common.ratelimit import client_ip, enforce
-from apps.follows.models import Block
+from apps.follows.models import Block, Follow
 from apps.promotions.services import promoted_for
 
-from .models import Post
+from .models import Post, PostMedia
 from .serializers import PostSerializer
 
 
@@ -34,12 +34,13 @@ def visible_posts(user):
     visible = Q(status=Post.Status.LIVE, audience=Post.Audience.PUBLIC) & ~Q(author__profile__is_private=True)
     if user.is_authenticated:
         visible |= Q(author=user)
-        visible |= Q(
-            status=Post.Status.LIVE,
-            author__followers__follower=user,
-            author__followers__status='accepted',
+        # A follower test as a subquery rather than as a join on author__followers:
+        # the join is what forced every feed query into a DISTINCT over the whole
+        # row, and "does the viewer follow this author" is one boolean either way.
+        visible |= Q(status=Post.Status.LIVE) & Exists(
+            Follow.objects.filter(followee=OuterRef('author'), follower=user, status=Follow.Status.ACCEPTED)
         )
-    return qs.filter(visible).distinct()
+    return qs.filter(visible)
 
 
 class PostViewSet(viewsets.ModelViewSet):
@@ -55,8 +56,10 @@ class PostViewSet(viewsets.ModelViewSet):
         if query:
             qs = qs.filter(Q(text__icontains=query) | Q(category__iexact=query.lstrip('#')))
         # The reels shelf is a stream of its own: posts that carry moving pictures.
+        # Exists, not media__kind: one clip per post would otherwise be one row
+        # per clip and a DISTINCT to tidy it back up.
         if self.request.query_params.get('media') == 'video':
-            qs = qs.filter(media__kind='video').distinct()
+            qs = qs.filter(Exists(PostMedia.objects.filter(post=OuterRef('pk'), kind='video')))
         return qs
 
     def perform_create(self, serializer):
@@ -132,7 +135,9 @@ def feed(request):
         # The Following tab is exactly the people the viewer chose; nobody gets
         # sponsored posts or strangers there, and an anonymous visitor gets nothing.
         qs = qs.none() if not request.user.is_authenticated else qs.filter(
-            author__followers__follower=request.user, author__followers__status='accepted',
+            Exists(Follow.objects.filter(
+                followee=OuterRef('author'), follower=request.user, status=Follow.Status.ACCEPTED,
+            ))
         )
     if promo_ids:
         qs = qs.exclude(pk__in=promo_ids)
