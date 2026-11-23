@@ -112,7 +112,14 @@ def _fresh(request, etag, mtime):
         # If-None-Match wins over If-Modified-Since (RFC 7232 §6), which is why
         # this returns rather than falling through.
         return any(_tag(candidate) in ('*', _tag(etag)) for candidate in inm.split(','))
-    since = parse_http_date(request.headers.get('If-Modified-Since') or '')
+    stamp = request.headers.get('If-Modified-Since')
+    try:
+        # parse_http_date raises on an empty or malformed date rather than
+        # answering None, and a request without the header is the common case:
+        # every plain <img> arrives here, so an unguarded call 500s all media.
+        since = parse_http_date(stamp) if stamp else None
+    except ValueError:
+        since = None
     # Last-Modified carries whole seconds, so the comparison happens there too.
     return since is not None and int(mtime) <= since
 
