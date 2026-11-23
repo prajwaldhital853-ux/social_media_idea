@@ -51,6 +51,15 @@ def follow(request):
         if edge is None:
             return Response({'detail': 'Could not follow. Try again.'}, status=500)
         created = False
+    # A private account only ever holds one answer per pair, so the row that
+    # outlived it is the usual shape of a second request: the follow was dropped
+    # from the other side, or an unfollow never reached the database. Answering
+    # "already accepted" here would leave the target with nothing to confirm, so
+    # the row is re-opened and asked again.
+    if private and not created and edge.status != Follow.Status.PENDING:
+        edge.status = Follow.Status.PENDING
+        edge.save(update_fields=['status'])
+        created = True
     if created:
         kind = 'follow_request' if private else 'follow'
         verb = 'requested to follow you' if private else 'started following you'

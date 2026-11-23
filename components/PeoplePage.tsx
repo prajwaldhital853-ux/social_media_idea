@@ -94,8 +94,9 @@ export default function PeoplePage({ kind }: { kind: 'followers' | 'following' }
   const title = kind === 'followers' ? t('followersOf', { name: user.name || user.username }) : t('followingOf', { name: user.name || user.username });
   const total = profile ? (kind === 'followers' ? profile.followers : profile.following) : people.length;
   // A private account answers an empty circle to strangers, so say whose it is
-  // instead of claiming nobody is there.
-  const hidden = !!profile?.locked;
+  // instead of claiming nobody is there. The owner is never a stranger: an
+  // empty circle under their own name is genuinely empty, not locked.
+  const hidden = !!profile?.locked && !own;
   const emptyText = hidden ? t('privateNotice') : (kind === 'followers' ? t('noFollowers') : t('noFollowing'));
 
   // An answer moves a real edge, so the page re-reads the circle and the totals

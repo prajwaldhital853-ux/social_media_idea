@@ -7349,7 +7349,7 @@ a.market-card { text-decoration: none; }
      it takes the whole column and runs the full height under the top bar. */
   .rail {
     width: auto;
-    padding: 16px 14px 6px 16px;
+    padding: 16px 14px 18px 16px;
     gap: 4px;
     border-right: 0;
     background: var(--paper);
@@ -7410,6 +7410,14 @@ a.market-card { text-decoration: none; }
   .messenger .messenger-main { background: var(--paper); }
   .messenger .chat-view { height: 100%; }
   .messenger .chat-back { display: none; }
+
+  /* Settings takes the whole field right of the rail: no suggestions column
+     competing with a page that is one stack of choices. */
+  .shell.settings-page { grid-template-columns: 280px minmax(0, 1fr) 0; column-gap: 0; padding-right: 0; }
+  .shell.settings-page .settings-body { padding: 20px 28px 44px; gap: 16px; max-width: 1000px; }
+  .shell.settings-page .settings-card { padding: 20px 22px; border-radius: 18px; }
+  .shell.settings-page .settings-choices { max-width: 420px; }
+  .shell.settings-page .settings-logout { max-width: 1000px; }
 }
 
 /* Under a full three columns the calm suggestions give up their space first;
@@ -7424,6 +7432,7 @@ a.market-card { text-decoration: none; }
 @media (min-width: 769px) and (max-width: 1023px) {
   .shell.messenger-page { grid-template-columns: 88px minmax(0, 1fr) 0; }
   .shell.messenger-page .side-calm { display: none; }
+  .shell.settings-page { grid-template-columns: 88px minmax(0, 1fr) 0; }
 }
 
 /* ============================================================

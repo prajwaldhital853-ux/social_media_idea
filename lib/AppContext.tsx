@@ -420,6 +420,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
         // /messages never reaches anyone who is not already there.
         void refreshList('inbox', inboxListDef(selfId));
       }
+      if (row.kind === 'follow_request' || row.kind === 'follow_accept') {
+        // Asking and answering both move an edge the cache still holds in its
+        // old shape. The requests panel and every follow button read that
+        // cache, so the graph is re-pulled here instead of waiting for a
+        // reload — a request that only exists on the server cannot be accepted.
+        void pullSession();
+      }
       void pullBadges();
     };
 
