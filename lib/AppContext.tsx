@@ -587,7 +587,30 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const updateProfile = async (patch: Record<string, any>) => {
     const self = currentMe();
-    if (!API_ENABLED || !self) return;
+    if (!self) return;
+    // Demo builds have no server to call, so the cache is the source of truth — and
+    // a new photo is still announced as a post, the way the API would do it.
+    if (!API_ENABLED) {
+      const now = Date.now();
+      const changed: Array<'profile' | 'cover'> = [];
+      if (patch.avatar && patch.avatar !== self.avatar) changed.push('profile');
+      if (patch.cover && patch.cover !== self.cover) changed.push('cover');
+      const notes: Post[] = changed.map((activity, i) => ({
+        id: uid(),
+        uid: self.id,
+        text: '',
+        media: [{ type: 'image', src: activity === 'profile' ? patch.avatar : patch.cover }],
+        ts: now + i,
+        status: 'live',
+        activity,
+      }));
+      setDb(prev => ({
+        ...prev,
+        users: prev.users.map(u => u.id === self.id ? { ...u, ...patch } : u),
+        posts: [...notes, ...prev.posts],
+      }));
+      return;
+    }
     const data = await api.patch<any>(`/api/profiles/${self.username}/`, toProfilePayload(patch));
     merge({ users: [{ ...self, ...profilePatch(data) }] });
     // A changed photo or banner is announced by a post the server just created,

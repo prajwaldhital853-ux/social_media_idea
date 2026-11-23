@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import AppShell from '@/components/AppShell';
@@ -8,33 +8,29 @@ import PostCard from '@/components/PostCard';
 import Avatar from '@/components/Avatar';
 import VerifiedBadge from '@/components/VerifiedBadge';
 import EditProfileModal from '@/components/EditProfileModal';
+import ImageCropper from '@/components/ImageCropper';
 import Lightbox from '@/components/Lightbox';
 import { useApp } from '@/lib/AppContext';
 import { listingsFragment, postsFragment, useList } from '@/lib/lists';
 import { useWindowed } from '@/lib/useWindowed';
-import { canSeePost, privateIds, hash, compact, ago, safeUrl } from '@/lib/utils';
+import { canSeePost, privateIds, compact, ago, safeUrl } from '@/lib/utils';
+import { checkPhoto, profileImage } from '@/lib/mediaFile';
 import { IC } from '@/lib/icons';
 import { Listing, Post, User } from '@/lib/types';
-
-const COVER_PALETTES = [
-  ['#B63740', '#FDA041'],
-  ['#1F6F78', '#B63740'],
-  ['#4A3F8F', '#E40104'],
-  ['#A85E00', '#B63740'],
-  ['#2F6B4F', '#FDA041'],
-  ['#2B3F47', '#B63740']
-];
 
 export default function UserProfilePage() {
   const params = useParams();
   const router = useRouter();
-  const { db, me, t, isFollowing, followState, toggleFollow, showToast, openComposer, serverMode, loadPerson, ready } = useApp();
+  const { db, me, t, isFollowing, followState, toggleFollow, showToast, openComposer, serverMode, loadPerson, ready, updateProfile } = useApp();
   const username = String(params.username || '');
   const user = db.users.find(u => u.username.toLowerCase() === username.toLowerCase());
   const [tab, setTab] = useState<'posts' | 'reels' | 'photos' | 'about' | 'listings'>('posts');
   const [reelOrder, setReelOrder] = useState<'views' | 'latest' | 'oldest'>('latest');
   const [editing, setEditing] = useState(false);
   const [zoom, setZoom] = useState<{ src: string; caption: string } | null>(null);
+  const [crop, setCrop] = useState<string | null>(null);
+  const [coverBusy, setCoverBusy] = useState(false);
+  const coverRef = useRef<HTMLInputElement>(null);
   // Only the profile row knows the true totals; a paginated list holds no more
   // than the rows the visitor has already scrolled past.
   const [stats, setStats] = useState<{ posts: number; followers: number; following: number } | null>(null);
@@ -128,8 +124,9 @@ export default function UserProfilePage() {
   const suspended = !!user.susp && (user.susp.until === null || user.susp.until > Date.now());
   const followers = db.follows.filter(f => f.following === user.id && f.status !== 'pending').map(f => db.users.find(u => u.id === f.follower)).filter((u): u is User => !!u);
   const followingList = db.follows.filter(f => f.follower === user.id && f.status !== 'pending').map(f => db.users.find(u => u.id === f.following)).filter((u): u is User => !!u);
-  const coverSrc = user.cover || (posts.flatMap(p => p.media.filter(m => m.type === 'image' && (m.src || m.gen)))[0]?.src || posts.flatMap(p => p.media.filter(m => m.type === 'image' && (m.src || m.gen)))[0]?.gen);
-  const [ca, cb] = COVER_PALETTES[hash(user.id) % COVER_PALETTES.length];
+  // A missing cover stays missing: falling back to the author's first picture made
+  // a profile look like it had a banner the owner never chose.
+  const coverSrc = user.cover || '';
   const joinedLabel = new Date(user.joined).toLocaleDateString(db.lang === 'ne' ? 'ne-NP' : 'en-GB', { month: 'long', year: 'numeric' });
   const location = [user.city, user.province, user.country].filter(Boolean).join(', ');
   const phoneUrl = user.phone ? `tel:${user.phone.replace(/[^\d+]/g, '')}` : null;
@@ -191,18 +188,63 @@ export default function UserProfilePage() {
     }
   };
 
+  const pickCover = (file: File | undefined) => {
+    if (!file) return;
+    try {
+      checkPhoto(file);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'That image could not be read. Try another one.');
+      return;
+    }
+    setCrop(URL.createObjectURL(file));
+  };
+
+  // The banner is framed by the author, not by whatever the first post happened to
+  // carry: pick, crop on the device, and only then send the bytes.
+  const useCover = async (file: File) => {
+    if (crop) URL.revokeObjectURL(crop);
+    setCrop(null);
+    setCoverBusy(true);
+    try {
+      await updateProfile({ cover: await profileImage(file, 1600) });
+      showToast(t('profileUpdated'));
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Your cover could not be saved.');
+    } finally {
+      setCoverBusy(false);
+    }
+  };
+
   return (
     <AppShell>
       <div className="profile-view">
-        <div className="profile-cover" style={!coverSrc ? { background: `linear-gradient(120deg, ${ca}, ${cb})` } : undefined}>
-          {coverSrc && <img src={coverSrc} alt="" decoding="async" />}
-          <div className="profile-cover-shade" />
-          {coverSrc && (
-            <button
-              type="button"
-              className="profile-cover-open"
-              aria-label={t('viewCover')}
-              onClick={() => setZoom({ src: coverSrc, caption: `${user.name || user.username} · ${t('viewCover')}` })}
+        <div className="profile-cover">
+          {coverSrc ? (
+            <>
+              <img src={coverSrc} alt="" decoding="async" />
+              <div className="profile-cover-shade" />
+              <button
+                type="button"
+                className="profile-cover-open"
+                aria-label={t('viewCover')}
+                onClick={() => setZoom({ src: coverSrc, caption: `${user.name || user.username} · ${t('viewCover')}` })}
+              />
+            </>
+          ) : (
+            own && (
+              <button type="button" className="profile-cover-upload" disabled={coverBusy} onClick={() => coverRef.current?.click()}>
+                {IC.img}
+                <span>{t('uploadCover')}</span>
+              </button>
+            )
+          )}
+          {own && (
+            <input
+              ref={coverRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              hidden
+              onChange={e => { pickCover(e.target.files?.[0]); e.target.value = ''; }}
             />
           )}
           <button type="button" className="icon-btn profile-back" aria-label="Back" onClick={() => window.history.length > 1 ? router.back() : router.push('/')}>{IC.back}</button>
@@ -484,6 +526,16 @@ export default function UserProfilePage() {
 
       {editing && own && <EditProfileModal onClose={() => setEditing(false)} />}
       {zoom && <Lightbox src={zoom.src} caption={zoom.caption} onClose={() => setZoom(null)} />}
+      {crop && (
+        <ImageCropper
+          src={crop}
+          name="cover.jpg"
+          ratio={2.4}
+          max={1600}
+          onCancel={() => { URL.revokeObjectURL(crop); setCrop(null); }}
+          onCrop={file => { void useCover(file); }}
+        />
+      )}
     </AppShell>
   );
 }
