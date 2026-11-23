@@ -212,6 +212,7 @@ export default function PostCard({ post, author, featured }: PostCardProps) {
         <div className="post-content">
           <div className="post-header">
             <Link href={`/u/${author.username}`} className="post-name" onClick={e => e.stopPropagation()}>
+              <span className="post-name-pencil" aria-hidden="true">{IC.edit}</span>
               {author.name || author.username}
             </Link>
             {author.verified && <VerifiedBadge />}
