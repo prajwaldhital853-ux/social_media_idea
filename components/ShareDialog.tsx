@@ -47,6 +47,7 @@ export default function ShareDialog({ open, url, title, text, preview, onShared,
   const { db, me, t, serverMode, sendMessage, showToast, merge } = useApp();
   const [query, setQuery] = useState('');
   const [found, setFound] = useState<User[] | null>(null);
+  const [confirmTo, setConfirmTo] = useState<User | null>(null);
   const [busyId, setBusyId] = useState('');
   const [recent, setRecent] = useState<string[]>([]);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -57,7 +58,17 @@ export default function ShareDialog({ open, url, title, text, preview, onShared,
     if (!open) return;
     setQuery('');
     setFound(null);
+    setConfirmTo(null);
     setRecent(readRecent());
+  }, [open]);
+
+  // The page behind the sheet stays where it is: a wheel or swipe outside the
+  // sheet would otherwise scroll the feed under a dialog still in use.
+  useEffect(() => {
+    if (!open) return;
+    const had = document.body.classList.contains('noscroll');
+    document.body.classList.add('noscroll');
+    return () => { if (!had) document.body.classList.remove('noscroll'); };
   }, [open]);
 
   // People the viewer follows, minus themselves: the sheet's first row of faces.
@@ -111,6 +122,7 @@ export default function ShareDialog({ open, url, title, text, preview, onShared,
       showToast(t('shareFailed'));
     } finally {
       setBusyId('');
+      setConfirmTo(null);
     }
   };
 
@@ -170,7 +182,7 @@ export default function ShareDialog({ open, url, title, text, preview, onShared,
           <input
             type="search"
             value={query}
-            onChange={e => setQuery(e.target.value)}
+            onChange={e => { setQuery(e.target.value); setConfirmTo(null); }}
             placeholder={t('shareSearch')}
             autoComplete="off"
           />
@@ -195,25 +207,39 @@ export default function ShareDialog({ open, url, title, text, preview, onShared,
         )}
 
         <div className="share-people">
-          <span className="share-section-label">{heading}</span>
-          {people.length === 0 ? (
-            <p className="share-empty">{t('shareSearch')}</p>
-          ) : (
-            <div className="share-grid">
-              {people.map(person => (
-                <button
-                  type="button"
-                  key={person.username}
-                  className="share-person"
-                  disabled={busyId === person.id}
-                  onClick={() => { void sendTo(person); }}
-                >
-                  <Avatar user={person} size={64} />
-                  <b>{person.name || person.username}</b>
-                  {busyId === person.id && <span className="share-person-busy">{IC.send}</span>}
+          {confirmTo ? (
+            <div className="share-confirm">
+              <Avatar user={confirmTo} size={64} />
+              <b>{t('shareConfirm').replace('{name}', confirmTo.name || confirmTo.username)}</b>
+              <span className="share-confirm-handle">@{confirmTo.username}</span>
+              <div className="share-confirm-actions">
+                <button type="button" className="ghost-btn" disabled={!!busyId} onClick={() => setConfirmTo(null)}>{t('cancel')}</button>
+                <button type="button" className="share-confirm-send" disabled={!!busyId} onClick={() => void sendTo(confirmTo)}>
+                  {IC.send}{t('send')}
                 </button>
-              ))}
+              </div>
             </div>
+          ) : (
+            <>
+              <span className="share-section-label">{heading}</span>
+              {people.length === 0 ? (
+                <p className="share-empty">{t('shareSearch')}</p>
+              ) : (
+                <div className="share-grid">
+                  {people.map(person => (
+                    <button
+                      type="button"
+                      key={person.username}
+                      className="share-person"
+                      onClick={() => setConfirmTo(person)}
+                    >
+                      <Avatar user={person} size={64} />
+                      <b>{person.name || person.username}</b>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </>
           )}
         </div>
 

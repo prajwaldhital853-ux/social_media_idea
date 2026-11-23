@@ -234,10 +234,9 @@ a:focus:not(:focus-visible) {
   text-decoration: none;
 }
 
-/* Wallet, Settings, Post and the reader's own face form one stack at the
-   rail's foot; the free space stays above it, under the nav. */
+/* More, Wallet, Settings, Post and the reader's own face continue the nav's
+   list without a band of empty space between Marketplace and More. */
 .rail-foot {
-  margin-top: auto;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -7269,6 +7268,7 @@ a.market-card { text-decoration: none; }
     background: var(--paper);
   }
   .rail-nav { gap: 2px; }
+  .rail-foot { gap: 2px; }
   .rail-bottom { gap: 6px; }
   .nav-item { gap: 14px; padding: 9px 12px; border-radius: 12px; font-size: 15px; font-weight: 600; }
   .nav-item svg { width: 22px; height: 22px; }
@@ -8192,6 +8192,7 @@ html { overscroll-behavior-y: none; }
   grid-template-columns: minmax(0, 1fr);
   place-items: center;
   padding: 20px 14px calc(20px + env(safe-area-inset-bottom));
+  overscroll-behavior: contain;
 }
 
 .share-sheet {
@@ -8206,6 +8207,7 @@ html { overscroll-behavior-y: none; }
   padding: 12px 16px 14px;
   box-shadow: var(--shadow-lg);
   min-height: 0;
+  overscroll-behavior: contain;
 }
 
 .share-head {
@@ -8357,24 +8359,49 @@ html { overscroll-behavior-y: none; }
   overflow: hidden;
   word-break: break-word;
 }
-.share-person-busy {
-  position: absolute;
-  top: 8px;
-  right: 12px;
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
-  background: var(--brand);
-  color: var(--on-brand);
-  display: grid;
-  place-items: center;
-}
-.share-person-busy svg { width: 14px; height: 14px; fill: currentColor; }
 .share-empty {
   margin: 6px 2px;
   color: var(--muted);
   font-size: 13px;
 }
+
+/* Tapping a face asks before it sends: the list gives way to the question. */
+.share-confirm {
+  min-height: 210px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 16px 8px;
+  text-align: center;
+}
+.share-confirm b {
+  font-size: 15.5px;
+  line-height: 1.35;
+  max-width: 34ch;
+}
+.share-confirm-handle { color: var(--muted); font-size: 12.5px; }
+.share-confirm-actions { display: flex; gap: 8px; margin-top: 12px; }
+.share-confirm-send {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 18px;
+  border-radius: 9999px;
+  background: var(--brand);
+  color: var(--on-brand);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
+  transition: filter .15s ease, transform .15s ease;
+}
+.share-confirm-send svg { width: 15px; height: 15px; fill: currentColor; }
+.share-confirm-send:hover { filter: brightness(.94); }
+.share-confirm-send:active { transform: scale(.97); }
+.share-confirm-send:disabled { opacity: .55; cursor: not-allowed; }
 
 .share-apps {
   flex: none;
