@@ -79,7 +79,7 @@ export default function ReactionButton({ targetType, targetId, small, kinds, ext
     return () => { document.removeEventListener('pointerdown', outside); document.removeEventListener('keydown', key); window.removeEventListener('scroll', onScroll, true); window.removeEventListener('resize', close); };
   }, [position]);
   return <div className={`react-wrap ${small ? 'small' : ''}`}>
-    <button ref={button} type="button" className={`action-btn reaction-trigger ${mine ? 'reacted' : ''} ${pop ? 'pop' : ''}`} aria-label={openOnClick ? 'Choose reaction' : t(mine || 'like')} aria-pressed={!!mine} aria-haspopup="dialog" aria-expanded={!!position} title={openOnClick ? 'Tap to choose a reaction' : 'Press and hold for reactions'} onPointerEnter={e => { if (e.pointerType === 'mouse') hoverIn(); }} onPointerDown={e => {
+    <button ref={button} type="button" className={`action-btn reaction-trigger ${mine ? 'reacted' : ''} ${mine === 'like' ? 'is-like' : ''} ${pop ? 'pop' : ''}`} aria-label={openOnClick ? 'Choose reaction' : t(mine || 'like')} aria-pressed={!!mine} aria-haspopup="dialog" aria-expanded={!!position} title={openOnClick ? 'Tap to choose a reaction' : 'Press and hold for reactions'} onPointerEnter={e => { if (e.pointerType === 'mouse') hoverIn(); }} onPointerDown={e => {
       if (e.button !== 0) return;
       cancel(); clearHover(); held.current = false; origin.current = { x: e.clientX, y: e.clientY };
       // A press that began here may end on an emoji the tray offers, and the

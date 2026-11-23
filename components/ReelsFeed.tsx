@@ -335,11 +335,6 @@ export default function ReelsFeed({ initialKey }: { initialKey?: string }) {
                       </button>
                       <span>{shareCount > 0 ? compact(shareCount) : 'Share'}</span>
                     </div>
-                    {(slide.post.views ?? 0) > 0 && (
-                      <div className="reel-rail-item reel-views">
-                        <span>{compact(slide.post.views ?? 0)} {t('views')}</span>
-                      </div>
-                    )}
                   </div>
                   <div className="reel-meta">
                     <Link href={`/u/${slide.author.username}`} className="reel-author">

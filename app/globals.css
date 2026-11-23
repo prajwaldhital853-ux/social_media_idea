@@ -3523,6 +3523,12 @@ body::-webkit-scrollbar {
   color: #ffd9dc;
 }
 
+/* A plain like reads as blue here too, lifted toward the sky so it survives the
+   dark viewer behind it. */
+.media-page-actions .action-btn.reacted.is-like {
+  color: #9cc3ff;
+}
+
 .media-page-actions .reaction-tray {
   color: var(--ink);
 }
@@ -3915,6 +3921,13 @@ body::-webkit-scrollbar {
 
 .reel-rail-item .reaction-trigger.reacted {
   border-color: rgba(255, 93, 108, 0.55);
+}
+
+/* Same verb, same colour: a plain like on a reel is blue, and the disc
+   reactions keep the colours they arrive with. */
+.reel-rail-item .reaction-trigger.is-like {
+  color: #5b9bff;
+  border-color: rgba(91, 155, 255, 0.55);
 }
 
 .reel-rail-item .reaction-trigger svg {
@@ -7446,8 +7459,6 @@ a.market-card { text-decoration: none; }
    it one — so the like count measures from the disc rather than the row, and
    has to be pushed the row's own padding to land in the same band as the rest. */
 .reel-rail-item .reaction-trigger > span { bottom: -15px; }
-.reel-views { padding-bottom: 2px; }
-.reel-views > span { position: static; transform: none; width: auto; font-size: 11.5px; }
 
 /* Sorting a person's reels is a question about that person, so the control sits
    on their profile — and it reads as three quiet words above the grid rather
@@ -7669,7 +7680,8 @@ button.profile-stat:hover b, a.profile-stat:hover b { color: var(--red); }
   text-align: left;
 }
 
-.reaction-summary:hover { background: var(--tint); }
+/* The underline is the whole hover: a plate behind the chips is the gray card a
+   tap leaves stuck on a hand. */
 .reaction-summary:hover .reaction-names { text-decoration: underline; }
 
 .reaction-stack { display: inline-flex; align-items: center; flex: none; }
@@ -7705,13 +7717,27 @@ button.profile-stat:hover b, a.profile-stat:hover b { color: var(--red); }
   background: none;
 }
 
-.post-actions .reaction-trigger.action-btn:hover { background: var(--tint); }
+/* A tap leaves its ghost behind: `:hover` outlives the click on a hand, and the
+   button takes focus after a reaction is chosen on a desk, so the gray plate
+   under the icon stays up long after the reaction landed. This row answers with
+   the icon and the number changing colour, never with a card behind them. */
+.post-actions .action-btn:hover { background: none; }
+
+.post-actions .action-btn:focus-visible {
+  background: none;
+  outline: 2px solid var(--brand-ring);
+  outline-offset: 2px;
+}
 
 .post-actions .reaction-trigger.action-btn.reacted {
   background: none;
   border-color: transparent;
   color: var(--brand);
 }
+
+/* A plain like is Facebook's blue; the disc reactions bring their own colours,
+   so only the thumb and the number it stands for move. */
+.post-actions .reaction-trigger.action-btn.is-like { color: var(--title-link); }
 
 /* Every control in the row reads at one size, so the verbs stop outweighing
    the sentence above them. */
