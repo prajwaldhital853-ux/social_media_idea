@@ -598,6 +598,14 @@ a:focus:not(:focus-visible) {
   background: var(--tint);
 }
 
+/* That lift is a feed affordance — it says the card is a door you can walk
+   through. On a page that already IS the thread, or already IS the person,
+   graying the whole card reads as a bug, not an invitation. */
+.thread-view .post:hover,
+.profile-view .post:hover {
+  background: none;
+}
+
 .post-top {
   display: flex;
   gap: 12px;
@@ -6942,6 +6950,7 @@ button.admin-stat:hover { background: var(--brand-tint); transform: translateY(-
 
 /* ---------- Phase 8: people pages ---------- */
 .people-page { animation: fadeIn .2s ease; padding-bottom: 32px; }
+.people-page-note { margin: 10px 16px 0; font-size: 13px; color: var(--muted); }
 .people-page-owner {
   display: flex; align-items: center; gap: 12px; margin: 12px 16px 4px; padding: 10px 12px;
   border: 1px solid var(--line); border-radius: 14px; background: var(--surface);
@@ -7250,9 +7259,9 @@ a.market-card { text-decoration: none; }
    second card under it, so the feed column opens on the first
    post and the gap between the two cards disappears.
    ============================================================ */
-.topbar-tabs { display: none; align-items: center; gap: 4px; }
+.topbar-tabs { display: none; align-items: center; gap: 14px; }
 .topbar-tab {
-  padding: 8px 15px;
+  padding: 7px 12px;
   border-radius: 9999px;
   font-size: 14px;
   font-weight: 650;
