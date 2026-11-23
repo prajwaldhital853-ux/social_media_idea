@@ -1,6 +1,7 @@
 from django.db import IntegrityError, transaction
 from django.db.models import Q
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from rest_framework import serializers, status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -8,10 +9,21 @@ from rest_framework.response import Response
 
 from apps.accounts.models import User
 from apps.common.pagination import KeysetPagination
+from apps.notifications.models import Notification
 from apps.notifications.services import email_activity, notify
 from apps.profiles.models import Profile
 
 from .models import Block, Follow
+
+
+def _settle_asks(recipient, asker):
+    """An ask that has been answered, declined or withdrawn waits for nobody,
+    so the bell that announced it stops counting. The point is reached on the
+    requests page, and the reader should not have to visit Notifications to
+    clear a dot for a decision they have already made."""
+    Notification.objects.filter(
+        recipient=recipient, actor=asker, kind='follow_request', read_at__isnull=True
+    ).update(read_at=timezone.now())
 
 
 class FollowUserSerializer(serializers.ModelSerializer):
@@ -75,7 +87,12 @@ def follow(request):
 @permission_classes([IsAuthenticated])
 def unfollow(request, username):
     target = get_object_or_404(User, username=username)
+    edge = Follow.objects.filter(follower=request.user, followee=target).first()
     deleted, _ = Follow.objects.filter(follower=request.user, followee=target).delete()
+    # Withdrawing an ask takes the question out of the other member's hands, so
+    # the bell that carried it stops counting too.
+    if edge is not None and edge.status == Follow.Status.PENDING:
+        _settle_asks(target, request.user)
     # Same reasoning as a repeat follow: an edge already gone is a stale client,
     # not a failure, and a 404 here bounces an honest unfollow tap into a toast.
     return Response({'detail': 'Removed.' if deleted else 'Nothing to remove.', 'removed': bool(deleted)})
@@ -159,6 +176,10 @@ def request_action(request, pk, action):
         )
     if edge is None:
         return Response({'detail': 'No follow request from that account is waiting.', 'status': 'gone'}, status=404)
+    # Whichever way this ends, the ask is dealt with: the row is answered, or it
+    # was answered already. Either way the bell that announced it has nothing
+    # left to wait for, so it is cleared here rather than in Notifications.
+    _settle_asks(request.user, edge.follower)
     if edge.status != Follow.Status.PENDING:
         return Response({'status': edge.status})
     if action == 'accept':

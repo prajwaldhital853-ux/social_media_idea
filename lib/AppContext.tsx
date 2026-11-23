@@ -935,7 +935,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
             return;
           }
         }
-        if (existing.status === 'pending') showToast('Follow request cancelled.');
+        if (existing.status === 'pending') {
+          // Withdrawing the ask settles the other member's bell row server-side;
+          // this reader's own counters are re-read so nothing waits on a visit
+          // to Notifications.
+          void pullBadges();
+          showToast('Follow request cancelled.');
+        }
         return;
       }
       const target = dbRef.current.users.find(u => u.id === targetId);
@@ -984,6 +990,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       } catch (err) {
         if (err instanceof ApiError && err.status === 404) {
           dropEdge(followerId, self.id);
+          // Nothing was waiting, so whatever the bell said about this ask is
+          // already out of date — the withdraw settled it.
+          void pullBadges();
           showToast('That request is no longer waiting.');
           return;
         }
@@ -991,6 +1000,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         showToast(errText(err, 'That request could not be updated.'));
         return;
       }
+      // Answering on this page is the whole point of the notification, so the
+      // server clears the row and the badge is re-read to agree with it.
+      void pullBadges();
     }
     if (accept) notify(followerId, 'follow', 'accepted your follow request', `/u/${self.username}`, self.username);
     showToast(accept ? 'Follow request accepted.' : 'Follow request declined.');

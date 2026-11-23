@@ -351,7 +351,16 @@ export default function UserProfilePage() {
             ) : suspended && !own ? (
               <p className="feed-empty">{t('suspNotice')}</p>
             ) : posts.length === 0 ? (
-              <p className="feed-empty">{t('noPosts')}</p>
+              // The row above already knows the author's total; until this page's
+              // first rows land, saying "no posts" would contradict it.
+              serverMode && !authorPosts.loaded ? (
+                <div className="feed-skeleton" aria-hidden="true">
+                  <div className="feed-skeleton-head"><span className="sk-avatar" /><span className="sk-lines"><i /><i /></span></div>
+                  <div className="sk-block" />
+                </div>
+              ) : (
+                <p className="feed-empty">{t('noPosts')}</p>
+              )
             ) : (
               <>
                 {posts.slice(0, postLimit).map(post => <PostCard key={post.id} post={post} author={user} />)}
