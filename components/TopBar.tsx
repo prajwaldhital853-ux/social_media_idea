@@ -15,7 +15,7 @@ import { IC } from '@/lib/icons';
 type Panel = 'none' | 'messages' | 'notifications';
 
 export default function TopBar() {
-  const { me, db, t, feedTab, setFeedTab } = useApp();
+  const { me, db, t, feedTab, setFeedTab, updateLang } = useApp();
   const pathname = usePathname();
   const [panel, setPanel] = useState<Panel>('none');
   const msgBox = useRef<HTMLDivElement>(null);
@@ -35,6 +35,7 @@ export default function TopBar() {
   const unreadMsg = db.unread ? db.unread.messages : (me ? db.messages.filter(m => m.to === me.id && !m.read).length : 0);
   const unreadNotif = db.unread ? db.unread.notifications : (me ? db.notifications.filter(n => n.uid === me.id && !n.read).length : 0);
   const badge = (n: number) => (n > 9 ? '9+' : String(n));
+  const ne = db.lang === 'ne';
 
   return (
     <header className="topbar">
@@ -108,6 +109,22 @@ export default function TopBar() {
           </button>
           {panel === 'notifications' && <NotificationPanel close={close} />}
         </div>
+        {/* Eng on one side, नेप on the other, and the knob slides to whichever
+            half is switched on. The same 40px the bell and the theme button take,
+            and it only paints on the desktop bar — a phone has the drawer. */}
+        <button
+          type="button"
+          role="switch"
+          aria-checked={db.lang === 'ne'}
+          aria-label="Switch language"
+          title={ne ? 'नेपाली' : 'English'}
+          className={`lang-switch ${ne ? 'ne' : ''}`}
+          onClick={() => updateLang(ne ? 'en' : 'ne')}
+        >
+          <span className={`lang-opt ${ne ? '' : 'on'}`}>Eng</span>
+          <span className={`lang-opt ${ne ? 'on' : ''}`}>नेप</span>
+          <span className="lang-knob" aria-hidden="true" />
+        </button>
         {!me && (
           <span className="topbar-auth">
             <Link href="/signup" className="topbar-signup">{t('signup')}</Link>

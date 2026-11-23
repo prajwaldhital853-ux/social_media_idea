@@ -7,7 +7,7 @@ import Avatar from './Avatar';
 import { IC } from '@/lib/icons';
 
 export default function NavRail() {
-  const { me, logout, openDrawer, t, feature, openCreateChooser } = useApp();
+  const { me, logout, t, feature, openCreateChooser } = useApp();
   const pathname = usePathname();
   const router = useRouter();
 
@@ -35,10 +35,10 @@ export default function NavRail() {
       </nav>
 
       <div className="rail-foot">
-        <button type="button" className="nav-item" onClick={openDrawer}>
-          {IC.menu}
-          <span>{t('more')}</span>
-        </button>
+        <Link href="/saved" className={`nav-item ${pathname.startsWith('/saved') ? 'active' : ''}`}>
+          {IC.bookmark}
+          <span>{t('saved')}</span>
+        </Link>
         <Link href="/wallet" className={`nav-item ${pathname.startsWith('/wallet') ? 'active' : ''}`}>
           {IC.wallet}
           <span>{t('wallet')}</span>

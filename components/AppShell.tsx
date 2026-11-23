@@ -90,9 +90,14 @@ export default function AppShell({ children }: AppShellProps) {
           {!focusedPage && profilePage && <SiteFooter />}
         </div>
       </main>
-      <aside className="side-calm">
-        <SuggestCard />
-      </aside>
+      {/* The people page is itself a column of suggested faces; a second
+          "Suggested for you" beside it only pushed the list down — and an empty
+          calm band is still a band, so the whole column goes. */}
+      {pathname !== '/people' && (
+        <aside className="side-calm">
+          <SuggestCard />
+        </aside>
+      )}
       <Drawer />
       <MobileNav />
       <CreatePostModal />
