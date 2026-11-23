@@ -7642,7 +7642,7 @@ button.profile-stat:hover b, a.profile-stat:hover b { color: var(--red); }
   display: flex;
   align-items: center;
   min-width: 0;
-  margin: -1px 0 -6px;
+  margin: -1px 0 -12px;
   padding: 0 2px;
 }
 
@@ -7653,7 +7653,7 @@ button.profile-stat:hover b, a.profile-stat:hover b { color: var(--red); }
   min-width: 0;
   max-width: 100%;
   margin-left: -7px;
-  padding: 4px 7px;
+  padding: 2px 7px;
   border: 0;
   border-radius: 9px;
   background: none;
@@ -7670,10 +7670,10 @@ button.profile-stat:hover b, a.profile-stat:hover b { color: var(--red); }
 .reaction-chip { display: inline-flex; flex: none; }
 /* The ring is what makes three discs read as three different things people felt
    instead of one smear of colour where they overlap. */
-.reaction-chip + .reaction-chip { margin-left: -6px; }
+.reaction-chip + .reaction-chip { margin-left: -5px; }
 .reaction-chip .reaction-art {
-  width: 21px;
-  height: 21px;
+  width: 18px;
+  height: 18px;
   border-radius: 50%;
   border: 1.5px solid var(--paper);
   background: var(--paper);
@@ -7687,27 +7687,31 @@ button.profile-stat:hover b, a.profile-stat:hover b { color: var(--red); }
 }
 
 /* The one button in the row that carries a colour of its own, because it is the
-   one that answers for a feeling rather than a chore. */
+   one that answers for a feeling rather than a chore — and the colour is the
+   disc, not a card drawn behind it. */
 .post-actions .reaction-trigger.action-btn {
   min-width: 0;
   min-height: 40px;
   gap: 6px;
   padding: 5px 13px 5px 8px;
-  border: 1px solid var(--line);
+  border: 0;
   border-radius: 999px;
-  background: var(--surface);
-  transition: background 0.15s ease, border-color 0.15s ease;
+  background: none;
 }
 
-.post-actions .reaction-trigger.action-btn:hover { background: var(--tint); border-color: var(--muted); }
+.post-actions .reaction-trigger.action-btn:hover { background: var(--tint); }
 
 .post-actions .reaction-trigger.action-btn.reacted {
-  background: var(--brand-tint);
-  border-color: var(--brand-ring);
+  background: none;
+  border-color: transparent;
   color: var(--brand);
 }
 
-.post-actions .reaction-trigger.action-btn .reaction-art { width: 22px; height: 22px; }
+/* Every control in the row reads at one size, so the verbs stop outweighing
+   the sentence above them. */
+.post-actions .action-btn svg { width: 17px; height: 17px; }
+
+.post-actions .reaction-trigger.action-btn .reaction-art { width: 21px; height: 21px; }
 .post-actions .reaction-trigger.action-btn > span { font-variant-numeric: tabular-nums; }
 
 /* The count moving under a thumb that just changed hands is the whole receipt
@@ -7721,15 +7725,15 @@ button.profile-stat:hover b, a.profile-stat:hover b { color: var(--red); }
 }
 
 @media (min-width: 1024px) {
-  .reaction-row { margin: -3px 0 -9px; }
+  .reaction-row { margin: -4px 0 -13px; }
 }
 
 @media (max-width: 768px) {
-  .reaction-row { margin: -1px 0 -5px; }
+  .reaction-row { margin: -1px 0 -11px; }
   .reaction-summary { font-size: 14px; }
-  .reaction-chip .reaction-art { width: 24px; height: 24px; }
+  .reaction-chip .reaction-art { width: 21px; height: 21px; }
   .post-actions .reaction-trigger.action-btn { min-height: 44px; padding: 6px 15px 6px 9px; }
-  .post-actions .reaction-trigger.action-btn .reaction-art { width: 26px; height: 26px; }
+  .post-actions .reaction-trigger.action-btn .reaction-art { width: 23px; height: 23px; }
 }
 
 /* ===== Everyone who reacted ===== */
