@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import AppShell from '@/components/AppShell';
@@ -26,10 +26,21 @@ export default function ListingPage() {
   const [editing, setEditing] = useState(false);
   const [promote, setPromote] = useState(false);
   const [report, setReport] = useState(false);
+  const [descOpen, setDescOpen] = useState(false);
+  const [descTall, setDescTall] = useState(false);
+  const descRef = useRef<HTMLParagraphElement>(null);
 
   const listing = db.listings.find(l => l.id === String(params.id || ''));
   // A listing opened from a link is not necessarily in any page of the market.
   const { remote, pull } = useRemoteRow('listing', String(params.id || ''), !!listing);
+
+  // Measured while the box is still clamped, so a short description never
+  // grows a "See more" it does not need.
+  useEffect(() => {
+    const el = descRef.current;
+    if (!el || descOpen) return;
+    setDescTall(el.scrollHeight > el.clientHeight + 2);
+  }, [listing?.desc, descOpen, db.lang]);
 
   if (!listing || listing.status === 'removed') {
     if (remote === 'loading') {
@@ -171,7 +182,16 @@ export default function ListingPage() {
               <span>{IC.globe}{listing.location}</span>
               <span>{IC.calendar}{ago(listing.ts, lang)}</span>
             </p>
-            {listing.desc && <p className="listing-desc">{listing.desc}</p>}
+            {listing.desc && (
+              <div className="listing-desc-wrap">
+                <p ref={descRef} className={`listing-desc ${descOpen ? '' : 'listing-desc-clamp'}`}>{listing.desc}</p>
+                {descTall && (
+                  <button type="button" className="listing-desc-more" onClick={() => setDescOpen(v => !v)}>
+                    {descOpen ? t('seeLess') : t('seeMore')}
+                  </button>
+                )}
+              </div>
+            )}
 
             <div className="listing-actions">
               {mine ? (

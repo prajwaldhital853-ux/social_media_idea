@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useApp } from '@/lib/AppContext';
 import { useBackClose } from '@/lib/useBackClose';
@@ -18,6 +18,28 @@ interface ListingFormProps {
   listingId?: string;
 }
 
+// Five pictures and five hundred words: past that the description stops being
+// a description and becomes a page nobody finishes on a phone.
+const MAX_PHOTOS = 5;
+const MAX_WORDS = 500;
+
+const wordsOf = (value: string) => (value.trim() ? value.trim().split(/\s+/).length : 0);
+
+/** Keep the text exactly as typed, up to the last word the limit allows. */
+function capWords(value: string): string {
+  if (wordsOf(value) <= MAX_WORDS) return value;
+  let out = '';
+  let seen = 0;
+  for (const chunk of value.split(/(\s+)/)) {
+    if (!chunk) continue;
+    if (/^\s+$/.test(chunk)) { out += chunk; continue; }
+    if (seen === MAX_WORDS) break;
+    out += chunk;
+    seen += 1;
+  }
+  return out.trimEnd();
+}
+
 export default function ListingForm({ onClose, onSaved, listingId }: ListingFormProps) {
   const { db, me, t, setDb, merge, showToast } = useApp();
   const existing = listingId ? db.listings.find(l => l.id === listingId) : undefined;
@@ -33,14 +55,22 @@ export default function ListingForm({ onClose, onSaved, listingId }: ListingForm
   const [sending, setSending] = useState<{ name: string; pct: number } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   useBackClose(true, onClose);
+  // While the sheet is open it is the page: without this the marketplace behind
+  // it scrolls under the form and the reader loses the row they came from.
+  useEffect(() => {
+    if (!me || typeof document === 'undefined') return;
+    const had = document.body.classList.contains('noscroll');
+    document.body.classList.add('noscroll');
+    return () => { if (!had) document.body.classList.remove('noscroll'); };
+  }, [me]);
 
   if (typeof document === 'undefined' || !me) return null;
 
   const addFiles = async (files: FileList | null) => {
     if (!files || busy) return;
     const images = Array.from(files).filter(f => f.type.startsWith('image/'));
-    if (media.length + images.length > 4) {
-      setError(t('e_photos4'));
+    if (media.length + images.length > MAX_PHOTOS) {
+      setError(t('e_photos5'));
       return;
     }
     setBusy(true);
@@ -53,9 +83,9 @@ export default function ListingForm({ onClose, onSaved, listingId }: ListingForm
           setSending({ name: file.name, pct: total > 0 ? Math.min(99, Math.round(sent / total * 100)) : 0 });
         }));
       }
-      setMedia(prev => [...prev, ...added].slice(0, 4));
+      setMedia(prev => [...prev, ...added].slice(0, MAX_PHOTOS));
     } catch (e) {
-      setError(e instanceof Error ? e.message : t('e_photos4'));
+      setError(e instanceof Error ? e.message : t('e_photos5'));
     } finally {
       setBusy(false);
       setSending(null);
@@ -66,7 +96,7 @@ export default function ListingForm({ onClose, onSaved, listingId }: ListingForm
   const addUrl = () => {
     const value = url.trim();
     if (!/^https?:\/\/\S+/i.test(value)) { setError(t('e_url')); return; }
-    if (media.length >= 4) { setError(t('e_photos4')); return; }
+    if (media.length >= MAX_PHOTOS) { setError(t('e_photos5')); return; }
     setMedia(prev => [...prev, { type: 'image' as const, src: value }]);
     setUrl('');
     setError('');
@@ -144,7 +174,14 @@ export default function ListingForm({ onClose, onSaved, listingId }: ListingForm
           </label>
           <label className="field">
             <span>{t('description')}</span>
-            <textarea value={desc} onChange={e => setDesc(e.target.value)} maxLength={1200} rows={3} placeholder={t('description')}/>
+            <textarea
+              value={desc}
+              onChange={e => setDesc(capWords(e.target.value))}
+              maxLength={5000}
+              rows={3}
+              placeholder={t('description')}
+            />
+            <span className="field-count">{wordsOf(desc)}/{MAX_WORDS}</span>
           </label>
           <div className="field-row">
             <label className="field">
@@ -171,14 +208,14 @@ export default function ListingForm({ onClose, onSaved, listingId }: ListingForm
                   <button type="button" aria-label={t('del')} onClick={() => setMedia(prev => prev.filter((_, j) => j !== i))}>{IC.x}</button>
                 </span>
               ))}
-              {media.length < 4 && (
+              {media.length < MAX_PHOTOS && (
                 <button type="button" className="listing-form-add" disabled={busy} onClick={() => fileRef.current?.click()}>
                   {IC.camera}<span>{sending ? `${sending.pct}%` : busy ? '…' : t('addPhotos')}</span>
                 </button>
               )}
             </div>
             <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" multiple hidden onChange={e => addFiles(e.target.files)}/>
-            <span className="field-count">{media.length}/4</span>
+            <span className="field-count">{media.length}/{MAX_PHOTOS}</span>
           </div>
 
           {sending && (
@@ -189,7 +226,7 @@ export default function ListingForm({ onClose, onSaved, listingId }: ListingForm
             </div>
           )}
 
-          {media.length < 4 && (
+          {media.length < MAX_PHOTOS && (
             <div className="listing-url-row">
               <input
                 type="url"

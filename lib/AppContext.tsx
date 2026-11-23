@@ -67,6 +67,8 @@ interface AppContextType {
   logAudit: (action: string, target: string, reason: string) => void;
   requestPromotion: (targetType: 'post' | 'listing', targetId: string, cfg: PromoConfig) => Promise<boolean>;
   cancelPromotion: (id: string) => Promise<void>;
+  setPromotionStatus: (id: string, action: 'pause' | 'resume') => Promise<void>;
+  updatePromotion: (id: string, patch: PromoTarget) => Promise<boolean>;
   activePromo: (targetType: 'post' | 'listing', targetId: string) => Promotion | undefined;
   promoEligible: (promo: Promotion) => boolean;
   updateLang: (lang: 'en' | 'ne') => void;
@@ -134,6 +136,14 @@ export interface PromoConfig {
   ageMax: number;
   country: string;
   city: string;
+}
+
+export interface PromoTarget {
+  category?: string;
+  ageMin?: number;
+  ageMax?: number;
+  country?: string;
+  city?: string;
 }
 
 export interface SignupPayload {
@@ -1554,6 +1564,56 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const setPromotionStatus = async (id: string, action: 'pause' | 'resume') => {
+    const promo = db.promotions.find(p => p.id === id);
+    if (!promo) return;
+    const paint = (status: Promotion['status']) => setDb(prev => ({
+      ...prev,
+      promotions: prev.promotions.map(p => (p.id === id ? { ...p, status } : p)),
+    }));
+    paint(action === 'pause' ? 'paused' : 'active');
+    if (!API_ENABLED) return;
+    try {
+      merge({ promotions: [mapPromotion(await api.post<any>(`/api/promotions/${id}/${action}/`, {}))] });
+    } catch (err) {
+      paint(promo.status);
+      showToast(errText(err, 'The promotion could not be updated.'));
+    }
+  };
+
+  /** Retarget a running campaign; the budget was spent at request time and stays put. */
+  const updatePromotion = async (id: string, patch: PromoTarget): Promise<boolean> => {
+    const promo = db.promotions.find(p => p.id === id);
+    if (!promo) return false;
+    const next: Promotion = {
+      ...promo,
+      category: patch.category ?? promo.category,
+      ageMin: patch.ageMin ?? promo.ageMin,
+      ageMax: patch.ageMax ?? promo.ageMax,
+      country: patch.country ?? promo.country,
+      city: patch.city ?? promo.city,
+    };
+    setDb(prev => ({ ...prev, promotions: prev.promotions.map(p => (p.id === id ? next : p)) }));
+    if (!API_ENABLED) {
+      showToast(t('promoUpdated'));
+      return true;
+    }
+    try {
+      merge({
+        promotions: [mapPromotion(await api.patch<any>(`/api/promotions/${id}/`, {
+          category: next.category, age_min: next.ageMin, age_max: next.ageMax,
+          country: next.country, city: next.city,
+        }))],
+      });
+      showToast(t('promoUpdated'));
+      return true;
+    } catch (err) {
+      setDb(prev => ({ ...prev, promotions: prev.promotions.map(p => (p.id === id ? promo : p)) }));
+      showToast(errText(err, 'The promotion could not be saved.'));
+      return false;
+    }
+  };
+
   const updateLang = (lang: 'en' | 'ne') => {
     setDb(prev => ({ ...prev, lang }));
     if (typeof window !== 'undefined') localStorage.setItem(LANG_KEY, lang);
@@ -1580,6 +1640,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         sharePost, countView, blockUser, unblockUser, isBlocked, blockedIds,
         notify, markAllRead, markRead, sendMessage, markThreadRead, addReport, logAudit,
         requestPromotion, cancelPromotion, activePromo, promoEligible,
+        setPromotionStatus, updatePromotion,
         updateLang, login, logout, isAuthenticated,
         theme, toggleTheme,
         drawerOpen, openDrawer: () => setDrawerOpen(true), closeDrawer: () => setDrawerOpen(false),
