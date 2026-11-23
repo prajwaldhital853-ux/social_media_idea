@@ -30,6 +30,7 @@ from apps.marketplace.models import Listing
 from apps.notifications.services import notify
 from apps.posts.models import Post
 from apps.promotions.models import Promotion
+from apps.promotions.services import people_reached
 from apps.wallet.models import Transaction, Wallet, apply as coin_apply
 
 from . import review, settings_store
@@ -38,8 +39,10 @@ from .models import PromoReview
 
 # The ranking the feed reads. Shipped as the numbers the code used to hard-code, so
 # opening this desk changes nothing on the site until somebody turns a dial.
-WEIGHTS = ('algo_weight_like', 'algo_weight_comment', 'algo_weight_save', 'algo_weight_watch')
-ALGO_KEYS = WEIGHTS + ('algo_relevance_floor', 'promo_daily_cap', 'promo_repeat_limit', 'promo_organic_gap')
+WEIGHTS = ('algo_weight_like', 'algo_weight_comment', 'algo_weight_save', 'algo_weight_watch',
+           'algo_weight_follow')
+ALGO_KEYS = WEIGHTS + ('promo_weight_target', 'algo_relevance_floor', 'promo_daily_cap',
+                       'promo_repeat_limit', 'promo_organic_gap')
 SWITCH = 'promo_global_pause'
 PACKAGES = 'promo_packages'
 TURNTABLES = ALGO_KEYS + (SWITCH,)
@@ -263,6 +266,12 @@ def row(promo, last=None, deep=False):
         'coins': str(promo.budget),
         'impressions': promo.impressions,
         'clicks': promo.clicks,
+        # What the package promised against what the ledger has actually handed out.
+        # A payer reading "up to 40,000 people" beside a campaign that reached 300 is
+        # a conversation the desk should be able to have without opening a console.
+        'reach_bought': (pack or {}).get('reach_max') or 0,
+        'delivered': promo.impressions,
+        'people': people_reached(promo.pk) if deep else None,
         'created_at': promo.created_at.isoformat(),
         'ends_at': promo.ends_at.isoformat() if promo.ends_at else None,
         'age_hours': round((now - promo.created_at).total_seconds() / 3600, 1),
@@ -367,6 +376,7 @@ def algorithm():
     return {
         'lines': lines,
         'weights': {key: values[key] for key in WEIGHTS},
+        'target': values['promo_weight_target'],
         'floor': values['algo_relevance_floor'],
         'caps': {'daily': values['promo_daily_cap'], 'repeat': values['promo_repeat_limit'],
                  'gap': values['promo_organic_gap']},
@@ -423,6 +433,7 @@ def public_config():
     tuned = algorithm()
     return {
         'weights': tuned['weights'],
+        'target': tuned['target'],
         'floor': tuned['floor'],
         'caps': tuned['caps'],
         'global_pause': tuned['global_pause'],

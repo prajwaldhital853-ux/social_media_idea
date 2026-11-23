@@ -12,13 +12,14 @@ interface SessionValue {
   session: Session | null;
   /** What step two of the sign-in has to ask for: a QR, or a code. */
   challenge: SignInChallenge | null;
-  /** True when a screen hit the door mid-work: the 30-minute window ran out. */
+  /** True when a screen hit the door mid-work and the seat has to sign in again. */
   lapsed: boolean;
   /** Recovery codes handed out at first enrolment — shown once, then gone. */
   newCodes: string[] | null;
   error: string | null;
   busy: boolean;
-  signIn: (identifier: string, password: string) => Promise<'enrol' | 'code' | 'rejected'>;
+  signIn: (identifier: string, password: string) => Promise<'password' | 'enrol' | 'code' | 'rejected'>;
+  setPassword: (password: string, confirm: string) => Promise<'enrol' | 'code' | 'rejected'>;
   verify: (code: string) => Promise<boolean>;
   signOut: () => Promise<void>;
   resume: () => Promise<void>;
@@ -79,6 +80,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       });
       setChallenge(started);
       setLapsed(false);
+      if (started.code === 'password_change_required') return 'password';
       return started.code === 'two_factor_enrolment' ? 'enrol' : 'code';
     } catch (err) {
       const failure = err as ApiError;
@@ -89,6 +91,24 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       if (failure.code === 'two_factor_locked') {
         setChallenge({ detail: failure.message, code: failure.code as SignInChallenge['code'], username: identifier, retry_in: Number(failure.data.retry_in || 0) });
       }
+      return 'rejected';
+    } finally {
+      setBusy(false);
+    }
+  }, []);
+
+  const setPassword = useCallback(async (password: string, confirm: string) => {
+    setBusy(true);
+    setError(null);
+    try {
+      const next = await api<SignInChallenge>('admin/session/password/', {
+        method: 'POST',
+        body: { password, confirm },
+      });
+      setChallenge(next);
+      return next.code === 'two_factor_enrolment' ? 'enrol' : 'code';
+    } catch (err) {
+      setError((err as ApiError).message);
       return 'rejected';
     } finally {
       setBusy(false);
@@ -154,6 +174,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     error,
     busy,
     signIn,
+    setPassword,
     verify,
     signOut,
     resume: load,
@@ -162,7 +183,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     clearLapsed: () => setLapsed(false),
     can: (key: string) => !!session && (session.role === 'superadmin' || session.permissions.includes(key)),
     isSuperadmin: session?.role === 'superadmin',
-  }), [status, session, challenge, lapsed, newCodes, error, busy, signIn, verify, signOut, load, noteGate]);
+  }), [status, session, challenge, lapsed, newCodes, error, busy, signIn, setPassword, verify, signOut, load, noteGate]);
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
 }

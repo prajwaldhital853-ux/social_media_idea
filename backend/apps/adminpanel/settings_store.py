@@ -120,6 +120,11 @@ DEFAULTS = {
     'algo_weight_save': (5, 'int', 'Weight of a save', 'Points a saved post in this category is worth.', 'promo'),
     'algo_weight_watch': (1, 'int', 'Weight of a reel watched',
                          'Points a reel this person played is worth.', 'promo'),
+    'algo_weight_follow': (6, 'int', 'Weight of following the payer',
+                           'Points a person who already follows this payer is worth.', 'promo'),
+    'promo_weight_target': (1, 'int', 'Weight of one audience match',
+                            'Points for each of age band, country and city the payer asked for '
+                            'that this person actually fits.', 'promo'),
     'algo_relevance_floor': (2, 'int', 'Lowest score worth showing',
                              'A campaign below this relevance is skipped instead of padded into the feed.',
                              'promo'),

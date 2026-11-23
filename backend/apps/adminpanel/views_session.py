@@ -2,20 +2,23 @@
 
 The main site's `/api/auth/login/` is deliberately not reused and not modified. A
 staff member browsing the platform as a person goes through that door; this door
-only opens once an authenticator code has been proved, and the proof is carried by
-its own 30-minute cookie so every admin endpoint can demand it again.
+only opens once an authenticator code has been proved, and the proof rides in a
+cookie the browser discards when the tab closes — so the seat ends when the person
+at it says so, not when a clock runs out.
 """
 
 import secrets
 from urllib.parse import quote
 
 from django.conf import settings
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError
 from django.utils import timezone
 from rest_framework.decorators import api_view, authentication_classes, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
-from apps.accounts.auth import clear_auth_cookies, hash_code, set_auth_cookies
+from apps.accounts.auth import REFRESH_TTL, clear_auth_cookies, hash_code, set_auth_cookies
 from apps.accounts.models import User
 from apps.common.ratelimit import client_ip, enforce
 
@@ -23,7 +26,7 @@ from . import rbac, totp
 from .journal import record
 from .models import StaffAccount, PASSWORD_LOCK_MINUTES, TOTP_LOCK_MINUTES
 from .tokens import (
-    ADMIN_COOKIE, ADMIN_TTL, SETUP_COOKIE, SETUP_TTL, clear_admin_cookies, issue_admin_token,
+    ADMIN_COOKIE, SETUP_COOKIE, SETUP_TTL, clear_admin_cookies, issue_admin_token,
     read_admin_token, set_admin_cookie,
 )
 
@@ -106,14 +109,16 @@ def _grant(request, staff, kind, amr):
         'role': staff.effective_role,
         'permissions': keys,
         'permission_keys': detailed,
-        'admin_expires_at': int((timezone.now() + ADMIN_TTL).timestamp()),
+        # None, not a countdown: this window is closed by the person at the desk,
+        # by the tab, or by the machine — never by a clock they cannot see running.
+        'admin_expires_at': None,
         'amr': list(amr),
         'recovery_codes': codes,
         'recovery_left': len(staff.recovery_codes),
         'enrolled': staff.is_enrolled,
     })
-    set_auth_cookies(response, staff.user, device_id=f'admin:{kind}')
-    set_admin_cookie(response, issue_admin_token(staff.user, amr=amr), kind='admin')
+    set_auth_cookies(response, staff.user, device_id=f'admin:{kind}', access_ttl=REFRESH_TTL)
+    set_admin_cookie(response, issue_admin_token(staff.user, amr=amr, ttl=None), kind='admin')
     response.delete_cookie(SETUP_COOKIE, path='/')
     staff.note_login_success()
     record(staff.user, 'admin_login', staff.user.username, f'{kind} via {amr[0]}')
@@ -157,6 +162,18 @@ def admin_login(request):
             'recovery_left': len(staff.recovery_codes),
         }, status=423)
 
+    if staff.must_change_password:
+        # The console wrote this password, so nobody else may have kept it. The
+        # seat is real and the door is not open until the person behind it has
+        # replaced it with one only they know.
+        response = Response({
+            'detail': 'Choose your own password to finish signing in.',
+            'code': 'password_change_required',
+            'username': user.username,
+        }, status=202)
+        set_admin_cookie(response, issue_admin_token(user, kind='setup', ttl=SETUP_TTL), kind='setup')
+        return response
+
     if not staff.is_enrolled:
         response = Response({
             'detail': 'Set up an authenticator app to finish signing in.',
@@ -175,6 +192,56 @@ def admin_login(request):
     }, status=202)
     set_admin_cookie(response, issue_admin_token(user, kind='setup', ttl=SETUP_TTL), kind='setup')
     return response
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def admin_set_password(request):
+    """Replace the password the console handed out, then carry on to the code.
+
+    Reaching this view already proves the first password: the setup cookie is only
+    minted after a match. What it does not prove is that the person typing now is
+    the person the seat was made for — which is exactly why the answer is a new
+    secret and not the one that was read out to them.
+    """
+    user = _principal(request)
+    if user is None:
+        return Response({'detail': 'Start the sign-in again.', 'code': 'session_expired'}, status=400)
+    staff = StaffAccount.for_user(user)
+    if not staff.must_change_password:
+        return Response({'detail': 'This seat already sets its own password.'}, status=400)
+
+    password = str(request.data.get('password') or '')
+    confirm = str(request.data.get('confirm') or '')
+    enforce(f'admin-password:{user.username}', 5, 300)
+    if confirm and confirm != password:
+        return Response({'detail': 'The two passwords do not match.'}, status=400)
+    if user.check_password(password):
+        return Response({'detail': 'That is the password we gave you. Choose one only you know.'}, status=400)
+    try:
+        validate_password(password, user)
+    except ValidationError as exc:
+        return Response({'detail': ' '.join(exc.messages), 'code': 'password_weak'}, status=400)
+
+    user.set_password(password)
+    user.save(update_fields=['password'])
+    staff.must_change_password = False
+    staff.save(update_fields=['must_change_password'])
+    record(user, 'staff_password_change', user.username, 'first password replaced at the door')
+
+    if not staff.is_enrolled:
+        return Response({
+            'detail': 'Password set. Now set up an authenticator app to finish signing in.',
+            'code': 'two_factor_enrolment',
+            'username': user.username,
+            'totp': _enrolment_payload(staff),
+        }, status=202)
+    return Response({
+        'detail': 'Password set. Enter the six-digit code from your authenticator app.',
+        'code': 'two_factor_required',
+        'username': user.username,
+        'recovery_left': len(staff.recovery_codes),
+    }, status=202)
 
 
 @api_view(['POST'])
@@ -254,7 +321,7 @@ def admin_session(request):
         'permission_keys': detailed,
         'enrolled': staff.is_enrolled,
         'recovery_left': len(staff.recovery_codes),
-        'admin_expires_at': int(payload['exp']) if payload else None,
+        'admin_expires_at': payload.get('exp') if payload else None,
         'last_admin_login_at': staff.last_admin_login_at,
     })
 

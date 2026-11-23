@@ -6,18 +6,25 @@ import QRCode from 'qrcode';
 import { IC } from '@/lib/icons';
 import { useSession } from '@/lib/session';
 
-type Step = 'wait' | 'credentials' | 'enrol' | 'code' | 'codes';
+type Step = 'wait' | 'credentials' | 'password' | 'enrol' | 'code' | 'codes';
 
 /**
  * Two doors, one screen: the password proves you know something, the
  * authenticator code proves you hold something. Nothing between them hands out a
  * session — the console's own cookie only ever appears after the code is proved.
+ * A seat handed out a temporary password has to trade it for its own before the
+ * code is even asked for.
  */
 export default function LoginPage() {
   const router = useRouter();
-  const { status, session, challenge, newCodes, error, busy, signIn, verify, forgetCodes } = useSession();
+  const {
+    status, session, challenge, newCodes, error, busy,
+    signIn, setPassword: choosePassword, verify, forgetCodes,
+  } = useSession();
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
+  const [fresh, setFresh] = useState('');
+  const [repeat, setRepeat] = useState('');
   const [code, setCode] = useState('');
   const [useRecovery, setUseRecovery] = useState(false);
   const [restart, setRestart] = useState(false);
@@ -42,6 +49,7 @@ export default function LoginPage() {
   }, [status, newCodes, router]);
 
   const enrolling = challenge?.code === 'two_factor_enrolment';
+  const choosing = challenge?.code === 'password_change_required';
   const enrolment = enrolling ? challenge?.totp : undefined;
 
   useEffect(() => {
@@ -65,6 +73,7 @@ export default function LoginPage() {
   const step: Step = newCodes ? 'codes'
     : status === 'loading' ? 'wait'
     : restart || !challenge ? 'credentials'
+    : choosing ? 'password'
     : enrolling ? 'enrol' : 'code';
 
   const submitCredentials = async (event: FormEvent) => {
@@ -72,6 +81,18 @@ export default function LoginPage() {
     setRestart(false);
     const outcome = await signIn(identifier.trim(), password);
     if (outcome === 'code') setCode('');
+    if (outcome === 'password') {
+      // The temporary password is a one-time read: do not keep it in the page
+      // while the seat types its own.
+      setPassword('');
+      setFresh('');
+      setRepeat('');
+    }
+  };
+
+  const submitPassword = async (event: FormEvent) => {
+    event.preventDefault();
+    await choosePassword(fresh, repeat);
   };
 
   const submitCode = async (event: FormEvent) => {
@@ -145,6 +166,46 @@ export default function LoginPage() {
             <p className="fineprint">
               Eight tries per minute, then the attempt pauses. Wrong passwords never say whether
               the username exists.
+            </p>
+          </form>
+        )}
+
+        {step === 'password' && (
+          <form className="login-card" onSubmit={submitPassword}>
+            <header className="step-head">
+              <h2>Choose your own password</h2>
+              <p>
+                {challenge?.username
+                  ? <>You signed in as <b>{challenge.username}</b> with the temporary password a Superadmin gave you. That one stops working now — this seat needs a password only you know.</>
+                  : <>That was the temporary password a Superadmin gave you. It stops working now — this seat needs a password only you know.</>}
+              </p>
+            </header>
+            <label className="field">
+              <span>New password</span>
+              <input
+                type="password" value={fresh} onChange={event => setFresh(event.target.value)}
+                autoComplete="new-password" autoFocus required
+                placeholder="At least 8 characters"
+              />
+            </label>
+            <label className="field">
+              <span>Type it again</span>
+              <input
+                type="password" value={repeat} onChange={event => setRepeat(event.target.value)}
+                autoComplete="new-password" required
+                placeholder="••••••••"
+              />
+            </label>
+            {error && <p className="card-error">{IC.alert}<span>{error}</span></p>}
+            <button
+              className="btn primary wide" type="submit"
+              disabled={busy || fresh.length < 8 || repeat !== fresh}
+            >
+              {busy ? 'Saving…' : 'Set my password'}
+            </button>
+            <p className="fineprint">
+              It cannot be the temporary one, your own name, your username or a common password.
+              The next step is the authenticator code — nothing is signed in until that is proved.
             </p>
           </form>
         )}

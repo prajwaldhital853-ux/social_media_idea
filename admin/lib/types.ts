@@ -7,6 +7,7 @@ export type GateCode =
   | 'two_factor_enrolment'
   | 'two_factor_required'
   | 'two_factor_locked'
+  | 'password_change_required'
   | 'permission_required'
   | 'code_rejected'
   | 'session_expired'
@@ -64,6 +65,8 @@ export interface Seat {
   last_admin_login_at: string | null;
   recovery_left: number;
   codes_locked_until: string | null;
+  /** True until the person has replaced the password the console wrote for them. */
+  must_change_password: boolean;
 }
 
 export interface PermissionEntry {
@@ -344,6 +347,27 @@ export interface ShelfRow {
 export interface ShelfPage extends Page<ShelfRow> {
   counts: Record<string, number>;
   type: ContentKind;
+}
+
+/**
+ * One target opened as a page of its own. Both moderation desks land here, so
+ * the report queue and the takedown shelf are two ways of reaching the same
+ * thing rather than two screens that disagree about what it says.
+ */
+export interface ReviewCase {
+  target: string;
+  kind: ContentKind;
+  id: number;
+  missing: boolean;
+  content: ContentPreview | null;
+  matches: string[];
+  pile: Pile;
+  campaigns: number;
+  permission: string | null;
+  actions: Decision[];
+  reports: ReportBrief[];
+  notices: NoticeRow[];
+  history: { id: number; action: string; actor: string | null; at: string; detail: string }[];
 }
 
 export interface TermRow {
@@ -731,6 +755,11 @@ export interface PromoRow {
   coins: string;
   impressions: number;
   clicks: number;
+  /** What the package promised, what the ledger has handed out, and how many
+   *  separate people that reached — `people` is only answered on one campaign. */
+  reach_bought: number;
+  delivered: number;
+  people: number | null;
   created_at: string;
   ends_at: string | null;
   age_hours: number;
@@ -781,6 +810,7 @@ export interface PackageDesk {
 export interface AlgorithmDesk {
   lines: SettingLine[];
   weights: Record<string, number>;
+  target: number;
   floor: number;
   caps: { daily: number; repeat: number; gap: number };
   global_pause: boolean;
@@ -796,6 +826,7 @@ export interface AlgorithmDesk {
 /** What the member site is told, with nobody signed in. */
 export interface ReachConfig {
   weights: Record<string, number>;
+  target: number;
   floor: number;
   caps: { daily: number; repeat: number; gap: number };
   global_pause: boolean;

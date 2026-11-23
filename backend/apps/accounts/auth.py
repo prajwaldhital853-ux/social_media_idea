@@ -26,8 +26,8 @@ def _encode(payload, ttl):
     return jwt.encode(body, settings.SECRET_KEY, algorithm=ALGORITHM), body
 
 
-def issue_access(user):
-    token, _ = _encode({'sub': str(user.pk), 'username': user.username, 'type': 'access'}, ACCESS_TTL)
+def issue_access(user, ttl=ACCESS_TTL):
+    token, _ = _encode({'sub': str(user.pk), 'username': user.username, 'type': 'access'}, ttl)
     return token
 
 
@@ -57,13 +57,17 @@ def hash_code(code):
     return hashlib.sha256(f'{settings.SECRET_KEY}:{code}'.encode()).hexdigest()
 
 
-def set_auth_cookies(response, user, device_id=''):
+def set_auth_cookies(response, user, device_id='', access_ttl=None):
     # Render and Vercel both speak https to the browser, so the cookies have to
     # carry Secure; local dev runs DEBUG=1 over http and must keep working.
     secure = not settings.DEBUG
+    # The console asks for a longer access token than a member sign-in: it has no
+    # refresh dance of its own, so a 15-minute access cookie reads to the person
+    # sitting at it as being signed out mid-task.
     response.set_cookie(
-        'exposing_access', issue_access(user),
-        max_age=int(ACCESS_TTL.total_seconds()), httponly=True, samesite='Lax', path='/', secure=secure,
+        'exposing_access', issue_access(user, access_ttl or ACCESS_TTL),
+        max_age=int((access_ttl or ACCESS_TTL).total_seconds()),
+        httponly=True, samesite='Lax', path='/', secure=secure,
     )
     response.set_cookie(
         'exposing_refresh', issue_refresh(user, device_id),

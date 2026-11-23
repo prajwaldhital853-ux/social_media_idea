@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import AppShell from '@/components/AppShell';
 import PostCard from '@/components/PostCard';
+import NoticeBanner from '@/components/NoticeBanner';
 import Avatar from '@/components/Avatar';
 import VerifiedBadge from '@/components/VerifiedBadge';
 import EditProfileModal from '@/components/EditProfileModal';
@@ -321,6 +322,7 @@ export default function UserProfilePage() {
             <span className="profile-meta-chip">{IC.calendar}{t('joined')} {joinedLabel}</span>
           </div>
           {suspended && <p className="profile-susp">{IC.flag}{t('suspNotice')} {user.susp?.reason}</p>}
+          <NoticeBanner notices={user.notices} full/>
 
           <div className="profile-stats">
             <button

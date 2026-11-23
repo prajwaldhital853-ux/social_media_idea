@@ -7,7 +7,7 @@ from rest_framework.response import Response
 from apps.common.pagination import KeysetPagination
 from apps.common.ratelimit import client_ip, enforce
 from apps.follows.models import Block, Follow
-from apps.promotions.services import promoted_for
+from apps.promotions.services import plan, serving
 
 from .models import Post, PostMedia
 from .serializers import PostSerializer
@@ -126,8 +126,11 @@ def feed(request):
     following = bool(request.query_params.get('following'))
     # The sponsored slot belongs at the head of a newest-first page. On an
     # ascending walk it would sit above rows that are chronologically older.
-    promos = [] if (cursor or following or request.query_params.get('order') == 'oldest') else [
-        p for p in promoted_for(request.user) if p.target_type == 'post' and p.target_id.isdigit()]
+    dial = None
+    promos = []
+    if not (cursor or following or request.query_params.get('order') == 'oldest'):
+        promos, dial = plan(request.user, KeysetPagination.page_size, target_type='post')
+        promos = [p for p in promos if p.target_id.isdigit()]
     promo_ids = [int(p.target_id) for p in promos]
     promo_by_post = {promo_id: promo for promo_id, promo in zip(promo_ids, promos)}
     qs = visible_posts(request.user)
@@ -152,12 +155,32 @@ def feed(request):
         found = {p.pk: p for p in visible_posts(request.user).filter(
             pk__in=promo_ids, status=Post.Status.LIVE
         )}
-        lead_posts = [found[post_id] for post_id in promo_ids if post_id in found]
-        lead = PostSerializer(lead_posts, many=True, context={'request': request}).data
-        for item in lead:
-            promo = promo_by_post[item['id']]
+        served = [promo_by_post[post_id] for post_id in promo_ids if post_id in found]
+        lead = PostSerializer([found[post_id] for post_id in promo_ids if post_id in found],
+                              many=True, context={'request': request}).data
+        for item, promo in zip(lead, served):
             item['promoted'] = True
             item['promo_id'] = promo.pk
             item['promo'] = promo_card(promo)
-        data = lead + data
+        # The gap the desk asked for is measured in ordinary posts, so a second
+        # paid card waits that many rows behind the first. A card that never gets
+        # its gap is not shown, and is not written to the ledger either: the reach
+        # a payer is charged for is the reach a person actually saw.
+        step = max(1, dial['gap']) if dial else 1
+        paid = list(zip(lead, served))
+        merged, since, shown = [], 0, []
+        if paid:
+            card, promo = paid.pop(0)
+            merged.append(card)
+            shown.append(promo)
+        for item in data:
+            if paid and since >= step:
+                card, promo = paid.pop(0)
+                merged.append(card)
+                shown.append(promo)
+                since = 0
+            merged.append(item)
+            since += 1
+        data = merged
+        serving(request.user, shown)
     return paginator.get_paginated_response(data)

@@ -31,11 +31,41 @@ COIN_PRICE = 10
 DEMO_GOOGLE = {'email': 'guest@demo.test', 'name': 'Guest Demo', 'sub': 'demo-google-guest'}
 
 
+def shelf():
+    """The packages the site sells right now: the console's shelf when a seat has
+    edited one, the shipped list otherwise.
+
+    The storefront and the delivery engine have to read the same shelf. A payer
+    quoted "up to 40,000 people" by a page that was edited, while the feed measures
+    the run against the shipped number, is a campaign that quietly never finishes.
+    """
+    try:
+        from apps.adminpanel import promotions as desk
+        return desk.packages()
+    except Exception:  # noqa: BLE001 - no settings table yet means the shipped shelf stands
+        return PACKAGE_CATALOG
+
+
 def package_by_id(package_id):
-    for pack in PACKAGE_CATALOG:
+    for pack in shelf():
         if pack['id'] == package_id:
             return pack
     return None
+
+
+def wording():
+    """The first-load card the console writes: the welcome sentence, the tagline
+    and the contacts under them.
+
+    The wording desk owns these lines and a visitor reads the card before any
+    session exists, so it travels with the rest of the public config rather than
+    behind a login. No desk on this database means no wording, not an error.
+    """
+    try:
+        from apps.adminpanel import views_welcome
+        return views_welcome.card()
+    except Exception:  # noqa: BLE001 - the shipped strings stand until the desk is written
+        return {}
 
 
 def features():
@@ -56,7 +86,7 @@ def features():
 def client_config():
     return {
         'features': features(),
-        'packages': PACKAGE_CATALOG,
+        'packages': shelf(),
         'categories': MARKETPLACE_CATEGORIES,
         'countries': COUNTRIES,
         'minAge': MIN_AGE,
@@ -65,6 +95,7 @@ def client_config():
         'rateLimits': bool(getattr(settings, 'EXPOSING_RATE_LIMITS', True)),
         'googleClientId': getattr(settings, 'GOOGLE_CLIENT_ID', ''),
         'demoGoogle': DEMO_GOOGLE if features()['googleDemo'] else None,
+        'wording': wording(),
         'bank': {
             'name': os.environ.get('EXPOSING_BANK_NAME', 'Nepal Bank Ltd'),
             'account': os.environ.get('EXPOSING_BANK_ACCOUNT', '0120-4455-8891'),

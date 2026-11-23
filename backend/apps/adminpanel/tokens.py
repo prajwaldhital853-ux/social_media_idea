@@ -2,10 +2,12 @@
 
 Kept apart from `apps.accounts.auth` because the two tokens answer different
 questions. An `exposing_access` cookie says "this person signed in"; an
-`exposing_admin` cookie says "this person proved a second factor for the admin
-console within the last 30 minutes", and only the second one opens these doors.
-The main login flow is untouched, so a staff member can still browse the site
-the way the rest of the platform expects.
+`exposing_admin` cookie says "this browser proved a second factor for the admin
+console", and only the second one opens these doors. It carries no expiry and no
+`max-age`: it is handed out when the seat signs in and the browser throws it away
+when the tab or the machine closes, which is the lifetime a person at a desk
+actually expects. The main login flow is untouched, so a staff member can still
+browse the site the way the rest of the platform expects.
 """
 
 import base64
@@ -20,7 +22,6 @@ from django.conf import settings
 from django.utils import timezone
 
 ALGORITHM = 'HS256'
-ADMIN_TTL = timedelta(minutes=30)
 SETUP_TTL = timedelta(minutes=10)
 
 ADMIN_COOKIE = 'exposing_admin'
@@ -55,11 +56,15 @@ def decrypt_secret(token):
 
 def _encode(payload, ttl):
     now = timezone.now()
-    body = {**payload, 'iat': int(now.timestamp()), 'exp': int((now + ttl).timestamp()), 'jti': uuid.uuid4().hex}
+    body = {**payload, 'iat': int(now.timestamp()), 'jti': uuid.uuid4().hex}
+    # No ttl means no expiry claim at all: the proof lives as long as the browser
+    # does, which is what a seat means by "do not sign me out while I am working".
+    if ttl is not None:
+        body['exp'] = int((now + ttl).timestamp())
     return jwt.encode(body, settings.SECRET_KEY, algorithm=ALGORITHM), body
 
 
-def issue_admin_token(user, kind='admin', amr=('totp',), ttl=ADMIN_TTL):
+def issue_admin_token(user, kind='admin', amr=('totp',), ttl=None):
     return _encode({'sub': str(user.pk), 'type': f'admin_{kind}', 'amr': list(amr)}, ttl)[0]
 
 
@@ -82,11 +87,14 @@ def read_admin_token(token, kind='admin'):
 
 def set_admin_cookie(response, token, kind='admin'):
     secure = not settings.DEBUG
+    # The admin proof is written without an expiry: the browser drops it when the
+    # tab or the machine closes, and nothing else ends it. The sign-in step keeps
+    # its own short clock, because a half-finished password check is not a session.
+    max_age = None if kind == 'admin' else int(SETUP_TTL.total_seconds())
     response.set_cookie(
         ADMIN_COOKIE if kind == 'admin' else SETUP_COOKIE,
         token,
-        max_age=int((ADMIN_TTL if kind == 'admin' else SETUP_TTL).total_seconds()),
-        httponly=True, samesite='Lax', path='/', secure=secure,
+        max_age=max_age, httponly=True, samesite='Lax', path='/', secure=secure,
     )
     return response
 

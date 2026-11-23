@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from apps.common.api import user_reaction_map
+from apps.common.api import notice_map, user_reaction_map
 from apps.posts.views import visible_posts
 
 from .models import Comment
@@ -12,6 +12,7 @@ class CommentListSerializer(serializers.ListSerializer):
         self.context['_comment_reactions'] = user_reaction_map(
             self.context.get('request'), 'comment', [c.pk for c in comments]
         )
+        self.context['_comment_notices'] = notice_map('comment', [c.pk for c in comments])
         return [self.child.to_representation(comment) for comment in comments]
 
 
@@ -23,13 +24,14 @@ class CommentSerializer(serializers.ModelSerializer):
     reply_count = serializers.SerializerMethodField()
     my_reaction = serializers.SerializerMethodField()
     is_post_author = serializers.SerializerMethodField()
+    notices = serializers.SerializerMethodField()
 
     class Meta:
         model = Comment
         fields = [
             'id', 'post', 'author', 'author_username', 'author_name', 'author_avatar_url', 'author_verified',
             'parent', 'media_index', 'text', 'status', 'like_count', 'reply_count', 'my_reaction',
-            'is_post_author', 'created_at',
+            'is_post_author', 'notices', 'created_at',
         ]
         read_only_fields = ['id', 'author', 'status', 'like_count', 'created_at']
         list_serializer_class = CommentListSerializer
@@ -49,6 +51,12 @@ class CommentSerializer(serializers.ModelSerializer):
                 self.context.get('request'), 'comment', [obj.pk]
             )
         return self.context['_comment_reactions'].get(str(obj.pk))
+
+    def get_notices(self, obj):
+        # A page fills this once; a single read asks for its own row.
+        if '_comment_notices' not in self.context:
+            self.context['_comment_notices'] = notice_map('comment', [obj.pk])
+        return self.context['_comment_notices'].get(str(obj.pk), [])
 
     def validate(self, attrs):
         post = attrs.get('post') or (self.instance.post if self.instance else None)

@@ -1,6 +1,6 @@
 import {
   Audit, CoinRequest, Comment, Follow, LedgerEntry, Listing, Media, Message,
-  Notification, NotificationKind, Post, Promotion, Reaction, ReactionKind, Report,
+  Notice, Notification, NotificationKind, Post, Promotion, Reaction, ReactionKind, Report,
   Settings, User,
 } from './types';
 
@@ -116,6 +116,10 @@ export function mapPerson(c: any): User {
   else delete person.phone;
   if (c.links !== undefined) person.links = Array.isArray(c.links) ? c.links : [];
   else delete person.links;
+  // A notice about the account only rides on a full profile read, and an empty
+  // list is left off rather than stored, so a thin card cannot clear one.
+  if (c.notices !== undefined) person.notices = mapNotices(c.notices);
+  else delete person.notices;
   return person as unknown as User;
 }
 
@@ -128,6 +132,19 @@ export function mapMedia(m: any): Media {
   };
 }
 
+/**
+ * The notices standing on one piece of content. Empty comes back as undefined
+ * rather than an empty array, so a card the server said nothing about keeps the
+ * shape it had and prints no banner.
+ */
+function mapNotices(rows: any): Notice[] | undefined {
+  if (!Array.isArray(rows) || rows.length === 0) return undefined;
+  return rows.map((n: any) => ({
+    id: idOf(n.id), text: n.text || '', reason: n.reason || undefined,
+    by: n.by || undefined, ts: at(n.at),
+  }));
+}
+
 export function mapPost(row: any): Post {
   const mediaKinds: Record<string, Record<string, number>> | undefined = row.media_reaction_kinds;
   return {
@@ -137,6 +154,7 @@ export function mapPost(row: any): Post {
     media: (row.media || []).map((m: any) => ({ ...mapMedia(m), reactionKinds: mediaKinds?.[String(m.position)] })),
     ts: at(row.created_at),
     status: row.status === 'hidden' || row.status === 'removed' ? row.status : 'live',
+    notices: mapNotices(row.notices),
     edited: !!row.edited,
     mood: row.mood || undefined,
     place: row.place || undefined,
@@ -163,6 +181,7 @@ export function mapComment(row: any): Comment {
     text: row.text || '',
     ts: at(row.created_at),
     status: row.status === 'removed' ? 'removed' : 'live',
+    notices: mapNotices(row.notices),
     likes: amount(row.like_count),
     replies: amount(row.reply_count),
     isPostAuthor: !!row.is_post_author,
@@ -182,6 +201,7 @@ export function mapListing(row: any): Listing {
     media: images.length ? images : row.image_url ? [{ type: 'image' as const, src: mediaUrl(row.image_url) }] : [],
     ts: at(row.created_at),
     status: row.status || 'active',
+    notices: mapNotices(row.notices),
     condition: row.condition || '',
     sellerName: row.seller_name || undefined,
     sellerUsername: row.seller_username || undefined,
@@ -332,6 +352,13 @@ export function mapSettings(config: any): Settings {
     categories: config.categories || [],
     googleClientId: config.googleClientId || undefined,
     demoGoogle: config.demoGoogle || null,
+    wording: config.wording && Object.keys(config.wording).length
+      ? {
+        message: config.wording.message || '',
+        tagline: config.wording.tagline || '',
+        contact: (config.wording.contact || []).map((row: any) => ({ label: row.label || '', value: row.value || '' })),
+      }
+      : undefined,
   };
 }
 

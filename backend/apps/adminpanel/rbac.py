@@ -150,7 +150,7 @@ def check(request, keys):
         return denial(
             'two_factor_required', 'Confirm your authenticator code to continue.',
             username=user.username,
-            admin_expires_at=int(payload['exp']) if payload else None,
+            admin_expires_at=payload.get('exp') if payload else None,
         )
     missing = [key for key in keys if key not in permissions_for(staff)]
     if missing:

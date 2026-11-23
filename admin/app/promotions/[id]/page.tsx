@@ -173,7 +173,9 @@ export default function CampaignPage({ params }: { params: { id: string } }) {
                 <li><span>Category</span><b>{row.category || 'not narrowed'}</b></li>
                 <li><span>Bought</span><b>{stamp(row.created_at)}</b></li>
                 <li><span>Ends</span><b>{row.ends_at ? stamp(row.ends_at) : 'no end date'}</b></li>
-                <li><span>Impressions</span><b>{num(row.impressions)}</b></li>
+                <li><span>Impressions</span><b>{num(row.delivered)}</b></li>
+                <li><span>People reached</span><b>{row.people === null ? 'not counted' : num(row.people)}</b></li>
+                <li><span>Reach bought</span><b>{row.reach_bought ? `${num(row.reach_bought)} people` : 'nothing promised'}</b></li>
                 <li><span>Clicks</span><b>{num(row.clicks)}</b></li>
                 <li><span>Standing</span><b><span className={`pill ${standing.tone}`}>{standing.label}</span></b></li>
               </ul>

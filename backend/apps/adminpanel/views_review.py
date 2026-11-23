@@ -16,6 +16,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
+from apps.accounts.models import User
 from apps.comments.models import Comment
 from apps.common.api import person
 from apps.common.pagination import KeysetPagination
@@ -28,11 +29,48 @@ from .journal import record
 from .models import PolicyCategory, PolicyTerm, PublicNotice
 
 SHELF_MODELS = {'post': Post, 'comment': Comment, 'listing': Listing}
+
+# What a seat is allowed to say when it is looking for a thing. An id is not on
+# this list: nobody is handed the number at the end of an address bar, so a
+# moderator has the words of the post and the name of whoever wrote it — and a
+# name is worth searching even when it is spelled only partly right.
+WHO = ('{who}__username', '{who}__email', '{who}__first_name',
+       '{who}__last_name', '{who}__profile__display_name')
 SEARCH_FIELDS = {
-    'post': ('text', 'author__username'),
-    'comment': ('text', 'author__username', 'post__text'),
-    'listing': ('title', 'description', 'seller__username'),
+    'post': ('text',) + tuple(field.format(who='author') for field in WHO),
+    'comment': ('text', 'post__text') + tuple(field.format(who='author') for field in WHO),
+    'listing': ('title', 'description') + tuple(field.format(who='seller') for field in WHO),
 }
+
+
+def _accounts_named(query):
+    """Every account whose username, email or name carries the word."""
+    return User.objects.filter(
+        Q(username__icontains=query) | Q(email__icontains=query)
+        | Q(first_name__icontains=query) | Q(last_name__icontains=query)
+        | Q(profile__display_name__icontains=query)
+    ).values_list('pk', flat=True)[:200]
+
+
+def _named(query):
+    """The reports one word points at — the reporter's, or about the thing named.
+
+    The queue is a list of reports, so searching it for a person means first
+    finding what that person wrote and then the reports sitting on it. A word
+    that matches nothing returns nothing, which is the honest answer.
+    """
+    found = (
+        Q(reporter__username__icontains=query) | Q(reporter__email__icontains=query)
+        | Q(reason__icontains=query) | Q(details__icontains=query)
+    )
+    for kind, fields in SEARCH_FIELDS.items():
+        condition = Q()
+        for field in fields:
+            condition |= Q(**{f'{field}__icontains': query})
+        pks = list(SHELF_MODELS[kind].objects.filter(condition).values_list('pk', flat=True)[:200])
+        found |= Q(target_type=kind, target_id__in=[str(pk) for pk in pks])
+    return found | Q(target_type='user', target_id__in=[str(pk) for pk in _accounts_named(query)])
+
 
 
 def _held(request, key):
@@ -104,10 +142,7 @@ def review_queue(request):
         return Response({'detail': 'Choose open, resolved, dismissed or all.'}, status=400)
     query = (request.query_params.get('q') or '').strip()
     if query:
-        rows = rows.filter(
-            Q(reporter__username__icontains=query) | Q(reason__icontains=query)
-            | Q(details__icontains=query) | Q(target_id__icontains=query)
-        )
+        rows = rows.filter(_named(query))
 
     terms = policy.words()
     paginator = KeysetPagination()
@@ -115,6 +150,70 @@ def review_queue(request):
     response = paginator.get_paginated_response([_report_row(report, terms) for report in page])
     response.data['facets'] = _facets()
     return response
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+@rbac.staff_only('reports')
+def review_case(request):
+    """One target opened as a page: the thing, every report on it, everything done to it.
+
+    The queue groups by target because a seat decides about a post, not about a
+    report. This is what that group looks like unfolded — the same rows the queue
+    builds, unpaginated, because a target has as many reports against it as people
+    have bothered to file and no more. Both desks land here, so the takedown shelf
+    and the report queue are two ways of reaching one page rather than two pages
+    that disagree about what the content says.
+    """
+    target = str(request.query_params.get('target') or '').strip().lower()
+    kind, _, raw_id = target.partition(':')
+    if kind not in review.MODEL:
+        return Response({'detail': 'Name the thing as post:17, comment:17, listing:17 or user:17.'}, status=400)
+    pk = review.pk_of(raw_id)
+    if pk is None:
+        return Response({'detail': f'{raw_id or "Nothing"} is not a number.'}, status=400)
+
+    row = review.row_for(kind, pk)
+    content = review.preview(kind, row) if row is not None else None
+    reports = Report.objects.filter(
+        target_type=kind, target_id=str(pk),
+    ).select_related('reporter', 'reporter__profile').order_by('-created_at')
+    terms = policy.words()
+    haystack = f"{(content or {}).get('text') or ''} {(content or {}).get('title') or ''}"
+    decided = AuditLog.objects.filter(
+        target=f'{kind}:{pk}', action__in=set(review.AUDIT.values()),
+    ).select_related('actor').order_by('-created_at')[:20]
+    return Response({
+        'target': f'{kind}:{pk}',
+        'kind': kind,
+        'id': pk,
+        'missing': row is None,
+        'content': content,
+        'matches': review.match(haystack, terms),
+        'pile': review.pile(kind, pk),
+        'campaigns': review.campaigns_on(kind, pk).count(),
+        'permission': review.KEY_BY_KIND.get(kind),
+        'actions': [] if row is None else review.actions_for(kind, content['state']),
+        'reports': [{
+            'id': report.pk,
+            'reason': report.reason,
+            'details': report.details,
+            'status': report.status,
+            'created_at': report.created_at,
+            'resolved_at': report.resolved_at,
+            'reporter': person(report.reporter),
+        } for report in reports],
+        'notices': [review.notice_row(notice) for notice in PublicNotice.objects.filter(
+            target_type=kind, target_id=str(pk),
+        ).select_related('about', 'actor').order_by('-created_at')[:10]],
+        'history': [{
+            'id': entry.pk,
+            'action': entry.action,
+            'actor': entry.actor.username if entry.actor else None,
+            'at': entry.created_at,
+            'detail': entry.detail,
+        } for entry in decided],
+    })
 
 
 @api_view(['POST'])
@@ -424,7 +523,14 @@ def notice_list(request):
         rows = rows.filter(target_type=kind)
     query = (request.query_params.get('q') or '').strip()
     if query:
-        rows = rows.filter(Q(text__icontains=query) | Q(about__username__icontains=query) | Q(target_id__icontains=query))
+        # No id here either: the sentence and the person are what a seat remembers.
+        rows = rows.filter(
+            Q(text__icontains=query) | Q(reason__icontains=query)
+            | Q(about__username__icontains=query) | Q(about__email__icontains=query)
+            | Q(about__first_name__icontains=query) | Q(about__last_name__icontains=query)
+            | Q(about__profile__display_name__icontains=query)
+            | Q(actor__username__icontains=query)
+        )
     paginator = KeysetPagination()
     page = paginator.paginate_queryset(rows, request)
     return paginator.get_paginated_response([review.notice_row(notice) for notice in page])

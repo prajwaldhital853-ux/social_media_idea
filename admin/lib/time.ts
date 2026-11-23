@@ -20,18 +20,3 @@ export function stamp(value: string | number | null | undefined): string {
   if (Number.isNaN(at)) return '—';
   return new Date(at).toLocaleString();
 }
-
-/** A countdown for the 30-minute admin window, ticking down in the top bar. */
-export function left(unixSeconds: number | null | undefined): string {
-  if (!unixSeconds) return '—';
-  const seconds = Math.round(unixSeconds - Date.now() / 1000);
-  if (seconds <= 0) return 'expired';
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 1) return `${seconds}s left`;
-  return `${minutes} min left`;
-}
-
-export function secondsLeft(unixSeconds: number | null | undefined): number {
-  if (!unixSeconds) return 0;
-  return Math.max(0, Math.round(unixSeconds - Date.now() / 1000));
-}
