@@ -99,7 +99,7 @@ export default function NotificationPanel({ close }: { close: () => void }) {
       </div>
 
       <footer className="panel-foot">
-        <Link href="/notifications" onClick={close}>{t('seeAllNotifications')}</Link>
+        <Link href="/notifications" onClick={() => { closeLayerWithoutBack(); close(); }}>{t('seeAllNotifications')}</Link>
       </footer>
     </div>
   );

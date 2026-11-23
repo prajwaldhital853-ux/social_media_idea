@@ -12,6 +12,10 @@ class User(AbstractUser):
     locked_until = models.DateTimeField(null=True, blank=True)
     suspended_until = models.DateTimeField(null=True, blank=True)
     suspend_reason = models.CharField(max_length=200, blank=True)
+    # Where this account last came in from. A staff ban needs something beyond the
+    # row to close, and these are the only two handles a login leaves behind.
+    last_ip = models.CharField(max_length=60, blank=True)
+    last_device = models.CharField(max_length=80, blank=True)
     # Stamped by seed_demo on every account it owns. The purge in that command may
     # delete only these rows, which is what makes it survivable as a deploy step.
     seeded = models.BooleanField(default=False)
@@ -62,6 +66,7 @@ class EmailOTP(models.Model):
     PURPOSES = [
         ('login', 'New device login'), ('unlock', 'Account unlock'),
         ('verify', 'Email verification'), ('delete', 'Account deletion'),
+        ('reset', 'Password reset'),
     ]
 
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='otps')
@@ -75,3 +80,34 @@ class EmailOTP(models.Model):
 
     class Meta:
         indexes = [models.Index(fields=['user', 'purpose', '-created_at'], name='otp_user_purpose_recent')]
+
+
+class AuthBan(models.Model):
+    """A way into the service that is closed, and until when.
+
+    The lockout used to live only on the User row, so three wrong passwords closed
+    one door and left the others open: the same person signed up again, or took the
+    Google door on the very address that had just locked — which then cleared its own
+    counter. A trip now writes a row for the address, the connection and the browser,
+    and every way in reads them before it looks at a credential.
+    """
+
+    SCOPES = [('email', 'Email address'), ('ip', 'Connection'), ('device', 'Device')]
+    REASONS = [('lock', 'Wrong passwords'), ('admin', 'Staff action'), ('manual', 'Manual ban')]
+
+    scope = models.CharField(max_length=8, choices=SCOPES)
+    value = models.CharField(max_length=190)
+    # The address this ban was raised for, so lifting one account's lock does not
+    # reopen a connection that somebody else's guesswork also closed.
+    identity = models.CharField(max_length=190, blank=True)
+    reason = models.CharField(max_length=8, choices=REASONS, default='lock')
+    until = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [models.Index(fields=['scope', 'value', '-created_at'], name='ban_scope_value_recent')]
+
+    @property
+    def active(self):
+        from django.utils import timezone
+        return self.until > timezone.now()

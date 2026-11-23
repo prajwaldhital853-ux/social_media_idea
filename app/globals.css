@@ -353,6 +353,30 @@ a:focus:not(:focus-visible) {
   fill: var(--ink);
 }
 
+/* The unread count rides the icon rather than the words, so it survives the
+   collapsed rail where the label steps out. */
+.nav-ico {
+  position: relative;
+  display: inline-flex;
+}
+
+.nav-badge {
+  position: absolute;
+  top: -6px;
+  right: -9px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 9999px;
+  background: var(--brand);
+  color: var(--on-brand);
+  font-size: 10px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .post-btn {
   background: var(--brand);
   color: var(--on-brand);
@@ -1681,6 +1705,26 @@ a:focus:not(:focus-visible) {
   cursor: default;
 }
 
+/* Under the sign-in button, where a person looks after the password fails. Small
+   and plain on purpose: it is a way out, not a second call to action. */
+.login-forgot {
+  width: 100%;
+  margin-top: 10px;
+  padding: 2px;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 14px;
+  text-align: center;
+  cursor: pointer;
+}
+
+.login-forgot:hover {
+  color: var(--brand);
+  text-decoration: underline;
+}
+
 /* One tap into the seeded demo account; the credentials stay visible so a
    reviewer can also type them on a keyboard they trust. */
 .login-demo {
@@ -1778,7 +1822,9 @@ a:focus:not(:focus-visible) {
     width: 88px;
   }
 
-  .nav-item span {
+  /* Only the words step out at this width — the icon and the count that hangs
+     off it both stay, or a collapsed rail would hide an unread message. */
+  .nav-item > span:not(.nav-ico) {
     display: none;
   }
 

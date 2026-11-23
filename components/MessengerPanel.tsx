@@ -107,7 +107,7 @@ export default function MessengerPanel({ close }: { close: () => void }) {
       </div>
 
       <footer className="panel-foot">
-        <Link href="/messages" onClick={close}>{t('seeAllMessages')}</Link>
+        <Link href="/messages" onClick={() => { closeLayerWithoutBack(); close(); }}>{t('seeAllMessages')}</Link>
       </footer>
 
       {picker && me && (

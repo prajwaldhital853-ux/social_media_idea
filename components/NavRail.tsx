@@ -1,19 +1,27 @@
 'use client';
 
+import { ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useApp } from '@/lib/AppContext';
 import Avatar from './Avatar';
 import { IC } from '@/lib/icons';
 
+type RailItem = { icon: ReactNode; label: string; href: string; badge?: number };
+
 export default function NavRail() {
-  const { me, logout, t, feature, openCreateChooser } = useApp();
+  const { me, db, logout, t, feature, openCreateChooser } = useApp();
   const pathname = usePathname();
   const router = useRouter();
 
-  const navItems = [
+  // The top bar owns these counts on a phone; on a desktop the rail is the only
+  // column that never scrolls away, so the unread threads belong here too.
+  const unreadMsg = db.unread ? db.unread.messages : (me ? db.messages.filter(m => m.to === me.id && !m.read).length : 0);
+
+  const navItems: RailItem[] = [
     { icon: IC.home, label: t('home'), href: '/' },
     { icon: IC.bell, label: t('notifications'), href: '/notifications' },
+    { icon: IC.msg, label: t('messages'), href: '/messages', badge: unreadMsg },
     { icon: IC.search, label: t('search'), href: '/explore' },
     ...(feature('video') ? [{ icon: IC.video, label: t('video'), href: '/video' }] : []),
     ...(feature('marketplace') ? [{ icon: IC.store, label: t('marketplace'), href: '/marketplace' }] : [])
@@ -28,7 +36,10 @@ export default function NavRail() {
             href={item.href}
             className={`nav-item ${pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href + '/')) ? 'active' : ''}`}
           >
-            {item.icon}
+            <span className="nav-ico">
+              {item.icon}
+              {!!item.badge && <span className="nav-badge">{item.badge > 9 ? '9+' : item.badge}</span>}
+            </span>
             <span>{item.label}</span>
           </Link>
         ))}

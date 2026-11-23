@@ -112,6 +112,10 @@ interface AppContextType {
   verifyCode: (challenge: string | number, code: string) => Promise<AuthResult>;
   resendCode: (challenge: string | number) => Promise<CodeResult>;
   googleSignIn: (token: { id_token?: string; demo?: { email: string; name: string; sub: string } }) => Promise<AuthResult>;
+  /** Step one of a forgotten password: mail a code to the address. */
+  requestPasswordReset: (email: string) => Promise<CodeResult>;
+  /** Step two: the code plus the new password, which signs nobody in. */
+  confirmPasswordReset: (challenge: string | number, code: string, password: string, email?: string) => Promise<AuthResult>;
   updateProfile: (patch: Record<string, any>) => Promise<void>;
   /** Step one: the typed word goes to the server, which mails the code. */
   requestAccountDeletion: (confirm: string) => Promise<{ challenge?: number; dev_code?: string; detail?: string }>;
@@ -178,6 +182,11 @@ export interface AuthResult {
   lockedUntil?: number;
   /** Seconds of cooloff left, counted on the server clock. */
   retryIn?: number;
+  /** A lock closed more than the password box: 'email', 'ip' or 'device'. */
+  banned?: boolean;
+  banScope?: string;
+  /** The account was made by Google and has no password to type. */
+  googleOnly?: boolean;
   attemptsLeft?: number;
   detail?: string;
   errors?: Record<string, string[]>;
@@ -191,6 +200,9 @@ export interface CodeResult {
   expiresIn?: number;
   detail?: string;
   error?: string;
+  /** Seconds until another code can be asked for — the server's number, not a guess. */
+  resendIn?: number;
+  retryIn?: number;
 }
 
 /**
@@ -541,6 +553,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         locked: !!err.data?.locked,
         lockedUntil: at(err.data?.locked_until),
         retryIn: err.data?.retry_in === undefined ? undefined : Number(err.data.retry_in),
+        banned: !!err.data?.banned,
+        banScope: err.data?.scope || undefined,
+        googleOnly: !!err.data?.google_only,
         attemptsLeft: err.data?.attempts_left,
       };
     }
@@ -574,12 +589,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const codeResult = (data: any, err?: unknown): CodeResult => {
-    if (err) return { error: errText(err, 'That request failed. Try again.') };
+    if (err) {
+      const body = err instanceof ApiError ? err.data : null;
+      return {
+        error: errText(err, 'That request failed. Try again.'),
+        resendIn: body?.resend_in === undefined ? undefined : Number(body.resend_in),
+        retryIn: body?.retry_in === undefined ? undefined : Number(body.retry_in),
+      };
+    }
     return {
       challenge: data?.challenge ? idOf(data.challenge) : undefined,
       devCode: data?.dev_code,
       expiresIn: data?.expires_in ? Number(data.expires_in) : undefined,
       detail: data?.detail,
+      resendIn: data?.resend_in === undefined ? undefined : Number(data.resend_in),
+      retryIn: data?.retry_in === undefined ? undefined : Number(data.retry_in),
     };
   };
 
@@ -623,6 +647,29 @@ export function AppProvider({ children }: { children: ReactNode }) {
         return { ok: false, status: 200, needsSignup: true, prefill: data.prefill, detail: data.detail };
       }
       return await finishAuth(data);
+    } catch (err) {
+      return authResult(err);
+    }
+  };
+
+  /** Step one of a reset: the address in, a challenge back. Never says whether it exists. */
+  const requestPasswordReset = async (email: string): Promise<CodeResult> => {
+    try {
+      return codeResult(await api.post('/api/auth/reset/', { email, device_id: api.deviceId() }));
+    } catch (err) {
+      return codeResult(null, err);
+    }
+  };
+
+  /** Step two: the code and the new password. The session is not reopened here. */
+  const confirmPasswordReset = async (
+    challenge: string | number, code: string, password: string, email = '',
+  ): Promise<AuthResult> => {
+    try {
+      const data = await api.post('/api/auth/reset/confirm/', {
+        challenge, code, password, email, device_id: api.deviceId(),
+      });
+      return { ok: true, status: 200, detail: data?.detail };
     } catch (err) {
       return authResult(err);
     }
@@ -1655,6 +1702,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         confirmBox, showConfirm, hideConfirm,
         ready, waking, serverMode, resync, merge,
         signin, signupAccount, verifyCode, resendCode, googleSignIn,
+        requestPasswordReset, confirmPasswordReset,
         updateProfile, requestAccountDeletion, confirmAccountDeletion, loadPerson, loadEntity,
       }}
     >

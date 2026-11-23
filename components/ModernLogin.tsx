@@ -15,10 +15,13 @@ type Step =
 const GOOGLE_KEY = 'exposing-google';
 /** The account seed_demo fills with posts, chats, reels and listings. */
 const DEMO = { email: 'sita@demo.test', password: 'exposing-demo-1' };
-/** What the server locks for when the third password is wrong. */
-const LOCK_SECONDS = 5 * 60;
-
-const mmss = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+/** 4:59, or 6:20:00 — a repeat guesser is told the truth about a longer wait. */
+const clock = (s: number) => {
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = String(s % 60).padStart(2, '0');
+  return h > 0 ? `${h}:${String(m).padStart(2, '0')}:${sec}` : `${m}:${sec}`;
+};
 
 export default function ModernLogin() {
   const { db, t, feature, ready, waking, login, signin, verifyCode, resendCode, googleSignIn, showToast } = useApp();
@@ -34,6 +37,8 @@ export default function ModernLogin() {
   const [googleBusy, setGoogleBusy] = useState(false);
   /** Seconds left on the cooloff, or null once it is over. */
   const [lockedFor, setLockedFor] = useState<number | null>(null);
+  /** Which door the server closed: the account, this browser, or this connection. */
+  const [banScope, setBanScope] = useState('email');
 
   useEffect(() => {
     if (db.meId) router.replace('/');
@@ -92,11 +97,22 @@ export default function ModernLogin() {
       return;
     }
     if (needsSignup(res)) return;
+    // Nothing was guessed wrong here: the account simply has no password to type,
+    // because Google opened it. That is a pointer, not a failure, so it is not
+    // written in red and it spends none of the three tries.
+    if (res.googleOnly) {
+      setError('');
+      setNotice(res.detail || t('googleOnlyHint'));
+      return;
+    }
     if (res.locked) {
       setError('');
       setNotice('');
+      setBanScope(res.banScope === 'ip' || res.banScope === 'device' ? res.banScope : 'email');
       const secs = res.retryIn ?? (res.lockedUntil ? Math.ceil((res.lockedUntil - Date.now()) / 1000) : null);
-      setLockedFor(secs === null || secs <= 0 ? 0 : Math.min(secs, LOCK_SECONDS));
+      // The wait is the server's number, not this screen's guess: a repeat guesser
+      // is locked for longer than the first cooloff and must see that.
+      setLockedFor(secs === null || secs <= 0 ? 0 : secs);
       return;
     }
     // The password was right and the address was never confirmed, which the old
@@ -246,6 +262,10 @@ export default function ModernLogin() {
     : !!db.settings.googleClientId || feature('googleLogin') || feature('googleDemo');
   const googleLabel = db.settings.googleClientId ? t('google') : t('demoGoogle');
   const canSubmit = email.trim().length > 0 && password.length > 0 && !busy;
+  // One panel, three answers: the account cooled off, this browser is barred, or
+  // the network outside it is. They wait differently, so they must read differently.
+  const banTitle = banScope === 'ip' ? t('banIpTitle') : banScope === 'device' ? t('banDeviceTitle') : t('lockedTitle');
+  const banDetail = banScope === 'ip' ? t('banIpDetail') : banScope === 'device' ? t('banDeviceDetail') : t('lockedDetail');
 
   return (
     <div className="login-container">
@@ -297,6 +317,9 @@ export default function ModernLogin() {
             <button type="submit" className={`login-submit ${canSubmit ? 'active' : ''}`} disabled={!canSubmit}>
               {busy ? t('checking') : t('signIn')}
             </button>
+            <button type="button" className="login-forgot" onClick={() => router.push('/forgot')}>
+              {t('forgot')}
+            </button>
             <button type="button" className="login-demo" onClick={useDemo} disabled={busy}>
               <b>{t('demoSignIn')}</b>
               <span>{t('demoCreds')}</span>
@@ -326,11 +349,11 @@ export default function ModernLogin() {
         ) : null}
 
         {lockedFor !== null ? (
-          <div className="auth-code" role="group" aria-label={t('lockedTitle')}>
-            <b className="auth-code-title">{t('lockedTitle')}</b>
-            <p className="auth-code-detail">{t('lockedDetail')}</p>
+          <div className="auth-code" role="group" aria-label={banTitle}>
+            <b className="auth-code-title">{banTitle}</b>
+            <p className="auth-code-detail">{banDetail}</p>
             {lockedFor > 0 ? (
-              <p className="auth-lock-clock" role="timer">{t('lockedWait', { time: mmss(lockedFor) })}</p>
+              <p className="auth-lock-clock" role="timer">{t('lockedWait', { time: clock(lockedFor) })}</p>
             ) : (
               <div className="auth-code-actions">
                 <button type="button" className="auth-code-link" onClick={() => setLockedFor(null)}>{t('backToLogin')}</button>
@@ -339,9 +362,13 @@ export default function ModernLogin() {
           </div>
         ) : null}
 
-        <p className="login-footer">
-          Don&apos;t have an account? <a href="/signup" onClick={e => { e.preventDefault(); router.push('/signup'); }}>{t('signUp')}</a>
-        </p>
+        {/* A locked account gets no side doors on this screen: not another signup,
+            not a reset letter, not the Google button. Only the wait is offered. */}
+        {lockedFor === null ? (
+          <p className="login-footer">
+            Don&apos;t have an account? <a href="/signup" onClick={e => { e.preventDefault(); router.push('/signup'); }}>{t('signUp')}</a>
+          </p>
+        ) : null}
         <nav className="auth-legal" aria-label="Legal">
           <a href="/legal/privacy">{t('privacy')}</a>
           <a href="/legal/terms">{t('terms')}</a>
