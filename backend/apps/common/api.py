@@ -223,21 +223,34 @@ def post_page_reactions(request, posts):
     }
 
 
-def notice_map(kind, ids):
-    """The public notices a seat has left standing on a page of content.
+def notice_map(kind, ids, request=None):
+    """The notices a seat has left standing on a page of content, for this reader.
 
     Almost nothing carries a notice, so a page of forty posts must not spend
     forty queries to find out it has none. The console writes these rows; this is
     the only way a member reads one, and it reads the newest sentence first.
+
+    A row aimed at one account is read by that account and by nobody else — not
+    because the sentence is secret, but because it is a note to one person about
+    their own content, and a stranger scrolling the feed has nothing to take from
+    it. Only the reader's own view of their profile or their post shows it.
     """
+    from django.db.models import Q
+
     from apps.adminpanel.models import PublicNotice
 
     keys = [str(pk) for pk in ids if pk not in (None, '')]
     if not keys:
         return {}
+    reader = getattr(request, 'user', None)
+    pk = getattr(reader, 'pk', None)
+    gate = Q(audience=PublicNotice.Audience.PUBLIC)
+    if pk:
+        gate |= Q(audience=PublicNotice.Audience.PRIVATE, about_id=pk)
     grouped = {}
     rows = (PublicNotice.objects
             .filter(target_type=kind, target_id__in=keys, is_live=True)
+            .filter(gate)
             .select_related('actor')
             .order_by('-created_at'))
     for row in rows:
@@ -247,5 +260,6 @@ def notice_map(kind, ids):
             'reason': row.reason,
             'by': row.actor.username if row.actor else 'staff',
             'at': row.created_at,
+            'private': row.audience == PublicNotice.Audience.PRIVATE,
         })
     return grouped

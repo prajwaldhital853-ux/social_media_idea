@@ -76,7 +76,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     try {
       const started = await api<SignInChallenge>('admin/session/login/', {
         method: 'POST',
-        body: { username: identifier, password },
+        // `email` and not a username: this door is opened by the address on the
+        // seat, because a handle is public and a seat is not a public thing.
+        body: { email: identifier, password },
       });
       setChallenge(started);
       setLapsed(false);

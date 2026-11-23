@@ -12,7 +12,7 @@ class CommentListSerializer(serializers.ListSerializer):
         self.context['_comment_reactions'] = user_reaction_map(
             self.context.get('request'), 'comment', [c.pk for c in comments]
         )
-        self.context['_comment_notices'] = notice_map('comment', [c.pk for c in comments])
+        self.context['_comment_notices'] = notice_map('comment', [c.pk for c in comments], self.context.get('request'))
         return [self.child.to_representation(comment) for comment in comments]
 
 
@@ -55,7 +55,7 @@ class CommentSerializer(serializers.ModelSerializer):
     def get_notices(self, obj):
         # A page fills this once; a single read asks for its own row.
         if '_comment_notices' not in self.context:
-            self.context['_comment_notices'] = notice_map('comment', [obj.pk])
+            self.context['_comment_notices'] = notice_map('comment', [obj.pk], self.context.get('request'))
         return self.context['_comment_notices'].get(str(obj.pk), [])
 
     def validate(self, attrs):

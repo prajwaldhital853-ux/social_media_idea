@@ -236,6 +236,7 @@ def review_decide(request, pk):
             report, request.user, action,
             reason=request.data.get('reason') or '',
             notice_text=request.data.get('notice') or '',
+            audience=request.data.get('audience') or '',
         )
     except ValueError as exc:
         return Response({'detail': str(exc)}, status=400)
@@ -344,6 +345,7 @@ def content_action(request, kind, pk):
             kind, pk, request.user, action,
             reason=request.data.get('reason') or '',
             notice_text=request.data.get('notice') or '',
+            audience=request.data.get('audience') or '',
         )
     except ValueError as exc:
         return Response({'detail': str(exc)}, status=400)
@@ -558,13 +560,19 @@ def notice_create(request):
     text = str(request.data.get('text') or '').strip()
     reason = str(request.data.get('reason') or '').strip()
     if not text:
-        return Response({'detail': 'Write the sentence the community will read.'}, status=400)
+        return Response({'detail': 'Write the sentence they will read.'}, status=400)
     if len(text) > 240:
         return Response({'detail': 'A notice is read over the content it is about, not under it. '
                                    'Keep it to 240 characters.'}, status=400)
     if not reason:
         return Response({'detail': 'Say why the notice is going up — that is the reason the audit row keeps.'},
                         status=400)
+    # Checked here rather than inside the write so that a bad answer is a form
+    # error, not a missing page: the sentence is the thing that went wrong.
+    try:
+        audience = review.audience_of(request.data.get('audience'))
+    except ValueError as err:
+        return Response({'detail': str(err)}, status=400)
     pk = review.pk_of(raw_id)
     if pk is None:
         return Response({'detail': f'{raw_id or "Nothing"} is not an id. Open the content and copy the number.'},
@@ -572,13 +580,16 @@ def notice_create(request):
     if PublicNotice.objects.filter(target_type=kind, target_id=str(pk), is_live=True, text=text).exists():
         return Response({'detail': 'That sentence is already standing on this content.'}, status=400)
     try:
-        notice = review.attach(kind, str(pk), request.user, reason, text)
+        notice = review.attach(kind, str(pk), request.user, reason, text, audience)
     except ValueError as err:
         return Response({'detail': str(err)}, status=404)
     record(request.user, 'attach_notice', f'{kind}:{pk}', f'{reason} — {text[:120]}')
+    reach = ('only ' + notice['about'] + ' reads it — they are also told in their bell'
+             if audience == PublicNotice.Audience.PRIVATE
+             else 'anyone reading it now reads this sentence first')
     return Response({'notice': notice,
-                     'detail': f'The notice is standing on {kind} {pk}. Anyone reading it now '
-                               f'reads this sentence first, and the audit row says who put it there.'},
+                     'detail': f'The notice is standing on {kind} {pk}. {reach}, '
+                               'and the audit row says who put it there.'},
                     status=201)
 
 
@@ -613,7 +624,13 @@ def public_notices(request, kind, pk):
     """
     if kind not in review.KINDS:
         return Response({'detail': 'Choose post, comment, listing or user.'}, status=400)
+    gate = Q(audience=PublicNotice.Audience.PUBLIC)
+    # A notice aimed at one account is read by that account and nobody else; an
+    # anonymous visitor is not the person it was written for, so they see the
+    # sentences written over their content and stop there.
+    if getattr(request.user, 'pk', None):
+        gate |= Q(audience=PublicNotice.Audience.PRIVATE, about_id=request.user.pk)
     rows = PublicNotice.objects.filter(
         target_type=kind, target_id=str(pk), is_live=True,
-    ).select_related('about', 'actor')
+    ).filter(gate).select_related('about', 'actor')
     return Response({'target': f'{kind}:{pk}', 'notices': [review.notice_row(row) for row in rows[:10]]})

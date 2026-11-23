@@ -105,6 +105,14 @@ export default function ModernLogin() {
       setNotice(res.detail || t('googleOnlyHint'));
       return;
     }
+    // A suspended seat is not a wrong guess. The server says the reason and when
+    // it ends, so the screen repeats it instead of a red "wrong password" that
+    // would send the person trying the same Google account a fourth time.
+    if (res.suspended) {
+      setError('');
+      setNotice(res.detail || t('suspNotice'));
+      return;
+    }
     if (res.locked) {
       setError('');
       setNotice('');

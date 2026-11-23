@@ -19,7 +19,7 @@ class ListingImageSerializer(serializers.ModelSerializer):
 class ListingListSerializer(serializers.ListSerializer):
     def to_representation(self, data):
         rows = list(data.all() if hasattr(data, 'all') else data)
-        self.context['_listing_notices'] = notice_map('listing', [row.pk for row in rows])
+        self.context['_listing_notices'] = notice_map('listing', [row.pk for row in rows], self.context.get('request'))
         return [self.child.to_representation(row) for row in rows]
 
 
@@ -42,7 +42,7 @@ class ListingSerializer(serializers.ModelSerializer):
     def get_notices(self, obj):
         # A page fills this once; a single read asks for its own row.
         if '_listing_notices' not in self.context:
-            self.context['_listing_notices'] = notice_map('listing', [obj.pk])
+            self.context['_listing_notices'] = notice_map('listing', [obj.pk], self.context.get('request'))
         return self.context['_listing_notices'].get(str(obj.pk), [])
 
     def validate_price(self, value):

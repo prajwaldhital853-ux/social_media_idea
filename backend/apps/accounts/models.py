@@ -66,11 +66,14 @@ class EmailOTP(models.Model):
     PURPOSES = [
         ('login', 'New device login'), ('unlock', 'Account unlock'),
         ('verify', 'Email verification'), ('delete', 'Account deletion'),
-        ('reset', 'Password reset'),
+        ('reset', 'Password reset'), ('admin_reset', 'Staff password reset'),
     ]
 
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='otps')
-    purpose = models.CharField(max_length=10, choices=PURPOSES)
+    # A staff code is a different key than a member code: `admin_reset` has to be
+    # longer than ten characters, and one door must never be able to spend the
+    # other door's letter.
+    purpose = models.CharField(max_length=12, choices=PURPOSES)
     code_hash = models.CharField(max_length=64)
     device_id = models.CharField(max_length=80, blank=True)
     attempts = models.PositiveSmallIntegerField(default=0)
@@ -80,6 +83,24 @@ class EmailOTP(models.Model):
 
     class Meta:
         indexes = [models.Index(fields=['user', 'purpose', '-created_at'], name='otp_user_purpose_recent')]
+
+
+class PasswordHistory(models.Model):
+    """The last few hashes an account has stood on.
+
+    A reset that lands back on the password the account already used is a reset
+    that changed nothing, and the person who typed it believes they are safe.
+    Only the hash is kept — the same one the account row holds — because a door
+    can ask "is this that word again" without ever being able to read it back.
+    """
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='password_hashes')
+    password_hash = models.CharField(max_length=255)
+    set_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-set_at']
+        indexes = [models.Index(fields=['user', '-set_at'], name='password_hist_user_recent')]
 
 
 class AuthBan(models.Model):

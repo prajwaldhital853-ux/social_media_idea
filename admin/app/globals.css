@@ -493,7 +493,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, .btn:focus-vi
 .step-head p { margin-top: 5px; color: var(--muted); font-size: 13px; }
 .step-head b { color: var(--ink); }
 
-.card-error, .card-warn {
+.card-error, .card-warn, .card-ok {
   display: flex;
   align-items: flex-start;
   gap: 8px;
@@ -505,6 +505,10 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, .btn:focus-vi
 
 .card-error { color: #8a090b; background: var(--red-tint); }
 .card-warn { color: var(--amber-ink); background: var(--amber-tint); }
+.card-ok { color: var(--green-ink); background: var(--green-tint); }
+
+button.link:disabled { color: var(--muted); cursor: default; }
+button.link:disabled:hover { color: var(--muted); text-decoration: none; }
 
 .fineprint { margin-top: 12px; color: var(--muted); font-size: 11.6px; line-height: 1.45; }
 

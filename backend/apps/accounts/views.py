@@ -3,7 +3,6 @@ import random
 from datetime import timedelta
 
 from django.conf import settings
-from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.core.validators import validate_email
 from django.db import IntegrityError, transaction
@@ -20,7 +19,7 @@ from .auth import (
     clear_auth_cookies, decode_token, hash_code, set_auth_cookies,
 )
 from .models import DeviceTrust, EmailOTP, RefreshSession, User
-from . import safety
+from . import passwords, safety
 from .tasks import deliver_otp_email
 
 LOCK_THRESHOLD = 3
@@ -51,6 +50,36 @@ def _email(value):
 
 def _device_id(request):
     return (request.data.get('device_id') or request.META.get('HTTP_X_DEVICE_ID') or '')[:80]
+
+
+def _suspended(user):
+    """The one answer every door gives a suspended account.
+
+    It used to read `Account suspended: <whatever the seat typed>`, which is a
+    note from the moderation log rather than a sentence to the person standing at
+    the door. They are told what happened, what it costs them, when it ends, and
+    that the sentence came from a staff account they can reply to.
+    """
+    reason = (user.suspend_reason or '').strip()
+    ends = user.suspended_until
+    until = ''
+    if ends:
+        if ends.year >= 9999:
+            until = 'It has no end date.'
+        else:
+            until = f'It ends on {ends.strftime("%d %B %Y")}.'
+    detail = 'Your account is suspended, so you cannot sign in.'
+    if reason:
+        detail += f' The reason given: {reason}.'
+    if until:
+        detail += f' {until}'
+    detail += ' Ask the Exposing team about this from another account, or wait until it ends.'
+    return Response({
+        'detail': detail,
+        'suspended': True,
+        'suspended_until': ends,
+        'permanent': bool(ends and ends.year >= 9999),
+    }, status=403)
 
 
 def _two_step(user):
@@ -164,10 +193,9 @@ def signup(request):
     if User.objects.filter(email=email).exists():
         return Response({'detail': 'An account with that email already exists.'}, status=400)
     if not google:
-        try:
-            validate_password(password)
-        except DjangoValidationError as e:
-            return Response({'detail': ' '.join(e.messages)}, status=400)
+        bad = passwords.strength(password)
+        if bad:
+            return Response({'detail': bad}, status=400)
     dob = data.get('dob') or None
     country = (data.get('country') or '').strip()[:80]
     if not dob or not country:
@@ -199,6 +227,7 @@ def signup(request):
     except IntegrityError:
         # Two tabs, one address: the exists() checks above both said no.
         return Response({'detail': 'An account with that email already exists.'}, status=400)
+    passwords.remember(user)
     if google:
         _trust_device(user, device_id)
         resp = Response({'user': {'id': user.pk, 'username': user.username, 'email': user.email}},
@@ -235,7 +264,7 @@ def login(request):
     if not user:
         return Response({'detail': 'No account matches those credentials.'}, status=401)
     if user.is_suspended:
-        return Response({'detail': f'Account suspended: {user.suspend_reason}'}, status=403)
+        return _suspended(user)
     if user.locked_until and not user.is_locked:
         # The cooloff elapsed, so the next three passwords are the owner's again.
         user.locked_until = None
@@ -471,6 +500,14 @@ def reset_request(request):
     user = User.objects.filter(email=email).order_by('id').first()
     if not user or user.is_suspended:
         return Response({'detail': 'If that email has an account, a reset code is on its way.'})
+    if user.is_staff:
+        # A seat opens every desk on the platform, so it is not recovered through
+        # the door meant for one member's own profile. The console screen says the
+        # same thing back, and that is where the letter has to be asked for.
+        return Response({
+            'detail': 'This is a staff account. Reset it from “Forgot password” on the admin console sign-in.',
+            'staff_door': True,
+        }, status=400)
     otp, code = _make_otp(user, 'reset', _device_id(request))
     return Response({
         'detail': 'If that email has an account, a reset code is on its way.',
@@ -506,12 +543,11 @@ def reset_confirm(request):
         otp.save(update_fields=['attempts'])
         return Response({'detail': 'Wrong code.', 'attempts_left': OTP_MAX_ATTEMPTS - otp.attempts}, status=400)
     password = str(request.data.get('password') or '')
-    try:
-        validate_password(password, otp.user)
-    except DjangoValidationError as e:
+    bad = passwords.refusal(password, otp.user)
+    if bad:
         # The code is not spent on a weak password: the person fixing the word
         # should not have to wait two minutes for a letter they already hold.
-        return Response({'detail': ' '.join(e.messages)}, status=400)
+        return Response({'detail': bad}, status=400)
     otp.consumed_at = timezone.now()
     otp.save(update_fields=['consumed_at'])
     user = otp.user
@@ -521,6 +557,7 @@ def reset_confirm(request):
     user.failed_attempts = 0
     user.locked_until = None
     user.save(update_fields=['password', 'email_verified', 'failed_attempts', 'locked_until'])
+    passwords.remember(user)
     safety.lift(user.email, reasons=['lock'])
     now = timezone.now()
     kicked = RefreshSession.objects.filter(user=user, revoked_at__isnull=True).update(revoked_at=now)
@@ -632,7 +669,10 @@ def google(request):
     device_id = _device_id(request)
     if user:
         if user.is_suspended:
-            return Response({'detail': f'Account suspended: {user.suspend_reason}'}, status=403)
+            # The identity provider proved the address and nothing else: a
+            # suspended account is still suspended when it arrives through
+            # Google, and it deserves to be told so in one plain sentence.
+            return _suspended(user)
         if user.is_locked:
             return Response({
                 'detail': 'This account is locked after too many wrong passwords. '

@@ -55,17 +55,23 @@ function AttachDesk({ busy, onDone }: {
   const [picked, setPicked] = useState<Hit | null>(null);
   const [text, setText] = useState('');
   const [reason, setReason] = useState('');
+  const [audience, setAudience] = useState<'public' | 'private'>('public');
   const [sending, setSending] = useState(false);
   const { noteGate } = useSession();
   const confirm = useConfirm();
 
   const ready = !!picked && text.trim() !== '' && reason.trim() !== '';
+  const privateNote = audience === 'private';
 
   const send = async () => {
     if (!picked) return;
     const sure = await confirm({
-      title: 'Put this notice up?',
-      body: `Everyone who reaches ${picked.who} — ${picked.label} — will read your sentence above it, and it goes on the record under your name. It stays there until a seat withdraws it.`,
+      title: privateNote ? 'Put this notice where only they read it?' : 'Put this notice up?',
+      body: privateNote
+        ? `Your sentence will stand above ${picked.who} — ${picked.label} for that person alone, `
+          + 'and they are told in their own bell. Nobody else on the platform sees it. It stays until a seat withdraws it.'
+        : `Everyone who reaches ${picked.who} — ${picked.label} — will read your sentence above it, `
+          + 'and it goes on the record under your name. It stays there until a seat withdraws it.',
       confirmLabel: 'Put it up',
       tone: 'amber',
     });
@@ -74,7 +80,7 @@ function AttachDesk({ busy, onDone }: {
     try {
       const out = await api<{ detail?: string }>('admin/notices/attach/', {
         method: 'POST',
-        body: { target: picked.target, text: text.trim(), reason: reason.trim() },
+        body: { target: picked.target, text: text.trim(), reason: reason.trim(), audience },
       });
       setText('');
       setReason('');
@@ -99,9 +105,9 @@ function AttachDesk({ busy, onDone }: {
         <div>
           <h2>Put a notice on content</h2>
           <p>
-            Three steps: say what it goes on, find it by a word from it or by who
-            wrote it, then write the sentence. Everyone who reaches that thing reads
-            the sentence, and only this desk can put one up or take one down.
+            Four steps: say what it goes on, find it by a word from it or by who wrote
+            it, say who reads it, then write the sentence. Only this desk can put one up
+            or take one down, and a notice written for one person is read by nobody else.
           </p>
         </div>
       </div>
@@ -153,10 +159,25 @@ function AttachDesk({ busy, onDone }: {
         )}
 
         <label className="field">
-          <span>3. The sentence the community reads <em>{text.length}/240</em></span>
+          <span>3. Who reads it</span>
+          <select
+            name="audience" value={audience} aria-label="Who reads the notice"
+            onChange={event => setAudience(event.target.value as 'public' | 'private')}
+          >
+            <option value="public">Everyone who reaches it</option>
+            <option value="private">Only the account it is about</option>
+          </select>
+        </label>
+
+        <label className="field">
+          <span>{privateNote
+            ? '4. The sentence only they read'
+            : '4. The sentence everyone reads'} <em>{text.length}/240</em></span>
           <textarea
             name="text" rows={2} value={text} maxLength={240}
-            placeholder="This claim has been checked and is false."
+            placeholder={privateNote
+              ? 'e.g. Two claims in this post have been checked and are wrong. Put a correction up.'
+              : 'This claim has been checked and is false.'}
             onChange={event => setText(event.target.value)}
           />
         </label>
@@ -341,7 +362,7 @@ export default function NoticesPage() {
             <thead>
               <tr>
                 <th style={{ width: '12%' }}>Target</th>
-                <th style={{ width: '36%' }}>What the community reads</th>
+                <th style={{ width: '36%' }}>What the reader is shown</th>
                 <th style={{ width: '11%' }}>About</th>
                 <th style={{ width: '19%' }}>Written</th>
                 <th style={{ width: '12%' }}>Standing</th>
@@ -354,7 +375,9 @@ export default function NoticesPage() {
                   <td><span className="id">{row.target}</span></td>
                   <td>
                     <span className="notice-text" title={row.text}>{row.text}</span>
-                    {row.reason && <p className="notice-reason">Reason on file: {row.reason}</p>}
+                    {row.audience === 'private'
+                      ? <p className="notice-reason">Only @{row.about} reads this one.</p>
+                      : row.reason && <p className="notice-reason">Reason on file: {row.reason}</p>}
                   </td>
                   <td className="strong">@{row.about}</td>
                   <td>

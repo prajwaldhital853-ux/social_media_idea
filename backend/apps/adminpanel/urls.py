@@ -10,6 +10,12 @@ urlpatterns = [
     path('admin/session/verify/', views_session.admin_verify),
     path('admin/session/password/', views_session.admin_set_password),
     path('admin/session/logout/', views_session.admin_logout),
+    # Contract: a seat recovers its own password here, from the address on the
+    # seat. They are named before `logout` is not required — the literal segments
+    # sit beside the id routes on purpose, since none of these is a username.
+    path('admin/session/forgot/', views_session.admin_forgot),
+    path('admin/session/forgot/resend/', views_session.admin_forgot_resend),
+    path('admin/session/recovery/', views_session.admin_recovery),
     path('admin/overview/', views_overview.admin_overview),
     path('admin/analytics/promotions/', views_overview.admin_promotion_analytics),
     path('admin/permissions/', views_staff.permission_catalog),

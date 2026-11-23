@@ -293,8 +293,15 @@ class PublicNotice(models.Model):
         LISTING = 'listing', 'Listing'
         USER = 'user', 'Account'
 
+    class Audience(models.TextChoices):
+        PUBLIC = 'public', 'Everyone reading the content'
+        PRIVATE = 'private', 'Only the account it is about'
+
     target_type = models.CharField(max_length=10, choices=Target.choices)
     target_id = models.CharField(max_length=64)
+    audience = models.CharField(
+        max_length=8, choices=Audience.choices, default=Audience.PUBLIC,
+    )
     about = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='public_notices',
     )

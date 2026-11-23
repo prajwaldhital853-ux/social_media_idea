@@ -139,7 +139,7 @@ def profile_detail(request, username):
     data['locked'] = not full
     # A notice about the account is read even by the visitor whose view is locked:
     # it is about the account, not about the posts behind the lock.
-    data['notices'] = notice_map('user', [user.pk]).get(str(user.pk), [])
+    data['notices'] = notice_map('user', [user.pk], request).get(str(user.pk), [])
     if not full:
         # Even a withheld card has to carry the id: without it the client cannot
         # tell this person from the row a feed already holds, and the follow

@@ -7,20 +7,25 @@ cookie the browser discards when the tab closes — so the seat ends when the pe
 at it says so, not when a clock runs out.
 """
 
+import logging
+import random
 import secrets
+from datetime import timedelta
 from urllib.parse import quote
 
 from django.conf import settings
-from django.contrib.auth.password_validation import validate_password
-from django.core.exceptions import ValidationError
 from django.utils import timezone
 from rest_framework.decorators import api_view, authentication_classes, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
 from apps.accounts.auth import REFRESH_TTL, clear_auth_cookies, hash_code, set_auth_cookies
-from apps.accounts.models import User
+from apps.accounts.models import EmailOTP, RefreshSession, User
+from apps.accounts import passwords, safety
+from apps.accounts.tasks import deliver_otp_email
+from apps.common.mail import send_off_request
 from apps.common.ratelimit import client_ip, enforce
+from apps.notifications.tasks import send_activity_email
 
 from . import rbac, totp
 from .journal import record
@@ -32,9 +37,25 @@ from .tokens import (
 
 ISSUER = getattr(settings, 'ADMIN_2FA_ISSUER', 'Exposing')
 RECOVERY_COUNT = 10
+# A staff code is worth less time than a member's: the mailbox it lands in is the
+# same mailbox that forwards to a hundred other services, and five minutes is
+# still longer than anybody needs to read a six-digit number off their phone.
+RECOVERY_MINUTES = 5
+RECOVERY_MAX_ATTEMPTS = 5
+RECOVERY_RESEND_SECONDS = 120
+# One sentence for the seat, the member and the nobody. A sign-in screen that can
+# tell you an address is not staff is a directory of who works here.
+RECOVERY_SENT = 'If that email holds a staff seat, a code is on its way to it.'
 # No I, O, L or 1: a code read aloud over the phone cannot be mistyped into a
 # lockout.
 _RECOVERY_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'
+
+logger = logging.getLogger(__name__)
+
+
+def _address(value):
+    """The one way this file reads an email off the wire — the same way signup does."""
+    return (value or '').strip().lower()
 
 
 def _otpauth(username, secret):
@@ -129,21 +150,32 @@ def _grant(request, staff, kind, amr):
 @authentication_classes([])
 @permission_classes([AllowAny])
 def admin_login(request):
-    """Password check only. Nothing is handed out here without the second factor."""
-    identifier = (request.data.get('username') or request.data.get('email') or '').strip().lower()
+    """Password check only. Nothing is handed out here without the second factor.
+
+    The address and a password, nothing else. A username is short, public and
+    changeable, and this is the one door on the platform that opens every desk —
+    so it is closed to a string somebody could read off a profile or guess.
+    """
+    identifier = _address(request.data.get('email') or request.data.get('username'))
     password = request.data.get('password') or ''
     enforce(f'admin-login-ip:{client_ip(request)}', 8, 60)
     enforce(f'admin-login-id:{identifier}', 8, 60)
     if not identifier or not password:
-        return Response({'detail': 'Enter the staff email or username and password.'}, status=400)
+        return Response({'detail': 'Enter the email on your seat and its password.'}, status=400)
+    if '@' not in identifier:
+        return Response({'detail': 'Staff sign in with their email address, not their username.'}, status=400)
 
-    user = User.objects.filter(username=identifier).first() or User.objects.filter(email=identifier).first()
+    user = User.objects.filter(email=identifier).order_by('id').first()
     if not user or not user.is_staff or not user.check_password(password):
-        # One sentence for both: whether this username is a staff account is not
+        # One sentence for both: whether this address is a staff account is not
         # something a password probe should be allowed to learn.
         return Response({'detail': 'Those credentials did not match a staff account.'}, status=401)
     if not user.is_active:
         return rbac.denial('staff_disabled', 'This account is deactivated.')
+    if user.is_suspended:
+        # rbac reads the same flag on every desk, but a suspended seat that types
+        # the right password at this door deserves to be told why it will not open.
+        return rbac.denial('staff_disabled', 'This staff account is suspended. A Superadmin can reinstate it.')
 
     staff = StaffAccount.for_user(user)
     if not staff.is_enabled:
@@ -213,18 +245,18 @@ def admin_set_password(request):
 
     password = str(request.data.get('password') or '')
     confirm = str(request.data.get('confirm') or '')
-    enforce(f'admin-password:{user.username}', 5, 300)
+    enforce(f'admin-password:{user.email}', 5, 300)
     if confirm and confirm != password:
         return Response({'detail': 'The two passwords do not match.'}, status=400)
     if user.check_password(password):
         return Response({'detail': 'That is the password we gave you. Choose one only you know.'}, status=400)
-    try:
-        validate_password(password, user)
-    except ValidationError as exc:
-        return Response({'detail': ' '.join(exc.messages), 'code': 'password_weak'}, status=400)
+    bad = passwords.refusal(password, user)
+    if bad:
+        return Response({'detail': bad, 'code': 'password_weak'}, status=400)
 
     user.set_password(password)
     user.save(update_fields=['password'])
+    passwords.remember(user)
     staff.must_change_password = False
     staff.save(update_fields=['must_change_password'])
     record(user, 'staff_password_change', user.username, 'first password replaced at the door')
@@ -333,3 +365,183 @@ def admin_logout(request):
     clear_auth_cookies(response)
     clear_admin_cookies(response)
     return response
+
+
+def _recovery_otp(user, device_id=''):
+    """Mint a staff reset code, and retire the live one it replaces.
+
+    Two open codes for one address would mean a person who asked twice has two
+    chances to guess each, so the older letter is burned on the way out.
+    """
+    EmailOTP.objects.filter(user=user, purpose='admin_reset', consumed_at__isnull=True).update(
+        consumed_at=timezone.now())
+    code = f'{random.SystemRandom().randint(0, 999999):06d}'
+    otp = EmailOTP.objects.create(
+        user=user, purpose='admin_reset', code_hash=hash_code(code), device_id=device_id,
+        expires_at=timezone.now() + timedelta(minutes=RECOVERY_MINUTES),
+    )
+    try:
+        deliver_otp_email(user.email, code, 'admin_reset', RECOVERY_MINUTES)
+    except Exception:  # noqa: BLE001 - the row is stored; the resend button is the fix
+        logger.exception('Could not queue the staff reset code for %s', user.username)
+    return otp, code
+
+
+def _seat(user):
+    """The seat behind an address, or None when there is nothing to recover."""
+    staff = StaffAccount.objects.filter(user=user).first() if user else None
+    if staff is None or not staff.is_enabled or not user.is_staff:
+        return None
+    if not user.is_active or user.is_suspended or not user.email:
+        # A closed seat gets no letter: it cannot be signed in to even with a
+        # fresh password, so sending one would only teach an attacker who is here.
+        return None
+    return staff
+
+
+@api_view(['POST'])
+@authentication_classes([])
+@permission_classes([AllowAny])
+def admin_forgot(request):
+    """Step one at the console door: an address, then a code to that mailbox.
+
+    A seat is not recovered through the member site's forgot-password page — that
+    door opens one profile, this one opens every desk — so the code is written
+    with its own purpose and can only ever be spent here.
+    """
+    email = _address(request.data.get('email'))
+    enforce(f'admin-forgot-ip:{client_ip(request)}', 6, 600)
+    enforce(f'admin-forgot:{email}', 3, 3600)
+    if not email or '@' not in email:
+        return Response({'detail': 'Enter the email address on your seat.'}, status=400)
+    banned = safety.blocking(request, email)
+    if banned is not None:
+        return safety.refuse(banned)
+    user = User.objects.filter(email=email).order_by('id').first()
+    if _seat(user) is None:
+        return Response({'detail': RECOVERY_SENT})
+    otp, code = _recovery_otp(user, (request.data.get('device_id') or '')[:80])
+    record(user, 'staff_recovery_sent', user.email, 'code mailed to the seat address')
+    body = {
+        'detail': RECOVERY_SENT,
+        'challenge': otp.pk,
+        'expires_in': RECOVERY_MINUTES * 60,
+        'resend_in': RECOVERY_RESEND_SECONDS,
+    }
+    if settings.DEBUG or getattr(settings, 'EXPOSING_OTP_VISIBLE', False):
+        body['dev_code'] = code
+    return Response(body)
+
+
+@api_view(['POST'])
+@authentication_classes([])
+@permission_classes([AllowAny])
+def admin_forgot_resend(request):
+    """A second letter, but not for two minutes and not for free.
+
+    The wait is counted on the server clock, so reloading the screen does not
+    shorten it, and the cooldown is answered with the number of seconds left
+    rather than a refusal the person has to time themselves.
+    """
+    challenge = request.data.get('challenge')
+    enforce(f'admin-forgot-resend-ip:{client_ip(request)}', 6, 600)
+    otp = EmailOTP.objects.filter(pk=challenge, purpose='admin_reset').select_related('user').first()
+    if otp is None or _seat(otp.user) is None:
+        return Response({'detail': RECOVERY_SENT})
+    email = _address(otp.user.email)
+    enforce(f'admin-forgot:{email}', 3, 3600)
+    left = RECOVERY_RESEND_SECONDS - int((timezone.now() - otp.created_at).total_seconds())
+    if left > 0:
+        return Response({
+            'detail': f'You can ask for another code in {left} seconds.',
+            'retry_in': left, 'resend_in': left,
+        }, status=429)
+    new_otp, code = _recovery_otp(otp.user, otp.device_id)
+    body = {
+        'detail': RECOVERY_SENT,
+        'challenge': new_otp.pk,
+        'expires_in': RECOVERY_MINUTES * 60,
+        'resend_in': RECOVERY_RESEND_SECONDS,
+    }
+    if settings.DEBUG or getattr(settings, 'EXPOSING_OTP_VISIBLE', False):
+        body['dev_code'] = code
+    return Response(body)
+
+
+@api_view(['POST'])
+@authentication_classes([])
+@permission_classes([AllowAny])
+def admin_recovery(request):
+    """Step two: the code, the new password, and every session this account held closed.
+
+    The second factor survives this on purpose. A mailbox that has been taken over
+    buys a password, and a password alone still cannot open the console — the
+    authenticator code is what proves the phone is in the hand of the seat.
+    """
+    challenge = request.data.get('challenge')
+    enforce(f'admin-recovery-ip:{client_ip(request)}', 10, 600)
+    enforce(f'admin-recovery:{challenge}', 8, 600)
+    hint = _address(request.data.get('email'))
+    if hint:
+        # Only worth an address-shaped bucket when the client names an address; an
+        # anonymous key would pool every recovery on the platform into one limiter.
+        enforce(f'admin-recovery-tries:{hint}', 12, 1800)
+    otp = (EmailOTP.objects
+           .filter(pk=challenge, purpose='admin_reset', consumed_at__isnull=True)
+           .select_related('user').first())
+    if otp is None or otp.expires_at < timezone.now():
+        return Response({'detail': 'That code has expired. Ask for a new one.', 'code': 'code_expired'}, status=400)
+    staff = _seat(otp.user)
+    if staff is None:
+        return rbac.denial('staff_disabled', 'That seat is closed.')
+    if otp.attempts >= RECOVERY_MAX_ATTEMPTS:
+        otp.consumed_at = timezone.now()
+        otp.save(update_fields=['consumed_at'])
+        return Response({'detail': 'Too many wrong codes. Ask for a new one.', 'code': 'code_rejected'}, status=400)
+    code = str(request.data.get('code') or '').strip()
+    if not code or not secrets.compare_digest(hash_code(code), otp.code_hash):
+        otp.attempts += 1
+        otp.save(update_fields=['attempts'])
+        return Response({
+            'detail': 'Wrong code.', 'code': 'code_rejected',
+            'attempts_left': max(0, RECOVERY_MAX_ATTEMPTS - otp.attempts),
+        }, status=400)
+
+    user = otp.user
+    password = str(request.data.get('password') or '')
+    confirm = str(request.data.get('confirm') or '')
+    if confirm and confirm != password:
+        return Response({'detail': 'The two passwords do not match.'}, status=400)
+    bad = passwords.refusal(password, user)
+    if bad:
+        # The code is not spent on a word the rules refuse: the letter is proved,
+        # and the person holding it is being asked to fix their own typing.
+        return Response({'detail': bad, 'code': 'password_weak'}, status=400)
+
+    otp.consumed_at = timezone.now()
+    otp.save(update_fields=['consumed_at'])
+    user.set_password(password)
+    user.failed_attempts = 0
+    user.locked_until = None
+    user.save(update_fields=['password', 'failed_attempts', 'locked_until'])
+    passwords.remember(user)
+    staff.must_change_password = False
+    staff.login_failed = 0
+    staff.login_locked_until = None
+    staff.save(update_fields=['must_change_password', 'login_failed', 'login_locked_until'])
+    safety.lift(user.email, reasons=['lock'])
+    kicked = RefreshSession.objects.filter(user=user, revoked_at__isnull=True).update(revoked_at=timezone.now())
+    record(user, 'staff_password_reset', user.email, f'by emailed code; {kicked} session(s) closed')
+    # Whoever held a session here is signed out, and the address is told about it:
+    # a reset nobody announces is how an account change goes unnoticed for a week.
+    send_off_request(
+        send_activity_email, user.email, 'Your Exposing staff password changed',
+        f'The password on the staff seat @{user.username} was reset with an emailed code. '
+        f'{kicked} signed-in session(s) were closed. If this was not you, a Superadmin must revoke '
+        'the seat before the next sign-in.', 'https://exposing.app/admin/',
+    )
+    response = Response({
+        'detail': 'Password changed. Sign in with it and your authenticator code.',
+        'sessions_revoked': kicked,
+    })
+    return clear_admin_cookies(response)

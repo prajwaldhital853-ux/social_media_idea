@@ -13,7 +13,7 @@ from apps.moderation.models import AuditLog
 
 from . import rbac
 from .models import StaffAccount
-from .tests_session import LOGIN_URL, PASSWORD, SESSION_URL, first_sign_in
+from .tests_session import LOGIN_URL, PASSWORD, SESSION_URL, first_sign_in, mail
 
 STAFF_URL = '/api/admin/staff/'
 GRANT_URL = '/api/admin/staff/grant/'
@@ -115,7 +115,7 @@ class SeatGrantTests(RbacTestCase):
         self.assertTrue(RefreshSession.objects.filter(user=self.mod, revoked_at__isnull=False).exists())
 
         # No seat, so not a staff account: the console door does not even recognise them.
-        door = APIClient().post(LOGIN_URL, {'username': 'night_mod', 'password': PASSWORD}, format='json')
+        door = APIClient().post(LOGIN_URL, {'email': mail('night_mod'), 'password': PASSWORD}, format='json')
         self.assertEqual(door.status_code, 401)
 
     def test_a_disabled_seat_stops_working_inside_its_own_admin_window(self):
@@ -165,7 +165,7 @@ class SeatGrantTests(RbacTestCase):
         self.mod.refresh_from_db()
         self.assertTrue(self.mod.is_staff)
 
-        door = APIClient().post(LOGIN_URL, {'username': 'night_mod', 'password': PASSWORD}, format='json')
+        door = APIClient().post(LOGIN_URL, {'email': mail('night_mod'), 'password': PASSWORD}, format='json')
         self.assertEqual(door.status_code, 202, door.data)
         self.assertEqual(door.data['code'], 'two_factor_required')
 
@@ -269,7 +269,7 @@ class TwoFactorResetTests(RbacTestCase):
 
         # A lost phone is not a back door: the next sign-in re-enrols from scratch.
         fresh = APIClient()
-        again = fresh.post(LOGIN_URL, {'username': 'night_mod', 'password': PASSWORD}, format='json')
+        again = fresh.post(LOGIN_URL, {'email': mail('night_mod'), 'password': PASSWORD}, format='json')
         self.assertEqual(again.status_code, 202)
         self.assertEqual(again.data['code'], 'two_factor_enrolment')
 

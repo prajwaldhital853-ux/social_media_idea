@@ -241,6 +241,7 @@ function ShelfCase({ row, onWarn }: { row: ShelfRow; onWarn: (text: string, bad?
   const [asking, setAsking] = useState(false);
   const [notice, setNotice] = useState('');
   const [reason, setReason] = useState('');
+  const [audience, setAudience] = useState<'public' | 'private'>('public');
   const [busy, setBusy] = useState(false);
   const confirm = useConfirm();
   const chips = [
@@ -256,11 +257,16 @@ function ShelfCase({ row, onWarn }: { row: ShelfRow; onWarn: (text: string, bad?
   const [kind, , targetId] = row.target.split(':');
   const mayWarn = row.actions.includes('warn') && can(row.permission || 'content');
 
+  const privateNote = audience === 'private';
+
   const warn = async () => {
     const sure = await confirm({
-      title: `Put a public warning on ${row.target}?`,
-      body: 'The content stays up and everyone who reaches it reads your sentence above it. '
-        + 'The author also gets a private warning, and the audit row keeps your name with it.',
+      title: privateNote ? `Put a notice only they can read on ${row.target}?` : `Put a public warning on ${row.target}?`,
+      body: privateNote
+        ? 'The content stays up and the sentence shows above it to the person who wrote it — and to '
+          + 'nobody else. They are told in their own bell, and the audit row keeps your name with it.'
+        : 'The content stays up and everyone who reaches it reads your sentence above it. '
+          + 'The author also gets a private warning, and the audit row keeps your name with it.',
       confirmLabel: 'Put it up',
       tone: 'amber',
     });
@@ -269,7 +275,7 @@ function ShelfCase({ row, onWarn }: { row: ShelfRow; onWarn: (text: string, bad?
     try {
       const out = await api<Outcome>(`admin/content/${kind}/${targetId}/`, {
         method: 'POST',
-        body: { action: 'warn', notice: notice.trim(), reason: reason.trim() },
+        body: { action: 'warn', notice: notice.trim(), reason: reason.trim(), audience },
       });
       setAsking(false);
       setNotice('');
@@ -321,18 +327,34 @@ function ShelfCase({ row, onWarn }: { row: ShelfRow; onWarn: (text: string, bad?
         <tr className="grid-ask">
           <td colSpan={7}>
             <div className="ask">
+              <div className="term-add">
+                <label className="field">
+                  <span>Who reads it</span>
+                  <select
+                    value={audience} aria-label="Who reads the notice"
+                    onChange={event => setAudience(event.target.value as 'public' | 'private')}
+                  >
+                    <option value="public">Everyone who reaches it</option>
+                    <option value="private">Only the person who wrote it</option>
+                  </select>
+                </label>
+                <label className="field grow">
+                  <span>{privateNote
+                    ? `The sentence only they read over this ${KIND_LABEL[kind] || kind}`
+                    : `The sentence everyone reads over this ${KIND_LABEL[kind] || kind}`}</span>
+                  <textarea
+                    rows={2} value={notice} maxLength={240} autoFocus
+                    placeholder={privateNote
+                      ? 'e.g. Two claims here have been checked and are wrong. Put a correction up before this reaches more people.'
+                      : "e.g. This post has been flagged as misleading. Read the author's correction before sharing it."}
+                    onChange={event => setNotice(event.target.value)}
+                  />
+                </label>
+              </div>
               <label className="field grow">
-                <span>The sentence everyone reads over this {KIND_LABEL[kind] || kind}</span>
-                <textarea
-                  rows={2} value={notice} maxLength={240} autoFocus
-                  placeholder="e.g. This post has been flagged as misleading. Read the author's correction before sharing it."
-                  onChange={event => setNotice(event.target.value)}
-                />
-              </label>
-              <label className="field grow">
-                <span>Why — said to the author privately (optional)</span>
+                <span>Why — kept on the record with your name (optional)</span>
                 <input
-                  value={reason} maxLength={500} placeholder="What about it broke the rules"
+                  value={reason} maxLength={120} placeholder="What about it broke the rules"
                   onChange={event => setReason(event.target.value)}
                 />
               </label>
@@ -341,7 +363,7 @@ function ShelfCase({ row, onWarn }: { row: ShelfRow; onWarn: (text: string, bad?
                   type="button" className="btn amber tiny" disabled={busy || notice.trim() === ''}
                   onClick={warn}
                 >
-                  {IC.mega}<span>{busy ? 'Putting it up…' : 'Put the warning up'}</span>
+                  {IC.mega}<span>{busy ? 'Putting it up…' : privateNote ? 'Put the private notice up' : 'Put the warning up'}</span>
                 </button>
                 <button type="button" className="btn ghost tiny" disabled={busy} onClick={() => setAsking(false)}>
                   <span>Cancel</span>

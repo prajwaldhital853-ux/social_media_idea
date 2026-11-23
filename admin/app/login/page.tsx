@@ -4,9 +4,17 @@ import { FormEvent, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import QRCode from 'qrcode';
 import { IC } from '@/lib/icons';
+import { api, ApiError } from '@/lib/api';
 import { useSession } from '@/lib/session';
 
-type Step = 'wait' | 'credentials' | 'password' | 'enrol' | 'code' | 'codes';
+type Step = 'wait' | 'credentials' | 'password' | 'enrol' | 'code' | 'codes' | 'forgot' | 'recover';
+type Recovery = {
+  detail?: string;
+  challenge?: number;
+  expires_in?: number;
+  resend_in?: number;
+  dev_code?: string;
+};
 
 /**
  * Two doors, one screen: the password proves you know something, the
@@ -32,15 +40,24 @@ export default function LoginPage() {
   const [copied, setCopied] = useState<string | null>(null);
   const [lockUntil, setLockUntil] = useState<number | null>(null);
   const [now, setNow] = useState(0);
+  /** 'ask' = the address, 'code' = the letter it sent, 'off' = the sign-in itself. */
+  const [recovering, setRecovering] = useState<'off' | 'ask' | 'code'>('off');
+  const [sent, setSent] = useState<Recovery | null>(null);
+  const [recoverBusy, setRecoverBusy] = useState(false);
+  const [recoverError, setRecoverError] = useState<string | null>(null);
+  const [note, setNote] = useState<string | null>(null);
+  // Both waits are server-set, so reloading the page cannot shorten them.
+  const [resendAt, setResendAt] = useState<number | null>(null);
+  const [expiresAt, setExpiresAt] = useState<number | null>(null);
 
-  // Only while a lockout is actually counting down — an idle sign-in screen has
+  // Only while something is actually counting down — an idle sign-in screen has
   // nothing to re-render every second.
   useEffect(() => {
-    if (lockUntil === null) return;
+    if (lockUntil === null && resendAt === null && expiresAt === null) return;
     setNow(Date.now() / 1000);
     const id = setInterval(() => setNow(Date.now() / 1000), 1000);
     return () => clearInterval(id);
-  }, [lockUntil]);
+  }, [lockUntil, resendAt, expiresAt]);
 
   // An open session normally means "go to the console" — except right after a
   // first enrolment, when the recovery codes have to be written down first.
@@ -70,7 +87,11 @@ export default function LoginPage() {
     setLockUntil(retryIn > 0 ? Date.now() / 1000 + retryIn : null);
   }, [challenge?.code, challenge?.retry_in]);
 
-  const step: Step = newCodes ? 'codes'
+  // A seat that has lost its password is not in the middle of a sign-in, so the
+  // recovery screens take the whole card and hand back the door when they are done.
+  const step: Step = recovering === 'ask' ? 'forgot'
+    : recovering === 'code' ? 'recover'
+    : newCodes ? 'codes'
     : status === 'loading' ? 'wait'
     : restart || !challenge ? 'credentials'
     : choosing ? 'password'
@@ -79,6 +100,7 @@ export default function LoginPage() {
   const submitCredentials = async (event: FormEvent) => {
     event.preventDefault();
     setRestart(false);
+    setNote(null);
     const outcome = await signIn(identifier.trim(), password);
     if (outcome === 'code') setCode('');
     if (outcome === 'password') {
@@ -113,7 +135,94 @@ export default function LoginPage() {
     }
   };
 
+  /** Move the two server-set waits onto the same clock the page ticks against. */
+  const arm = (resendIn?: number, expiresIn?: number) => {
+    const at = Date.now() / 1000;
+    setResendAt(Number(resendIn || 0) > 0 ? at + Number(resendIn) : null);
+    setExpiresAt(Number(expiresIn || 0) > 0 ? at + Number(expiresIn) : null);
+  };
+
+  const leaveRecovery = () => {
+    setRecovering('off');
+    setRecoverError(null);
+    setSent(null);
+    arm(undefined, undefined);
+  };
+
+  const askCode = async (event: FormEvent) => {
+    event.preventDefault();
+    setRecoverBusy(true);
+    setRecoverError(null);
+    try {
+      const out = await api<Recovery>('admin/session/forgot/', {
+        method: 'POST',
+        body: { email: identifier.trim() },
+      });
+      setSent(out);
+      setCode('');
+      setFresh('');
+      setRepeat('');
+      arm(out.resend_in, out.expires_in);
+      setRecovering('code');
+    } catch (err) {
+      setRecoverError((err as ApiError).message);
+    } finally {
+      setRecoverBusy(false);
+    }
+  };
+
+  const resendCode = async () => {
+    setRecoverBusy(true);
+    setRecoverError(null);
+    try {
+      const out = await api<Recovery>('admin/session/forgot/resend/', {
+        method: 'POST',
+        body: { challenge: sent?.challenge },
+      });
+      setSent(out);
+      arm(out.resend_in, out.expires_in);
+    } catch (err) {
+      // The cooldown arrives as a 429 carrying the seconds left, so the button
+      // keeps counting down rather than inviting another press.
+      const wait = Number((err as ApiError).data?.resend_in || 0);
+      if (wait > 0) arm(wait, undefined);
+      setRecoverError((err as ApiError).message);
+    } finally {
+      setRecoverBusy(false);
+    }
+  };
+
+  const spendCode = async (event: FormEvent) => {
+    event.preventDefault();
+    setRecoverBusy(true);
+    setRecoverError(null);
+    try {
+      const out = await api<{ detail?: string; sessions_revoked?: number }>('admin/session/recovery/', {
+        method: 'POST',
+        body: {
+          challenge: sent?.challenge, email: identifier.trim(),
+          code: code.trim(), password: fresh, confirm: repeat,
+        },
+      });
+      const kicked = Number(out.sessions_revoked || 0);
+      setNote(`${out.detail || 'Your password is changed.'}`
+        + (kicked > 0 ? ` ${kicked} signed-in session${kicked === 1 ? '' : 's'} closed.` : ''));
+      setPassword('');
+      setCode('');
+      setFresh('');
+      setRepeat('');
+      leaveRecovery();
+      setRestart(true);
+    } catch (err) {
+      setRecoverError((err as ApiError).message);
+    } finally {
+      setRecoverBusy(false);
+    }
+  };
+
   const locked = lockUntil !== null && lockUntil > now;
+  const waiting = resendAt !== null && resendAt > now;
+  const gone = expiresAt !== null && expiresAt <= now;
 
   return (
     <main className="login">
@@ -142,14 +251,14 @@ export default function LoginPage() {
           <form className="login-card" onSubmit={submitCredentials}>
             <header className="step-head">
               <h2>Staff sign-in</h2>
-              <p>Use the account the Client gave you. An ordinary platform login will not open this door.</p>
+              <p>Use the email address on the account the Client gave you. An ordinary platform login, and a username, will not open this door.</p>
             </header>
             <label className="field">
-              <span>Username or email</span>
+              <span>Email on your seat</span>
               <input
-                value={identifier} onChange={event => setIdentifier(event.target.value)}
-                autoComplete="username" autoFocus required
-                placeholder="sita"
+                type="email" value={identifier} onChange={event => setIdentifier(event.target.value)}
+                autoComplete="email" autoFocus required
+                placeholder="you@company.com"
               />
             </label>
             <label className="field">
@@ -160,12 +269,21 @@ export default function LoginPage() {
               />
             </label>
             {error && <p className="card-error">{IC.alert}<span>{error}</span></p>}
+            {note && <p className="card-ok">{IC.check}<span>{note}</span></p>}
             <button className="btn primary wide" type="submit" disabled={busy || !identifier || !password}>
               {busy ? 'Checking…' : 'Continue'}
             </button>
+            <div className="back-row">
+              <button
+                type="button" className="link"
+                onClick={() => { setNote(null); setRecoverError(null); setRecovering('ask'); }}
+              >
+                Forgot my password
+              </button>
+            </div>
             <p className="fineprint">
               Eight tries per minute, then the attempt pauses. Wrong passwords never say whether
-              the username exists.
+              the address holds a seat.
             </p>
           </form>
         )}
@@ -185,7 +303,7 @@ export default function LoginPage() {
               <input
                 type="password" value={fresh} onChange={event => setFresh(event.target.value)}
                 autoComplete="new-password" autoFocus required
-                placeholder="At least 8 characters"
+                placeholder="At least 10 characters"
               />
             </label>
             <label className="field">
@@ -199,13 +317,15 @@ export default function LoginPage() {
             {error && <p className="card-error">{IC.alert}<span>{error}</span></p>}
             <button
               className="btn primary wide" type="submit"
-              disabled={busy || fresh.length < 8 || repeat !== fresh}
+              disabled={busy || fresh.length < 10 || repeat !== fresh}
             >
               {busy ? 'Saving…' : 'Set my password'}
             </button>
             <p className="fineprint">
-              It cannot be the temporary one, your own name, your username or a common password.
-              The next step is the authenticator code — nothing is signed in until that is proved.
+              At least ten characters with a letter and a number in it. It cannot be the temporary
+              one, your own name, your username, a common password, or any password this seat has
+              already stood on. The next step is the authenticator code — nothing is signed in until
+              that is proved.
             </p>
           </form>
         )}
@@ -296,6 +416,97 @@ export default function LoginPage() {
                 Different account
               </button>
             </div>
+          </form>
+        )}
+
+        {step === 'forgot' && (
+          <form className="login-card" onSubmit={askCode}>
+            <header className="step-head">
+              <h2>Forgot your password</h2>
+              <p>
+                A six-digit code goes to the email address on your seat. It opens this door only —
+                your authenticator setup is not touched, so a stranger who reads your mail still
+                cannot sign in.
+              </p>
+            </header>
+            <label className="field">
+              <span>Email on your seat</span>
+              <input
+                type="email" value={identifier} onChange={event => setIdentifier(event.target.value)}
+                autoComplete="email" autoFocus required placeholder="you@company.com"
+              />
+            </label>
+            {recoverError && <p className="card-error">{IC.alert}<span>{recoverError}</span></p>}
+            <button className="btn primary wide" type="submit" disabled={recoverBusy || !identifier.trim()}>
+              {recoverBusy ? 'Sending…' : 'Send me a code'}
+            </button>
+            <div className="back-row">
+              <button type="button" className="link" onClick={leaveRecovery}>Back to sign-in</button>
+              <span className="dim">Three codes an hour, five minutes each.</span>
+            </div>
+            <p className="fineprint">
+              The answer is the same whether or not the address holds a seat. Check the spam folder
+              before asking again, and a Superadmin can always rebuild the desk from the staff page.
+            </p>
+          </form>
+        )}
+
+        {step === 'recover' && (
+          <form className="login-card" onSubmit={spendCode}>
+            <header className="step-head">
+              <h2>The code from your email</h2>
+              <p>
+                {sent?.detail || 'A code is on its way.'}
+                {expiresAt !== null && !gone && <> It stops working in {countdown(expiresAt - now)}.</>}
+                {gone && <> It has stopped working — ask for a new one.</>}
+              </p>
+            </header>
+            <label className="field">
+              <span>Six-digit code</span>
+              <input
+                inputMode="numeric" autoComplete="one-time-code" autoFocus maxLength={6}
+                value={code} onChange={event => setCode(event.target.value)}
+                placeholder="123456"
+              />
+            </label>
+            {sent?.dev_code && (
+              <p className="card-ok">{IC.alert}<span>Local build — the code this page cannot mail is <b>{sent.dev_code}</b>.</span></p>
+            )}
+            <label className="field">
+              <span>New password</span>
+              <input
+                type="password" value={fresh} onChange={event => setFresh(event.target.value)}
+                autoComplete="new-password" required placeholder="At least 10 characters"
+              />
+            </label>
+            <label className="field">
+              <span>Type it again</span>
+              <input
+                type="password" value={repeat} onChange={event => setRepeat(event.target.value)}
+                autoComplete="new-password" required placeholder="••••••••"
+              />
+            </label>
+            {recoverError && <p className="card-error">{IC.alert}<span>{recoverError}</span></p>}
+            <button
+              className="btn primary wide" type="submit"
+              disabled={recoverBusy || gone || code.trim().length < 6 || fresh.length < 10 || repeat !== fresh}
+            >
+              {recoverBusy ? 'Saving…' : 'Set my password'}
+            </button>
+            <div className="back-row">
+              <button
+                type="button" className="link" disabled={recoverBusy || waiting} onClick={resendCode}
+                title={waiting ? 'The wait is counted on the server' : 'Burn this code and mail a new one'}
+              >
+                {waiting ? `Send another in ${countdown(resendAt! - now)}` : 'Send another code'}
+              </button>
+              <button type="button" className="link" onClick={leaveRecovery}>Back to sign-in</button>
+            </div>
+            <p className="fineprint">
+              Ten wrong codes burn the letter. The password cannot be one this seat has already
+              stood on. Every device signed in to this account is closed when it is set, and the
+              address is mailed about it.
+            </p>
           </form>
         )}
 

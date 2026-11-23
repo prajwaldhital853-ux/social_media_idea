@@ -227,25 +227,48 @@ def preview(kind, row):
     }
 
 
-def _notice(kind, row, actor, reason, text):
+def audience_of(value):
+    """Which readers a notice is written for, or a refusal to write it at all.
+
+    Guessing `public` for a word the console did not send would put a sentence
+    meant for one person in front of everybody, so an unknown answer is an error
+    rather than a default.
+    """
+    text = str(value or '').strip().lower()
+    if text in ('', PublicNotice.Audience.PUBLIC):
+        return PublicNotice.Audience.PUBLIC
+    if text == PublicNotice.Audience.PRIVATE:
+        return PublicNotice.Audience.PRIVATE
+    raise ValueError('Choose who reads this notice: public, or private.')
+
+
+def _notice(kind, row, actor, reason, text, audience=PublicNotice.Audience.PUBLIC):
     notice = PublicNotice.objects.create(
         target_type=kind, target_id=str(row.pk), about=owner_for(kind, row),
         text=text[:240], reason=reason[:120], actor=actor,
+        audience=audience_of(audience),
     )
     return notice_row(notice)
 
 
-def attach(kind, target_id, actor, reason, text):
+def attach(kind, target_id, actor, reason, text, audience=PublicNotice.Audience.PUBLIC):
     """Put a notice on one target with no report and no decision behind it.
 
     The queue writes a notice as half of a verdict; a false-information claim
     nobody reported needs the same sentence over the same content, so both paths
-    end in this row rather than in two shapes of it.
+    end in this row rather than in two shapes of it. A private audience keeps the
+    sentence on the same content and shows it to the one account it is about.
     """
     row = row_for(kind, target_id)
     if row is None:
         raise ValueError(f'There is no {kind} {target_id} to put a notice on.')
-    return _notice(kind, row, actor, reason, text)
+    audience = audience_of(audience)
+    out = _notice(kind, row, actor, reason, text, audience)
+    if audience == PublicNotice.Audience.PRIVATE:
+        # A public notice is found by reading the content. A private one is not,
+        # so the bell is the only way the person it is about learns to go and look.
+        _say(kind, row, actor, f'A notice about your {kind} is standing where only you can read it: {text[:240]}')
+    return out
 
 
 def notice_row(notice):
@@ -255,6 +278,7 @@ def notice_row(notice):
         'target_type': notice.target_type,
         'target_id': notice.target_id,
         'about': notice.about.username,
+        'audience': notice.audience,
         'text': notice.text,
         'reason': notice.reason,
         'actor': notice.actor.username if notice.actor else None,
@@ -269,12 +293,17 @@ def _say(kind, row, actor, text):
     return notify(owner_for(kind, row), actor, 'warning', text, kind, row.pk)
 
 
-def act(kind, target_id, actor, action, reason='', notice_text=''):
+def act(kind, target_id, actor, action, reason='', notice_text='', audience=PublicNotice.Audience.PUBLIC):
     """Apply one action to one target. Raises ValueError with the sentence to show.
 
     `decide()` is this with a report attached; the takedown shelf calls it
     directly, because restoring a post three weeks after the reports closed has
     no live report to hang the decision on.
+
+    `audience` only ever applies to the notice this action may write: taking a
+    post down is public whatever the seat chose, and a private notice is the
+    option for the sentence that stays over content nobody else is being warned
+    about.
     """
     if action not in ACTIONS:
         raise ValueError('Choose dismiss, remove, warn, release or restore.')
@@ -283,11 +312,12 @@ def act(kind, target_id, actor, action, reason='', notice_text=''):
         raise ValueError(f'That {kind} is no longer here, so there is nothing to act on.')
     reason = str(reason or '').strip()
     notice_text = str(notice_text or '').strip()
+    audience = audience_of(audience) if notice_text else PublicNotice.Audience.PUBLIC
     now = timezone.now()
     out = {
         'action': action, 'kind': kind, 'target': f'{kind}:{row.pk}',
         'content': preview(kind, row), 'reports_closed': 0,
-        'campaigns': [], 'refunded': '0', 'notice': None, 'detail': '',
+        'campaigns': [], 'refunded': '0', 'notice': None, 'audience': audience, 'detail': '',
     }
 
     if action == 'dismiss':
@@ -308,25 +338,33 @@ def act(kind, target_id, actor, action, reason='', notice_text=''):
         out['campaigns'], out['refunded'] = campaigns, str(refunded)
         _say(kind, row, actor, f'Your {kind} was removed by moderation: {reason}')
         if notice_text:
-            out['notice'] = _notice(kind, row, actor, reason, notice_text)
+            out['notice'] = _notice(kind, row, actor, reason, notice_text, audience)
         out['content']['state'] = row.status
         out['detail'] = (
             f'Taken down. {out["reports_closed"]} report(s) closed'
             + (f', {len(campaigns)} campaign(s) cancelled' if campaigns else '')
             + (f', {refunded} coins refunded' if refunded else '')
-            + (' + a public notice' if out['notice'] else '')
+            + (' + a notice only they read' if audience == PublicNotice.Audience.PRIVATE and out['notice']
+               else ' + a public notice' if out['notice'] else '')
             + '.'
         )
 
     elif action == 'warn':
         if not notice_text:
-            raise ValueError('Write the sentence the community is shown.')
-        out['notice'] = _notice(kind, row, actor, reason, notice_text)
+            raise ValueError('Write the sentence they are shown.')
+        out['notice'] = _notice(kind, row, actor, reason, notice_text, audience)
         out['reports_closed'] = close_reports(kind, row.pk, Report.Status.RESOLVED, now)
-        _say(kind, row, actor, f'A public warning notice was posted about your {kind}: {notice_text}')
-        out['detail'] = (
-            f'Left up with a public notice. {out["reports_closed"]} report(s) closed as resolved.'
-        )
+        if audience == PublicNotice.Audience.PRIVATE:
+            _say(kind, row, actor,
+                 f'A notice about your {kind} is standing where only you can read it: {notice_text}')
+            out['detail'] = (
+                f'Left up with a notice only the author reads. {out["reports_closed"]} report(s) closed as resolved.'
+            )
+        else:
+            _say(kind, row, actor, f'A public warning notice was posted about your {kind}: {notice_text}')
+            out['detail'] = (
+                f'Left up with a public notice. {out["reports_closed"]} report(s) closed as resolved.'
+            )
 
     elif action == 'release':
         if kind == 'user':
@@ -361,8 +399,8 @@ def act(kind, target_id, actor, action, reason='', notice_text=''):
     return out
 
 
-def decide(report, actor, action, reason='', notice_text=''):
+def decide(report, actor, action, reason='', notice_text='', audience=PublicNotice.Audience.PUBLIC):
     """`act()` with the report that started it, so the queue can re-render one row."""
-    out = act(report.target_type, report.target_id, actor, action, reason, notice_text)
+    out = act(report.target_type, report.target_id, actor, action, reason, notice_text, audience)
     out['report'] = report.pk
     return out

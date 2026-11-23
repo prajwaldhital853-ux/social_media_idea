@@ -141,7 +141,7 @@ function mapNotices(rows: any): Notice[] | undefined {
   if (!Array.isArray(rows) || rows.length === 0) return undefined;
   return rows.map((n: any) => ({
     id: idOf(n.id), text: n.text || '', reason: n.reason || undefined,
-    by: n.by || undefined, ts: at(n.at),
+    by: n.by || undefined, ts: at(n.at), private: !!n.private,
   }));
 }
 

@@ -17,7 +17,7 @@ class PostListSerializer(serializers.ListSerializer):
     def to_representation(self, data):
         posts = list(data.all() if hasattr(data, 'all') else data)
         self.context['_reactions'] = post_page_reactions(self.context.get('request'), posts)
-        self.context['_notices'] = notice_map('post', [post.pk for post in posts])
+        self.context['_notices'] = notice_map('post', [post.pk for post in posts], self.context.get('request'))
         return [self.child.to_representation(post) for post in posts]
 
 
@@ -79,7 +79,7 @@ class PostSerializer(serializers.ModelSerializer):
     def get_notices(self, obj):
         # A page fills this once; a single read asks for its own row.
         if '_notices' not in self.context:
-            self.context['_notices'] = notice_map('post', [obj.pk])
+            self.context['_notices'] = notice_map('post', [obj.pk], self.context.get('request'))
         return self.context['_notices'].get(str(obj.pk), [])
 
     def create(self, validated_data):

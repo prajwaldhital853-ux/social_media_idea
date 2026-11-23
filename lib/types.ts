@@ -57,6 +57,8 @@ export interface Notice {
   reason?: string;
   by?: string;
   ts: number;
+  /** True when a seat wrote it for the account alone — nobody else reads this one. */
+  private?: boolean;
 }
 
 export interface Post {
