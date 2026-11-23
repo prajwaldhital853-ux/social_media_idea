@@ -15,12 +15,12 @@ for the seat that asked.
 import secrets
 
 from django.conf import settings as django_settings
-from django.core.files.storage import default_storage
 from django.db.models import Count, Q, Sum
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
+from apps.common.media import save_upload
 from apps.common.pagination import KeysetPagination
 from apps.common.uploads import EXTENSIONS
 from apps.wallet.models import CoinRequest, Transaction
@@ -225,7 +225,7 @@ def coin_qr_upload(request):
         return Response({'detail': 'A payment QR is a small drawing; keep it under 2 MB.'}, status=400)
     extension = EXTENSIONS[upload.content_type]
     name = f'coin-qr/{secrets.token_hex(8)}{extension}'.lower()
-    path = default_storage.save(name, upload)
+    path = save_upload(name, upload)
     url = request.build_absolute_uri(f'{django_settings.MEDIA_URL}{path}')
     previous = str(settings_store.get('coin_qr_url') or '')
     settings_store.write(request.user, {'coin_qr_url': url})

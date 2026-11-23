@@ -12,11 +12,14 @@ import re
 
 from django.conf import settings
 from django.core.exceptions import SuspiciousOperation
+from django.core.files.storage import default_storage
 from django.http import (
     Http404, HttpResponse, HttpResponseNotModified, StreamingHttpResponse,
 )
 from django.utils._os import safe_join
 from django.utils.http import http_date, parse_http_date
+
+from .models import MediaBlob
 
 # Only the types the upload view accepts, so nothing served from here can be a
 # script or a document the browser would run on this origin.
@@ -37,6 +40,21 @@ CHUNK = 1024 * 1024
 MAX_AGE = 86400
 
 IMAGE_TYPES = {'image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/avif'}
+
+
+def save_upload(name, upload):
+    """Write the bytes where the next deploy cannot erase them.
+
+    Images are small enough for the database, and on the hosted demo the database
+    is the only part of the stack a rebuild leaves alone; a photo in /media is
+    gone minutes after the next push. Clips still go to the media root.
+    """
+    if upload.content_type in IMAGE_TYPES:
+        MediaBlob.objects.create(
+            key=name, content_type=upload.content_type, size=upload.size, data=upload.read(),
+        )
+        return name
+    return default_storage.save(name, upload)
 
 
 def _true_type(target, declared):
@@ -124,9 +142,49 @@ def _fresh(request, etag, mtime):
     return since is not None and int(mtime) <= since
 
 
+def _serve_blob(request, blob):
+    """One upload answered from its row, ranges included, so it survives a deploy."""
+    data = bytes(blob.data)
+    size = len(data)
+    etag = f'"b{blob.pk}-{size:x}"'
+    mtime = blob.created_at.timestamp()
+    try:
+        cached = _fresh(request, etag, mtime)
+    except Exception:
+        cached = False
+    if cached:
+        response = HttpResponseNotModified()
+        response['Cache-Control'] = f'public, max-age={MAX_AGE}'
+        response['ETag'] = etag
+        response['Last-Modified'] = http_date(mtime)
+        return response
+
+    start, end, status = _range(request.headers.get('Range'), size)
+    if status == 416:
+        response = HttpResponse(status=416)
+        response['Content-Range'] = f'bytes */{size}'
+        return response
+
+    body = b'' if request.method == 'HEAD' else data[start:end + 1]
+    response = HttpResponse(body, status=status, content_type=blob.content_type or 'application/octet-stream')
+    response['Content-Length'] = str(end - start + 1)
+    response['Content-Disposition'] = 'inline'
+    response['Accept-Ranges'] = 'bytes'
+    response['Cache-Control'] = f'public, max-age={MAX_AGE}'
+    response['ETag'] = etag
+    response['Last-Modified'] = http_date(mtime)
+    response['X-Content-Type-Options'] = 'nosniff'
+    if status == 206:
+        response['Content-Range'] = f'bytes {start}-{end}/{size}'
+    return response
+
+
 def serve_media(request, path):
     if request.method not in ('GET', 'HEAD'):
         raise Http404
+    blob = MediaBlob.objects.filter(key=path).first()
+    if blob is not None:
+        return _serve_blob(request, blob)
     try:
         target = safe_join(str(settings.MEDIA_ROOT), path)
     except (ValueError, TypeError, SuspiciousOperation):

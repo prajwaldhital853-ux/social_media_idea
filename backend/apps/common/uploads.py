@@ -7,10 +7,11 @@ database only ever stores the resulting URL.
 import secrets
 
 from django.conf import settings
-from django.core.files.storage import default_storage
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+
+from .media import save_upload
 
 MAX_BYTES = 150 * 1024 * 1024
 IMAGE_TYPES = {'image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/avif'}
@@ -47,6 +48,6 @@ def upload(request):
 
     extension = EXTENSIONS[upload.content_type]
     name = f'uploads/{secrets.token_hex(12)}{extension}'.lower()
-    path = default_storage.save(name, upload)
+    path = save_upload(name, upload)
     url = request.build_absolute_uri(f'{settings.MEDIA_URL}{path}')
     return Response({'url': url, 'kind': kind, 'bytes': upload.size}, status=201)
