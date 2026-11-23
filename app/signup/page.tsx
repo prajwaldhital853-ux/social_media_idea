@@ -7,7 +7,7 @@ import AuthCode from '@/components/AuthCode';
 import BrandLogo from '@/components/BrandLogo';
 import { AuthResult, useApp } from '@/lib/AppContext';
 import { API_ENABLED } from '@/lib/api';
-import { requestGoogleToken } from '@/lib/google';
+import GoogleButton from '@/components/GoogleButton';
 import { COUNTRIES, THEME_KEY, ageFromDob, uid } from '@/lib/utils';
 import { IC } from '@/lib/icons';
 import { SignupProvider, User } from '@/lib/types';
@@ -171,21 +171,32 @@ export default function SignupPage() {
     }
   };
 
+  // Google's own button hands back the token; this is the half that spends it.
+  const googleToken = async (token: string) => {
+    setError('');
+    setGoogleBusy(true);
+    try {
+      const res = await googleSignIn({ id_token: token });
+      if (res.needsSignup && res.prefill) {
+        setPrefill(res.prefill);
+        setEmail(res.prefill.email);
+        setName(res.prefill.name);
+      } else if (res.ok && res.user) {
+        showToast(t('welcome', { name: res.user.name || res.user.username }));
+        router.push('/');
+      }
+    } catch (err) {
+      setError((err as Error)?.message || t('googleUnavailable'));
+    } finally {
+      setGoogleBusy(false);
+    }
+  };
+
   const startGoogle = async () => {
     setError('');
     setGoogleBusy(true);
     try {
-      if (db.settings.googleClientId) {
-        const res = await googleSignIn({ id_token: await requestGoogleToken(db.settings.googleClientId) });
-        if (res.needsSignup && res.prefill) {
-          setPrefill(res.prefill);
-          setEmail(res.prefill.email);
-          setName(res.prefill.name);
-        } else if (res.ok && res.user) {
-          showToast(t('welcome', { name: res.user.name || res.user.username }));
-          router.push('/');
-        }
-      } else if (feature('googleDemo') && db.settings.demoGoogle) {
+      if (feature('googleDemo') && db.settings.demoGoogle) {
         setPrefill({ ...db.settings.demoGoogle, google_sub: db.settings.demoGoogle.sub } as Prefill);
         setEmail(db.settings.demoGoogle.email);
         setName(db.settings.demoGoogle.name);
@@ -247,7 +258,10 @@ export default function SignupPage() {
         <p className="signup-sub">{t('signupSub')}</p>
         {waking ? <p className="auth-notice" role="status">{t('waking')}</p> : null}
 
-        {showGoogle && (
+        {showGoogle && db.settings.googleClientId && (
+          <GoogleButton clientId={db.settings.googleClientId} onToken={googleToken} onError={setError} fallback={null} />
+        )}
+        {showGoogle && !db.settings.googleClientId && (
           <button type="button" className={`social-btn ${googleBusy ? 'checking' : ''}`} onClick={startGoogle}
             disabled={busy || googleBusy} aria-busy={googleBusy}>
             {googleBusy ? <span className="btn-spin" aria-hidden="true" /> : IC.g}
