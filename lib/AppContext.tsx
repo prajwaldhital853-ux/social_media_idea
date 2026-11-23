@@ -178,6 +178,9 @@ export interface AuthResult {
   lockedUntil?: number;
   /** Seconds of cooloff left, counted on the server clock. */
   retryIn?: number;
+  /** A lock closed more than the password box: 'email', 'ip' or 'device'. */
+  banned?: boolean;
+  banScope?: string;
   attemptsLeft?: number;
   detail?: string;
   errors?: Record<string, string[]>;
@@ -541,6 +544,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         locked: !!err.data?.locked,
         lockedUntil: at(err.data?.locked_until),
         retryIn: err.data?.retry_in === undefined ? undefined : Number(err.data.retry_in),
+        banned: !!err.data?.banned,
+        banScope: err.data?.scope || undefined,
         attemptsLeft: err.data?.attempts_left,
       };
     }

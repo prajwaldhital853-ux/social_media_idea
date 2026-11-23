@@ -20,6 +20,7 @@ from .auth import (
     clear_auth_cookies, decode_token, hash_code, set_auth_cookies,
 )
 from .models import DeviceTrust, EmailOTP, RefreshSession, User
+from . import safety
 from .tasks import deliver_otp_email
 
 LOCK_THRESHOLD = 3
@@ -122,7 +123,9 @@ def request_label(user):
 def _finish_login(request, user, device_id):
     user.failed_attempts = 0
     user.locked_until = None
-    user.save(update_fields=['failed_attempts', 'locked_until'])
+    user.last_ip = client_ip(request)[:60]
+    user.last_device = (device_id or '')[:80]
+    user.save(update_fields=['failed_attempts', 'locked_until', 'last_ip', 'last_device'])
     _trust_device(user, device_id)
     resp = Response({'user': {'id': user.pk, 'username': user.username, 'email': user.email}})
     return set_auth_cookies(resp, user, device_id)
@@ -145,6 +148,13 @@ def signup(request):
         validate_email(email)
     except DjangoValidationError:
         return Response({'detail': 'Enter a valid email address.'}, status=400)
+    # A new account is the widest door of the three, so a connection or a browser
+    # that was closed for guessing passwords cannot simply start over. The address
+    # is read too: the lock that covers it says so here instead of pretending the
+    # email is merely taken.
+    banned = safety.blocking(request, email)
+    if banned is not None:
+        return safety.refuse(banned)
     if User.objects.filter(username=username).exists():
         return Response({'detail': 'That username is taken.'}, status=400)
     if User.objects.filter(email=email).exists():
@@ -237,16 +247,26 @@ def login(request):
     if not user.check_password(password):
         user.failed_attempts += 1
         if user.failed_attempts >= LOCK_THRESHOLD:
-            user.locked_until = timezone.now() + timedelta(minutes=LOCK_MINUTES)
-            user.save(update_fields=['failed_attempts', 'locked_until'])
+            # The cooloff itself is only worth anything if the doors beside it shut
+            # at the same time: the address, this connection and this browser are
+            # banned for exactly as long as the account stays locked.
+            minutes, until = safety.trip(request, user)
+            user.save(update_fields=['failed_attempts'])
             return Response({
-                'detail': f'Account locked for {LOCK_MINUTES} minutes after {LOCK_THRESHOLD} wrong passwords.',
-                'locked': True, 'locked_until': user.locked_until, 'retry_in': LOCK_MINUTES * 60,
+                'detail': f'Account locked for {minutes} minutes after {LOCK_THRESHOLD} wrong passwords.',
+                'locked': True, 'locked_until': until, 'retry_in': minutes * 60, 'scope': 'email',
             }, status=423)
         user.save(update_fields=['failed_attempts'])
         return Response({
             'detail': 'Wrong password.', 'attempts_left': LOCK_THRESHOLD - user.failed_attempts,
         }, status=401)
+    # The password is right, so the cooloff this address caused stops holding its
+    # side doors shut: a household must not lose the honest member's sign-in to
+    # somebody else's guessing. A staff ban is not lifted by a password.
+    safety.lift(user.email, reasons=['lock'])
+    banned = safety.blocking(request, email)
+    if banned is not None:
+        return safety.refuse(banned)
     if user.password != encoded:
         # The verify re-hashed at the current work factor. An upgrade nobody
         # writes down is paid for again on every later sign-in.
@@ -312,6 +332,10 @@ def _verify_otp(request, force_purpose=None):
         user.failed_attempts = 0
         user.locked_until = None
         user.save(update_fields=['failed_attempts', 'locked_until'])
+        # The code went to the address, which is the proof that the person on the
+        # other side owns it — so the connection and the browser that trip closed
+        # open again with it. Staff bans survive an unlock.
+        safety.lift(user.email, reasons=['lock'])
         return Response({'detail': 'Account unlocked. Sign in with your password.'})
     if otp.purpose == 'verify':
         user.email_verified = True
@@ -491,9 +515,24 @@ def google(request):
     if not email:
         # Blank would otherwise match the one row an admin left without an address.
         return Response({'detail': 'Google did not give us an email address for this account.'}, status=400)
+    # Google proves who the address belongs to; it never proved that the account
+    # behind it is allowed in. A locked or banned identity used to walk through here
+    # and _finish_login wiped its own counter on the way.
+    banned = safety.blocking(request, email)
+    if banned is not None:
+        return safety.refuse(banned)
     user = User.objects.filter(email=email).order_by('id').first()
     device_id = _device_id(request)
     if user:
+        if user.is_suspended:
+            return Response({'detail': f'Account suspended: {user.suspend_reason}'}, status=403)
+        if user.is_locked:
+            return Response({
+                'detail': 'This account is locked after too many wrong passwords. '
+                          'Sign in with the right password once the cooloff ends.',
+                'locked': True, 'locked_until': user.locked_until, 'scope': 'email',
+                'retry_in': int((user.locked_until - timezone.now()).total_seconds()),
+            }, status=423)
         if user.provider != 'google':
             user.provider = 'google'
             user.save(update_fields=['provider'])

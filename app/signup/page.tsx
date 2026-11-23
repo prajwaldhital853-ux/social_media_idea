@@ -11,6 +11,7 @@ import GoogleButton from '@/components/GoogleButton';
 import { COUNTRIES, THEME_KEY, ageFromDob, uid } from '@/lib/utils';
 import { IC } from '@/lib/icons';
 import { SignupProvider, User } from '@/lib/types';
+import type { TranslationKey } from '@/lib/i18n';
 
 const GOOGLE_KEY = 'exposing-google';
 type Prefill = { email: string; name: string; google_sub: string };
@@ -22,6 +23,15 @@ type Prefill = { email: string; name: string; google_sub: string };
 const serverRef = (res: AuthResult) => (res.requestId && res.status >= 500 && res.detail
   ? `${res.detail} (ref ${res.requestId})`
   : res.detail);
+
+/**
+ * A lock closes the sign-up door as well: the account, the browser and the
+ * network it was guessed from are all paused together, so this page has to say
+ * which one is holding and for how long instead of blaming the email box.
+ */
+const banLine = (res: AuthResult, t: (key: TranslationKey, vars?: Record<string, string | number>) => string) =>
+  t(res.banScope === 'device' ? 'e_bannedDevice' : res.banScope === 'ip' ? 'e_bannedIp' : 'e_locked',
+    { time: Math.max(1, Math.ceil((res.retryIn || 0) / 60)) });
 
 export default function SignupPage() {
   const { db, t, feature, ready, waking, setDb, showToast, signupAccount, verifyCode, resendCode, googleSignIn } = useApp();
@@ -117,6 +127,7 @@ export default function SignupPage() {
         google: prefill ? { sub: prefill.google_sub, email: prefill.email, name: prefill.name } : undefined,
       });
       if (!res.ok) {
+        if (res.locked) return setError(banLine(res, t));
         const first = res.errors && Object.values(res.errors)[0]?.[0];
         setError(first || serverRef(res) || t('e_email'));
         return;
@@ -184,6 +195,12 @@ export default function SignupPage() {
       } else if (res.ok && res.user) {
         showToast(t('welcome', { name: res.user.name || res.user.username }));
         router.push('/');
+      } else if (res.locked) {
+        // Google believes the address; it never believed the account was allowed in.
+        // Without this the button simply stopped, which read as Google being broken.
+        setError(banLine(res, t));
+      } else if (res.detail) {
+        setError(res.detail);
       }
     } catch (err) {
       setError((err as Error)?.message || t('googleUnavailable'));

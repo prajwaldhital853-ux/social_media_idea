@@ -26,6 +26,7 @@ from django.db.models import Count, F, Q
 from django.utils import timezone
 from django.utils.dateparse import parse_date, parse_datetime
 
+from apps.accounts import safety
 from apps.accounts.models import RefreshSession, User
 from apps.comments.models import Comment
 from apps.common.api import person
@@ -505,6 +506,14 @@ def suspend(user, caller, *, reason, days=None, until=None, permanent=False):
     user.suspend_reason = reason[:200]
     user.save(update_fields=['suspended_until', 'suspend_reason'])
     kicked = locked_out(user, now)
+    # Suspension ends the seat they are sitting in. The ban is the door: the
+    # address, the connection it last arrived on and every browser that account was
+    # ever trusted on are closed for as long as the suspension runs, so a
+    # suspension cannot be signed around with a new account or the Google button.
+    closed = safety.raise_bans(
+        user.email, end, 'admin', ip=user.last_ip,
+        devices=[user.last_device, *list(user.trusted_devices.values_list('device_id', flat=True))],
+    )
     notify(user, caller, 'warning',
            f'Your account is suspended {"for good" if permanent else f"until {end:%Y-%m-%d}"}: {reason}',
            'user', user.pk)
@@ -523,8 +532,10 @@ def suspend(user, caller, *, reason, days=None, until=None, permanent=False):
         'suspension': suspension_of(user), 'emailed': emailed, 'sessions_revoked': kicked,
         'detail': (f'Suspended {"for good" if permanent else f"until {end:%d %b %Y}"}. '
                    f'{kicked} open session(s) cannot be renewed. '
+                   + (f'Sign-in, sign-up and Google are blocked on {", ".join(closed)}. ' if closed else '')
                    + (f'An email went to {emailed["to"]}.' if emailed
                       else 'There is no email address on this account.')),
+        'banned': closed,
     }
 
 
@@ -535,11 +546,15 @@ def reinstate(user, caller):
     user.suspended_until = None
     user.suspend_reason = ''
     user.save(update_fields=['suspended_until', 'suspend_reason'])
+    # The seat is back; so are the doors. Only the bans this suspension raised —
+    # a cooloff someone else caused on the same connection stays where it is.
+    lifted = safety.lift(user.email, reasons=['admin'])
     notify(user, caller, 'warning', 'Your account suspension was lifted by staff.', 'user', user.pk)
     record(caller, 'reinstate_user', user.username, 'suspension lifted')
+    doors = f'The suspension is lifted and {lifted} sign-in ban(s) with it. ' if lifted else 'The suspension is lifted. '
     return {
-        'action': 'reinstate', 'username': user.username, 'suspension': None,
-        'detail': 'The suspension is lifted. They can sign in again right now.',
+        'action': 'reinstate', 'username': user.username, 'suspension': None, 'bans_lifted': lifted,
+        'detail': doors + 'They can sign in again right now.',
     }
 
 
@@ -617,6 +632,9 @@ def clear_flags(user, caller, *, reason=''):
     user.failed_attempts = 0
     user.locked_until = None
     user.save(update_fields=['failed_attempts', 'locked_until'])
+    # Clearing the lockout means the whole way back in, not just the password box:
+    # the cooloff also closed their connection and their browser.
+    safety.lift(user.email, reasons=['lock'])
     held = Post.objects.filter(author=user, status=Post.Status.HIDDEN).count()
     notify(user, caller, 'warning',
            'The reports on your account were reviewed and cleared.'

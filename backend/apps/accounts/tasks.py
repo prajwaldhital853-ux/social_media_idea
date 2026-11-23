@@ -31,8 +31,13 @@ def deliver_otp_email(email, code, purpose):
 
 @shared_task
 def prune_expired_auth_rows():
+    from datetime import timedelta
+
     from django.utils import timezone
-    from .models import EmailOTP, RefreshSession
+    from .models import AuthBan, EmailOTP, RefreshSession
     cutoff = timezone.now()
     EmailOTP.objects.filter(expires_at__lt=cutoff).delete()
     RefreshSession.objects.filter(expires_at__lt=cutoff).delete()
+    # A ban that has lifted stays a day longer than it lasted: that history is how
+    # the next round of guessing knows it is not the first one.
+    AuthBan.objects.filter(until__lt=cutoff - timedelta(days=1)).delete()
