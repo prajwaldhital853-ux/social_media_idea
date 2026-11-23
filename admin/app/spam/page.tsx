@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import Banner from '@/components/Banner';
 import ConsoleShell from '@/components/ConsoleShell';
+import { useConfirm } from '@/components/Confirm';
 import { api } from '@/lib/api';
 import { IC } from '@/lib/icons';
 import { ago } from '@/lib/time';
@@ -28,6 +29,7 @@ const ENFORCED_NOTE = 'the site refuses this at its own door today';
 
 export default function SpamScreen() {
   const { noteGate } = useSession();
+  const confirm = useConfirm();
   const [desk, setDesk] = useState<SpamDesk | null>(null);
   const [quote, setQuote] = useState<SpamConfig | null>(null);
   const [draft, setDraft] = useState<Record<string, string>>({});
@@ -61,6 +63,13 @@ export default function SpamScreen() {
   const held = (key: string) => lines.find(item => item.key === key);
 
   const save = async () => {
+    const sure = await confirm({
+      title: `Save ${touched.length} spam control(s)?`,
+      body: 'These take effect on the next request, not on a restart: whatever is typed here is what the site hides, rate-limits or refuses from now on, including for people already posting this minute.',
+      confirmLabel: 'Save and enforce',
+      tone: 'amber',
+    });
+    if (!sure) return;
     setBusy(true);
     setBanner(null);
     try {

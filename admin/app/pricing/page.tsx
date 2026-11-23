@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import Banner from '@/components/Banner';
 import ConsoleShell from '@/components/ConsoleShell';
+import { useConfirm } from '@/components/Confirm';
 import { api, upload } from '@/lib/api';
 import { IC } from '@/lib/icons';
 import { ago } from '@/lib/time';
@@ -25,6 +26,7 @@ const FILED = ['coin_qr_url'];
 
 export default function PricingScreen() {
   const { noteGate } = useSession();
+  const confirm = useConfirm();
   const [desk, setDesk] = useState<CoinDesk | null>(null);
   const [draft, setDraft] = useState<Record<string, string>>({});
   const [banner, setBanner] = useState<{ kind: 'ok' | 'bad'; text: string } | null>(null);
@@ -59,6 +61,13 @@ export default function PricingScreen() {
 
   const save = async () => {
     if (!desk) return;
+    const sure = await confirm({
+      title: `Save ${touched.length} price line(s)${file ? ' and the payment QR' : ''}?`,
+      body: 'This is the number a stranger is asked for before the bank details are ever shown. It re-quotes every wallet on the site from the next page load, and coins already sold are not re-priced.',
+      confirmLabel: 'Save and re-quote',
+      tone: 'amber',
+    });
+    if (!sure) return;
     setBusy(true);
     setBanner(null);
     try {

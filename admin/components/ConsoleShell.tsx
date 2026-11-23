@@ -1,12 +1,17 @@
 'use client';
 
-import { ReactNode, useEffect, useState } from 'react';
+import { ReactNode, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 import { crumbsFor, navFor, requires } from '@/lib/nav';
 import { IC } from '@/lib/icons';
 import { left } from '@/lib/time';
 import { useSession } from '@/lib/session';
+
+// Every screen renders its own shell, so switching screens rebuilds this drawer
+// from nothing. A moderator working down a long list would lose their place on
+// every click, so the offset outlives the element that was scrolled.
+let navScroll = 0;
 
 export default function ConsoleShell({
   title, subtitle, actions, children,
@@ -16,6 +21,16 @@ export default function ConsoleShell({
   const { status, session, lapsed, error, verify, signOut, busy, can } = useSession();
   const [tick, setTick] = useState(0);
   const [jump, setJump] = useState('');
+  const navRef = useRef<HTMLElement>(null);
+
+  useLayoutEffect(() => {
+    const nav = navRef.current;
+    if (!nav) return;
+    nav.scrollTop = navScroll;
+    const remember = () => { navScroll = nav.scrollTop; };
+    nav.addEventListener('scroll', remember, { passive: true });
+    return () => nav.removeEventListener('scroll', remember);
+  }, [status]);
 
   useEffect(() => {
     if (status === 'out') router.replace('/login');
@@ -73,7 +88,7 @@ export default function ConsoleShell({
           </span>
         </Link>
 
-        <nav className="side-nav">
+        <nav className="side-nav" ref={navRef}>
           {groups.map(group => (
             <div key={group.id} className="side-group">
               <span className="side-group-label">{group.label}</span>

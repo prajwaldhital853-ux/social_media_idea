@@ -335,6 +335,7 @@ function Case({ bucket, decide, onDone }: {
                 <DecisionBar
                   actions={rep.actions}
                   permission={rep.permission}
+                  target={rep.target}
                   run={(verb, reason, notice) => decide(rep, verb, reason, notice)}
                   onDone={onDone}
                 />

@@ -1,17 +1,16 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
 import Banner from '@/components/Banner';
 import ConsoleShell from '@/components/ConsoleShell';
-import { Act, Chips, More } from '@/components/List';
+import { ActLink, Chips, More } from '@/components/List';
 import { api } from '@/lib/api';
 import { num } from '@/lib/format';
 import { IC } from '@/lib/icons';
-import { ago, stamp } from '@/lib/time';
+import { ago } from '@/lib/time';
 import { useSession } from '@/lib/session';
-import {
-  PeopleFacets, PersonDetail, PersonOutcome, PersonPage, PersonRow, PersonVerbs,
-} from '@/lib/types';
+import { PeopleFacets, PersonPage, PersonRow, PersonVerbs } from '@/lib/types';
 
 const STATES = [
   { id: 'all', label: 'Everyone' },
@@ -35,46 +34,6 @@ const ROLE_LABEL: Record<string, string> = {
   superadmin: 'Client seat', admin: 'Admin seat', moderator: 'Moderator seat', user: 'Member',
 };
 
-type Verb = 'suspend' | 'reinstate' | 'verify' | 'warn' | 'clear_flags' | 'delete';
-
-const PATH: Record<Verb, (username: string) => string> = {
-  suspend: username => `admin/people/${username}/suspend/`,
-  reinstate: username => `admin/people/${username}/reinstate/`,
-  verify: username => `admin/people/${username}/verify/`,
-  warn: username => `admin/people/${username}/warn/`,
-  clear_flags: username => `admin/people/${username}/clear-flags/`,
-  delete: username => `admin/people/${username}/delete/`,
-};
-
-const SPEC: Record<Verb, { label: string; tone: string; icon: keyof typeof IC; help: string }> = {
-  suspend: {
-    label: 'Suspend', tone: 'danger', icon: 'lock',
-    help: 'They stop being able to sign in at their next request, lose every open session, and are emailed the reason with the Client contact details.',
-  },
-  reinstate: {
-    label: 'Reinstate', tone: 'primary', icon: 'check',
-    help: 'The bar is lifted right now and they are told in the app. Nothing else about the account changes.',
-  },
-  verify: {
-    label: 'Verified tick', tone: 'amber', icon: 'key',
-    help: 'The grey tick on their profile. Putting it on needs a reason, and it goes on the audit row.',
-  },
-  warn: {
-    label: 'Private warning', tone: 'ghost', icon: 'chat',
-    help: 'Lands in their notification bell, and their inbox unless they turned warning emails off. Always written to the record.',
-  },
-  clear_flags: {
-    label: 'Clear spam flags', tone: 'primary', icon: 'refresh',
-    help: 'Closes every open report on the account and its content and clears a sign-in lockout. It does not undo a takedown somebody decided.',
-  },
-  delete: {
-    label: 'Delete account', tone: 'danger', icon: 'x',
-    help: 'Destroys the account, their posts, comments, listings, follows, messages and wallet. Refused while anything is running or owed.',
-  },
-};
-
-const ORDER: Verb[] = ['suspend', 'reinstate', 'warn', 'verify', 'clear_flags', 'delete'];
-
 export default function PeoplePage() {
   const { status, noteGate, session } = useSession();
   const [q, setQ] = useState('');
@@ -84,11 +43,6 @@ export default function PeoplePage() {
   const [facets, setFacets] = useState<PeopleFacets | null>(null);
   const [verbs, setVerbs] = useState<PersonVerbs>({ actions: false, warn: false });
   const [cursor, setCursor] = useState<string | null>(null);
-  const [open, setOpen] = useState<string | null>(null);
-  // The pen icons at the end of a row do not act on the spot — they open the
-  // account with that one ask already written, so the reason and the audit row
-  // are still typed by a person who can see who they are about to bar.
-  const [askFor, setAskFor] = useState<Verb | null>(null);
   const [banner, setBanner] = useState<{ kind: 'ok' | 'bad'; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
   // The search box answers every keystroke, so three requests for one word can
@@ -147,23 +101,6 @@ export default function PeoplePage() {
     } finally {
       if (seq.current === mine) setBusy(false);
     }
-  };
-
-  const done = (out: PersonOutcome) => {
-    setBanner({ kind: 'ok', text: out.detail });
-    // The account no longer exists, so the open card has nothing left to show.
-    if (out.action === 'delete') { setOpen(null); setAskFor(null); }
-    load();
-  };
-
-  const toggle = (username: string) => {
-    setOpen(current => (current === username ? null : username));
-    setAskFor(null);
-  };
-
-  const actOn = (username: string, verb: Verb) => {
-    setOpen(username);
-    setAskFor(verb);
   };
 
   return (
@@ -253,10 +190,6 @@ export default function PeoplePage() {
             {rows.map(row => (
               <PersonRowView
                 key={row.id} row={row} verbs={verbs} mine={row.username === session?.user.username}
-                opens={open === row.username} askFor={open === row.username ? askFor : null}
-                onToggle={() => toggle(row.username)} onAct={verb => actOn(row.username, verb)}
-                onDone={out => { done(out); if (out.action !== 'delete') setAskFor(null); }}
-                noteGate={noteGate}
               />
             ))}
           </table>
@@ -268,31 +201,30 @@ export default function PeoplePage() {
   );
 }
 
-function PersonRowView({
-  row, verbs, mine, opens, askFor, onToggle, onAct, onDone, noteGate,
-}: {
-  row: PersonRow;
-  verbs: PersonVerbs;
-  mine: boolean;
-  opens: boolean;
-  askFor: Verb | null;
-  onToggle: () => void;
-  onAct: (verb: Verb) => void;
-  onDone: (out: PersonOutcome) => void;
-  noteGate: (err: unknown) => boolean;
-}) {
+/**
+ * A row is a summary, not a drawer. Everything underneath it — the pile, the
+ * warnings, the wallet, the act-on buttons — lives on the account's own page,
+ * so the directory never grows eleven columns tall mid-scroll.
+ */
+function PersonRowView({ row, verbs, mine }: { row: PersonRow; verbs: PersonVerbs; mine: boolean }) {
   const holding = row.flags.on_account + row.flags.on_content;
   const barred = !!row.suspension;
-  const offered: Verb[] = ['warn', barred ? 'reinstate' : 'suspend', 'delete'];
+  const offered: { verb: string; icon: keyof typeof IC; label: string; act: string }[] = [
+    { verb: 'warn', icon: 'pen', label: 'Private warning', act: 'warn' },
+    barred
+      ? { verb: 'reinstate', icon: 'check', label: 'Reinstate', act: 'reinstate' }
+      : { verb: 'suspend', icon: 'lock', label: 'Suspend', act: 'suspend' },
+    { verb: 'delete', icon: 'trash', label: 'Delete account', act: 'delete' },
+  ];
 
   return (
-    <tbody className={`person${opens ? ' open' : ''}`} data-person={row.username}>
-      <tr className={`grid-row${opens ? ' open' : ''}`}>
+    <tbody className="person" data-person={row.username}>
+      <tr className="grid-row">
         <td>
-          <button type="button" className="person-id" onClick={onToggle} aria-expanded={opens}>
+          <Link href={`/people/${row.username}`} className="person-id">
             <span className="grid-caret">{IC.chevron}</span>
             <span className="id">@{row.username}</span>
-          </button>
+          </Link>
         </td>
         <td className="strong">
           <span className="person-name">
@@ -335,397 +267,20 @@ function PersonRowView({
         </td>
         <td>
           <div className="grid-acts">
-            <Act icon="eye" label={opens ? 'Close this account' : 'Open this account'} onClick={onToggle} />
-            {offered.map(verb => (
-              <Act
-                key={verb}
-                icon={verb === 'warn' ? 'pen' : verb === 'delete' ? 'trash' : barred ? 'check' : 'lock'}
-                label={SPEC[verb].label}
-                tone={verb === 'delete' ? 'dead' : undefined}
-                disabled={!mine && !(verb === 'warn' ? verbs.warn : verbs.actions)}
-                onClick={() => onAct(verb)}
+            <ActLink to={`/people/${row.username}`} icon="eye" label="Open this account"/>
+            {offered.map(item => (
+              <ActLink
+                key={item.verb}
+                to={`/people/${row.username}?act=${item.act}`}
+                icon={item.icon}
+                label={`${item.label} — opens the account with this ask written`}
+                tone={item.verb === 'delete' ? 'dead' : undefined}
+                disabled={mine || !(item.verb === 'warn' ? verbs.warn : verbs.actions)}
               />
             ))}
           </div>
         </td>
       </tr>
-      {opens && (
-        <tr className="grid-detail">
-          <td colSpan={11}>
-            <PersonDetailCard
-              username={row.username} verbs={verbs} mine={mine} askFor={askFor}
-              onDone={onDone} noteGate={noteGate}
-            />
-          </td>
-        </tr>
-      )}
     </tbody>
-  );
-}
-
-function PersonDetailCard({
-  username, verbs, mine, askFor, onDone, noteGate,
-}: {
-  username: string;
-  verbs: PersonVerbs;
-  mine: boolean;
-  askFor: Verb | null;
-  onDone: (out: PersonOutcome) => void;
-  noteGate: (err: unknown) => boolean;
-}) {
-  const [detail, setDetail] = useState<PersonDetail | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  const reload = useCallback(async () => {
-    try {
-      setDetail(await api<PersonDetail>(`admin/people/${username}/`));
-      setError(null);
-    } catch (err) {
-      if (!noteGate(err)) setError((err as Error).message);
-    }
-  }, [noteGate, username]);
-
-  useEffect(() => {
-    reload();
-  }, [reload]);
-
-  if (!detail) {
-    return error
-      ? <p className="card-error" role="status">{IC.alert}<span>{error}</span></p>
-      : <div className="seat-body"><div className="skeleton-stack"><div className="skeleton"/><div className="skeleton"/></div></div>;
-  }
-
-  const person = detail.person;
-  const offered = ORDER.filter(verb => {
-    if (verb === 'reinstate') return !!person.suspension;
-    if (verb === 'suspend') return !person.suspension;
-    return true;
-  });
-
-  return (
-    <div className="person-body">
-      <div className="person-side">
-        <h3>Act on this account</h3>
-        {!verbs.actions && !verbs.warn ? (
-          <p className="note">
-            This seat may read the directory but holds neither <b>Suspend, reinstate, verify,
-            delete</b> nor <b>Private warnings to users</b>, so there is nothing to sign here.
-          </p>
-        ) : (
-          <div className="verbs">
-            {offered.map(verb => {
-              const needs = verb === 'warn' ? verbs.warn : verbs.actions;
-              return (
-                <VerbButton
-                  key={verb} verb={verb} person={person} allowed={needs && !mine}
-                  detail={detail} opened={askFor === verb}
-                  onDone={out => { onDone(out); reload(); }}
-                  noteGate={noteGate}
-                />
-              );
-            })}
-          </div>
-        )}
-        {mine && (
-          <p className="note row">
-            {IC.lock}
-            <span>
-              This is the account you are signed in with. Nothing can be suspended or deleted from
-              the seat doing it, which is why the buttons are off.
-            </span>
-          </p>
-        )}
-
-        <h3>What a deletion would take</h3>
-        <dl className="facts">
-          <div><dt>Wallet</dt><dd>{detail.holdings.balance} coins</dd></div>
-          <div><dt>Running campaigns</dt><dd>{detail.holdings.campaigns}</dd></div>
-          <div><dt>Payment proofs waiting</dt><dd>{detail.holdings.pending_requests}</dd></div>
-          <div><dt>Content</dt><dd>{detail.holdings.posts} posts, {detail.holdings.comments} comments, {detail.holdings.listings} listings</dd></div>
-        </dl>
-        {detail.ledger.length > 0 && (
-          <p className="fineprint">
-            Last ledger move: {detail.ledger[0].kind} {detail.ledger[0].amount} · {ago(detail.ledger[0].created_at)}
-          </p>
-        )}
-      </div>
-
-      <div className="person-record">
-        <h3>The pile</h3>
-        {detail.reports.length === 0 && detail.content.length === 0 ? (
-          <p className="note">Nothing is reported against this account or anything it has posted.</p>
-        ) : (
-          <>
-            <ul className="chips">
-              {detail.content.slice(0, 12).map(item => (
-                <li key={item.target} className="chip" data-pile={item.target}>
-                  {item.target} · {item.state}
-                  {item.open > 0 ? ` · ${item.open} open (${item.reporters} reporters)` : ''}
-                </li>
-              ))}
-            </ul>
-            <ul className="reporters">
-              {detail.reports.slice(0, 6).map(report => (
-                <li key={report.id}>
-                  <b>{report.reason}</b>
-                  <em>{report.reporter ? `@${report.reporter.username}` : 'unknown'} · {ago(report.created_at)} · {report.status}</em>
-                  {report.details && <span className="ctext">{report.details}</span>}
-                </li>
-              ))}
-            </ul>
-          </>
-        )}
-
-        <h3>What staff have told them</h3>
-        {detail.warnings.length === 0
-          ? <p className="note">No private warnings on record.</p>
-          : (
-            <ul className="reporters">
-              {detail.warnings.map((entry, index) => (
-                // The notification has no id in this payload; who said it and when is unique enough.
-                <li key={`${entry.created_at}-${index}`}>
-                  <b>{entry.text}</b>
-                  <em>{entry.actor ? `@${entry.actor}` : 'staff'} · {ago(entry.created_at)}</em>
-                </li>
-              ))}
-            </ul>
-          )}
-
-        <h3>Record</h3>
-        {detail.audit.length === 0
-          ? <p className="note">No staff decision has touched this account yet.</p>
-          : (
-            <ul className="reporters">
-              {detail.audit.slice(0, 10).map(entry => (
-                <li key={entry.id}>
-                  <b>{entry.action}</b>
-                  <em title={stamp(entry.created_at)}>{entry.actor ? `@${entry.actor}` : 'system'} · {ago(entry.created_at)}</em>
-                  <span className="ctext">{entry.detail}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-      </div>
-    </div>
-  );
-}
-
-function VerbButton({
-  verb, person, allowed, detail, opened, onDone, noteGate,
-}: {
-  verb: Verb;
-  person: PersonRow;
-  allowed: boolean;
-  detail: PersonDetail;
-  opened: boolean;
-  onDone: (out: PersonOutcome) => void;
-  noteGate: (err: unknown) => boolean;
-}) {
-  const [form, setForm] = useState(false);
-  const [kind, setKind] = useState<'days' | 'until' | 'permanent'>('days');
-  const [days, setDays] = useState('7');
-  const [until, setUntil] = useState('');
-  const [reason, setReason] = useState('');
-  const [text, setText] = useState('');
-  const [confirm, setConfirm] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  // A pen clicked at the end of the row means "this one", so the ask opens
-  // itself with the reason box already under the cursor.
-  useEffect(() => {
-    if (opened) { setForm(true); setError(null); }
-  }, [opened]);
-
-  const spec = SPEC[verb];
-  const label = verb === 'verify'
-    ? (person.verified ? 'Take the tick off' : 'Give the verified tick')
-    : spec.label;
-
-  const submit = async (body: Record<string, unknown>) => {
-    setBusy(true);
-    setError(null);
-    try {
-      const out = await api<PersonOutcome>(PATH[verb](person.username), { method: 'POST', body });
-      setForm(false);
-      setReason('');
-      setText('');
-      setConfirm('');
-      onDone(out);
-    } catch (err) {
-      // A lapsed admin window or an ended seat is the shell's business, not this card's error line.
-      if (!noteGate(err)) setError((err as Error).message || 'That did not go through.');
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const start = () => {
-    setError(null);
-    if (verb === 'reinstate') {
-      submit({});
-      return;
-    }
-    setForm(!form);
-  };
-
-  const needsReason = verb === 'suspend' || verb === 'clear_flags'
-    || (verb === 'verify' && !person.verified) || verb === 'delete';
-
-  const canSend = (() => {
-    if (verb === 'warn') return text.trim().length > 0;
-    if (verb === 'delete') return reason.trim().length > 0 && confirm.trim() === person.username;
-    if (verb === 'verify') return person.verified ? true : reason.trim().length > 0;
-    if (verb === 'clear_flags') return reason.trim().length > 0;
-    if (verb === 'suspend') return reason.trim().length > 0
-      && (kind === 'permanent' || (kind === 'days' ? Number(days) >= 1 : until.length > 0));
-    return true;
-  })();
-
-  const send = () => {
-    if (verb === 'suspend') {
-      submit(kind === 'permanent'
-        ? { permanent: true, reason: reason.trim() }
-        : kind === 'until'
-          ? { until, reason: reason.trim() }
-          : { days: Number(days), reason: reason.trim() });
-      return;
-    }
-    if (verb === 'verify') {
-      submit({ verified: !person.verified, reason: reason.trim() });
-      setReason('');
-      return;
-    }
-    if (verb === 'warn') {
-      submit({ text: text.trim(), reason: reason.trim() });
-      setText('');
-      setReason('');
-      return;
-    }
-    if (verb === 'clear_flags') {
-      submit({ reason: reason.trim() });
-      setReason('');
-      return;
-    }
-    if (verb === 'delete') {
-      submit({ reason: reason.trim(), confirm: confirm.trim() });
-    }
-  };
-
-  return (
-    <>
-      <button
-        type="button" data-verb={verb}
-        className={`btn ${spec.tone} tiny`}
-        disabled={busy || !allowed}
-        title={allowed ? spec.help : `This seat does not hold ${verb === 'warn' ? 'Private warnings to users' : 'Suspend, reinstate, verify, delete'}`}
-        onClick={start}
-      >
-        {IC[spec.icon]}
-        <span>{busy && !form ? 'Working…' : label}</span>
-      </button>
-
-      {form && (
-        <div className="ask">
-          <p className="note row">{IC.alert}<span>{spec.help}</span></p>
-
-          {verb === 'suspend' && (
-            <div className="suspend-kind">
-              <label className="field">
-                <span>For how long</span>
-                <select value={kind} onChange={event => setKind(event.target.value as typeof kind)}>
-                  <option value="days">A number of days</option>
-                  <option value="until">Until a date</option>
-                  <option value="permanent">Permanently, until staff put it back</option>
-                </select>
-              </label>
-              {kind === 'days' && (
-                <label className="field">
-                  <span>Days</span>
-                  <input
-                    type="number" min={1} max={3650} value={days}
-                    onChange={event => setDays(event.target.value)} aria-label="Days of suspension"
-                  />
-                </label>
-              )}
-              {kind === 'until' && (
-                <label className="field">
-                  <span>Ends on</span>
-                  <input type="date" value={until} onChange={event => setUntil(event.target.value)} aria-label="Suspension end date"/>
-                </label>
-              )}
-              {kind === 'permanent' && (
-                <p className="fineprint">
-                  A permanent bar is the same column set far ahead, so only a reinstate lifts it.
-                  The account keeps everything it has — suspending is not deleting.
-                </p>
-              )}
-            </div>
-          )}
-
-          {verb === 'warn' && (
-            <label className="field">
-              <span>The warning they read</span>
-              <textarea
-                rows={3} name="warn_text" value={text} maxLength={240} autoFocus
-                placeholder="e.g. Third harassment report. Do not post other people's photographs."
-                onChange={event => setText(event.target.value)}
-              />
-            </label>
-          )}
-
-          {verb === 'delete' && (
-            <>
-              <p className="note row">
-                {IC.alert}
-                <span>
-                  Deleting takes {detail.holdings.posts} post(s), {detail.holdings.comments} comment(s),{' '}
-                  {detail.holdings.listings} listing(s) and their wallet with the ledger in it. It is
-                  refused while a campaign runs, a payment proof waits, or the balance is not zero.
-                </span>
-              </p>
-              <label className="field">
-                <span>Type the username to confirm</span>
-                <input
-                  value={confirm} onChange={event => setConfirm(event.target.value)}
-                  placeholder={person.username} autoComplete="off" aria-label="Type the username to confirm"
-                />
-              </label>
-            </>
-          )}
-
-          {verb !== 'warn' && (
-            <label className="field">
-              <span>Reason {needsReason ? '— required, and kept on the record' : '(optional)'}</span>
-              <textarea
-                rows={2} name="reason" value={reason} maxLength={500}
-                placeholder={verb === 'verify' && !person.verified
-                  ? 'What made this account worth a tick'
-                  : 'The sentence the audit row keeps'}
-                onChange={event => setReason(event.target.value)}
-              />
-            </label>
-          )}
-
-          {verb === 'warn' && (
-            <label className="field">
-              <span>Reason (optional — written next to the warning)</span>
-              <textarea rows={1} name="reason" value={reason} maxLength={240} onChange={event => setReason(event.target.value)}/>
-            </label>
-          )}
-
-          <div className="ask-actions">
-            <button type="button" className={`btn ${spec.tone} tiny`} disabled={busy || !canSend} onClick={send}>
-              {IC.go}<span>{busy ? 'Working…' : `Confirm — ${label}`}</span>
-            </button>
-            <button type="button" className="btn ghost tiny" disabled={busy} onClick={() => setForm(false)}>
-              <span>Cancel</span>
-            </button>
-          </div>
-
-          {error && <p className="card-error" role="status">{IC.alert}<span>{error}</span></p>}
-        </div>
-      )}
-    </>
   );
 }

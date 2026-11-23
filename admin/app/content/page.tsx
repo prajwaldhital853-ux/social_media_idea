@@ -311,6 +311,7 @@ function ShelfCase({ row, state, act, onDone }: {
                 <DecisionBar
                   actions={row.actions}
                   permission={row.permission}
+                  target={row.target}
                   run={(verb, reason, notice) => act(row, verb, reason, notice)}
                   onDone={onDone}
                   footnote={state === 'taken_down'

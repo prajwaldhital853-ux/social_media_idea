@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Banner from '@/components/Banner';
+import { useConfirm } from '@/components/Confirm';
 import ConsoleShell from '@/components/ConsoleShell';
 import { ApiError, api } from '@/lib/api';
 import { num } from '@/lib/format';
@@ -36,6 +37,7 @@ function toDraft(pack: PromoPackage): Draft {
 
 export default function PackagesScreen() {
   const { noteGate } = useSession();
+  const confirm = useConfirm();
   const [desk, setDesk] = useState<PackageDesk | null>(null);
   const [draft, setDraft] = useState<Draft[]>([]);
   const [banner, setBanner] = useState<{ kind: 'ok' | 'bad'; text: string } | null>(null);
@@ -67,6 +69,21 @@ export default function PackagesScreen() {
 
   const save = async () => {
     if (!desk) return;
+    // The id is what a campaign already bought is matched by, so a number typed
+    // here rewrites the words around a promise people already paid for.
+    const moved = desk.packages.filter((row, index) => {
+      const next = draft[index];
+      return !next || next.id.trim() !== row.id
+        || Number(next.coins) !== row.coins || Number(next.days) !== row.days
+        || Number(next.reach_max) !== row.reach_max;
+    }).length;
+    const sure = await confirm({
+      title: `Rewrite the package shelf (${moved} package(s) changed)?`,
+      body: 'Campaigns already bought keep their own numbers, but this is the price list every payer sees next. A package whose id disappeared is treated as withdrawn, and a campaign pointing at it stops being signable.',
+      confirmLabel: 'Save the shelf',
+      tone: 'amber',
+    });
+    if (!sure) return;
     setBusy(true);
     setBanner(null);
     setErrors([]);

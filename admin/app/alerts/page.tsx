@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import Banner from '@/components/Banner';
+import { useConfirm } from '@/components/Confirm';
 import ConsoleShell from '@/components/ConsoleShell';
 import { Chips } from '@/components/List';
 import { api } from '@/lib/api';
@@ -39,6 +40,7 @@ const SEVERITY_LABEL: Record<string, string> = { info: 'Note', warning: 'Needs a
 
 export default function AlertsScreen() {
   const { noteGate, session } = useSession();
+  const confirm = useConfirm();
   const [desk, setDesk] = useState<AlertDesk | null>(null);
   const [status, setStatus] = useState('all');
   const [kind, setKind] = useState('');
@@ -74,6 +76,13 @@ export default function AlertsScreen() {
   }, [load]);
 
   const scan = async () => {
+    const sure = await confirm({
+      title: 'Run every check again now?',
+      body: 'This reads the live counts and writes whatever it finds as new alerts, then closes conditions it no longer believes. The run is written to the audit log with your name on it, so a check you ran twice looks like two checks.',
+      confirmLabel: 'Run the checks',
+      tone: 'amber',
+    });
+    if (!sure) return;
     setScanning(true);
     try {
       const out = await api<{ detail: string; raised: AlertRow[] }>('admin/alerts/scan/', { method: 'POST', body: {} });
@@ -87,6 +96,15 @@ export default function AlertsScreen() {
   };
 
   const mark = async (row: AlertRow, to: 'ack' | 'resolve') => {
+    if (to === 'resolve') {
+      const sure = await confirm({
+        title: `Close “${row.title}”?`,
+        body: 'Resolved says the condition is over. It does not silence the check: if the numbers are still past the threshold, the next run raises this same alert again with a higher count. The row is kept either way.',
+        confirmLabel: 'Mark it resolved',
+        tone: 'amber',
+      });
+      if (!sure) return;
+    }
     try {
       const out = await api<{ detail: string; alert: AlertRow }>(`admin/alerts/${row.id}/mark/`, {
         method: 'POST', body: { to },
@@ -115,6 +133,13 @@ export default function AlertsScreen() {
   const dirty = touched.length > 0;
 
   const saveDials = async () => {
+    const sure = await confirm({
+      title: `Move ${touched.length} alert threshold(s)?`,
+      body: 'The checks read these the next time they run. Raising a number closes whatever the platform no longer believes; lowering one can turn a quiet day into several alerts at once, all of them stamped with this change.',
+      confirmLabel: 'Save the thresholds',
+      tone: 'amber',
+    });
+    if (!sure) return;
     setBusy(true);
     try {
       const body = touched.reduce((all, item) => ({ ...all, [item.key]: valueOf(item) }), {} as Record<string, string>);

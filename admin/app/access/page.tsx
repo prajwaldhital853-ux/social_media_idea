@@ -1,20 +1,17 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
 import Banner from '@/components/Banner';
 import ConsoleShell from '@/components/ConsoleShell';
-import { Act, Chips } from '@/components/List';
+import { useConfirm } from '@/components/Confirm';
+import { ActLink, Chips } from '@/components/List';
+import { CYCLE, KeyGrid, ROLE_LABEL, State } from '@/components/SeatDesk';
 import { api } from '@/lib/api';
 import { IC } from '@/lib/icons';
 import { ago } from '@/lib/time';
 import { useSession } from '@/lib/session';
 import { Catalogue, Seat } from '@/lib/types';
-
-type State = 'default' | 'allow' | 'deny';
-const CYCLE: Record<State, State> = { default: 'allow', allow: 'deny', deny: 'default' };
-const ROLE_LABEL: Record<string, string> = {
-  superadmin: 'Superadmin', admin: 'Admin', moderator: 'Moderator',
-};
 
 interface Banner {
   kind: 'ok' | 'bad';
@@ -27,8 +24,6 @@ export default function AccessPage() {
   const [catalogue, setCatalogue] = useState<Catalogue | null>(null);
   const [q, setQ] = useState('');
   const [state, setState] = useState('all');
-  const [open, setOpen] = useState<string | null>(null);
-  const [draft, setDraft] = useState<Record<string, State>>({});
   const [banner, setBanner] = useState<Banner | null>(null);
   const [busy, setBusy] = useState(false);
   const [granting, setGranting] = useState(false);
@@ -68,69 +63,6 @@ export default function AccessPage() {
     (key: string) => catalogue?.permissions.find(entry => entry.key === key)?.label || key,
     [catalogue],
   );
-
-  const mutate = useCallback(async (path: string, body: Record<string, unknown>, done: string) => {
-    setBusy(true);
-    setBanner(null);
-    try {
-      await api(path, { method: 'POST', body });
-      setBanner({ kind: 'ok', text: done });
-      await load();
-    } catch (err) {
-      if (!noteGate(err)) setBanner({ kind: 'bad', text: (err as Error).message });
-    } finally {
-      setBusy(false);
-    }
-  }, [load, noteGate]);
-
-  const expand = (seat: Seat) => {
-    if (open === seat.username) {
-      setOpen(null);
-      setDraft({});
-      return;
-    }
-    setOpen(seat.username);
-    // Only the clicks are remembered. What the seat actually holds is read from
-    // the roster row every time, so nothing here depends on load order.
-    setDraft({});
-  };
-
-  const current = useMemo(
-    () => (seats || []).find(seat => seat.username === open) || null,
-    [seats, open],
-  );
-
-  const valueOf = useCallback((key: string): State => {
-    if (draft && key in draft) return draft[key];
-    if (!current) return 'default';
-    if (current.denied_keys.includes(key)) return 'deny';
-    if (current.granted_keys.includes(key)) return 'allow';
-    return 'default';
-  }, [draft, current]);
-
-  const draftKeys = useMemo(() => {
-    if (!catalogue || !current) return { granted: [] as string[], denied: [] as string[] };
-    const granted: string[] = [];
-    const denied: string[] = [];
-    catalogue.permissions.forEach(entry => {
-      const value = valueOf(entry.key);
-      if (value === 'allow') granted.push(entry.key);
-      if (value === 'deny') denied.push(entry.key);
-    });
-    return { granted: granted.sort(), denied: denied.sort() };
-  }, [catalogue, current, valueOf]);
-
-  const dirty = !!current && (
-    JSON.stringify(draftKeys.granted) !== JSON.stringify([...current.granted_keys].sort())
-    || JSON.stringify(draftKeys.denied) !== JSON.stringify([...current.denied_keys].sort())
-  );
-
-  const saveKeys = () => {
-    const username = open!;
-    return mutate(`admin/staff/${username}/`,
-      { granted_keys: draftKeys.granted, denied_keys: draftKeys.denied },
-      `Saved ${username}'s screens. The change lands on their next click — no new code needed.`);
-  };
 
   return (
     <ConsoleShell
@@ -206,15 +138,14 @@ export default function AccessPage() {
               const mine = seat.username === session?.user.username;
               const reachable = isSuperadmin || seat.role === 'moderator';
               const editable = can('staff_permissions') && reachable && !mine;
-              const opens = open === seat.username;
               return (
-                <tbody key={seat.username} className={`seat ${opens ? 'open' : ''}`}>
-                  <tr className={`grid-row${opens ? ' open' : ''}`}>
+                <tbody key={seat.username} className="seat">
+                  <tr className="grid-row">
                     <td>
-                      <button type="button" className="seat-id" onClick={() => expand(seat)} aria-expanded={opens}>
+                      <Link href={`/access/${seat.username}`} className="seat-id">
                         <span className="grid-caret">{IC.chevron}</span>
                         <span className="id">@{seat.username}</span>
-                      </button>
+                      </Link>
                     </td>
                     <td className="strong">{seat.name}</td>
                     <td className="dim wrap">{seat.email || '—'}</td>
@@ -236,36 +167,14 @@ export default function AccessPage() {
                     </td>
                     <td>
                       <div className="grid-acts">
-                        <Act icon="eye" label={opens ? 'Close this seat' : 'Open this seat'} onClick={() => expand(seat)} />
-                        <Act
-                          icon="pen" label="Screens this seat reaches"
-                          disabled={!editable} onClick={() => !opens && expand(seat)}
-                        />
-                        <Act
-                          icon="logout" label="End this seat's access" tone="dead"
-                          disabled={!can('staff_grant') || !reachable || !seat.is_enabled || mine}
-                          onClick={() => {
-                            if (!window.confirm(`End ${seat.username}'s access to the console? Their sessions are revoked immediately.`)) return;
-                            mutate(`admin/staff/${seat.username}/revoke/`, {}, `Access ended for ${seat.username}.`);
-                          }}
+                        <ActLink to={`/access/${seat.username}`} icon="eye" label="Open this seat"/>
+                        <ActLink
+                          to={`/access/${seat.username}`} icon="pen"
+                          label="Screens this seat reaches" disabled={!editable}
                         />
                       </div>
                     </td>
                   </tr>
-                  {opens && (
-                    <tr className="grid-detail">
-                      <td colSpan={9}>
-                        <SeatBody
-                          seat={seat} mine={mine} reachable={reachable} editable={editable}
-                          busy={busy} can={can} isSuperadmin={isSuperadmin}
-                          catalogue={catalogue} labelOf={labelOf} valueOf={valueOf}
-                          draftKeys={draftKeys} dirty={dirty}
-                          onCycle={key => setDraft({ ...draft, [key]: CYCLE[valueOf(key)] })}
-                          onSave={saveKeys} onDiscard={() => setDraft({})} onMutate={mutate}
-                        />
-                      </td>
-                    </tr>
-                  )}
                 </tbody>
               );
             })}
@@ -275,192 +184,6 @@ export default function AccessPage() {
     </ConsoleShell>
   );
 }
-
-function SeatBody({
-  seat, mine, reachable, editable, busy, can, isSuperadmin, catalogue, labelOf,
-  valueOf, draftKeys, dirty, onCycle, onSave, onDiscard, onMutate,
-}: {
-  seat: Seat;
-  mine: boolean;
-  reachable: boolean;
-  editable: boolean;
-  busy: boolean;
-  can: (key: string) => boolean;
-  isSuperadmin: boolean;
-  catalogue: Catalogue | null;
-  labelOf: (key: string) => string;
-  valueOf: (key: string) => State;
-  draftKeys: { granted: string[]; denied: string[] };
-  dirty: boolean;
-  onCycle: (key: string) => void;
-  onSave: () => Promise<void>;
-  onDiscard: () => void;
-  onMutate: (path: string, body: Record<string, unknown>, done: string) => Promise<void>;
-}) {
-  return (
-    <div className="seat-body">
-      <div className="seat-side">
-        <h3>Seat</h3>
-        {seat.granted_by && (
-          <p className="note">Granted by <b>{seat.granted_by}</b>.</p>
-        )}
-        {mine && (
-          <p className="note">
-            Your own role and screens are changed from another staff account — one bad
-            click cannot shut the door you are standing in.
-          </p>
-        )}
-
-        {editable && (
-          <label className="field">
-            <span>Role</span>
-            <select
-              defaultValue={seat.role}
-              disabled={busy || seat.role === 'superadmin'}
-              onChange={event => onMutate(`admin/staff/${seat.username}/`,
-                { role: event.target.value },
-                `${seat.username} is now a ${ROLE_LABEL[event.target.value]}.`)}
-            >
-              {(isSuperadmin ? ['superadmin', 'admin', 'moderator'] : ['moderator'])
-                .map(role => <option key={role} value={role}>{ROLE_LABEL[role]}</option>)}
-            </select>
-            {seat.role === 'superadmin' && (
-              <em>A Client seat holds every screen; there is nothing to narrow it to.</em>
-            )}
-          </label>
-        )}
-
-        {can('staff_permissions') && reachable && (
-          <button
-            type="button"
-            className={`btn ${seat.is_enabled ? 'danger' : 'primary'}`}
-            disabled={busy}
-            onClick={() => onMutate(`admin/staff/${seat.username}/`, { is_enabled: !seat.is_enabled },
-              seat.is_enabled
-                ? `${seat.username}'s seat is switched off. Their open console stops at the next click.`
-                : `${seat.username} can sign in again.`)}
-          >
-            {seat.is_enabled ? IC.x : IC.check}
-            <span>{seat.is_enabled ? 'Switch seat off' : 'Switch seat back on'}</span>
-          </button>
-        )}
-
-        {can('staff_permissions') && reachable && seat.enrolled && (
-          <button
-            type="button" className="btn ghost" disabled={busy}
-            onClick={() => onMutate(`admin/staff/${seat.username}/reset-two-factor/`, {},
-              `${seat.username}'s authenticator is unbound. They must scan a new one at the next sign-in.`)}
-          >
-            {IC.refresh}<span>Reset authenticator</span>
-          </button>
-        )}
-
-        {can('staff_grant') && reachable && seat.is_enabled && !mine && (
-          <button
-            type="button" className="btn danger outline" disabled={busy}
-            onClick={() => {
-              if (!window.confirm(`End ${seat.username}'s access to the console? Their sessions are revoked immediately.`)) return;
-              onMutate(`admin/staff/${seat.username}/revoke/`, {},
-                `Access ended for ${seat.username}.`);
-            }}
-          >
-            {IC.logout}<span>Revoke access</span>
-          </button>
-        )}
-
-        {!seat.is_enabled && can('staff_grant') && reachable && (
-          <button
-            type="button" className="btn ghost" disabled={busy}
-            onClick={() => onMutate('admin/staff/grant/',
-              { username: seat.username, role: seat.role },
-              `${seat.username} holds a ${ROLE_LABEL[seat.role]} seat again.`)}
-          >
-            {IC.plus}<span>Hand the same seat back</span>
-          </button>
-        )}
-      </div>
-
-      <div className="seat-keys">
-        <h3>Screens</h3>
-        {seat.role === 'superadmin' ? (
-          <p className="note">A Superadmin is the Client and holds all {seat.permissions.length} screens.</p>
-        ) : !editable ? (
-          <div className="key-list">
-            {seat.permissions.map(key => (
-              <span key={key} className="key on">{labelOf(key)}</span>
-            ))}
-            {seat.permissions.length === 0 && <p className="note">This seat opens nothing but the console itself.</p>}
-          </div>
-        ) : (
-          <>
-            <p className="note">
-              Click a screen to cycle role default → extra grant → explicit denial. A
-              denial always wins, so a screen taken away stays taken away.
-            </p>
-            <KeyGrid
-              catalogue={catalogue} valueOf={valueOf} labelOf={labelOf}
-              onChange={onCycle}
-            />
-            <div className="key-actions">
-              <button type="button" className="btn primary" disabled={busy || !dirty} onClick={onSave}>
-                {IC.check}<span>Save screens</span>
-              </button>
-              <button
-                type="button" className="btn ghost" disabled={busy || !dirty}
-                onClick={onDiscard}
-              >
-                <span>Discard changes</span>
-              </button>
-              <span className="key-tally">
-                {draftKeys.granted.length} granted · {draftKeys.denied.length} denied
-              </span>
-            </div>
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function KeyGrid({
-  catalogue, valueOf, labelOf, onChange,
-}: {
-  catalogue: Catalogue | null;
-  valueOf: (key: string) => State;
-  labelOf: (key: string) => string;
-  onChange: (key: string) => void;
-}) {
-  if (!catalogue) return <div className="skeleton-stack"><div className="skeleton" /></div>;
-  return (
-    <div className="key-groups">
-      {catalogue.groups.map(group => {
-        const entries = catalogue.permissions.filter(entry => entry.group === group.id);
-        if (entries.length === 0) return null;
-        return (
-          <div key={group.id} className="key-group">
-            <span className="key-group-label">{group.label}</span>
-            <div className="key-list">
-              {entries.map(entry => {
-                const value = valueOf(entry.key);
-                return (
-                  <button
-                    type="button" key={entry.key}
-                    className={`key ${value}`} onClick={() => onChange(entry.key)}
-                    title={`Role default: ${entry.roles.map(role => ROLE_LABEL[role] || role).join(', ') || 'nobody'}`}
-                  >
-                    {value === 'allow' ? IC.plus : value === 'deny' ? IC.x : IC.check}
-                    <span>{labelOf(entry.key)}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
 function GrantForm({
   busy, catalogue, labelOf, onDone, onError, noteGate,
 }: {
@@ -472,6 +195,7 @@ function GrantForm({
   noteGate: (err: unknown) => boolean;
 }) {
   const { isSuperadmin } = useSession();
+  const confirm = useConfirm();
   const [username, setUsername] = useState('');
   const [role, setRole] = useState('moderator');
   const [extra, setExtra] = useState<Record<string, State>>({});
@@ -481,6 +205,13 @@ function GrantForm({
       onError(new Error('Type the username of an existing account.'));
       return;
     }
+    const sure = await confirm({
+      title: `Make @${username.trim()} a ${ROLE_LABEL[role]}?`,
+      body: 'This turns a member account into staff. They can sign in to this console as soon as they set up an authenticator, and everything they do is written under their name. Superadmin seats can lock you out of this screen.',
+      confirmLabel: 'Grant the seat',
+      tone: 'danger',
+    });
+    if (!sure) return;
     try {
       const granted = Object.entries(extra).filter(([, value]) => value === 'allow').map(([key]) => key);
       const denied = Object.entries(extra).filter(([, value]) => value === 'deny').map(([key]) => key);

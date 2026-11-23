@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import Banner from '@/components/Banner';
 import ConsoleShell from '@/components/ConsoleShell';
+import { useConfirm } from '@/components/Confirm';
 import { api } from '@/lib/api';
 import { IC } from '@/lib/icons';
 import { ago } from '@/lib/time';
@@ -11,6 +12,7 @@ import { WelcomeDesk, WelcomeLine } from '@/lib/types';
 
 export default function WelcomePage() {
   const { noteGate } = useSession();
+  const confirm = useConfirm();
   const [desk, setDesk] = useState<WelcomeDesk | null>(null);
   const [draft, setDraft] = useState<Record<string, string>>({});
   const [banner, setBanner] = useState<{ kind: 'ok' | 'bad'; text: string } | null>(null);
@@ -34,6 +36,14 @@ export default function WelcomePage() {
 
   const save = async () => {
     if (!desk) return;
+    const moved = desk.lines.filter(item => (draft[item.field] ?? item.value) !== item.value);
+    const sure = await confirm({
+      title: `Save the first-load wording${moved.length ? ` (${moved.length} line(s) changed)` : ''}?`,
+      body: 'This is what every visitor reads before they have an account, and the numbers in it are the only way a stranger can reach the person running the site. It goes live on the next page load.',
+      confirmLabel: 'Save the wording',
+      tone: 'amber',
+    });
+    if (!sure) return;
     const body: Record<string, string> = {};
     desk.lines.forEach(item => { body[item.field] = valueOf(item.field).trim(); });
     setBusy(true);
