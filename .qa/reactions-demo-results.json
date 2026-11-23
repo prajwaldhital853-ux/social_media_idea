@@ -1,0 +1,153 @@
+{
+  "target": {
+    "id": "p9",
+    "text": "Golden hour on the Annapurna circuit. Fo",
+    "n": 11,
+    "people": 11,
+    "kinds": {
+      "like": 7,
+      "love": 1,
+      "sad": 3
+    },
+    "mine": true,
+    "rendered": true,
+    "top": [
+      "like",
+      "sad",
+      "love"
+    ]
+  },
+  "results": [
+    {
+      "name": "demo: this build runs on the localStorage database",
+      "pass": true,
+      "detail": "{\"isDemoBuild\":true}"
+    },
+    {
+      "name": "demo: a card with several kinds and a crowd exists",
+      "pass": true,
+      "detail": "{\"like\":7,\"love\":1,\"sad\":3}"
+    },
+    {
+      "name": "demo: the row prints the three most-used kinds, most-used first",
+      "pass": true,
+      "detail": "{\"screen\":[\"like\",\"sad\",\"love\"],\"cache\":[\"like\",\"sad\",\"love\"]}"
+    },
+    {
+      "name": "demo: the names are one ellipsised line",
+      "pass": true,
+      "detail": "You, Nima and 9 others"
+    },
+    {
+      "name": "demo: the chips overlap and wear the page ground as a ring",
+      "pass": true,
+      "detail": "{\"overlap\":6,\"ring\":\"rgb(0, 0, 0)\",\"ground\":\"rgb(0, 0, 0)\"}"
+    },
+    {
+      "name": "demo: the pill counts the same crowd the row names",
+      "pass": true,
+      "detail": "{\"pill\":\"11\",\"cache\":11}"
+    },
+    {
+      "name": "demo: the pill holds one icon, not a second mix",
+      "pass": true,
+      "detail": "{\"art\":0,\"mixes\":0}"
+    },
+    {
+      "name": "demo: the pill is a rounded pill",
+      "pass": true,
+      "detail": "{\"radius\":999}"
+    },
+    {
+      "name": "demo: a tap moves the number by one and flips what the cache holds",
+      "pass": true,
+      "detail": "{\"before\":11,\"after\":\"10\",\"mine\":false}"
+    },
+    {
+      "name": "demo: the names lead with \"You\" exactly when the reader has reacted",
+      "pass": true,
+      "detail": "Nima Kitchen, Maya and 8 others"
+    },
+    {
+      "name": "demo: a short hold does not open the tray",
+      "pass": true,
+      "detail": "0 tray at 240ms"
+    },
+    {
+      "name": "demo: holding opens the picker with the five kinds",
+      "pass": true,
+      "detail": "Like/Love/Haha/Wow/Sad"
+    },
+    {
+      "name": "demo: releasing on an emoji chooses it and puts the tray away",
+      "pass": true,
+      "detail": "{\"mine\":[\"love\"],\"art\":\"love\",\"pill\":\"11\",\"tray\":false}"
+    },
+    {
+      "name": "demo: a tap on the reaction the reader already chose takes it off",
+      "pass": true,
+      "detail": "0 rows left"
+    },
+    {
+      "name": "demo: the tabs are All plus one per kind, each with its count",
+      "pass": true,
+      "detail": "{\"tabs\":[\"All10\",\"6\",\"1\",\"3\"],\"rows\":10,\"people\":10}"
+    },
+    {
+      "name": "demo: every row has a name, its reaction and a Follow button",
+      "pass": true,
+      "detail": "{\"rows\":10,\"follows\":10}"
+    },
+    {
+      "name": "demo: on a desk the list is a centered dialog, not a sheet",
+      "pass": true,
+      "detail": "{\"x\":410,\"w\":460}"
+    },
+    {
+      "name": "demo: the list pages to the end of the crowd without repeats",
+      "pass": true,
+      "detail": "{\"rows\":10,\"unique\":10,\"people\":10}"
+    },
+    {
+      "name": "demo: a tab shows that reaction and nothing else",
+      "pass": true,
+      "detail": "{\"kinds\":[\"like\"],\"rows\":6}"
+    },
+    {
+      "name": "demo: a Follow pressed in the list lands there and then",
+      "pass": true,
+      "detail": "{\"name\":\"Elon Musk\",\"after\":\"Following\",\"stored\":true}"
+    },
+    {
+      "name": "demo: Escape puts the list away",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "demo: a phone prints the same row above its buttons",
+      "pass": true,
+      "detail": "{\"chips\":[\"like\",\"sad\",\"love\"],\"names\":\"Nima Kitchen, Elon and 8 others\",\"pill\":\"10\"}"
+    },
+    {
+      "name": "demo: on a phone it is a sheet the width of the screen, on its bottom edge",
+      "pass": true,
+      "detail": "{\"x\":0,\"w\":390,\"bottom\":0,\"rows\":10}"
+    },
+    {
+      "name": "demo: the sheet pages on a phone too",
+      "pass": true,
+      "detail": "{\"rows\":10,\"unique\":10}"
+    },
+    {
+      "name": "demo: a tap above the sheet puts it away",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "demo: no console or HTTP errors during the run",
+      "pass": true,
+      "detail": ""
+    }
+  ],
+  "errors": []
+}

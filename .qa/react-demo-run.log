@@ -1,0 +1,28 @@
+PASS  demo: this build runs on the localStorage database  — {"isDemoBuild":true}
+PASS  demo: a card with several kinds and a crowd exists  — {"like":7,"love":1,"sad":3}
+PASS  demo: the row prints the three most-used kinds, most-used first  — {"screen":["like","sad","love"],"cache":["like","sad","love"]}
+PASS  demo: the names are one ellipsised line  — You, Nima and 9 others
+PASS  demo: the chips overlap and wear the page ground as a ring  — {"overlap":6,"ring":"rgb(0, 0, 0)","ground":"rgb(0, 0, 0)"}
+PASS  demo: the pill counts the same crowd the row names  — {"pill":"11","cache":11}
+PASS  demo: the pill holds one icon, not a second mix  — {"art":0,"mixes":0}
+PASS  demo: the pill is a rounded pill  — {"radius":999}
+PASS  demo: a tap moves the number by one and flips what the cache holds  — {"before":11,"after":"10","mine":false}
+PASS  demo: the names lead with "You" exactly when the reader has reacted  — Nima Kitchen, Maya and 8 others
+PASS  demo: a short hold does not open the tray  — 0 tray at 240ms
+PASS  demo: holding opens the picker with the five kinds  — Like/Love/Haha/Wow/Sad
+PASS  demo: releasing on an emoji chooses it and puts the tray away  — {"mine":["love"],"art":"love","pill":"11","tray":false}
+PASS  demo: a tap on the reaction the reader already chose takes it off  — 0 rows left
+PASS  demo: the tabs are All plus one per kind, each with its count  — {"tabs":["All10","6","1","3"],"rows":10,"people":10}
+PASS  demo: every row has a name, its reaction and a Follow button  — {"rows":10,"follows":10}
+PASS  demo: on a desk the list is a centered dialog, not a sheet  — {"x":410,"w":460}
+PASS  demo: the list pages to the end of the crowd without repeats  — {"rows":10,"unique":10,"people":10}
+PASS  demo: a tab shows that reaction and nothing else  — {"kinds":["like"],"rows":6}
+PASS  demo: a Follow pressed in the list lands there and then  — {"name":"Elon Musk","after":"Following","stored":true}
+PASS  demo: Escape puts the list away
+PASS  demo: a phone prints the same row above its buttons  — {"chips":["like","sad","love"],"names":"Nima Kitchen, Elon and 8 others","pill":"10"}
+PASS  demo: on a phone it is a sheet the width of the screen, on its bottom edge  — {"x":0,"w":390,"bottom":0,"rows":10}
+PASS  demo: the sheet pages on a phone too  — {"rows":10,"unique":10}
+PASS  demo: a tap above the sheet puts it away
+PASS  demo: no console or HTTP errors during the run
+
+26/26 demo reaction checks green.
