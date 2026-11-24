@@ -1,14 +1,13 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import AuthCode from '@/components/AuthCode';
 import BrandLogo from '@/components/BrandLogo';
 import { AuthResult, useApp } from '@/lib/AppContext';
 import { API_ENABLED } from '@/lib/api';
-import GoogleButton from '@/components/GoogleButton';
-import { credentialAccount, rememberGoogleAccount } from '@/lib/google';
+import { rememberGoogleAccount } from '@/lib/google';
 import { COUNTRIES, THEME_KEY, ageFromDob, uid } from '@/lib/utils';
 import { IC } from '@/lib/icons';
 import { SignupProvider, User } from '@/lib/types';
@@ -16,14 +15,9 @@ import type { TranslationKey } from '@/lib/i18n';
 
 const GOOGLE_KEY = 'exposing-google';
 type Prefill = { email: string; name: string; google_sub: string };
-
-/** prajwal.dhital@gmail.com → prajwal_dhital: the one guess worth making for a
- *  person who arrived here with an address already proved and no handle yet. */
-const googleUsername = (email: string, name: string) => {
-  const raw = ((email.split('@')[0] || name) || '')
-    .replace(/[^A-Za-z0-9_]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
-  return raw.length >= 3 && raw.length <= 20 ? raw.toLowerCase() : '';
-};
+type FieldName = 'name' | 'username' | 'email' | 'password' | 'dob' | 'country' | 'province' | 'city' | 'age' | 'legal';
+type FieldErrors = Partial<Record<FieldName, string>>;
+const FIELD_ORDER: FieldName[] = ['name', 'username', 'email', 'password', 'dob', 'country', 'province', 'city'];
 
 /**
  * A failure the server wrote itself carries the handle for its own log line,
@@ -43,7 +37,7 @@ const banLine = (res: AuthResult, t: (key: TranslationKey, vars?: Record<string,
     { time: Math.max(1, Math.ceil((res.retryIn || 0) / 60)) });
 
 export default function SignupPage() {
-  const { db, t, feature, ready, waking, setDb, showToast, signupAccount, verifyCode, resendCode, googleSignIn } = useApp();
+  const { db, t, feature, waking, setDb, showToast, signupAccount, verifyCode, resendCode } = useApp();
   const router = useRouter();
   const [name, setName] = useState('');
   const [username, setUsername] = useState('');
@@ -57,10 +51,9 @@ export default function SignupPage() {
   const [ageOk, setAgeOk] = useState(false);
   const [legalOk, setLegalOk] = useState(false);
   const [error, setError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+  const fields = useRef<Partial<Record<FieldName, HTMLElement | null>>>({});
   const [busy, setBusy] = useState(false);
-  // Google keeps its own flag: the chooser is the visitor's next step, not a wait on
-  // this form, so the submit button must not start spinning on its behalf.
-  const [googleBusy, setGoogleBusy] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [code, setCode] = useState<{ challenge: string; expiresAt?: number; devCode?: string } | null>(null);
 
@@ -86,12 +79,32 @@ export default function SignupPage() {
     };
   }, []);
 
+  const showFieldError = (field: FieldName, message: string) => {
+    setError('');
+    setFieldErrors({ [field]: message });
+    requestAnimationFrame(() => {
+      const input = fields.current[field];
+      if (!input) return;
+      input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      input.focus({ preventScroll: true });
+    });
+  };
+
+  const clearFieldError = (field: FieldName) => setFieldErrors(prev => {
+    if (!prev[field]) return prev;
+    const next = { ...prev };
+    delete next[field];
+    return next;
+  });
+
   const localAccount = (data: { name: string; username: string; email: string; dob: string; country: string; province?: string; city?: string; provider: SignupProvider }) => {
     // Signing up is never a second way in. An address or handle that already
     // belongs to someone has to be refused, not handed out as their session.
     const clash = db.users.find(u => u.username.toLowerCase() === data.username.toLowerCase() || u.email.toLowerCase() === data.email.toLowerCase());
     if (clash) {
-      return setError(clash.username.toLowerCase() === data.username.toLowerCase() ? t('e_taken') : t('e_hasacc'));
+      return clash.username.toLowerCase() === data.username.toLowerCase()
+        ? showFieldError('username', t('e_taken'))
+        : showFieldError('email', t('e_hasacc'));
     }
     const user: User = {
       id: uid(), email: data.email.toLowerCase(), username: data.username, name: data.name,
@@ -106,22 +119,23 @@ export default function SignupPage() {
     router.push('/');
   };
 
-  const validate = (): string => {
-    if (!name.trim()) return t('fullName');
-    if (!/^[A-Za-z0-9_]{3,20}$/.test(username)) return t('e_user');
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return t('e_email');
-    if (!prefill && password.length < 8) return t('e_pass');
-    if (!dob || ageFromDob(dob) < 13) return t('e_dob13');
-    if (!ageOk) return t('e_age');
-    if (!legalOk) return t('e_legal');
-    return '';
+  const validate = (): { field: FieldName; message: string } | null => {
+    if (!name.trim()) return { field: 'name', message: t('fullName') };
+    if (!/^[A-Za-z0-9_]{3,20}$/.test(username)) return { field: 'username', message: t('e_user') };
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { field: 'email', message: t('e_email') };
+    if (!prefill && password.length < 10) return { field: 'password', message: t('e_pass') };
+    if (!dob || ageFromDob(dob) < 13) return { field: 'dob', message: t('e_dob13') };
+    if (!ageOk) return { field: 'age', message: t('e_age') };
+    if (!legalOk) return { field: 'legal', message: t('e_legal') };
+    return null;
   };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const local = validate();
-    if (local) return setError(local);
+    const invalid = validate();
+    if (invalid) return showFieldError(invalid.field, invalid.message);
     setError('');
+    setFieldErrors({});
 
     if (!API_ENABLED) {
       return localAccount({
@@ -138,8 +152,16 @@ export default function SignupPage() {
       });
       if (!res.ok) {
         if (res.locked) return setError(banLine(res, t));
-        const first = res.errors && Object.values(res.errors)[0]?.[0];
-        setError(first || serverRef(res) || t('e_email'));
+        const detail = serverRef(res) || '';
+        const field = FIELD_ORDER.find(name => res.errors?.[name]?.length) || (
+          /password/i.test(detail) ? 'password'
+            : /username/i.test(detail) ? 'username'
+              : /email/i.test(detail) ? 'email'
+                : /date of birth/i.test(detail) ? 'dob'
+                  : /country/i.test(detail) ? 'country' : undefined
+        );
+        if (field) return showFieldError(field, res.errors?.[field]?.[0] || detail || t('e_email'));
+        setError(detail || t('e_email'));
         return;
       }
       if (res.challenge) {
@@ -192,64 +214,6 @@ export default function SignupPage() {
     }
   };
 
-  // Google's own button hands back the token; this is the half that spends it.
-  const googleToken = async (token: string) => {
-    setError('');
-    setGoogleBusy(true);
-    // Filled from the credential before the server is asked anything: the boxes carry
-    // the address that was actually chosen in Google's dialog, so a form left open by
-    // a slow answer is never showing a different member's details.
-    const picked = credentialAccount(token);
-    if (picked.email) {
-      setEmail(picked.email);
-      if (picked.name && !name) setName(picked.name);
-      if (!username) setUsername(googleUsername(picked.email, picked.name));
-    }
-    try {
-      const res = await googleSignIn({ id_token: token });
-      if (res.needsSignup && res.prefill) {
-        setPrefill(res.prefill);
-        setEmail(res.prefill.email);
-        setName(res.prefill.name);
-      } else if (res.ok && res.user) {
-        showToast(t('welcome', { name: res.user.name || res.user.username }));
-        router.push('/');
-      } else if (res.locked) {
-        // Google believes the address; it never believed the account was allowed in.
-        // Without this the button simply stopped, which read as Google being broken.
-        setError(banLine(res, t));
-      } else if (res.detail) {
-        setError(res.detail);
-      }
-    } catch (err) {
-      setError((err as Error)?.message || t('googleUnavailable'));
-    } finally {
-      setGoogleBusy(false);
-    }
-  };
-
-  const startGoogle = async () => {
-    setError('');
-    setGoogleBusy(true);
-    try {
-      if (feature('googleDemo') && db.settings.demoGoogle) {
-        setPrefill({ ...db.settings.demoGoogle, google_sub: db.settings.demoGoogle.sub } as Prefill);
-        setEmail(db.settings.demoGoogle.email);
-        setName(db.settings.demoGoogle.name);
-        setPassword('');
-      } else if (!API_ENABLED) {
-        const demo = { name: 'Aarav Sharma', username: 'aarav_g', email: 'aarav.sharma@gmail.com', dob: '1998-05-14', city: 'Kathmandu' };
-        localAccount({ ...demo, country: 'Nepal', province: 'Bagmati', provider: 'google' });
-      } else {
-        setError(t('googleUnavailable'));
-      }
-    } catch (err) {
-      setError((err as Error)?.message || t('googleUnavailable'));
-    } finally {
-      setGoogleBusy(false);
-    }
-  };
-
   const socialAccount = (provider: 'facebook' | 'apple', demo: { name: string; username: string; email: string; dob: string; city: string }) => {
     localAccount({ ...demo, country: 'Nepal', province: 'Bagmati', provider });
   };
@@ -282,9 +246,7 @@ export default function SignupPage() {
     );
   }
 
-  const showGoogle = API_ENABLED
-    ? ready && (!!db.settings.googleClientId || feature('googleLogin') || feature('googleDemo'))
-    : true;
+  const showSocial = !API_ENABLED && (feature('facebookLogin') || feature('appleLogin'));
 
   return (
     <div className="login-container signup-container">
@@ -294,81 +256,178 @@ export default function SignupPage() {
         <p className="signup-sub">{t('signupSub')}</p>
         {waking ? <p className="auth-notice" role="status">{t('waking')}</p> : null}
 
-        {showGoogle && db.settings.googleClientId && (
-          <GoogleButton clientId={db.settings.googleClientId} onToken={googleToken} onError={setError} fallback={null} />
-        )}
-        {showGoogle && !db.settings.googleClientId && (
-          <button type="button" className={`social-btn ${googleBusy ? 'checking' : ''}`} onClick={startGoogle}
-            disabled={busy || googleBusy} aria-busy={googleBusy}>
-            {googleBusy ? <span className="btn-spin" aria-hidden="true" /> : IC.g}
-            <span>{googleBusy ? t('checking') : db.settings.googleClientId ? t('google') : feature('googleDemo') ? t('demoGoogle') : t('google')}</span>
-          </button>
-        )}
         {feature('facebookLogin') && !API_ENABLED && (
           <button type="button" className="social-btn" onClick={() => socialAccount('facebook', { name: 'Puja Rai', username: 'puja_fb', email: 'puja.rai@facebook.demo', dob: '1997-09-22', city: 'Dharan' })}>{IC.fb}<span>{t('facebook')}</span></button>
         )}
         {feature('appleLogin') && !API_ENABLED && (
           <button type="button" className="social-btn" onClick={() => socialAccount('apple', { name: 'Niraj Thapa', username: 'niraj_a', email: 'niraj@icloud.demo', dob: '1995-01-30', city: 'Pokhara' })}>{IC.apple}<span>{t('apple')}</span></button>
         )}
-        {(showGoogle || feature('facebookLogin') || feature('appleLogin')) && <div className="login-divider">{t('or')}</div>}
+        {showSocial && <div className="login-divider">{t('or')}</div>}
 
         {prefill ? <p className="auth-notice" role="status">{t('googleHandoff', { email: prefill.email })}</p> : null}
 
         <form onSubmit={submit} className="signup-form" noValidate>
           <label className="signup-field">
             <span>{t('fullName')} *</span>
-            <input className="login-input" type="text" value={name} maxLength={60} autoComplete="off" placeholder={t('fullName')} onChange={e => setName(e.target.value)} />
+            <input
+              ref={el => { fields.current.name = el; }}
+              className="login-input"
+              type="text"
+              value={name}
+              maxLength={60}
+              autoComplete="off"
+              placeholder={t('fullName')}
+              aria-invalid={!!fieldErrors.name}
+              aria-describedby={fieldErrors.name ? 'signup-name-error' : undefined}
+              onChange={e => { setName(e.target.value); clearFieldError('name'); }}
+            />
+            {fieldErrors.name ? <span className="signup-field-error" id="signup-name-error" role="alert">{fieldErrors.name}</span> : null}
           </label>
           <label className="signup-field">
             <span>{t('username')} *</span>
-            <input className="login-input" type="text" value={username} maxLength={20} autoComplete="off" placeholder="sita_k" onChange={e => setUsername(e.target.value.replace(/\s/g, '_'))} />
+            <input
+              ref={el => { fields.current.username = el; }}
+              className="login-input"
+              type="text"
+              value={username}
+              maxLength={20}
+              autoComplete="off"
+              placeholder="sita_k"
+              aria-invalid={!!fieldErrors.username}
+              aria-describedby={fieldErrors.username ? 'signup-username-error' : undefined}
+              onChange={e => { setUsername(e.target.value.replace(/\s/g, '_')); clearFieldError('username'); }}
+            />
+            {fieldErrors.username ? <span className="signup-field-error" id="signup-username-error" role="alert">{fieldErrors.username}</span> : null}
           </label>
           <label className="signup-field">
             <span>{t('email')} *</span>
-            <input className="login-input" type="email" value={email} autoComplete="off" placeholder="you@example.com" readOnly={!!prefill} onChange={e => setEmail(e.target.value)} />
+            <input
+              ref={el => { fields.current.email = el; }}
+              className="login-input"
+              type="email"
+              value={email}
+              autoComplete="off"
+              placeholder="you@example.com"
+              readOnly={!!prefill}
+              aria-invalid={!!fieldErrors.email}
+              aria-describedby={fieldErrors.email ? 'signup-email-error' : undefined}
+              onChange={e => { setEmail(e.target.value); clearFieldError('email'); }}
+            />
+            {fieldErrors.email ? <span className="signup-field-error" id="signup-email-error" role="alert">{fieldErrors.email}</span> : null}
           </label>
           {!prefill && (
             <label className="signup-field">
               <span>{t('password')} *</span>
-              <input className="login-input" type="password" value={password} autoComplete="new-password" placeholder="••••••••" onChange={e => setPassword(e.target.value)} />
+              <input
+                ref={el => { fields.current.password = el; }}
+                className="login-input"
+                type="password"
+                value={password}
+                autoComplete="new-password"
+                placeholder="••••••••"
+                aria-invalid={!!fieldErrors.password}
+                aria-describedby={fieldErrors.password ? 'signup-password-error' : undefined}
+                onChange={e => { setPassword(e.target.value); clearFieldError('password'); }}
+              />
+              {fieldErrors.password ? <span className="signup-field-error" id="signup-password-error" role="alert">{fieldErrors.password}</span> : null}
             </label>
           )}
           <div className="signup-row">
             <label className="signup-field">
               <span>{t('dob')} *</span>
-              <input className="login-input" type="date" value={dob} max={new Date().toISOString().slice(0, 10)} onChange={e => setDob(e.target.value)} />
+              <input
+                ref={el => { fields.current.dob = el; }}
+                className="login-input"
+                type="date"
+                value={dob}
+                max={new Date().toISOString().slice(0, 10)}
+                aria-invalid={!!fieldErrors.dob}
+                aria-describedby={fieldErrors.dob ? 'signup-dob-error' : undefined}
+                onChange={e => { setDob(e.target.value); clearFieldError('dob'); }}
+              />
+              {fieldErrors.dob ? <span className="signup-field-error" id="signup-dob-error" role="alert">{fieldErrors.dob}</span> : null}
             </label>
             <label className="signup-field">
               <span>{t('country')} *</span>
-              <select className="login-input" value={country} onChange={e => setCountry(e.target.value)}>
+              <select
+                ref={el => { fields.current.country = el; }}
+                className="login-input"
+                value={country}
+                aria-invalid={!!fieldErrors.country}
+                aria-describedby={fieldErrors.country ? 'signup-country-error' : undefined}
+                onChange={e => { setCountry(e.target.value); clearFieldError('country'); }}
+              >
                 {COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
+              {fieldErrors.country ? <span className="signup-field-error" id="signup-country-error" role="alert">{fieldErrors.country}</span> : null}
             </label>
           </div>
           <div className="signup-row">
             <label className="signup-field">
               <span>{t('province')} ({t('optional')})</span>
-              <input className="login-input" type="text" value={province} maxLength={40} autoComplete="off" onChange={e => setProvince(e.target.value)} />
+              <input
+                ref={el => { fields.current.province = el; }}
+                className="login-input"
+                type="text"
+                value={province}
+                maxLength={40}
+                autoComplete="off"
+                aria-invalid={!!fieldErrors.province}
+                aria-describedby={fieldErrors.province ? 'signup-province-error' : undefined}
+                onChange={e => { setProvince(e.target.value); clearFieldError('province'); }}
+              />
+              {fieldErrors.province ? <span className="signup-field-error" id="signup-province-error" role="alert">{fieldErrors.province}</span> : null}
             </label>
             <label className="signup-field">
               <span>{t('city')} ({t('optional')})</span>
-              <input className="login-input" type="text" value={city} maxLength={40} autoComplete="off" onChange={e => setCity(e.target.value)} />
+              <input
+                ref={el => { fields.current.city = el; }}
+                className="login-input"
+                type="text"
+                value={city}
+                maxLength={40}
+                autoComplete="off"
+                aria-invalid={!!fieldErrors.city}
+                aria-describedby={fieldErrors.city ? 'signup-city-error' : undefined}
+                onChange={e => { setCity(e.target.value); clearFieldError('city'); }}
+              />
+              {fieldErrors.city ? <span className="signup-field-error" id="signup-city-error" role="alert">{fieldErrors.city}</span> : null}
             </label>
           </div>
 
-          <label className="signup-check">
-            <input type="checkbox" checked={ageOk} onChange={e => setAgeOk(e.target.checked)} />
-            <span>{t('ageConfirm')}</span>
-          </label>
-          <label className="signup-check">
-            <input type="checkbox" checked={legalOk} onChange={e => setLegalOk(e.target.checked)} />
-            <span>
-              {t('legalTick')}{' '}
-              <span className="signup-legal-links">
-                (<Link href="/legal/terms" target="_blank" rel="noopener">{t('terms')}</Link> · <Link href="/legal/user-policy" target="_blank" rel="noopener">{t('userPolicy')}</Link> · <Link href="/legal/privacy" target="_blank" rel="noopener">{t('privacy')}</Link> · <Link href="/legal/cookies" target="_blank" rel="noopener">{t('cookies')}</Link>)
+          <div className="signup-check-wrap">
+            <label className="signup-check">
+              <input
+                ref={el => { fields.current.age = el; }}
+                type="checkbox"
+                checked={ageOk}
+                aria-invalid={!!fieldErrors.age}
+                aria-describedby={fieldErrors.age ? 'signup-age-error' : undefined}
+                onChange={e => { setAgeOk(e.target.checked); clearFieldError('age'); }}
+              />
+              <span>{t('ageConfirm')}</span>
+            </label>
+            {fieldErrors.age ? <span className="signup-field-error" id="signup-age-error" role="alert">{fieldErrors.age}</span> : null}
+          </div>
+          <div className="signup-check-wrap">
+            <label className="signup-check">
+              <input
+                ref={el => { fields.current.legal = el; }}
+                type="checkbox"
+                checked={legalOk}
+                aria-invalid={!!fieldErrors.legal}
+                aria-describedby={fieldErrors.legal ? 'signup-legal-error' : undefined}
+                onChange={e => { setLegalOk(e.target.checked); clearFieldError('legal'); }}
+              />
+              <span>
+                {t('legalTick')}{' '}
+                <span className="signup-legal-links">
+                  (<Link href="/legal/terms" target="_blank" rel="noopener">{t('terms')}</Link> · <Link href="/legal/user-policy" target="_blank" rel="noopener">{t('userPolicy')}</Link> · <Link href="/legal/privacy" target="_blank" rel="noopener">{t('privacy')}</Link> · <Link href="/legal/cookies" target="_blank" rel="noopener">{t('cookies')}</Link>)
+                </span>
               </span>
-            </span>
-          </label>
+            </label>
+            {fieldErrors.legal ? <span className="signup-field-error" id="signup-legal-error" role="alert">{fieldErrors.legal}</span> : null}
+          </div>
 
           {error && <p className="signup-error" role="alert">{error}</p>}
           <button type="submit" className={`login-submit ${busy ? '' : 'active'}`} disabled={busy}>{busy ? t('checking') : t('signup')}</button>
