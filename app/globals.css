@@ -2607,6 +2607,9 @@ a.trend-item:hover { text-decoration: none; }
 .notice-line > a { flex: none; color: #fff; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
 .notice-line > a:hover, .notice-line > a:focus-visible { color: #fff; text-decoration-thickness: 2px; }
 .comments-content > .notice-banner { margin: 0 0 6px; }
+/* The card already spaces its own rows, and the notice reads as part of the
+   caption block rather than a banner laid over the top of the post. */
+.post > .notice-banner { margin: 0; }
 .comment-card { display: inline-block; align-self: flex-start; width: fit-content; max-width: 100%; min-width: 0; vertical-align: top; }
 .comment-card > .notice-banner, .comment-card > .comment-bubble { width: 100%; }
 .comment-card > .comment-bubble { display: block; width: 100%; max-width: 100%; box-sizing: border-box; }

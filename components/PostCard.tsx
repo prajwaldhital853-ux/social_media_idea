@@ -185,8 +185,6 @@ export default function PostCard({ post, author, featured }: PostCardProps) {
 
   return (
     <article className={`post ${featured ? 'post-featured' : ''}`} onClick={onArticleClick} onPointerEnter={warmRoutes} onTouchStart={warmRoutes}>
-      <NoticeBanner notices={post.notices} full={featured}/>
-
       {promo && (
         <div className="promoted-row">
           <span className="promoted-chip">{IC.chart}{t('promoted')}</span>
@@ -257,6 +255,8 @@ export default function PostCard({ post, author, featured }: PostCardProps) {
           {post.text && <Caption text={post.text} full={featured} />}
         </div>
       </div>
+
+      <NoticeBanner notices={post.notices} full={featured}/>
 
       {shown.length > 0 && (
         <div className={`media-mosaic ${mosaicClass(shown.length)}`} onClick={e => e.stopPropagation()}>
