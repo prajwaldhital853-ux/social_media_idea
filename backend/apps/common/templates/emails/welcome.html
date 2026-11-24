@@ -1,0 +1,50 @@
+{% extends 'emails/base.html' %}
+
+{% block preheader %}Your Exposing account is ready{% endblock %}
+
+{% block content %}
+  <h1 style="margin:0 0 12px;font-size:21px;line-height:1.3;font-weight:700;color:#1b1b1f;">{{ heading }}</h1>
+  <p style="margin:0;font-size:15px;line-height:1.65;color:#46464d;">
+    {% if name %}Hi {{ name }},{% else %}Hello,{% endif %}<br><br>
+    Your account <strong>@{{ username }}</strong> is open. Here is what is worth doing first.
+  </p>
+
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-top:22px;">
+    {% for step in steps %}
+    <tr>
+      <td valign="top" width="26" style="padding:0 0 14px;font-size:14px;font-weight:700;color:#E40104;">{{ forloop.counter }}</td>
+      <td valign="top" style="padding:0 0 14px;">
+        <p style="margin:0;font-size:14px;line-height:1.6;color:#1b1b1f;font-weight:700;">{{ step.title }}</p>
+        <p style="margin:2px 0 0;font-size:14px;line-height:1.6;color:#6b6b72;">{{ step.body }}</p>
+      </td>
+    </tr>
+    {% endfor %}
+  </table>
+
+  {% if cta_url and cta_label %}
+  <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin-top:10px;">
+    <tr>
+      <td bgcolor="#E40104" style="border-radius:6px;">
+        <a href="{{ cta_url }}" style="display:inline-block;padding:12px 22px;color:#ffffff;font-size:14px;font-weight:700;text-decoration:none;border-radius:6px;">{{ cta_label }}</a>
+      </td>
+    </tr>
+  </table>
+  {% endif %}
+
+  {% if not verified %}
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-top:8px;">
+    <tr>
+      <td bgcolor="#f7f7f8" style="border-left:3px solid #E40104;padding:12px 16px;">
+        <p style="margin:0;font-size:14px;line-height:1.6;color:#46464d;">
+          One step is still outstanding. We have emailed a six-digit code to this address &mdash;
+          enter it to finish confirming it. Until you do, the account stays signed out.
+        </p>
+      </td>
+    </tr>
+  </table>
+  {% endif %}
+
+  <p style="margin:24px 0 0;font-size:13px;line-height:1.6;color:#6b6b72;">
+    You can change any of this later in Settings. If you did not open this account, write to us from the support address below and we will sort it out.
+  </p>
+{% endblock %}

@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="x-apple-disable-message-reformatting">
+  <title>{% block title %}{{ heading }}{% endblock %}</title>
+  <style>
+    @media only screen and (max-width: 620px) {
+      .email-shell { width: 100% !important; }
+      .email-pad { padding-left: 22px !important; padding-right: 22px !important; }
+      .detail-label { width: 40% !important; }
+      .code-cell { font-size: 24px !important; letter-spacing: 4px !important; }
+    }
+  </style>
+</head>
+<body style="margin:0;padding:0;background:#f5f5f6;color:#1b1b1f;font-family:Helvetica,Arial,sans-serif;">
+  <div style="display:none;max-height:0;overflow:hidden;opacity:0;">{% block preheader %}{{ heading }}{% endblock %}</div>
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" bgcolor="#f5f5f6">
+    <tr>
+      <td align="center" style="padding:36px 12px;">
+        <table role="presentation" class="email-shell" width="580" cellspacing="0" cellpadding="0" border="0" bgcolor="#ffffff" style="width:580px;max-width:580px;border:1px solid #e5e5e9;border-radius:12px;">
+          <tr>
+            <td height="3" bgcolor="#E40104" style="height:3px;background:#E40104;font-size:0;line-height:0;border-radius:12px 12px 0 0;">&nbsp;</td>
+          </tr>
+          <tr>
+            <td class="email-pad" style="padding:26px 36px 0;">
+              <table role="presentation" cellspacing="0" cellpadding="0" border="0">
+                <tr>
+                  <td valign="middle" style="padding-right:12px;">
+                    {% if logo_src %}
+                      <img src="{{ logo_src }}" width="34" height="34" alt="" style="display:block;width:34px;height:34px;">
+                    {% endif %}
+                  </td>
+                  <td valign="middle" style="font-size:15px;font-weight:700;letter-spacing:2px;color:#1b1b1f;">EXPOSING</td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td class="email-pad" style="padding:20px 36px 8px;">
+              {% block content %}{% endblock %}
+            </td>
+          </tr>
+          <tr>
+            <td class="email-pad" style="padding:26px 36px 28px;">
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+                <tr><td height="1" bgcolor="#e5e5e9" style="height:1px;background:#e5e5e9;font-size:0;line-height:0;">&nbsp;</td></tr>
+              </table>
+              <p style="margin:18px 0 6px;font-size:13px;line-height:1.6;color:#1b1b1f;font-weight:700;">Questions? Contact Exposing support</p>
+              <p style="margin:0;font-size:13px;line-height:1.7;color:#6b6b72;">
+                {% if support.email %}<a href="mailto:{{ support.email }}" style="color:#6b6b72;text-decoration:underline;">{{ support.email }}</a>{% endif %}
+                {% if support.phone %}&nbsp;&nbsp;|&nbsp;&nbsp;<a href="tel:{{ support.phone }}" style="color:#6b6b72;text-decoration:underline;">{{ support.phone }}</a>{% endif %}
+                {% if support.form %}&nbsp;&nbsp;|&nbsp;&nbsp;<a href="{{ support.form }}" style="color:#6b6b72;text-decoration:underline;">Support form</a>{% endif %}
+              </p>
+              <p style="margin:16px 0 0;font-size:12px;line-height:1.7;color:#8d8d95;">
+                This message was sent to {{ recipient }} by Exposing because it relates to your account. Do not reply to this address.
+              </p>
+              <p style="margin:6px 0 0;font-size:12px;line-height:1.7;color:#8d8d95;">&copy; {{ year }} Exposing. All rights reserved.</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

@@ -14,7 +14,7 @@ from rest_framework.decorators import api_view, permission_classes, authenticati
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
-from apps.common.emails import queue_event_email
+from apps.common.emails import queue_welcome_email
 from apps.common.ratelimit import client_ip, enforce
 from apps.profiles.models import Profile
 
@@ -67,7 +67,10 @@ def _is_staff_member(user):
 def _reserved_email(email):
     if not email:
         return False
-    return User.objects.filter(email=email).filter(
+    # The seat may have been written before addresses were folded to lower case,
+    # so the lookup ignores case: 'Desk.Mod@X.com' and 'desk.mod@x.com' are the
+    # same staff mailbox and neither one opens a member account.
+    return User.objects.filter(email__iexact=email).filter(
         Q(is_staff=True) | Q(is_superuser=True) | Q(staff_account__is_enabled=True)
     ).exists()
 
@@ -218,7 +221,7 @@ def signup(request):
     if User.objects.filter(username=username).exists():
         message = 'That username is taken.'
         return Response({'detail': message, 'username': [message]}, status=400)
-    if User.objects.filter(email=email).exists():
+    if User.objects.filter(email__iexact=email).exists():
         message = 'An account with that email already exists.'
         return Response({'detail': message, 'email': [message]}, status=400)
     if not google:
@@ -266,15 +269,7 @@ def signup(request):
             message = 'An account with that email already exists.'
         return Response({'detail': message, 'email': [message]}, status=400)
     passwords.remember(user)
-    queue_event_email(
-        user.email, 'Welcome to Exposing', f'Welcome to Exposing, {name or username}',
-        ('Your Exposing account is ready. You can sign in with Google and start sharing your work.'
-         if google else
-         'Your Exposing account has been created. Use the code in your verification email to finish confirming this address.'),
-        details=[('Username', f'@{username}'), ('Email', user.email)],
-        cta_label='Open Exposing', cta_path='/login',
-        footnote=None if google else 'Your account stays signed out until you confirm the verification code.',
-    )
+    queue_welcome_email(user, name=name or username, username=username, verified=bool(google))
     if google:
         _trust_device(user, device_id)
         resp = Response({'user': {'id': user.pk, 'username': user.username, 'email': user.email}},
@@ -307,7 +302,7 @@ def login(request):
         return Response({'detail': 'Sign in with your email address, not your username.'}, status=400)
     enforce(f'login-id:{email}', 10, 60)
     password = request.data.get('password') or ''
-    user = User.objects.filter(email=email).order_by('id').first()
+    user = User.objects.filter(email__iexact=email).order_by('id').first()
     if not user or _is_staff_member(user):
         return Response({'detail': 'No account matches those credentials.'}, status=401)
     if user.is_suspended:
@@ -511,7 +506,7 @@ def unlock_request(request):
     enforce(f'unlock:{email}', 3, 600)
     if not email or '@' not in email:
         return Response({'detail': 'Enter the email address you signed up with.'}, status=400)
-    user = User.objects.filter(email=email).order_by('id').first()
+    user = User.objects.filter(email__iexact=email).order_by('id').first()
     if not user:
         return Response({'detail': 'If that email exists, an unlock code is on its way.'})
     otp, code = _make_otp(user, 'unlock')
@@ -543,7 +538,7 @@ def reset_request(request):
     banned = safety.blocking(request, email)
     if banned is not None:
         return safety.refuse(banned)
-    user = User.objects.filter(email=email).order_by('id').first()
+    user = User.objects.filter(email__iexact=email).order_by('id').first()
     if not user or user.is_suspended or _is_staff_member(user):
         return Response({'detail': 'If that email has an account, a reset code is on its way.'})
     otp, code = _make_otp(user, 'reset', _device_id(request))
@@ -731,7 +726,7 @@ def google(request):
     banned = safety.blocking(request, email)
     if banned is not None:
         return safety.refuse(banned)
-    user = User.objects.filter(email=email).order_by('id').first()
+    user = User.objects.filter(email__iexact=email).order_by('id').first()
     if user and _is_staff_member(user):
         return Response({'detail': 'This email address cannot be used.'}, status=400)
     device_id = _device_id(request)

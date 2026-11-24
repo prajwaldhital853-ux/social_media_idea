@@ -7,9 +7,18 @@ from urllib.parse import urljoin
 from django.conf import settings
 
 from apps.common.mail import send_off_request
-from apps.common.tasks import safe_link, send_branded_email
+from apps.common.tasks import safe_link, send_branded_email, send_welcome_email
 
 logger = logging.getLogger(__name__)
+
+
+def _queue(task, *args):
+    """Post one letter without letting the mail broker fail the business write."""
+    try:
+        return send_off_request(task, *args)
+    except Exception:
+        logger.exception('Could not queue an email for %s', args[0])
+        return None
 
 
 def _absolute(value):
@@ -55,6 +64,14 @@ def queue_event_email(to, subject, heading, message, details=(), cta_label='', c
     except Exception:
         logger.exception('Could not queue the %s email for %s', subject, to)
         return None
+
+
+def queue_welcome_email(user, *, name='', username='', verified=True):
+    """The first letter, sent once the account row and its profile exist."""
+    return _queue(
+        send_welcome_email, user.email, 'Welcome to Exposing', name, username,
+        _absolute('/login'), verified, support_context(),
+    )
 
 
 def queue_coin_credit_email(user, *, coins, amount, balance, request_id, reference=''):

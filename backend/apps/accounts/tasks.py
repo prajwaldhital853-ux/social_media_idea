@@ -1,29 +1,52 @@
 from celery import shared_task
-from django.conf import settings
-from django.core.mail import send_mail
 
+from apps.common.emails import support_context
 from apps.common.mail import send_off_request
+from apps.common.tasks import send_code_email
+
+# The sentence under the code, per door it opens. A person who asked for a reset
+# and a person whose account is locked after wrong passwords are in different
+# situations, and one generic line covers neither.
+COPY = {
+    'login': (
+        'Your sign-in code',
+        'Your Exposing sign-in code',
+        'Use this code to finish signing in to Exposing.',
+    ),
+    'unlock': (
+        'Unlock your Exposing account',
+        'Unlock your account',
+        'Use this code to unlock your Exposing account. It was locked after several '
+        'sign-ins with the wrong password.',
+    ),
+    'verify': (
+        'Verify your Exposing email',
+        'Confirm your email address',
+        'Use this code to confirm that this address is yours. It finishes setting up '
+        'your Exposing account.',
+    ),
+    'reset': (
+        'Reset your Exposing password',
+        'Choose a new password',
+        'Use this code to choose a new Exposing password. If you did not ask for one, '
+        'your password has not changed.',
+    ),
+    'admin_reset': (
+        'Reset your Exposing staff password',
+        'Choose a new staff password',
+        'Use this code to choose a new password for the Exposing staff console. This '
+        'code does not affect your member account.',
+    ),
+}
+FALLBACK = ('Your Exposing code', 'Your Exposing code', 'Use this code to continue.')
 
 
 @shared_task
 def send_otp_email(email, code, purpose, minutes=10):
-    subjects = {
-        'login': 'Your Exposing sign-in code',
-        'unlock': 'Unlock your Exposing account',
-        'verify': 'Verify your Exposing email',
-        'reset': 'Reset your Exposing password',
-        'admin_reset': 'Reset your Exposing staff password',
-    }
+    subject, heading, intro = COPY.get(purpose, FALLBACK)
     # No try/except: this runs on the mail thread, where a raised SMTP error is the
     # only thing that reaches the log, and a silent one is a code nobody received.
-    send_mail(
-        subjects.get(purpose, 'Your Exposing code'),
-        f'Your code is {code}. It expires in {minutes} minutes. '
-        'If you did not request it, ignore this email.',
-        settings.DEFAULT_FROM_EMAIL,
-        [email],
-        fail_silently=False,
-    )
+    send_code_email(email, subject, heading, intro, code, minutes, support_context())
 
 
 def deliver_otp_email(email, code, purpose, minutes=10):
