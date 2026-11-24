@@ -2659,20 +2659,22 @@ a.trend-item:hover { text-decoration: none; }
 .promoted-why { font-size: 10px; padding: 2px; }
 .promoted-pop { position: absolute; top: 24px; left: 0; max-width: 300px; padding: 12px; z-index: 15; background: var(--paper); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow-lg); }
 
-/* A sentence staff put over one piece of content, read before the thing it warns about. */
+/* A moderation warning, in the same unmistakable shape as an account ban. */
 .notice-banner { display: flex; flex-direction: column; gap: 8px; margin: 0 0 10px; }
 .notice-line {
-  display: flex; flex-wrap: wrap; align-items: baseline; gap: 3px 8px;
-  margin: 0; padding: 0 0 8px; border-bottom: 1px solid var(--line);
-  font-size: 13px; line-height: 1.45; color: var(--ink);
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  margin: 0; padding: 13px 16px; border-radius: 12px;
+  background: #c62828; color: #fff; font-size: 14px; line-height: 1.4;
+  box-shadow: 0 2px 6px #8b1a1a22;
 }
-.notice-line:last-child { padding-bottom: 0; border-bottom: 0; }
-.notice-label { flex: none; font-size: 11.5px; font-weight: 600; letter-spacing: .02em; color: var(--muted); text-transform: uppercase; }
-.notice-text { font-weight: 500; }
-.notice-reason { flex-basis: 100%; font-size: 12px; color: var(--muted); }
-.notice-by { font-size: 11.5px; color: var(--muted); }
-.comments-content > .notice-banner { margin: 0 0 4px; }
-.comments-content > .notice-banner .notice-line { font-size: 12.5px; padding-bottom: 6px; }
+.notice-copy { display: flex; flex-direction: column; gap: 3px; margin: 0; min-width: 0; }
+.notice-text { font-weight: 500; overflow-wrap: anywhere; }
+.notice-reason { font-size: 12px; color: #ffffffd9; overflow-wrap: anywhere; }
+.notice-by { font-size: 12px; color: #ffffffd9; }
+.notice-line > a { flex: none; color: #fff; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
+.notice-line > a:hover, .notice-line > a:focus-visible { color: #fff; text-decoration-thickness: 2px; }
+.comments-content > .notice-banner { margin: 0 0 6px; }
+.comments-content > .notice-banner .notice-line { padding: 9px 12px; border-radius: 10px; font-size: 12.5px; gap: 10px; }
 .desktop-compose { padding: 14px 16px; border-bottom: 1px solid var(--line); }
 .desktop-compose button { padding: 10px 16px; width: 100%; text-align: left; background: var(--surface); color: var(--muted); border-radius: 24px; }
 .feed-empty { padding: 32px 20px; color: var(--muted); font-size: 14px; }
@@ -6674,6 +6676,19 @@ a.wallet-sec-note:hover { color: var(--brand); text-decoration: underline; }
 .notif-time { font-size: 12px; color: var(--muted); }
 .notif-time.fresh { color: var(--brand); font-weight: 700; }
 .notif-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--brand); flex-shrink: 0; }
+
+.warning-detail-page { min-height: calc(100vh - 56px); }
+.warning-detail { width: min(640px, 100%); margin: 0 auto; padding: 14px 16px 40px; display: flex; flex-direction: column; gap: 14px; }
+.warning-card { padding: 18px; border: 1px solid var(--line); border-radius: 16px; background: var(--paper); box-shadow: var(--shadow); }
+.warning-card h2 { margin: 0 0 10px; font-size: 16px; }
+.warning-copy { margin: 0; line-height: 1.55; overflow-wrap: anywhere; white-space: pre-wrap; }
+.warning-target-label { margin: 0 0 8px; color: var(--muted); font-size: 13px; }
+.warning-facts { display: flex; flex-direction: column; gap: 10px; margin: 16px 0 0; }
+.warning-facts > div { display: grid; grid-template-columns: 130px minmax(0, 1fr); gap: 12px; }
+.warning-facts dt { color: var(--muted); font-size: 12.5px; }
+.warning-facts dd { margin: 0; overflow-wrap: anywhere; text-transform: capitalize; }
+.warning-target-link { display: inline-flex; align-items: center; gap: 6px; margin-top: 16px; color: var(--brand); font-weight: 700; }
+.warning-target-link svg { width: 16px; height: 16px; }
 
 /* ---------- Inbox ---------- */
 .inbox-view { animation: fadeIn .2s ease; }

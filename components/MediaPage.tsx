@@ -19,11 +19,11 @@ interface MediaPageProps {
 
 export default function MediaPage({ postId, initialIndex }: MediaPageProps) {
   const router = useRouter();
-  const { db, me, isStaff, t, sharePost } = useApp();
+  const { db, me, t, sharePost } = useApp();
   const post = db.posts.find(p => p.id === postId);
   // A direct link to /post/<id>/media/<n> has no list behind it; ask for the row.
   const { remote, pull } = useRemoteRow('post', postId, !!post);
-  const available = !!post && (post.status === 'live' || me?.id === post.uid || isStaff()) && canSeePost(post, me?.id ?? null, db.follows, privateIds(db.users));
+  const available = !!post && post.status === 'live' && canSeePost(post, me?.id ?? null, db.follows, privateIds(db.users));
   const media = (post?.media || []).filter(m => m.src || m.gen);
   const start = Math.max(0, Math.min(initialIndex, Math.max(0, media.length - 1)));
   const [index, setIndex] = useState(start);

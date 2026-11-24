@@ -5,6 +5,10 @@ from django.db import models
 class Notification(models.Model):
     recipient = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='notifications')
     actor = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='actions')
+    notice = models.ForeignKey(
+        'adminpanel.PublicNotice', null=True, blank=True,
+        on_delete=models.SET_NULL, related_name='notifications',
+    )
     kind = models.CharField(max_length=40)
     target_type = models.CharField(max_length=20, blank=True)
     target_id = models.CharField(max_length=64, blank=True)

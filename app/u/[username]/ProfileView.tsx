@@ -87,7 +87,7 @@ export default function UserProfilePage() {
 
   const cachedPosts = useMemo(() => {
     const index = new Map(db.posts.map(p => [p.id, p] as [string, Post]));
-    return authorPosts.ids.map(id => index.get(id)).filter((p): p is Post => !!p);
+    return authorPosts.ids.map(id => index.get(id)).filter((p): p is Post => !!p && p.status === 'live');
   }, [db.posts, authorPosts.ids]);
 
   const posts = useMemo(() => {
@@ -156,7 +156,7 @@ export default function UserProfilePage() {
   const reelCells = (() => {
     const index = new Map(db.posts.map(p => [p.id, p] as [string, Post]));
     const rows = serverMode
-      ? authorReels.ids.map(id => index.get(id)).filter((p): p is Post => !!p)
+      ? authorReels.ids.map(id => index.get(id)).filter((p): p is Post => !!p && p.status === 'live')
       : db.posts.filter(p => p.uid === user.id && p.status === 'live'
           && canSeePost(p, me?.id ?? null, db.follows, privateIds(db.users)));
     const cells = rows.flatMap(p => (p.media || [])

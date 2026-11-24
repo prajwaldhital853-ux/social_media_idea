@@ -39,7 +39,7 @@ from apps.posts.models import Post
 from apps.promotions.models import Promotion
 from apps.wallet.models import CoinRequest, Transaction, Wallet
 
-from . import rbac, settings_store, spam
+from . import rbac, review, settings_store, spam
 from .journal import record
 from .models import PublicNotice, StaffAccount
 
@@ -381,7 +381,7 @@ def detail(user):
         'notices': [{
             'id': item.pk, 'target': f'{item.target_type}:{item.target_id}', 'text': item.text,
             'reason': item.reason, 'is_live': item.is_live, 'created_at': item.created_at,
-            'actor': item.actor.username if item.actor else None,
+            'actor': item.actor.username if item.actor else None, 'audience': item.audience,
         } for item in notices.order_by('-created_at')[:10]],
         'audit': [{
             'id': log.pk, 'action': log.action, 'actor': log.actor.username if log.actor else None,
@@ -604,8 +604,8 @@ def verify(user, caller, *, verified, reason=''):
     }
 
 
-def warn(user, caller, *, text, reason=''):
-    """A private warning: in their bell, in their inbox unless they opted out, on the record."""
+def warn(user, caller, *, text, reason='', audience=PublicNotice.Audience.PRIVATE):
+    """A warning on the profile and in the bell, with a mailbox copy unless opted out."""
     text = str(text or '').strip()
     if not text:
         raise Refused('Write the warning. These are the words they read.')
@@ -613,13 +613,14 @@ def warn(user, caller, *, text, reason=''):
         raise Refused('A warning is 240 characters or less.')
     reason = str(reason or '').strip()
     profile = getattr(user, 'profile', None)
-    notify(user, caller, 'warning', text, 'user', user.pk)
+    notice = review.attach('user', user.pk, caller, reason, text, audience)
     opted_out = profile is not None and not profile.notify_email
     emailed = None if opted_out else enforcement_email(user, 'A note from the Exposing team', text)
     record(caller, 'warn_user', user.username,
            (f'{text} — {reason}' if reason else text)[:240])
     return {
         'action': 'warn', 'username': user.username, 'emailed': emailed, 'opted_out': opted_out,
+        'notice': notice,
         'detail': (f'@{user.username} was warned in the app.'
                    + (' They turned warning emails off, so nothing was sent to their inbox.' if opted_out
                       else (f' An email went to {emailed["to"]}.' if emailed

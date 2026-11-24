@@ -43,7 +43,7 @@ class CommentSerializer(serializers.ModelSerializer):
 
     def get_reply_count(self, obj):
         value = getattr(obj, 'annotated_reply_count', None)
-        return value if value is not None else obj.replies.count()
+        return value if value is not None else obj.replies.filter(status=Comment.Status.LIVE).count()
 
     def get_my_reaction(self, obj):
         if '_comment_reactions' not in self.context:
@@ -64,9 +64,11 @@ class CommentSerializer(serializers.ModelSerializer):
         # The same rule as reading: if the post is not in your view, it is not a
         # place you may speak — a private or follower-only author keeps a closed
         # thread even when someone guesses the post id.
-        if post and post.author_id != user.id and not visible_posts(user).filter(pk=post.pk).exists():
+        if post and not visible_posts(user).filter(pk=post.pk).exists():
             raise serializers.ValidationError('This post is not accepting comments.')
         parent = attrs.get('parent')
         if parent and post and parent.post_id != post.id:
             raise serializers.ValidationError('Reply must belong to the same post.')
+        if parent and parent.status != Comment.Status.LIVE:
+            raise serializers.ValidationError('This comment is not accepting replies.')
         return attrs
