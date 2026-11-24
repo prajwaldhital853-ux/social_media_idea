@@ -60,7 +60,9 @@ ENDED = 'qa_promo_four'
 FIVE = 'qa_promo_five'
 STALE = 'qa_promo_stale'
 DRAFT = 'qa_promo_draft'
-Payers = (WAITING, LIVE, PAUSED, ENDED, FIVE, STALE, DRAFT)
+# An order in the queue that no seat has touched: no coins taken, no run started.
+ORDER = 'qa_promo_order'
+Payers = (WAITING, LIVE, PAUSED, ENDED, FIVE, STALE, DRAFT, ORDER)
 
 
 def account(username):
@@ -97,6 +99,10 @@ def campaign(owner, target, kind, package, budget, ran, left, status, **extra):
     )
     now = timezone.now()
     stamp = {'created_at': now - timedelta(days=ran)}
+    if status not in (Promotion.Status.PENDING, Promotion.Status.DRAFT):
+        # A row that is already running was paid for, and approval is what takes the
+        # coins — so it carries the start date the migration gives the old ones.
+        stamp['starts_at'] = now - timedelta(days=ran)
     if left is not None:
         stamp['ends_at'] = now + timedelta(days=left)
     Promotion.objects.filter(pk=promo.pk).update(**stamp)
@@ -149,11 +155,12 @@ def main():
     five = caption(users[FIVE], f'{MARK} a clean campaign with nothing reported on it')
     stale = caption(users[STALE], f'{MARK} a run that finished before anyone looked')
     draft = caption(users[DRAFT], f'{MARK} a draft nobody has paid for')
+    ordered = caption(users[ORDER], f'{MARK} a campaign bought and waiting for a seat')
 
     # 300 coins over 30 days, 18 of them still to run: refusing it owes 180 back.
     waiting = campaign(users[WAITING], one, 'post', 'pk_growth', '300.00', 12, 18,
                        Promotion.Status.ACTIVE, category='Photography',
-                       age_min=18, age_max=35, country='Nepal', city='Kathmandu')
+                       age_min=18, age_max=35, country='Nepal', cities=['Kathmandu'])
     # 800 coins over 16 days with 12 left, so a stop refunds 600 — and the desk has
     # to be told whether it will, because withholding is also an answer.
     live = campaign(users[LIVE], two, 'listing', 'pk_prime', '800.00', 4, 12,
@@ -170,6 +177,13 @@ def main():
     campaign(users[STALE], stale, 'post', 'pk_growth', '150.00', 20, -2, Promotion.Status.ACTIVE)
     campaign(users[DRAFT], draft, 'post', 'pk_starter', '100.00', 1, None,
              Promotion.Status.DRAFT)
+    # The new money rule, on one row: ordered, aimed at two named cities, 300 coins
+    # still sitting in the payer's wallet and no end date until a seat approves it.
+    pending = campaign(users[ORDER], ordered, 'post', 'pk_growth', '300.00', 0, None,
+                       Promotion.Status.PENDING, category='Photography',
+                       age_min=18, age_max=45, country='Nepal',
+                       cities=['Kathmandu', 'Bhaktapur'])
+    Wallet.objects.filter(user=users[ORDER]).update(balance=Decimal('300.00'))
 
     decided(live, actor, PromoReview.Action.APPROVE, reason='', refunded='0')
     # A stop that withheld is the one decision that honestly owes nothing back, so
@@ -196,7 +210,8 @@ def main():
     print(f'{WAITING} holds a campaign nobody has signed off, with 2 open reports under it: #{waiting.pk}')
     print(f'{LIVE} is running and already approved: #{live.pk} | {PAUSED} is paused: #{paused.pk}')
     print(f'{ENDED} was stopped with the money withheld: #{ended.pk} | {STALE} ran out: past its end date')
-    print('re-run any time: these seven accounts and their campaigns are reset to these states.')
+    print(f'{ORDER} ordered reach and has paid nothing: #{pending.pk} — 300 coins still in their wallet')
+    print('re-run any time: these eight accounts and their campaigns are reset to these states.')
 
 
 if __name__ == '__main__':

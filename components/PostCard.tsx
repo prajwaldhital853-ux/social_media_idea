@@ -197,7 +197,7 @@ export default function PostCard({ post, author, featured }: PostCardProps) {
             <div className="promoted-pop" onClick={e => e.stopPropagation()}>
               <p>{me ? t('promoWhy') : t('promoWhyGuest')}</p>
               <p className="promoted-target">
-                {promo.category} · {promo.ageMin}–{promo.ageMax} · {promo.country || t('allLocations')}{promo.city ? `, ${promo.city}` : ''}
+                {promo.category} · {promo.ageMin}–{promo.ageMax} · {promo.country || t('allLocations')}{(promo.cities || []).length ? `: ${(promo.cities || []).join(', ')}` : ''}
               </p>
               {!own && menuItem(t('hidePromo'), () => { setPromoHidden(true); showToast(t('promoHidden')); })}
             </div>

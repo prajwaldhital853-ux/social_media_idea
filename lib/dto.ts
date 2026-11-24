@@ -257,6 +257,7 @@ export function mapMessage(row: any, meId: string, otherId: string): Message {
 }
 
 export function mapPromotion(row: any): Promotion {
+  const budget = amount(row.budget);
   return {
     id: idOf(row.id),
     uid: idOf(row.owner),
@@ -267,9 +268,13 @@ export function mapPromotion(row: any): Promotion {
     ageMin: Number(row.age_min ?? 13),
     ageMax: Number(row.age_max ?? 65),
     country: row.country || '',
-    city: row.city || '',
-    coins: amount(row.budget),
+    cities: (Array.isArray(row.cities) ? row.cities : []).map((name: unknown) => String(name)),
+    // The approval is what takes the coins, so `starts_at` is also the line between
+    // "spent" and "quoted" — a waiting campaign has cost its payer nothing yet.
+    coins: row.starts_at ? budget : 0,
+    budget,
     ts: at(row.created_at),
+    starts: at(row.starts_at),
     ends: at(row.ends_at),
     status: row.status || 'pending',
     impressions: amount(row.impressions),

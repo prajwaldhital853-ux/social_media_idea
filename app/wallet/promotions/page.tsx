@@ -38,7 +38,9 @@ export default function WalletPromotionsPage() {
           <p className="wallet-empty">{t('noPromos')}</p>
         ) : promos.map(p => {
           const open = p.status === 'active' || p.status === 'paused';
+          const waiting = p.status === 'pending';
           const left = daysLeft(p.ends);
+          const cities = p.cities || [];
           return (
             <article className="promo-card" key={p.id}>
               <header className="promo-card-head">
@@ -46,11 +48,13 @@ export default function WalletPromotionsPage() {
                 <StatusChip status={p.status} />
               </header>
 
+              {waiting && <p className="promo-charge-note">{t('chargedOnApproval')}</p>}
+
               <div className="promo-figures">
                 <div><b>{p.impressions.toLocaleString('en-US')}</b><span>{t('impressions')}</span></div>
                 <div><b>{p.clicks.toLocaleString('en-US')}</b><span>{t('clicks')}</span></div>
                 <div><b>{pct(p.clicks, p.impressions)}</b><span>{t('ctr')}</span></div>
-                <div><b>{p.coins}</b><span>{t('spent')}</span></div>
+                <div><b title={waiting ? t('notChargedYet') : undefined}>{p.coins}</b><span>{waiting ? t('notChargedYet') : t('spent')}</span></div>
               </div>
 
               <dl className="promo-facts">
@@ -59,17 +63,24 @@ export default function WalletPromotionsPage() {
                 <div><dt>{t('targetAge')}</dt><dd>{t('ageRange', { min: p.ageMin, max: p.ageMax })}</dd></div>
                 <div>
                   <dt>{t('targetLocation')}</dt>
-                  <dd>{p.country || t('allLocations')}{p.city ? ` · ${p.city}` : ''}</dd>
+                  <dd>{p.country || t('allLocations')}{cities.length ? ` · ${cities.join(', ')}` : ''}</dd>
                 </div>
-                <div><dt>{t('started')}</dt><dd>{ago(p.ts, db.lang)}</dd></div>
+                <div>
+                  <dt>{t('started')}</dt>
+                  <dd>{p.starts ? ago(p.starts, db.lang) : t('awaitingApproval')}</dd>
+                </div>
                 <div>
                   <dt>{t('endsIn')}</dt>
-                  <dd>{p.status === 'active' ? t('daysLeft', { n: left }) : new Date(p.ends).toLocaleDateString(db.lang === 'ne' ? 'ne-NP' : 'en-GB', { day: 'numeric', month: 'short' })}</dd>
+                  <dd>{waiting || !p.ends
+                    ? '—'
+                    : p.status === 'active'
+                      ? t('daysLeft', { n: left })
+                      : new Date(p.ends).toLocaleDateString(db.lang === 'ne' ? 'ne-NP' : 'en-GB', { day: 'numeric', month: 'short' })}</dd>
                 </div>
               </dl>
 
               <div className="promo-actions">
-                {open && <button type="button" className="wallet-button" onClick={() => setEditing(p)}>{t('editTargeting')}</button>}
+                {(open || waiting) && <button type="button" className="wallet-button" onClick={() => setEditing(p)}>{t('editTargeting')}</button>}
                 {p.status === 'active' && <button type="button" className="wallet-quiet" onClick={() => void setPromotionStatus(p.id, 'pause')}>{t('pause')}</button>}
                 {p.status === 'paused' && <button type="button" className="wallet-quiet" onClick={() => void setPromotionStatus(p.id, 'resume')}>{t('resume')}</button>}
                 {open && (
@@ -81,7 +92,7 @@ export default function WalletPromotionsPage() {
                     {t('endNow')}
                   </button>
                 )}
-                {p.status === 'pending' && (
+                {waiting && (
                   <button type="button" className="wallet-quiet danger" onClick={() => void cancelPromotion(p.id)}>{t('cancelPromo')}</button>
                 )}
               </div>

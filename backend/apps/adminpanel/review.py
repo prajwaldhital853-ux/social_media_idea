@@ -122,12 +122,16 @@ def unspent(promo, now):
     """The coins a timed campaign paid for and never got the chance to spend.
 
     A campaign with no end date was bought as an open run, so nothing about
-    stopping it early is unearned; it refunds nothing and says so.
+    stopping it early is unearned; it refunds nothing and says so. The run is
+    measured from `starts_at`, the day the coins were actually taken — the order
+    date can sit days before it while a seat reads the queue, and counting those
+    days as spent would refund less than the payer ever bought.
     """
     budget = Decimal(promo.budget or 0)
     if budget <= 0 or promo.ends_at is None:
         return Decimal('0')
-    span = (promo.ends_at - promo.created_at).total_seconds()
+    began = promo.starts_at or promo.created_at
+    span = (promo.ends_at - began).total_seconds()
     left = (promo.ends_at - now).total_seconds()
     if span <= 0 or left <= 0:
         return Decimal('0')

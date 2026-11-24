@@ -2707,6 +2707,26 @@ a.trend-item:hover { text-decoration: none; }
 .promote-field { display: flex; flex-direction: column; gap: 6px; }
 .promote-ages { display: flex; gap: 8px; }
 .promote-ages label { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 4px; font-size: 12px; }
+.promote-sublabel { margin-top: 6px; font-size: 12px; color: var(--muted); }
+.promote-cities { display: flex; flex-direction: column; gap: 8px; }
+.promote-city-add { display: flex; gap: 8px; align-items: center; }
+.promote-city-add input { flex: 1; min-width: 0; }
+.promote-city-add .wallet-button { flex-shrink: 0; padding: 8px 12px; font-size: 12.5px; }
+.promote-city-add .wallet-button:disabled { opacity: .5; cursor: not-allowed; }
+.promote-city-list { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.promote-city-list li {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 5px 3px 10px; border: 1px solid var(--line); border-radius: 999px;
+  background: var(--paper); font-size: 12.5px; font-weight: 600;
+}
+.promote-city-list button {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 18px; height: 18px; padding: 0; border: 0; border-radius: 50%;
+  background: transparent; color: var(--muted); cursor: pointer;
+}
+.promote-city-list button:hover { background: var(--line); color: var(--ink); }
+.promote-city-note { font-size: 11.5px; color: var(--muted); }
+.promote-charge-note { margin: 4px 0 0; font-size: 12px; color: var(--muted); }
 .promote-form select, .promote-form input:not([type="checkbox"]), .report-form textarea { width: 100%; padding: 8px; border: 1px solid var(--line); border-radius: 6px; color: var(--ink); background: var(--surface); font: inherit; }
 .promote-summary { display: flex; justify-content: space-between; gap: 8px; }
 .promote-total { display: inline-flex; gap: 4px; align-items: center; }
@@ -6550,6 +6570,9 @@ a.wallet-sec-note:hover { color: var(--brand); text-decoration: underline; }
 .promo-figures b { font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .promo-figures span { font-size: 11.5px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
 .promo-facts { margin: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px 18px; }
+/* The order has not been paid for yet; the sentence has to be read before any of
+   the figures below it, or "0 spent" looks like a billing error. */
+.promo-card .promo-charge-note { margin: 0 0 12px; color: var(--amber-ink); font-size: 12.5px; }
 .promo-facts > div { display: flex; flex-direction: column; gap: 1px; }
 .promo-facts dt { font-size: 11.5px; color: var(--muted); }
 .promo-facts dd { margin: 0; font-size: 13px; font-weight: 600; }

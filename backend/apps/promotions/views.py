@@ -1,6 +1,5 @@
-from datetime import timedelta
+from decimal import Decimal
 
-from django.db import transaction
 from django.db.models import F
 from django.utils import timezone
 from rest_framework import serializers, status
@@ -13,9 +12,35 @@ from apps.common.config import package_by_id
 from apps.common.pagination import KeysetPagination
 from apps.marketplace.models import Listing
 from apps.posts.models import Post
-from apps.wallet.models import Transaction, Wallet, apply
+from apps.wallet.models import Wallet
 
 from .models import Promotion
+
+
+CITY_LIMIT = 12
+
+
+def clean_cities(value):
+    """The cities a payer named, in the order they typed them, with the noise out.
+
+    A campaign aimed at `kathmandu , Kathmandu` is one city, not two audiences, and
+    the delivery filter compares these strings case-insensitively — so the tidying
+    happens once, on the way in, and every reader downstream sees the same list.
+    """
+    if isinstance(value, str):
+        value = value.split(',')
+    if not isinstance(value, (list, tuple)):
+        return []
+    out, seen = [], set()
+    for item in value:
+        name = str(item or '').strip()[:40]
+        if not name or name.lower() in seen:
+            continue
+        seen.add(name.lower())
+        out.append(name)
+        if len(out) == CITY_LIMIT:
+            break
+    return out
 
 
 class PromotionSerializer(serializers.ModelSerializer):
@@ -25,14 +50,22 @@ class PromotionSerializer(serializers.ModelSerializer):
         model = Promotion
         fields = [
             'id', 'owner', 'owner_username', 'target_type', 'target_id', 'category', 'age_min', 'age_max',
-            'country', 'city', 'budget', 'package', 'status', 'impressions', 'clicks',
-            'created_at', 'ends_at',
+            'country', 'cities', 'budget', 'package', 'status', 'impressions', 'clicks',
+            'created_at', 'starts_at', 'ends_at',
         ]
-        read_only_fields = ['id', 'owner', 'status', 'impressions', 'clicks', 'created_at', 'ends_at']
+        read_only_fields = ['id', 'owner', 'status', 'impressions', 'clicks',
+                            'created_at', 'starts_at', 'ends_at']
+
+    def validate_cities(self, value):
+        return clean_cities(value)
 
     def validate(self, attrs):
-        if attrs.get('age_min', 13) > attrs.get('age_max', 65):
+        age_min = attrs.get('age_min', 13)
+        age_max = attrs.get('age_max', 65)
+        if age_min > age_max:
             raise serializers.ValidationError('age_min cannot exceed age_max.')
+        if age_min < 13 or age_max > 100:
+            raise serializers.ValidationError('Age range must sit between 13 and 100.')
         budget = attrs.get('budget', 0)
         if budget < 0:
             raise serializers.ValidationError('Budget cannot be negative.')
@@ -70,22 +103,24 @@ def promotion_list(request):
                 status=400,
             )
         pack = package_by_id(data.get('package'))
-        budget = data.get('budget', 0)
-        if pack:
-            budget = pack['coins']
+        budget = pack['coins'] if pack else data.get('budget', 0)
         wallet, _ = Wallet.objects.get_or_create(user=request.user)
-        try:
-            with transaction.atomic():
-                if budget > 0:
-                    apply(wallet.pk, Transaction.Kind.DEBIT, budget, f'Promotion budget for {target_type}:{target_id}')
-                promo = serializer.save(
-                    owner=request.user,
-                    budget=budget,
-                    status=Promotion.Status.ACTIVE,
-                    ends_at=timezone.now() + timedelta(days=pack['days']) if pack else None,
-                )
-        except ValueError as e:
-            return Response({'detail': str(e)}, status=400)
+        # The balance is looked at and left alone. A seat's approval is what takes
+        # the coins, so a campaign the platform refuses has cost the payer nothing —
+        # and a run that never started has no clock to count down.
+        if budget > 0 and wallet.balance < Decimal(str(budget)):
+            return Response(
+                {'detail': f'That package costs {budget} coins and your balance is {wallet.balance}. '
+                           'Buy coins first.'},
+                status=400,
+            )
+        promo = serializer.save(
+            owner=request.user,
+            budget=budget,
+            status=Promotion.Status.PENDING,
+            starts_at=None,
+            ends_at=None,
+        )
         return Response(_row(promo), status=status.HTTP_201_CREATED)
     qs = Promotion.objects.filter(owner=request.user).select_related('owner')
     paginator = KeysetPagination()
@@ -130,21 +165,23 @@ def promotion_queue(request):
     return paginator.get_paginated_response(data)
 
 
-EDITABLE = ('category', 'age_min', 'age_max', 'country', 'city')
+EDITABLE = ('category', 'age_min', 'age_max', 'country', 'cities')
 
 
 @api_view(['PATCH'])
 @permission_classes([IsAuthenticated])
 def promotion_update(request, pk):
-    """Retarget a campaign that is already running.
+    """Retarget a campaign the payer still holds.
 
-    The budget is spent at request time, so the package and the coin figure are
-    not editable here — the money is already out of the wallet.
+    The package and the coin figure are not editable: on an approved run that money
+    has already left the wallet, and on a waiting one the desk is reading the price
+    it was asked to approve.
     """
     promo = Promotion.objects.filter(pk=pk, owner=request.user).first()
     if not promo:
         return Response({'detail': 'Not your promotion.'}, status=404)
-    if promo.status not in (Promotion.Status.ACTIVE, Promotion.Status.PAUSED, Promotion.Status.DRAFT):
+    if promo.status not in (Promotion.Status.ACTIVE, Promotion.Status.PAUSED,
+                            Promotion.Status.DRAFT, Promotion.Status.PENDING):
         return Response({'detail': 'A finished promotion cannot be edited.'}, status=400)
     fields = []
     for name in EDITABLE:
@@ -156,6 +193,8 @@ def promotion_update(request, pk):
                 value = int(value)
             except (TypeError, ValueError):
                 return Response({'detail': f'{name} must be a number.'}, status=400)
+        elif name == 'cities':
+            value = clean_cities(value)
         else:
             value = str(value or '').strip()[:80]
         setattr(promo, name, value)
@@ -180,6 +219,10 @@ def promotion_action(request, pk, action):
         promo.status = Promotion.Status.PAUSED
     elif action == 'resume' and promo.status == Promotion.Status.PAUSED:
         promo.status = Promotion.Status.ACTIVE
+    elif action == 'end' and promo.status == Promotion.Status.PENDING:
+        # Withdrawing an order nobody approved takes back nothing, because it gave
+        # up nothing: the coins are still in the payer's wallet and the run never began.
+        promo.status = Promotion.Status.ENDED
     elif action == 'end' and promo.status in (Promotion.Status.ACTIVE, Promotion.Status.PAUSED):
         promo.status = Promotion.Status.ENDED
         promo.ends_at = timezone.now()

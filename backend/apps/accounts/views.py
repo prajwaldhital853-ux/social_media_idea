@@ -237,12 +237,17 @@ def signup(request):
             return Response({'detail': bad, 'password': [bad]}, status=400)
     dob = data.get('dob') or None
     country = (data.get('country') or '').strip()[:80]
-    if not dob or not country:
-        message = 'Date of birth and country are required.'
+    city = (data.get('city') or '').strip()[:80]
+    # A campaign aimed at Kathmandu can only find its audience if the site was ever
+    # told who is in Kathmandu, and this form is the one moment a member will type it.
+    # An empty box is not "everywhere", it is invisible.
+    if not dob or not country or not city:
+        message = 'Date of birth, country and city are required.'
         return Response({
             'detail': message,
             'dob': [] if dob else ['Date of birth is required.'],
             'country': [] if country else ['Country is required.'],
+            'city': [] if city else ['City is required.'],
         }, status=400)
     device_id = _device_id(request)
     # The account, its profile and its wallet either all exist or none of them do.
@@ -253,7 +258,7 @@ def signup(request):
             user = User.objects.create_user(
                 username=username, email=email, password=password if not google else None,
                 first_name=name.split()[0] if name else '', last_name=' '.join(name.split()[1:]) if name else '',
-                date_of_birth=dob, country=country, city=(data.get('city') or '').strip()[:80],
+                date_of_birth=dob, country=country, city=city,
                 provider='google' if google else 'email',
             )
             if google:
@@ -265,7 +270,7 @@ def signup(request):
                 defaults={
                     'display_name': name or username,
                     'province': (data.get('province') or '').strip()[:80],
-                    'location': (data.get('city') or '').strip()[:120],
+                    'location': city[:120],
                 },
             )
     except IntegrityError:

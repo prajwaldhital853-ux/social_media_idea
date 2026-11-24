@@ -8,18 +8,20 @@ never a hand-written balance. The third is the reach itself: what a package prom
 how a campaign is ranked into a feed, how often one payer may appear, and a switch
 that stops the platform selling reach without ending anybody's campaign.
 
-The site takes the coins when a campaign is created, so there is no "pending" column
-on `promotions.Promotion` to wait on. The queue therefore asks a different question
-of money that has already been reserved: has a seat looked at this one? A campaign
-with no review row is *waiting*, whether or not the feed is already carrying it —
-which is why refusing one hands the coins back, and why a stop asks the Admin whether
-the unrun part of the budget is refunded or withheld.
+The site asks for the money when a campaign is approved, not when it is ordered, so
+`pending` is a real queue: coins still in the payer's wallet, no run started, nothing
+in the feed. Approving is what takes the coins and starts the clock, so `starts_at` is
+the line between "charged" and "only promised" — every refund below is measured
+against it, and a campaign that never started cannot owe money back. A campaign
+already running with no review row is *waiting* for a seat to look at it, which is
+what the rows this desk inherited from the old rule are.
 
 Nothing here reaches into the member site's tables beyond what its own API does: a
 status, an end date, and one append-only ledger row when money returns.
 """
 
 import json
+from datetime import timedelta
 from decimal import Decimal
 
 from django.db import transaction as db_atomic
@@ -61,9 +63,11 @@ CHOICE_LABELS = {
 }
 DELIVERY = {
     Promotion.Status.DRAFT: 'a draft nobody has run',
+    Promotion.Status.PENDING: 'waiting for a seat to approve it',
     Promotion.Status.ACTIVE: 'running in the feed',
     Promotion.Status.PAUSED: 'paused by somebody',
     Promotion.Status.ENDED: 'ended',
+    Promotion.Status.REJECTED: 'refused before it ran',
 }
 TARGET_MODEL = {'post': Post, 'listing': Listing}
 _ACTION = {
@@ -77,9 +81,12 @@ _TO = {
     'approve': Promotion.Status.ACTIVE,
     'resume': Promotion.Status.ACTIVE,
     'pause': Promotion.Status.PAUSED,
-    'reject': Promotion.Status.ENDED,
+    'reject': Promotion.Status.REJECTED,
     'stop': Promotion.Status.ENDED,
 }
+# A campaign that has a start date was paid for; one that does not is only a promise
+# the desk has not taken money against yet.
+CLOSING = (Promotion.Status.ENDED, Promotion.Status.REJECTED)
 
 
 def _number(value):
@@ -201,7 +208,8 @@ def sign_off(promo, last=None):
     """What a seat last said about this campaign — or that nobody has said anything."""
     last = last if last is not None else latest(promo.pk)
     if last is None:
-        return 'waiting' if promo.status == Promotion.Status.ACTIVE else 'none'
+        waiting = promo.status in (Promotion.Status.PENDING, Promotion.Status.ACTIVE)
+        return 'waiting' if waiting else 'none'
     return last.action
 
 
@@ -218,15 +226,16 @@ def target_of(promo):
 def owed(promo, action, now=None):
     """The coins this decision would hand back, before anybody clicks it.
 
-    A refused campaign was never signed off, so everything it reserved goes back —
-    pro-rated if it had an end date and started running against it. A stopped one
-    gives back only the part of its run it never got, and an open-ended campaign has
-    no unrun part, so a stop there owes nothing and says so instead of inventing a
-    number.
+    Nothing is owed on a campaign that was never charged — `starts_at` is empty on
+    one still waiting for approval, and paying it out would hand the payer coins
+    they never gave up. A refused campaign that did run gives back what it never
+    spent, pro-rated against its end date. A stopped one gives back only the part
+    of its run it never got, and an open-ended campaign has no unrun part, so a
+    stop there owes nothing and says so instead of inventing a number.
     """
     now = now or timezone.now()
     budget = Decimal(str(promo.budget or 0))
-    if budget <= 0:
+    if budget <= 0 or promo.starts_at is None:
         return Decimal('0')
     if action == 'reject':
         return review.unspent(promo, now) if promo.ends_at else budget
@@ -258,13 +267,16 @@ def row(promo, last=None, deep=False):
         'delivery': DELIVERY.get(promo.status, promo.status),
         'category': promo.category,
         'targeting': {'age_min': promo.age_min, 'age_max': promo.age_max,
-                      'country': promo.country, 'city': promo.city},
+                      'country': promo.country, 'cities': list(promo.cities or [])},
         'package': pack or (None if not promo.package and not promo.budget else {
             'id': promo.package, 'name': promo.package or 'bought as a budget',
             'coins': _number(promo.budget), 'days': None, 'reach': 'no package on the row',
             'reach_max': 0,
         }),
         'coins': str(promo.budget),
+        # False until a seat approves the order: the coins are still in the payer's
+        # wallet and the run clock has not started.
+        'charged': promo.starts_at is not None,
         'impressions': promo.impressions,
         'clicks': promo.clicks,
         # What the package promised against what the ledger has actually handed out.
@@ -274,6 +286,7 @@ def row(promo, last=None, deep=False):
         'delivered': promo.impressions,
         'people': people_reached(promo.pk) if deep else None,
         'created_at': promo.created_at.isoformat(),
+        'starts_at': promo.starts_at.isoformat() if promo.starts_at else None,
         'ends_at': promo.ends_at.isoformat() if promo.ends_at else None,
         'age_hours': round((now - promo.created_at).total_seconds() / 3600, 1),
         'left_hours': round((promo.ends_at - now).total_seconds() / 3600, 1) if promo.ends_at else None,
@@ -288,37 +301,54 @@ def row(promo, last=None, deep=False):
     return out
 
 
-def _said(action, promo, refund):
+def _coins(value):
+    """`800.00` → `800`. Coins are counted in whole numbers by everybody who reads
+    these sentences, so a balance shown with pennies on it looks like a bug."""
+    number = Decimal(str(value or 0))
+    if number == number.to_integral_value():
+        return str(number.quantize(Decimal(1)))
+    return str(number.normalize())
+
+
+def _said(action, promo, refund, taken=Decimal('0')):
     if action == 'approve':
-        return (f'Campaign {promo.pk} approved and running. Nothing was charged again — the payer '
-                'had already reserved it.')
+        if taken > 0:
+            return (f'Campaign {promo.pk} approved. {_coins(taken)} coins left @{promo.owner.username}‘s '
+                    'wallet and the run clock started today.')
+        return (f'Campaign {promo.pk} approved and running. The coins were taken when it was first '
+                'approved, so nothing was charged again.')
     if action == 'reject':
-        return (f'Campaign {promo.pk} refused. {refund} coins went back through the ledger.'
-                if refund else f'Campaign {promo.pk} refused. Nothing was owed back on it.')
+        if refund:
+            return (f'Campaign {promo.pk} refused. {_coins(refund)} coins of the part it never ran '
+                    'went back through the ledger.')
+        return (f'Campaign {promo.pk} refused before it ran. Nothing was charged, so the payer’s balance '
+                'never moved.')
     if action == 'pause':
-        return f'Campaign {promo.pk} is out of the feed until it is resumed. The reservation stands.'
+        return f'Campaign {promo.pk} is out of the feed until it is resumed. The coins it paid stay spent.'
     if action == 'resume':
         return f'Campaign {promo.pk} is running again, on the end date it already had.'
-    return (f'Campaign {promo.pk} stopped. {refund} coins of the unrun part went back.'
+    return (f'Campaign {promo.pk} stopped. {_coins(refund)} coins of the unrun part went back.'
             if refund else f'Campaign {promo.pk} stopped and nothing was refunded — the reason is on the row.')
 
 
 def decide(promo, actor, action, reason='', choice=''):
     """Approve, refuse, pause, resume or stop one campaign. Returns (status, body).
 
-    A refusal always hands the reservation back — the payer never signed up to fund
-    a campaign the platform itself turned down. A stop is different: the run was
-    approved and something went wrong during it, so whether the unspent days are
-    refunded or kept is a decision the seat has to make out loud.
+    Approving an order is the moment the money moves: the coins leave the payer's wallet,
+    `starts_at` is stamped, and the package's days begin to count from today. A refusal
+    before that moment costs the payer nothing and pays nothing back — they never gave
+    the coins up. A refusal or a stop after it is measured against what the campaign
+    never got, and the seat has to choose out loud whether a stop refunds or keeps that
+    part, because the run was approved and paid for.
     """
     reason = str(reason or '').strip()[:240]
     choice = str(choice or '').strip()
     if action not in _ACTION:
         return 400, {'detail': 'Approve, reject, pause, resume or stop.'}
-    if promo.status == Promotion.Status.ENDED:
-        return 409, {'detail': 'That campaign has already ended. Nothing here changes it again.'}
+    if promo.status in CLOSING:
+        return 409, {'detail': 'That campaign is closed. Nothing here changes it again.'}
     if action in ('reject', 'stop') and not reason:
-        return 400, {'detail': 'Say why the money is refused — the payer is told this sentence.'
+        return 400, {'detail': 'Say why the campaign is refused — the payer is told this sentence.'
                               if action == 'reject' else
                               'Say why this paid run is ending early. The sentence goes on the record.'}
     if action == 'stop' and choice not in ('credit', 'withhold'):
@@ -326,21 +356,57 @@ def decide(promo, actor, action, reason='', choice=''):
     if action in ('approve', 'resume') and promo.ends_at and promo.ends_at <= timezone.now():
         return 409, {'detail': 'Its run is over. Approving it now would promise reach that no longer exists.'}
     if action == 'approve' and promo.status == Promotion.Status.DRAFT:
-        return 400, {'detail': 'A draft has not been paid for yet — there is nothing here to approve.'}
+        return 400, {'detail': 'A draft has not been ordered yet — there is nothing here to approve.'}
+    if action == 'approve' and target_of(promo) is None:
+        # An order can sit in the queue long enough for the post or listing it points
+        # at to be deleted or taken down. Charging the payer then would buy reach on
+        # nothing, so the desk has to refuse it instead.
+        return 409, {'detail': 'The content this campaign points at is gone, so there is nothing here to give '
+                               'reach to. Refuse the order — no coins were taken from the payer.'}
     if action == 'pause' and promo.status != Promotion.Status.ACTIVE:
         return 400, {'detail': 'Only a campaign that is running can be paused.'}
     if action == 'resume' and promo.status != Promotion.Status.PAUSED:
         return 400, {'detail': 'That campaign is not paused.'}
 
     now = timezone.now()
+    budget = Decimal(str(promo.budget or 0))
+    pack = package_by_id(promo.package)
+    # Only an order still sitting in the queue is bought here. A campaign that already
+    # has a start date was paid for on the day it was first approved, and a running row
+    # that predates this rule is left as it was found.
+    ordering = action == 'approve' and promo.starts_at is None and promo.status == Promotion.Status.PENDING
     held = action == 'stop' and choice == 'withhold'
     refund = Decimal('0') if held or action not in ('reject', 'stop') else owed(promo, action, now)
     status = _TO[action]
+    taken = Decimal('0')
+    starts_at, ends_at = promo.starts_at, promo.ends_at
+    if ordering:
+        taken = budget
+        starts_at = now
+        days = (pack or {}).get('days') or 0
+        if days:
+            ends_at = now + timedelta(days=days)
+        if taken > 0:
+            wallet, _ = Wallet.objects.get_or_create(user=promo.owner)
+            # The payer may have spent the balance down while the order waited. Taking
+            # the coins then would push them into the negative, so the desk is told to
+            # refuse the campaign instead of the ledger raising the alarm later.
+            if wallet.balance < taken:
+                return 409, {
+                    'detail': f'@{promo.owner.username} now has {_coins(wallet.balance)} coins and this '
+                              f'campaign costs {_coins(taken)}. Refuse it, or wait until they buy coins.'}
 
     with db_atomic.atomic():
         Promotion.objects.filter(pk=promo.pk).update(
-            status=status, ends_at=now if status == Promotion.Status.ENDED else promo.ends_at)
+            status=status, starts_at=starts_at,
+            ends_at=now if status == Promotion.Status.ENDED else ends_at)
         promo.refresh_from_db()
+        if taken > 0:
+            wallet, _ = Wallet.objects.get_or_create(user=promo.owner)
+            coin_apply(wallet.pk, Transaction.Kind.DEBIT, taken,
+                       f'Promotion {promo.pk} — {pack["name"] if pack else "custom budget"}'
+                       f'{f" ({pack["days"]} days)" if pack and pack.get("days") else ""}, '
+                       f'approved by {actor.username}')
         if refund > 0:
             wallet, _ = Wallet.objects.get_or_create(user=promo.owner)
             coin_apply(wallet.pk, Transaction.Kind.CREDIT, refund,
@@ -351,37 +417,46 @@ def decide(promo, actor, action, reason='', choice=''):
             else (PromoReview.Choice.WITHHOLD if held else ''),
         )
 
-    say = {
-        'approve': f'Your campaign {promo.pk} was approved and is running.',
-        'reject': f'Your campaign {promo.pk} was refused: {reason}',
-        'pause': f'Your campaign {promo.pk} was paused by the platform.',
-        'resume': f'Your campaign {promo.pk} is running again.',
-        'stop': f'Your campaign {promo.pk} was stopped: {reason}',
-    }[action]
-    notify(promo.owner, actor, 'promotion', say[:240], 'promotion', promo.pk)
-    record(actor, f'promo_{action}', f'promotion:{promo.pk}',
-           f'{promo.target_type}:{promo.target_id} — {promo.budget} coins reserved — '
-           + (reason if reason else f'{refund} coins back'))
     if action == 'approve':
-        pack = package_by_id(promo.package)
+        say = (f'Your campaign {promo.pk} was approved. {_coins(taken)} coins were taken and it is now '
+               f'running.' if taken else f'Your campaign {promo.pk} was approved and is running.')
+    elif action == 'reject' and not refund:
+        say = f'Your campaign {promo.pk} was refused before it ran, so no coins were taken: {reason}'
+    else:
+        say = {
+            'reject': f'Your campaign {promo.pk} was refused: {reason}',
+            'pause': f'Your campaign {promo.pk} was paused by the platform.',
+            'resume': f'Your campaign {promo.pk} is running again.',
+            'stop': f'Your campaign {promo.pk} was stopped: {reason}',
+        }[action]
+    notify(promo.owner, actor, 'promotion', say[:240], 'promotion', promo.pk)
+    money = (f'{_coins(taken)} coins taken on approval' if taken
+             else f'{_coins(refund)} coins refunded' if refund else 'no coins moved')
+    record(actor, f'promo_{action}', f'promotion:{promo.pk}',
+           f'{promo.target_type}:{promo.target_id} — budget {_coins(budget)} — {money}'
+           + (f' — {reason}' if reason else ''))
+    if action == 'approve':
         queue_event_email(
             promo.owner.email,
             f'Exposing promotion {promo.pk} approved',
             'Your promotion is approved',
-            'The Exposing team has approved your promotion. It is now active and eligible to run in the feed.',
+            'The Exposing team has approved your promotion. The coins for it have now left your wallet '
+            'and the campaign is eligible to run in the feed.',
             details=[
                 ('Campaign', f'#{promo.pk}'),
                 ('Package', pack['name'] if pack else promo.package or 'Custom budget'),
-                ('Budget', f'{promo.budget} coins'),
+                ('Charged', f'{_coins(taken if taken else budget)} coins'),
                 ('Promoted content', promo.target_type.title()),
+                ('Runs until', promo.ends_at.strftime('%d %b %Y') if promo.ends_at else 'until you end it'),
                 ('Status', 'Approved and running'),
             ],
             cta_label='View your promotion', cta_path='/wallet/promotions',
-            footnote='No additional coins were charged for this approval.',
+            footnote='The approval is when the payment happened — ordering only reserved the campaign.',
         )
     return 200, {
-        'detail': _said(action, promo, refund),
+        'detail': _said(action, promo, refund, taken),
         'campaign': row(promo, entry),
+        'charged': str(taken),
         'refunded': str(refund),
         'reviews': reviews(promo.pk),
     }

@@ -9,9 +9,14 @@ class Promotion(models.Model):
 
     class Status(models.TextChoices):
         DRAFT = 'draft', 'Draft'
+        # Bought, not paid for. The coins leave the wallet and the run clock starts
+        # when a seat approves it, so a campaign the platform refused never cost
+        # anything and never reached anybody.
+        PENDING = 'pending', 'Waiting for approval'
         ACTIVE = 'active', 'Active'
         PAUSED = 'paused', 'Paused'
         ENDED = 'ended', 'Ended'
+        REJECTED = 'rejected', 'Refused'
 
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='promotions')
     target_type = models.CharField(max_length=10, choices=Target.choices, default=Target.POST)
@@ -20,12 +25,18 @@ class Promotion(models.Model):
     age_min = models.PositiveSmallIntegerField(default=13)
     age_max = models.PositiveSmallIntegerField(default=65)
     country = models.CharField(max_length=80, blank=True)
-    city = models.CharField(max_length=80, blank=True)
+    # Every city the payer named, in the order they typed them. A campaign aimed at
+    # Kathmandu and Bhaktapur is shown to nobody outside those two, so this is a
+    # hard filter and not a preference — an empty list is the only "everywhere".
+    cities = models.JSONField(default=list, blank=True)
     budget = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     package = models.CharField(max_length=20, blank=True)
     status = models.CharField(max_length=10, choices=Status.choices, default=Status.DRAFT)
     impressions = models.PositiveIntegerField(default=0)
     clicks = models.PositiveIntegerField(default=0)
+    # When the money was actually taken and the run actually began — approval, not
+    # the order. A campaign that was never approved has no start and no bill.
+    starts_at = models.DateTimeField(null=True, blank=True)
     ends_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 

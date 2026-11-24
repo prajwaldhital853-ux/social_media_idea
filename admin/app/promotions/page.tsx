@@ -13,27 +13,32 @@ import { useSession } from '@/lib/session';
 import { PromoPage, PromoRow, ReachConfig } from '@/lib/types';
 
 /**
- * Contract 6.8 — the promotion desk. Somebody has already paid Coins for reach on
- * their own post or listing, so this screen decides with the thing itself on the
- * row, the reports sitting under it, and the number of coins each verb hands back.
+ * Contract 6.8 — the promotion desk. Somebody has asked for reach on their own post
+ * or listing, and this screen decides whether the platform sells it to them: the
+ * content itself on the row, the reports sitting under it, and the number of coins
+ * each verb hands back printed before the click.
  *
- * Nothing here is a status column someone guessed at: "waiting" means no seat has
- * signed this off, which is a different question from "the feed is carrying it",
- * because the site takes the coins when the campaign is created.
+ * Nothing here is a status column someone guessed at. "Waiting" means either an order
+ * no seat has charged yet or a run that predates the queue, and the two are told apart
+ * by `charged` — the coins leave the payer's wallet when this desk approves, not when
+ * the campaign was written down.
  */
 
 const STATES = [
   { id: 'waiting', label: 'Waiting on a seat' },
   { id: 'live', label: 'Signed off and running' },
   { id: 'paused', label: 'Paused' },
+  { id: 'refused', label: 'Refused' },
   { id: 'ended', label: 'Ended' },
   { id: 'all', label: 'Every campaign' },
 ];
 
 const STAMP: Record<string, { tone: string; label: string }> = {
-  draft: { tone: 'mute', label: 'Not paid for yet' },
+  draft: { tone: 'mute', label: 'Never ordered' },
+  pending: { tone: 'warn', label: 'Waiting for approval' },
   active: { tone: 'good', label: 'Running' },
   paused: { tone: 'warn', label: 'Paused' },
+  rejected: { tone: 'dead', label: 'Refused' },
   ended: { tone: 'mute', label: 'Ended' },
 };
 
@@ -112,7 +117,7 @@ export default function PromotionsScreen() {
   return (
     <ConsoleShell
       title="Promotions"
-      subtitle="Campaigns somebody already paid Coins for, the content they point at, and the five verbs that decide whether the reach is delivered — with the coins each one hands back printed before the click."
+      subtitle="Campaigns people have ordered with Coins, the content they point at, and the five verbs that decide whether the reach is delivered. Approving is what takes the coins and starts the run; every refund is printed before the click."
       actions={(
         <button type="button" className={`btn ghost${busy ? ' spinning' : ''}`} onClick={() => load()} title="Reload the queue">
           {IC.refresh}<span>Refresh</span>
@@ -127,7 +132,7 @@ export default function PromotionsScreen() {
           n: counts
             ? (item.id === 'all'
               ? counts.every
-              : counts[item.id as 'waiting' | 'live' | 'paused' | 'ended'])
+              : counts[item.id as 'waiting' | 'live' | 'paused' | 'refused' | 'ended'])
             : undefined,
         }))}
         value={state}
@@ -153,7 +158,11 @@ export default function PromotionsScreen() {
         <p className="facets" data-held>
           <span><b>{page.counts.reserved}</b> coins</span>
           <span className="dot"/>
-          <span>reserved by campaigns that are running or paused</span>
+          <span>spent by campaigns that are running or paused</span>
+          <span className="dot"/>
+          <span><b>{page.counts.unbilled}</b> more</span>
+          <span className="dot"/>
+          <span>still in payers&rsquo; wallets against {page.counts.orders} order{page.counts.orders === 1 ? '' : 's'} waiting</span>
           <span className="dot"/>
           <span>{page.controls.caps.daily} promotions per person per day</span>
           <span className="dot"/>
@@ -210,7 +219,7 @@ export default function PromotionsScreen() {
           <h2>Nothing in this pile</h2>
           <p>
             {state === 'waiting'
-              ? 'Every campaign that is running has been looked at by a seat. A new one appears the moment somebody buys reach.'
+              ? 'No order is sitting here. A campaign appears the moment somebody buys reach, and its coins leave the payer’s wallet only when a seat approves it.'
               : 'No campaign matches this view. Try widening the filter.'}
           </p>
         </section>
@@ -240,8 +249,8 @@ export default function PromotionsScreen() {
 }
 
 function age(row: PromoRow) {
-  const { age_min: min, age_max: max, country, city } = row.targeting;
-  const where = [country, city].filter(Boolean).join(', ') || 'everywhere';
+  const { age_min: min, age_max: max, country, cities } = row.targeting;
+  const where = [...(cities || []), country].filter(Boolean).join(', ') || 'everywhere';
   return `${min}–${max} · ${where}`;
 }
 
@@ -251,20 +260,26 @@ function age(row: PromoRow) {
  */
 function Campaign({ row }: { row: PromoRow }) {
   const standing = STAMP[row.status] || { tone: 'mute', label: row.status_label };
+  // The order is not the payment. Until a seat approves, the coins are still in the
+  // payer's wallet and the run has no clock, so the row must not read as money spent.
+  const billed = row.charged;
 
   return (
-    <tbody className="promo" data-promo={row.id}>
+    <tbody className="promo" data-promo={row.id} data-charged={billed ? 'yes' : 'no'}>
       <tr className="grid-row">
         <td data-label="Who bought reach">
           <Link href={`/promotions/${row.id}`} className="promo-id">
             <span className="grid-caret">{IC.chevron}</span>
             <span className="promo-name">
               <b>@{row.owner}</b>
-              <em>{row.package?.name || 'bought as a budget'} · {row.coins} coins</em>
+              <em>{row.package?.name || 'bought as a budget'} · {row.coins} coins{billed ? '' : ' on approval'}</em>
             </span>
           </Link>
         </td>
-        <td data-label="Coins" className="strong num" data-coins>{row.coins}</td>
+        <td data-label="Coins" className="strong num" data-coins>
+          {row.coins}
+          {!billed && <p className="promo-wait" data-unbilled>not taken yet</p>}
+        </td>
         <td data-label="Package bought">
           <span className="promo-pack" data-package={row.package?.id || ''}>
             {row.package ? `${row.package.days ?? '—'} d` : 'no package'}
@@ -277,10 +292,13 @@ function Campaign({ row }: { row: PromoRow }) {
         </td>
         <td data-label="Audience" className="dim"><span className="promo-audit">{age(row)}</span></td>
         <td data-label="Run left" className="dim">
-          <span className={`pile${row.status === 'active' ? ' open' : ' shut'}`} title={stamp(row.created_at)}>
-            {IC.pulse}<b>{row.left_hours === null ? 'open run' : `${Math.round(row.left_hours / 24)} d`}</b>
+          <span className={`pile${row.status === 'active' ? ' open' : ' shut'}`}
+                title={stamp(billed ? row.starts_at || row.created_at : row.created_at)}>
+            {IC.pulse}
+            <b>{!billed ? 'starts on approval'
+              : row.left_hours === null ? 'open run' : `${Math.round(row.left_hours / 24)} d`}</b>
           </span>
-          <p className="promo-wait">{Math.round(row.age_hours)} h since bought</p>
+          <p className="promo-wait">{Math.round(row.age_hours)} h since {billed ? 'approved' : 'ordered'}</p>
         </td>
         <td data-label="Standing"><span className={`pill ${standing.tone}`}>{standing.label}</span></td>
         <td data-label="Decided" className="dim">

@@ -7,25 +7,28 @@ import { useBackClose } from '@/lib/useBackClose';
 import { COUNTRIES, POST_TOPICS } from '@/lib/utils';
 import { IC } from '@/lib/icons';
 import { Promotion } from '@/lib/types';
+import CityTargets from './CityTargets';
 
 interface PromotionEditorProps {
   promo: Promotion;
   onClose: () => void;
 }
 
+const ageOf = (text: string, fallback: number) => Math.max(13, Math.min(100, Math.round(Number(text) || fallback)));
+
 /**
- * The audience of a campaign that is already bought. The package and the coin
- * figure are read-only: that money left the wallet when the request was made.
+ * The audience of a campaign the payer still holds. The package and the coin figure
+ * are read-only: on an approved run that money has left the wallet, and on one still
+ * waiting for a seat the desk is reading the price it was asked to approve.
  */
 export default function PromotionEditor({ promo, onClose }: PromotionEditorProps) {
   const { db, t, updatePromotion } = useApp();
   const [category, setCategory] = useState(promo.category || (promo.targetType === 'listing' ? db.settings.categories[0] : POST_TOPICS[0]));
-  const [ageMin, setAgeMin] = useState(promo.ageMin);
-  const [ageMax, setAgeMax] = useState(promo.ageMax);
+  const [ageMin, setAgeMin] = useState(String(promo.ageMin));
+  const [ageMax, setAgeMax] = useState(String(promo.ageMax));
   const [country, setCountry] = useState(promo.country || 'Nepal');
-  const [city, setCity] = useState(promo.city || '');
-  const [allLoc, setAllLoc] = useState(!promo.country && !promo.city);
-  const [error, setError] = useState('');
+  const [cities, setCities] = useState<string[]>(promo.cities || []);
+  const [allLoc, setAllLoc] = useState(!promo.country && !(promo.cities || []).length);
   const [busy, setBusy] = useState(false);
 
   useBackClose(true, onClose);
@@ -39,15 +42,25 @@ export default function PromotionEditor({ promo, onClose }: PromotionEditorProps
   if (typeof document === 'undefined') return null;
 
   const pack = db.settings.packages.find(p => p.id === promo.packageId);
+  const settleAges = () => {
+    let lo = ageOf(ageMin, 18);
+    let hi = ageOf(ageMax, 40);
+    if (lo > hi) [lo, hi] = [hi, lo];
+    setAgeMin(String(lo));
+    setAgeMax(String(hi));
+  };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (ageMin > ageMax) { setError(t('e_age_range')); return; }
+    const lo = ageOf(ageMin, 18);
+    const hi = Math.max(ageOf(ageMax, 40), lo);
+    setAgeMin(String(lo));
+    setAgeMax(String(hi));
     setBusy(true);
     const ok = await updatePromotion(promo.id, {
-      category, ageMin, ageMax,
+      category, ageMin: lo, ageMax: hi,
       country: allLoc ? '' : country,
-      city: allLoc ? '' : city.trim(),
+      cities: allLoc ? [] : cities,
     });
     setBusy(false);
     if (ok) onClose();
@@ -63,8 +76,15 @@ export default function PromotionEditor({ promo, onClose }: PromotionEditorProps
         <form className="promote-form" onSubmit={submit}>
           <div className="promo-edit-frozen">
             <span>{t('package')}: <b>{pack?.name || promo.packageId || '—'}</b></span>
-            <span>{t('spent')}: <b>{promo.coins}</b> {t('coins')}</span>
-            <small>{t('coinsSpentFrozen')}</small>
+            {promo.status === 'pending' ? (
+              <>
+                <span className="wallet-status pending">{t('awaitingApproval')}</span>
+                <span>{t('costsCoins', { n: promo.budget ?? promo.coins })}</span>
+              </>
+            ) : (
+              <span>{t('spent')}: <b>{promo.coins}</b> {t('coins')}</span>
+            )}
+            <small>{promo.status === 'pending' ? t('chargedOnApproval') : t('coinsSpentFrozen')}</small>
           </div>
 
           <label className="promote-field">
@@ -79,11 +99,11 @@ export default function PromotionEditor({ promo, onClose }: PromotionEditorProps
             <div className="promote-ages">
               <label>
                 {t('ageMin')}
-                <input type="number" min={13} max={99} value={ageMin} onChange={e => setAgeMin(Math.max(13, Math.min(99, Number(e.target.value) || 13)))} />
+                <input type="text" inputMode="numeric" value={ageMin} onChange={e => setAgeMin(e.target.value.replace(/[^0-9]/g, ''))} onBlur={settleAges} />
               </label>
               <label>
                 {t('ageMax')}
-                <input type="number" min={13} max={99} value={ageMax} onChange={e => setAgeMax(Math.max(13, Math.min(99, Number(e.target.value) || 99)))} />
+                <input type="text" inputMode="numeric" value={ageMax} onChange={e => setAgeMax(e.target.value.replace(/[^0-9]/g, ''))} onBlur={settleAges} />
               </label>
             </div>
           </div>
@@ -95,22 +115,21 @@ export default function PromotionEditor({ promo, onClose }: PromotionEditorProps
               {t('allLocations')}
             </label>
             {!allLoc && (
-              <div className="promote-ages">
-                <label>
-                  {t('country')}
-                  <select value={country} onChange={e => setCountry(e.target.value)}>
-                    {COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                </label>
-                <label>
-                  {t('city')} ({t('optional')})
-                  <input type="text" value={city} onChange={e => setCity(e.target.value)} placeholder={t('city')} />
-                </label>
-              </div>
+              <>
+                <div className="promote-ages">
+                  <label>
+                    {t('country')}
+                    <select value={country} onChange={e => setCountry(e.target.value)}>
+                      {COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  </label>
+                </div>
+                <span className="promote-sublabel">{t('cities')}</span>
+                <CityTargets cities={cities} onChange={setCities} />
+              </>
             )}
           </div>
 
-          {error && <p className="form-error" role="alert">{error}</p>}
           <div className="promo-edit-actions">
             <button type="button" className="ghost-btn" onClick={onClose} disabled={busy}>{t('cancel')}</button>
             <button type="submit" className="promote-submit" disabled={busy}>{t('save')}</button>

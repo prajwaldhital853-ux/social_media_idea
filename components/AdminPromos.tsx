@@ -28,25 +28,33 @@ export default function AdminPromos() {
     return listing ? listing.title : p.targetId;
   };
 
+  // The desk is where the money moves: approving is what takes the coins and starts
+  // the clock, so a refusal costs the payer nothing at all.
   const activate = (p: Promotion) => {
+    const now = Date.now();
     const pk = db.settings.packages.find(x => x.id === p.packageId);
-    const ends = Date.now() + (pk?.days ?? 3) * DAY;
-    setDb(prev => ({ ...prev, promotions: prev.promotions.map(x => x.id === p.id ? { ...x, status: 'active' as const, ends } : x) }));
+    const ends = now + (pk?.days ?? 3) * DAY;
+    const cost = p.budget ?? p.coins;
+    setDb(prev => ({
+      ...prev,
+      promotions: prev.promotions.map(x => x.id === p.id
+        ? { ...x, status: 'active' as const, coins: cost, starts: now, ends }
+        : x),
+      users: prev.users.map(u => u.id === p.uid ? { ...u, coins: u.coins - cost } : u),
+      ledger: [{ id: uid(), uid: p.uid, delta: -cost, kind: 'spend' as const, note: `Promotion ${p.id} — ${pk?.name ?? p.packageId} approved`, ts: now }, ...prev.ledger],
+    }));
     notify(p.uid, 'promotion', t('promoActivated'), '/wallet');
-    logAudit('activate_promotion', p.id, pk?.name ?? p.packageId);
+    logAudit('activate_promotion', p.id, `${cost} coins taken on approval`);
     showToast(t('promoActivated'));
   };
 
   const reject = (p: Promotion) => {
-    const now = Date.now();
     setDb(prev => ({
       ...prev,
       promotions: prev.promotions.map(x => x.id === p.id ? { ...x, status: 'rejected' as const } : x),
-      users: prev.users.map(u => u.id === p.uid ? { ...u, coins: u.coins + p.coins } : u),
-      ledger: [{ id: uid(), uid: p.uid, delta: p.coins, kind: 'refund' as const, note: 'Promotion request rejected', ts: now }, ...prev.ledger]
     }));
     notify(p.uid, 'promotion', t('promoRejected'), '/wallet');
-    logAudit('reject_promotion', p.id, `${p.coins} coins returned`);
+    logAudit('reject_promotion', p.id, 'refused before it ran — no coins taken');
     showToast(t('promoRejected'));
   };
 
@@ -78,15 +86,15 @@ export default function AdminPromos() {
               <div key={p.id} className="admin-promo">
                 {user && <Avatar user={user} size={44}/>}
                 <span className="admin-promo-main">
-                  <b>{user?.name ?? p.uid} · {pk?.name ?? p.packageId} · {p.coins} {t('coins')}</b>
+                  <b>{user?.name ?? p.uid} · {pk?.name ?? p.packageId} · {p.status === 'pending' ? `${p.budget ?? p.coins} ${t('notChargedYet')}` : `${p.coins} ${t('coins')}`}</b>
                   <span className="admin-promo-target">{t(p.targetType === 'post' ? 'dpost' : 'dlisting')}: {targetLabel(p)}</span>
                   <span className="admin-promo-meta">
                     <span>{p.category}</span>
                     <span>{p.ageMin}–{p.ageMax}</span>
-                    <span>{p.country || t('allLocations')}{p.city ? ` · ${p.city}` : ''}</span>
+                    <span>{p.country || t('allLocations')}{(p.cities || []).length ? ` · ${(p.cities || []).join(', ')}` : ''}</span>
                     <span>{IC.eye}{compact(p.impressions)} {t('impressions')}</span>
                     <span>{IC.chart}{compact(p.clicks)} {t('clicks')}</span>
-                    <span>{t('endsIn')} {new Date(p.ends).toLocaleDateString(lang === 'ne' ? 'ne-NP' : 'en-GB')}</span>
+                    <span>{p.status === 'pending' ? t('awaitingApproval') : `${t('endsIn')} ${new Date(p.ends).toLocaleDateString(lang === 'ne' ? 'ne-NP' : 'en-GB')}`}</span>
                     <span>{ago(p.ts, lang)}</span>
                   </span>
                 </span>

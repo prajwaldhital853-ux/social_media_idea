@@ -164,13 +164,14 @@ def sync(request):
                 'age_min': promo.age_min,
                 'age_max': promo.age_max,
                 'country': promo.country,
-                'city': promo.city,
+                'cities': list(promo.cities or []),
                 'budget': promo.budget,
                 'status': promo.status,
                 'package': promo.package,
                 'impressions': promo.impressions,
                 'clicks': promo.clicks,
                 'created_at': promo.created_at,
+                'starts_at': promo.starts_at,
                 'ends_at': promo.ends_at,
             }
             for promo in own_promotions

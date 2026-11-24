@@ -86,8 +86,8 @@ class SyncPayloadTests(TestCase):
         self.assertEqual(promo['package'], 'speed')
         self.assertEqual(promo['target_id'], str(self.post.pk))
         for field in ('id', 'owner', 'target_type', 'category', 'age_min', 'age_max',
-                      'country', 'city', 'budget', 'status', 'impressions', 'clicks',
-                      'created_at', 'ends_at'):
+                      'country', 'cities', 'budget', 'status', 'impressions', 'clicks',
+                      'created_at', 'starts_at', 'ends_at'):
             self.assertIn(field, promo)
         for field in ('id', 'username', 'email', 'name', 'avatar', 'cover', 'bio', 'role',
                       'verified', 'emailVerified', 'provider', 'dob', 'country', 'city',

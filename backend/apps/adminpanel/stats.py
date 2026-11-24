@@ -148,9 +148,9 @@ def _coin_requests(cutoffs):
 
 
 def _promotions(cutoffs):
-    # `draft` is the only state an un-reviewed campaign can sit in today, so it is
-    # what "pending promotions" means until 6.8 gives the queue its own approval
-    # status. Reporting active rows here would double-count them on this screen.
+    # `pending` is the state an ordered-but-not-yet-charged campaign sits in, so it is
+    # what "pending promotions" means here. Reporting active rows would double-count
+    # them on this screen.
     running = Promotion.objects.filter(status=Promotion.Status.ACTIVE).exclude(
         Q(ends_at__isnull=False, ends_at__lt=cutoffs['now']),
     )
@@ -160,7 +160,7 @@ def _promotions(cutoffs):
         'label': 'Promotions',
         'href': '/promotions',
         'active': running.count(),
-        'awaiting_review': Promotion.objects.filter(status=Promotion.Status.DRAFT).count(),
+        'awaiting_review': Promotion.objects.filter(status=Promotion.Status.PENDING).count(),
         'paused': Promotion.objects.filter(status=Promotion.Status.PAUSED).count(),
         'started_month': Promotion.objects.filter(created_at__gte=cutoffs['month']).count(),
         'impressions_month': _total(Promotion.objects.filter(created_at__gte=cutoffs['month']), 'impressions'),
@@ -359,7 +359,13 @@ UNMEASURED = {
 
 
 def _window_of(promo, now):
-    start = promo.created_at
+    # The window is the part the payer paid for. That begins when approval took the
+    # coins, not when the order was written down, and an order nobody has approved has
+    # no window at all — counting a week of organic likes into it would sell the desk
+    # reach the campaign never bought.
+    if promo.starts_at is None and promo.status in (Promotion.Status.DRAFT, Promotion.Status.PENDING):
+        return now, now
+    start = promo.starts_at or promo.created_at
     end = promo.ends_at or now
     return start, end if end > start else now
 
@@ -395,7 +401,7 @@ def promotion_row(promo, now):
         'package': promo.package,
         'status': promo.status,
         'category': promo.category,
-        'started_at': start,
+        'started_at': promo.starts_at,
         'ends_at': promo.ends_at,
         'minutes_live': int((min(end, now) - start).total_seconds() // 60) if end > start else 0,
         'metrics': {
@@ -407,7 +413,9 @@ def promotion_row(promo, now):
             'new_followers': Follow.objects.filter(
                 followee_id=promo.owner_id, status=Follow.Status.ACCEPTED, **span,
             ).count(),
-            'coins_spent': int(promo.budget or 0),
+            # Coins only count as spent once approval has actually taken them; an
+            # order still in the queue has cost its payer nothing.
+            'coins_spent': int(promo.budget or 0) if promo.starts_at else 0,
         },
         'unmeasured': dict(UNMEASURED),
         'click_rate': round(promo.clicks * 100.0 / promo.impressions, 1) if promo.impressions else None,

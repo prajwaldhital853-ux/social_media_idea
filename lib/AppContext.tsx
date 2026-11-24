@@ -5,7 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { Database, Follow, User, Post, Comment, ThemeMode, ReactionKind, NotificationKind, FeatureFlags, Promotion, Message } from './types';
 import { getDb, save, emptyDb } from './storage';
 import { hydrateVideoSrcs } from './videoStore';
-import { THEME_KEY, LANG_KEY, uid, ageFromDob, DAY, reactionRank } from './utils';
+import { THEME_KEY, LANG_KEY, uid, ageFromDob, reactionRank } from './utils';
 import { I18N, TranslationKey } from './i18n';
 import { api, API_ENABLED, ApiError, onWakeChange } from './api';
 import { merge as applyFragment, Fragment } from './store';
@@ -142,7 +142,7 @@ export interface PromoConfig {
   ageMin: number;
   ageMax: number;
   country: string;
-  city: string;
+  cities: string[];
 }
 
 export interface PromoTarget {
@@ -150,7 +150,7 @@ export interface PromoTarget {
   ageMin?: number;
   ageMax?: number;
   country?: string;
-  city?: string;
+  cities?: string[];
 }
 
 export interface SignupPayload {
@@ -1560,7 +1560,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const self = currentMe();
     if (!self) return true;
     if (promo.country && self.country !== promo.country) return false;
-    if (promo.city && (self.city || '') !== promo.city) return false;
+    // Naming cities is a wall, not a preference: anyone the site never placed in one
+    // of them is outside it, including the person who left the box blank.
+    const names = promo.cities || [];
+    if (names.length && !names.some(c => c.toLowerCase() === (self.city || '').toLowerCase())) return false;
     const age = ageFromDob(self.dob);
     return age >= promo.ageMin && age <= promo.ageMax;
   };
@@ -1579,17 +1582,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!pack || self.coins < pack.coins) return false;
     if (!API_ENABLED) {
       const now = Date.now();
+      // An order is only a promise: the coins stay in the wallet and the run has no
+      // end date until a seat approves it.
       const promo: Promotion = {
         id: uid(), uid: self.id, targetType, targetId,
         packageId: pack.id, category: cfg.category,
-        ageMin: cfg.ageMin, ageMax: cfg.ageMax, country: cfg.country, city: cfg.city,
-        coins: pack.coins, ts: now, ends: now + pack.days * DAY,
+        ageMin: cfg.ageMin, ageMax: cfg.ageMax, country: cfg.country, cities: cfg.cities,
+        coins: 0, budget: pack.coins, ts: now, starts: 0, ends: 0,
         status: 'pending', impressions: 0, clicks: 0
       };
       setDb(prev => ({
         ...prev,
-        users: prev.users.map(u => (u.id === self.id ? { ...u, coins: u.coins - pack.coins } : u)),
-        ledger: [{ id: uid(), uid: self.id, delta: -pack.coins, kind: 'spend', note: `Reserved: ${pack.name} promotion`, ts: now }, ...prev.ledger],
         promotions: [promo, ...prev.promotions],
         notifications: [{ id: uid(), uid: 'u_admin', kind: 'promotion', text: `New promotion request from @${self.username}`, href: '/admin', ts: now, read: false }, ...prev.notifications]
       }));
@@ -1599,7 +1602,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       const row = await api.post<any>('/api/promotions/', {
         target_type: targetType, target_id: targetId, category: cfg.category,
-        age_min: cfg.ageMin, age_max: cfg.ageMax, country: cfg.country, city: cfg.city, package: cfg.packageId,
+        age_min: cfg.ageMin, age_max: cfg.ageMax, country: cfg.country, cities: cfg.cities,
+        package: cfg.packageId,
       });
       merge({ promotions: [mapPromotion(row)] });
       await resync();
@@ -1615,12 +1619,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const promo = db.promotions.find(p => p.id === id);
     if (!promo) return;
     if (!API_ENABLED) {
-      if (promo.status !== 'pending') return;
+      const now = Date.now();
+      const paid = promo.coins;
       setDb(prev => ({
         ...prev,
-        promotions: prev.promotions.filter(p => p.id !== id),
-        users: prev.users.map(u => (u.id === promo.uid ? { ...u, coins: u.coins + promo.coins } : u)),
-        ledger: [{ id: uid(), uid: promo.uid, delta: promo.coins, kind: 'refund', note: 'Promotion request cancelled', ts: Date.now() }, ...prev.ledger]
+        promotions: prev.promotions.map(p => (p.id === id ? { ...p, status: 'ended' as const, ends: now } : p)),
+        // Only a campaign that was actually charged gives anything back; a withdrawn
+        // order never took a coin.
+        users: paid > 0 ? prev.users.map(u => (u.id === promo.uid ? { ...u, coins: u.coins + paid } : u)) : prev.users,
+        ledger: paid > 0 ? [{ id: uid(), uid: promo.uid, delta: paid, kind: 'refund' as const, note: 'Promotion ended — unused Coins returned', ts: now }, ...prev.ledger] : prev.ledger
       }));
       showToast(t('promoCancelled'));
       return;
@@ -1628,6 +1635,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       merge({ promotions: [mapPromotion(await api.post<any>(`/api/promotions/${id}/end/`, {}))] });
       await resync();
+      // A refund is a ledger row, and the history list would otherwise keep showing
+      // the page it had before the money moved.
+      forgetLists('wallet-ledger');
       showToast(t('promoCancelled'));
     } catch (err) {
       showToast(errText(err, 'Could not end the promotion.'));
@@ -1651,7 +1661,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  /** Retarget a running campaign; the budget was spent at request time and stays put. */
+  /** Retarget a campaign the payer still holds; the coin figure is not editable. */
   const updatePromotion = async (id: string, patch: PromoTarget): Promise<boolean> => {
     const promo = db.promotions.find(p => p.id === id);
     if (!promo) return false;
@@ -1661,7 +1671,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       ageMin: patch.ageMin ?? promo.ageMin,
       ageMax: patch.ageMax ?? promo.ageMax,
       country: patch.country ?? promo.country,
-      city: patch.city ?? promo.city,
+      cities: patch.cities ?? promo.cities ?? [],
     };
     setDb(prev => ({ ...prev, promotions: prev.promotions.map(p => (p.id === id ? next : p)) }));
     if (!API_ENABLED) {
@@ -1672,7 +1682,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       merge({
         promotions: [mapPromotion(await api.patch<any>(`/api/promotions/${id}/`, {
           category: next.category, age_min: next.ageMin, age_max: next.ageMax,
-          country: next.country, city: next.city,
+          country: next.country, cities: next.cities,
         }))],
       });
       showToast(t('promoUpdated'));

@@ -746,7 +746,7 @@ export interface PromoMark {
   at: string;
 }
 
-export type PromoState = 'draft' | 'active' | 'paused' | 'ended';
+export type PromoState = 'draft' | 'pending' | 'active' | 'paused' | 'ended' | 'rejected';
 
 export interface PromoRow {
   id: number;
@@ -760,9 +760,11 @@ export interface PromoRow {
   sign_off_label: string;
   delivery: string;
   category: string;
-  targeting: { age_min: number; age_max: number; country: string; city: string };
+  targeting: { age_min: number; age_max: number; country: string; cities: string[] };
   package: PromoPackage | null;
   coins: string;
+  /** False while the order only promises the money: the coins leave the wallet on approval. */
+  charged: boolean;
   impressions: number;
   clicks: number;
   /** What the package promised, what the ledger has handed out, and how many
@@ -771,6 +773,7 @@ export interface PromoRow {
   delivered: number;
   people: number | null;
   created_at: string;
+  starts_at: string | null;
   ends_at: string | null;
   age_hours: number;
   left_hours: number | null;
@@ -784,7 +787,8 @@ export interface PromoRow {
 
 export interface PromoPage extends Page<PromoRow> {
   counts: {
-    waiting: number; live: number; paused: number; ended: number; every: number; reserved: string;
+    waiting: number; orders: number; live: number; paused: number; refused: number;
+    ended: number; every: number; reserved: string; unbilled: string;
   };
   state: string;
   can_review: boolean;

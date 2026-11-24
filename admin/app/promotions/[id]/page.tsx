@@ -14,16 +14,23 @@ import { useSession } from '@/lib/session';
 import { PromoDetail, PromoRow } from '@/lib/types';
 
 const STAMP: Record<string, { tone: string; label: string }> = {
-  draft: { tone: 'mute', label: 'Not paid for yet' },
+  draft: { tone: 'mute', label: 'Never ordered' },
+  pending: { tone: 'warn', label: 'Waiting for approval' },
   active: { tone: 'good', label: 'Running' },
   paused: { tone: 'warn', label: 'Paused' },
+  rejected: { tone: 'dead', label: 'Refused' },
   ended: { tone: 'mute', label: 'Ended' },
 };
 
 type Verb = 'approve' | 'pause' | 'resume' | 'reject' | 'stop';
 
+/**
+ * An order that has not been approved has no run to pause and no money to hand
+ * back, so the only two things a seat can do to it are take the coins or refuse.
+ */
 function verbsFor(row: PromoRow): Verb[] {
-  if (row.status === 'draft' || row.status === 'ended') return [];
+  if (row.status === 'draft' || row.status === 'ended' || row.status === 'rejected') return [];
+  if (row.status === 'pending') return ['approve', 'reject'];
   const over = row.left_hours !== null && row.left_hours <= 0;
   const out: Verb[] = [];
   if (row.status === 'active') {
@@ -37,6 +44,9 @@ function verbsFor(row: PromoRow): Verb[] {
 
 /** The sentence a refund verb has to be worth before anybody clicks it. */
 function owed(row: PromoRow, verb: 'reject' | 'stop') {
+  if (!row.charged) {
+    return 'Nothing has been taken from this wallet yet, so refusing hands back nothing and starts no run.';
+  }
   const coins = Number(verb === 'reject' ? row.refund_reject : row.refund_stop);
   if (!coins) {
     return verb === 'reject'
@@ -49,10 +59,10 @@ function owed(row: PromoRow, verb: 'reject' | 'stop') {
 }
 
 const WORDS: Record<Verb, string> = {
-  approve: 'Signing this off lets the feed carry the campaign. Nothing is charged again — the coins were taken when it was bought.',
-  pause: 'Taking it out of the feed keeps the reservation standing, so the paid run still ends on the same date.',
+  approve: 'Signing this off takes the budget out of the payer’s wallet now, starts the paid run today and lets the feed carry the campaign.',
+  pause: 'Taking it out of the feed keeps the paid run standing, so it still ends on the same date.',
   resume: 'Putting it back in the feed runs out the end date it already had.',
-  reject: 'Refusing ends the campaign and hands the unspent part of the run back to the payer.',
+  reject: 'Refusing ends the campaign and hands back whatever part of the paid run was never delivered.',
   stop: 'Stopping ends a paid run early and either refunds the unspent coins or withholds them.',
 };
 
@@ -129,7 +139,7 @@ export default function CampaignPage({ params }: { params: { id: string } }) {
     <ConsoleShell
       title={row ? `Campaign #${row.id} — @${row.owner}` : `Campaign #${params.id}`}
       subtitle={row
-        ? `${row.package?.name || 'bought as a budget'} · ${row.coins} coins · ${standing!.label}`
+        ? `${row.package?.name || 'bought as a budget'} · ${row.coins} coins${row.charged ? '' : ' still in the payer’s wallet'} · ${standing!.label}`
         : 'What the coins bought, who is meant to see it, and what the seat can sign.'}
       actions={(
         <>
@@ -169,10 +179,19 @@ export default function CampaignPage({ params }: { params: { id: string } }) {
               <ul className="promo-facts" data-targeting>
                 <li><span>Ages</span><b>{row.targeting.age_min}–{row.targeting.age_max}</b></li>
                 <li><span>Country</span><b>{row.targeting.country || 'everywhere'}</b></li>
-                <li><span>City</span><b>{row.targeting.city || 'the whole country'}</b></li>
+                <li><span>Cities</span>
+                  <b>{row.targeting.cities.length ? row.targeting.cities.join(', ') : 'the whole country'}</b>
+                </li>
                 <li><span>Category</span><b>{row.category || 'not narrowed'}</b></li>
-                <li><span>Bought</span><b>{stamp(row.created_at)}</b></li>
-                <li><span>Ends</span><b>{row.ends_at ? stamp(row.ends_at) : 'no end date'}</b></li>
+                <li><span>Ordered</span><b>{stamp(row.created_at)}</b></li>
+                <li><span>Coins taken</span>
+                  <b data-charged={row.charged ? 'yes' : 'no'}>
+                    {row.charged ? stamp(row.starts_at || row.created_at) : 'not yet — waiting on a seat'}
+                  </b>
+                </li>
+                <li><span>Ends</span>
+                  <b>{row.ends_at ? stamp(row.ends_at) : row.charged ? 'no end date' : 'when a seat approves'}</b>
+                </li>
                 <li><span>Impressions</span><b>{num(row.delivered)}</b></li>
                 <li><span>People reached</span><b>{row.people === null ? 'not counted' : num(row.people)}</b></li>
                 <li><span>Reach bought</span><b>{row.reach_bought ? `${num(row.reach_bought)} people` : 'nothing promised'}</b></li>
@@ -235,7 +254,7 @@ export default function CampaignPage({ params }: { params: { id: string } }) {
                 {IC.alert}
                 <span>A draft has not been paid for — there are no coins here to approve or hand back.</span>
               </p>
-            ) : row.status === 'ended' ? (
+            ) : row.status === 'ended' || row.status === 'rejected' ? (
               <div className="verdict" data-record>
                 <p className="verdict-line">
                   {IC.check}
@@ -256,6 +275,15 @@ export default function CampaignPage({ params }: { params: { id: string } }) {
               </p>
             ) : (
               <div className="verbs">
+                {row.status === 'pending' && (
+                  <p className="note row" data-unbilled>
+                    {IC.coin}
+                    <span>
+                      <b>{row.coins} coins are still in @{row.owner}&apos;s wallet.</b> Approving moves them here
+                      and starts the {row.package?.days ? `${row.package.days}-day ` : ''}run today; refusing moves nothing.
+                    </span>
+                  </p>
+                )}
                 {over && (
                   <p className="note row" data-over>
                     {IC.alert}
@@ -290,7 +318,7 @@ export default function CampaignPage({ params }: { params: { id: string } }) {
               </div>
             )}
 
-            {verb && review && row.status !== 'draft' && row.status !== 'ended' && (
+            {verb && review && row.status !== 'draft' && row.status !== 'ended' && row.status !== 'rejected' && (
               <div className="ask">
                 <p className="note row">{IC.coin}<span>{owed(row, verb)}</span></p>
                 <label className="field">

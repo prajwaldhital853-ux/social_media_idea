@@ -103,8 +103,8 @@ def _intervals(promo, user):
         out.append(years is not None and promo.age_min <= years <= promo.age_max)
     if promo.country:
         out.append(_said(user.country, promo.country))
-    if promo.city:
-        out.append(_said(user.city, promo.city))
+    if promo.cities:
+        out.append(_said_any(user.city, promo.cities))
     return out
 
 
@@ -116,19 +116,33 @@ def _said(theirs, asked):
     return str(theirs).lower() == str(asked).lower()
 
 
+def _said_any(theirs, asked):
+    """The same question, asked of a list: is their city one of the ones the payer named."""
+    if not theirs:
+        return None
+    return str(theirs).lower() in {str(name).lower() for name in asked}
+
+
 def audience_matches(promo, user):
     """The hard filters: what the person said about themselves, and the payer's band.
 
     An age the site was never told only clears a campaign that is willing to show
     itself to anybody old enough to have an account, because a payer who asked for
     thirties and got a fourteen-year-old is a complaint, not a rounding error. A
-    country or city nobody typed is only a blank box, so it is not held against
-    them — it just earns no audience points.
+    country nobody typed is only a blank box, so it is not held against them — it
+    just earns no audience points.
+
+    Cities are held against them. Naming Kathmandu and Bhaktapur is a payer buying
+    those two towns, so a person whose home town is blank, misspelled or elsewhere
+    is somebody the coins were not meant for, and letting them through would be
+    charging for reach the payer never asked to buy.
     """
     if not user.is_authenticated:
         return False
     if promo.owner_id == user.pk:
         return True
+    if promo.cities and str(user.city or '').lower() not in {str(c).lower() for c in promo.cities}:
+        return False
     return not any(answer is False for answer in _intervals(promo, user))
 
 

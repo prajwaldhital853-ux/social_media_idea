@@ -2,6 +2,7 @@ from decimal import Decimal
 
 from django.core.cache import cache
 from django.test import TestCase
+from django.utils import timezone
 
 from apps.common.testutils import auth_client, make_user
 from apps.posts.models import Post
@@ -23,17 +24,34 @@ class PromotionTests(TestCase):
         self.co = auth_client(self.owner)
         apply(self.owner.wallet.pk, 'credit', 1000, 'seed')
 
-    def promote(self, **extra):
+    def promote(self, approve=True, **extra):
+        """Order a campaign, and by default sign it off the way a seat does, so the
+        tests below read a run rather than the queue. The coins move at approval."""
         body = {'target_type': 'post', 'target_id': str(self.post.pk), 'category': 'Outdoors', 'age_min': 18, 'age_max': 40, 'country': 'Nepal', 'budget': 100}
         body.update(extra)
-        return self.co.post('/api/promotions/', body, format='json')
+        resp = self.co.post('/api/promotions/', body, format='json')
+        if approve and resp.status_code == 201:
+            self.sign_off(resp.data['id'])
+        return resp
 
-    def test_create_debits_budget(self):
-        resp = self.promote()
+    def sign_off(self, pk):
+        promo = Promotion.objects.get(pk=pk)
+        promo.status = Promotion.Status.ACTIVE
+        promo.starts_at = timezone.now()
+        promo.save(update_fields=['status', 'starts_at'])
+        if promo.budget:
+            apply(promo.owner.wallet.pk, 'debit', promo.budget, f'Promotion {promo.pk} approved')
+        return promo
+
+    def test_create_waits_for_a_seat_and_moves_no_coins(self):
+        resp = self.promote(approve=False)
         self.assertEqual(resp.status_code, 201)
         self.owner.wallet.refresh_from_db()
-        self.assertEqual(self.owner.wallet.balance, Decimal('900'))
-        self.assertEqual(resp.data['status'], 'active')
+        self.assertEqual(self.owner.wallet.balance, Decimal('1000'), 'ordering buys nothing until a seat approves')
+        self.assertEqual(resp.data['status'], 'pending')
+        feed = auth_client(self.match).get('/api/feed/')
+        self.assertTrue(all(not p.get('promoted') for p in feed.data['results']),
+                        'an unapproved campaign is not in the feed')
 
     def test_overdraft_and_foreign_target_rejected(self):
         resp = self.promote(budget=5000)
@@ -56,7 +74,7 @@ class PromotionTests(TestCase):
         self.assertFalse(audience_matches(promo, self.old))
         self.assertFalse(audience_matches(promo, self.foreign))
         self.assertTrue(audience_matches(promo, self.owner))
-        promo.city = 'Pokhara'
+        promo.cities = ['Pokhara']
         self.assertFalse(audience_matches(promo, self.match))
 
     def test_feed_targets_only_matching_users(self):

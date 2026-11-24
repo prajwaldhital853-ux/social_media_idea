@@ -236,9 +236,13 @@ export interface Promotion {
   ageMin: number;
   ageMax: number;
   country: string;
-  city?: string;
+  cities?: string[];
+  /** What has actually left the wallet — zero until a seat approves the order. */
   coins: number;
+  /** The price the package quotes, whether or not it has been paid yet. */
+  budget?: number;
   ts: number;
+  starts?: number;
   ends: number;
   status: 'pending' | 'active' | 'paused' | 'ended' | 'rejected';
   impressions: number;

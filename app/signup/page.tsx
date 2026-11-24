@@ -125,6 +125,9 @@ export default function SignupPage() {
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { field: 'email', message: t('e_email') };
     if (!prefill && password.length < 10) return { field: 'password', message: t('e_pass') };
     if (!dob || ageFromDob(dob) < 13) return { field: 'dob', message: t('e_dob13') };
+    // The city is what promotion targeting reads. A blank box is not "everywhere",
+    // it is invisible, so it is asked for here — the one moment it is cheap to give.
+    if (!city.trim()) return { field: 'city', message: t('e_city') };
     if (!ageOk) return { field: 'age', message: t('e_age') };
     if (!legalOk) return { field: 'legal', message: t('e_legal') };
     return null;
@@ -158,7 +161,8 @@ export default function SignupPage() {
             : /username/i.test(detail) ? 'username'
               : /email/i.test(detail) ? 'email'
                 : /date of birth/i.test(detail) ? 'dob'
-                  : /country/i.test(detail) ? 'country' : undefined
+                  : /country/i.test(detail) ? 'country'
+                    : /city/i.test(detail) ? 'city' : undefined
         );
         if (field) return showFieldError(field, res.errors?.[field]?.[0] || detail || t('e_email'));
         setError(detail || t('e_email'));
@@ -379,7 +383,7 @@ export default function SignupPage() {
               {fieldErrors.province ? <span className="signup-field-error" id="signup-province-error" role="alert">{fieldErrors.province}</span> : null}
             </label>
             <label className="signup-field">
-              <span>{t('city')} ({t('optional')})</span>
+              <span>{t('cityRequired')}</span>
               <input
                 ref={el => { fields.current.city = el; }}
                 className="login-input"

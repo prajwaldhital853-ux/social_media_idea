@@ -30,7 +30,7 @@ from . import promotions, rbac, review
 from .models import PromoReview
 
 SIGNED = (PromoReview.Action.APPROVE, PromoReview.Action.RESUME)
-STATES = ('waiting', 'live', 'paused', 'ended', 'all')
+STATES = ('waiting', 'live', 'paused', 'refused', 'ended', 'all')
 LIVE = (Promotion.Status.ACTIVE, Promotion.Status.PAUSED)
 
 
@@ -42,19 +42,33 @@ def _base():
     return Promotion.objects.select_related('owner', 'owner__profile')
 
 
+def _waiting():
+    """The rows a seat has to look at: orders nothing has charged yet, plus a running
+    campaign nobody signed off — the ones the old rule let straight into the feed."""
+    return (Q(status=Promotion.Status.PENDING)
+            | (Q(status=Promotion.Status.ACTIVE) & ~Q(pk__in=_signed_ids())))
+
+
 def _counts():
     """How many campaigns sit in each part of the desk, and what they hold back."""
     signed = _signed_ids()
     active = Promotion.objects.filter(status=Promotion.Status.ACTIVE)
     by_state = dict(Promotion.objects.values('status').annotate(n=Count('id')).values_list('status', 'n'))
     reserved = sum((promo.budget for promo in Promotion.objects.filter(status__in=LIVE)), Decimal('0'))
+    # The coins an approved-but-not-yet-charged order would take. Saying "reserved"
+    # about these would be a lie: they are still in the payer's wallet.
+    unbilled = sum((promo.budget for promo in Promotion.objects.filter(
+        status=Promotion.Status.PENDING)), Decimal('0'))
     return {
-        'waiting': active.exclude(pk__in=signed).count(),
+        'waiting': Promotion.objects.filter(_waiting()).count(),
+        'orders': by_state.get(Promotion.Status.PENDING, 0),
         'live': active.filter(pk__in=signed).count(),
         'paused': by_state.get(Promotion.Status.PAUSED, 0),
+        'refused': by_state.get(Promotion.Status.REJECTED, 0),
         'ended': by_state.get(Promotion.Status.ENDED, 0),
         'every': Promotion.objects.count(),
         'reserved': str(reserved),
+        'unbilled': str(unbilled),
     }
 
 
@@ -80,9 +94,12 @@ def promotion_queue(request):
     qs = _base()
     signed = _signed_ids()
     if state == 'waiting':
-        qs = qs.filter(status=Promotion.Status.ACTIVE).exclude(pk__in=signed)
+        qs = qs.filter(Q(status=Promotion.Status.PENDING)
+                       | (Q(status=Promotion.Status.ACTIVE) & ~Q(pk__in=signed)))
     elif state == 'live':
         qs = qs.filter(status=Promotion.Status.ACTIVE, pk__in=signed)
+    elif state == 'refused':
+        qs = qs.filter(status=Promotion.Status.REJECTED)
     elif state != 'all':
         qs = qs.filter(status=state)
 

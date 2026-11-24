@@ -310,21 +310,27 @@ export function seed(): Database {
   const promotions = [
     {
       id: 'pr1', uid: 'u10', targetType: 'post' as const, targetId: 'p9', packageId: 'pk_growth',
-      category: 'Photography', ageMin: 18, ageMax: 40, country: 'Nepal', city: '',
-      coins: 300, ts: now - 40 * M, ends: now + 6 * DAY + 20 * 60 * M,
+      category: 'Photography', ageMin: 18, ageMax: 40, country: 'Nepal', cities: [],
+      coins: 300, budget: 300, ts: now - 40 * M, starts: now - 30 * M, ends: now + 6 * DAY + 20 * 60 * M,
       status: 'active' as const, impressions: 4180, clicks: 262
     },
     {
       id: 'pr2', uid: 'u9', targetType: 'listing' as const, targetId: 'l3', packageId: 'pk_starter',
-      category: 'Services', ageMin: 20, ageMax: 55, country: 'Nepal', city: 'Kathmandu',
-      coins: 100, ts: now - 1 * DAY, ends: now + 2 * DAY,
+      category: 'Services', ageMin: 20, ageMax: 55, country: 'Nepal', cities: ['Kathmandu', 'Lalitpur'],
+      coins: 100, budget: 100, ts: now - 1 * DAY, starts: now - 20 * 60 * M, ends: now + 2 * DAY,
       status: 'active' as const, impressions: 1210, clicks: 74
     },
     {
       id: 'pr3', uid: 'u1', targetType: 'post' as const, targetId: 'p3', packageId: 'pk_starter',
-      category: 'Travel', ageMin: 18, ageMax: 35, country: 'Nepal', city: '',
-      coins: 100, ts: now - 5 * DAY, ends: now - 2 * DAY,
+      category: 'Travel', ageMin: 18, ageMax: 35, country: 'Nepal', cities: ['Pokhara'],
+      coins: 100, budget: 100, ts: now - 5 * DAY, starts: now - 4 * DAY, ends: now - 2 * DAY,
       status: 'ended' as const, impressions: 2600, clicks: 141
+    },
+    {
+      id: 'pr4', uid: 'u1', targetType: 'post' as const, targetId: 'p3', packageId: 'pk_starter',
+      category: 'Travel', ageMin: 25, ageMax: 45, country: 'Nepal', cities: ['Kathmandu', 'Bhaktapur'],
+      coins: 0, budget: 100, ts: now - 40 * M, starts: 0, ends: 0,
+      status: 'pending' as const, impressions: 0, clicks: 0
     }
   ];
 

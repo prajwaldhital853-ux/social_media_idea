@@ -59,7 +59,12 @@ class PromoTestCase(RbacTestCase):
 
     def running(self, owner=None, target=None, kind='post', budget='900.00', ran=10, left=20,
                 status=Promotion.Status.ACTIVE, package='pk_prime', **extra):
-        """A timed campaign, stamped backwards so a decision mid-run has days left to refund."""
+        """A timed campaign, stamped backwards so a decision mid-run has days left to refund.
+
+        `starts_at` comes along with the run: these rows were bought under the rule
+        where approval is what takes the coins, so a refund here is measured against
+        a paid-for run, not against an order still sitting in the queue.
+        """
         promo = Promotion.objects.create(
             owner=owner or self.author, target_type=kind,
             target_id=str((target if target is not None else self.subject).pk),
@@ -67,6 +72,8 @@ class PromoTestCase(RbacTestCase):
         )
         now = timezone.now()
         stamp = {'created_at': now - timedelta(days=ran)}
+        if status not in (Promotion.Status.PENDING, Promotion.Status.DRAFT):
+            stamp['starts_at'] = now - timedelta(days=ran)
         if left is not None:
             stamp['ends_at'] = now + timedelta(days=left)
         Promotion.objects.filter(pk=promo.pk).update(**stamp)
@@ -229,7 +236,7 @@ class MoneyTests(PromoTestCase):
         self.assertIn('Refund: campaign', entry.note)
         self.assertIn('client_owner', entry.note)
         self.campaign.refresh_from_db()
-        self.assertEqual(self.campaign.status, Promotion.Status.ENDED)
+        self.assertEqual(self.campaign.status, Promotion.Status.REJECTED)
 
     def test_refusing_a_campaign_bought_as_an_open_run_gives_back_the_whole_budget(self):
         open_ended = self.running(left=None)
@@ -304,7 +311,7 @@ class MoneyTests(PromoTestCase):
         draft = self.running(status=Promotion.Status.DRAFT)
         out = self.decide(draft, 'approve')
         self.assertEqual(out.status_code, 400)
-        self.assertIn('not been paid for', out.data['detail'])
+        self.assertIn('not been ordered', out.data['detail'])
 
     def test_an_ended_campaign_refuses_every_verb_and_cannot_be_refunded_twice(self):
         self.decide(self.campaign, 'reject', reason='the seller is suspended')
