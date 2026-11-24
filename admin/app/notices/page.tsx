@@ -221,6 +221,10 @@ export default function NoticesPage() {
   const [target, setTarget] = useState('');
   const [banner, setBanner] = useState<{ kind: 'ok' | 'bad'; text: string } | null>(null);
   const [helpOpen, setHelpOpen] = useState(false);
+  // The desk is where the work happens, so it is the only card on the page until a
+  // seat asks for the record: the list of every sentence already standing is opened
+  // from the top bar and lands above the desk, not underneath it.
+  const [logOpen, setLogOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   // The search box answers every keystroke, so three requests for one word can
   // land in any order, and the one that arrives last is not the one that was
@@ -253,8 +257,8 @@ export default function NoticesPage() {
   }, [fetchPage, noteGate]);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    if (logOpen) load();
+  }, [load, logOpen]);
 
   useEffect(() => {
     if (!helpOpen) return;
@@ -322,32 +326,16 @@ export default function NoticesPage() {
           <button type="button" className="btn ghost" onClick={() => setHelpOpen(true)}>
             {IC.chat}<span>How notices work</span>
           </button>
-          <button type="button" className={`btn ghost${busy ? ' spinning' : ''}`} onClick={() => load()} title="Reload the notices">
-            {IC.refresh}<span>Refresh</span>
+          <button
+            type="button" className="btn ghost" onClick={() => setLogOpen(open => !open)}
+            aria-expanded={logOpen}
+            title={logOpen ? 'Put the record away again' : 'Every notice on the platform, standing or withdrawn'}
+          >
+            {logOpen ? IC.collapse : IC.expand}<span>{logOpen ? 'Hide notice log' : 'Notice log'}</span>
           </button>
         </>
       )}
     >
-      <Chips
-        label="Filter by what it is about"
-        chips={TARGETS.map(item => ({ id: item.id, label: item.label }))}
-        value={target}
-        onPick={setTarget}
-      />
-
-      <div className="toolbar">
-        <label className="search">
-          {IC.search}
-          <input
-            value={q} onChange={event => setQ(event.target.value)}
-            placeholder="Search the sentence, the reason on file, or the person it is about" aria-label="Search notices"
-          />
-        </label>
-        <span className="toolbar-count">
-          {rows === null ? '…' : `${live} standing of ${rows.length} shown`}
-        </span>
-      </div>
-
       <Banner banner={banner} />
 
       {helpOpen && (
@@ -368,74 +356,108 @@ export default function NoticesPage() {
         </div>
       )}
 
+      {logOpen && (
+        <section className="panel" data-list="notices">
+          <div className="panel-head">
+            <div>
+              <h2>Notices on the platform</h2>
+              <p>Every sentence written about content or an account, standing or withdrawn.</p>
+            </div>
+            <button type="button" className={`btn ghost tiny${busy ? ' spinning' : ''}`} onClick={() => load()} title="Reload the notices">
+              {IC.refresh}<span>Refresh</span>
+            </button>
+          </div>
+
+          <Chips
+            label="Filter by what it is about"
+            chips={TARGETS.map(item => ({ id: item.id, label: item.label }))}
+            value={target}
+            onPick={setTarget}
+          />
+
+          <div className="toolbar">
+            <label className="search">
+              {IC.search}
+              <input
+                value={q} onChange={event => setQ(event.target.value)}
+                placeholder="Search the sentence, the reason on file, or the person it is about" aria-label="Search notices"
+              />
+            </label>
+            <span className="toolbar-count">
+              {rows === null ? '…' : `${live} standing of ${rows.length} shown`}
+            </span>
+          </div>
+
+          {rows === null ? (
+            <div className="skeleton-stack">
+              <div className="skeleton"/><div className="skeleton"/><div className="skeleton skeleton-short"/>
+            </div>
+          ) : rows.length === 0 ? (
+            <p className="empty-note">
+              {IC.check}
+              <span>
+                Nothing has been said to the community about content on this platform yet. Write the
+                first sentence below, or make a decision with the Public notice verb on the queue.
+              </span>
+            </p>
+          ) : (
+            <div className="notices grid-wrap">
+              <table className="grid review">
+                <thead>
+                  <tr>
+                    <th style={{ width: '12%' }}>Target</th>
+                    <th style={{ width: '36%' }}>What the reader is shown</th>
+                    <th style={{ width: '11%' }}>About</th>
+                    <th style={{ width: '19%' }}>Written</th>
+                    <th style={{ width: '12%' }}>Standing</th>
+                    <th style={{ width: '10%' }} aria-label="Actions"/>
+                  </tr>
+                </thead>
+                {rows.map(row => (
+                  <tbody key={row.id} data-notice={row.id} data-target={row.target} className={`notice${row.is_live ? '' : ' gone'}`}>
+                    <tr className="grid-row">
+                      <td data-label="Target"><span className="id">{row.target}</span></td>
+                      <td data-label="What the reader is shown">
+                        <span className="notice-text" title={row.text}>{row.text}</span>
+                        {row.audience === 'private'
+                          ? <p className="notice-reason">Only @{row.about} reads this one.</p>
+                          : row.reason && <p className="notice-reason">Reason on file: {row.reason}</p>}
+                      </td>
+                      <td data-label="About" className="strong">@{row.about}</td>
+                      <td data-label="Written">
+                        <span className="notice-meta">
+                          <span>written by <b>{row.actor || 'the system'}</b> {ago(row.created_at)}</span>
+                          <span className="dim" title={stamp(row.created_at)}>{new Date(row.created_at).toLocaleDateString()}</span>
+                        </span>
+                      </td>
+                      <td data-label="Standing">
+                        {row.is_live
+                          ? <span className="pill warn">Standing</span>
+                          : <span className="pill mute">Withdrawn {ago(row.withdrawn_at)}</span>}
+                      </td>
+                      <td data-label="Actions"><div className="grid-acts">
+                        {row.is_live && (
+                          <span className="notice-act">
+                            <button type="button" className="btn danger outline tiny" disabled={busy} onClick={() => withdraw(row)}>
+                              {IC.x}<span>Withdraw notice</span>
+                            </button>
+                          </span>
+                        )}
+                      </div></td>
+                    </tr>
+                  </tbody>
+                ))}
+              </table>
+              <More hasMore={!!cursor} busy={busy} onMore={older} label="Show older"/>
+            </div>
+          )}
+        </section>
+      )}
+
       <AttachDesk busy={busy} onDone={next => {
         setBanner(next);
-        if (next.kind === 'ok') load();
+        if (next.kind === 'ok' && logOpen) load();
       }}/>
-
-      {rows === null ? (
-        <div className="skeleton-stack">
-          <div className="skeleton"/><div className="skeleton"/><div className="skeleton skeleton-short"/>
-        </div>
-      ) : rows.length === 0 ? (
-        <section className="panel empty">
-          <h2>No notices</h2>
-          <p>
-            Nothing has been said to the community about content on this platform yet. Write the
-            first sentence above, or make a decision with the Public notice verb on the queue.
-          </p>
-        </section>
-      ) : (
-        <div className="notices grid-wrap">
-          <table className="grid review">
-            <thead>
-              <tr>
-                <th style={{ width: '12%' }}>Target</th>
-                <th style={{ width: '36%' }}>What the reader is shown</th>
-                <th style={{ width: '11%' }}>About</th>
-                <th style={{ width: '19%' }}>Written</th>
-                <th style={{ width: '12%' }}>Standing</th>
-                <th style={{ width: '10%' }} aria-label="Actions"/>
-              </tr>
-            </thead>
-            {rows.map(row => (
-              <tbody key={row.id} data-notice={row.id} data-target={row.target} className={`notice${row.is_live ? '' : ' gone'}`}>
-                <tr className="grid-row">
-                  <td data-label="Target"><span className="id">{row.target}</span></td>
-                  <td data-label="What the reader is shown">
-                    <span className="notice-text" title={row.text}>{row.text}</span>
-                    {row.audience === 'private'
-                      ? <p className="notice-reason">Only @{row.about} reads this one.</p>
-                      : row.reason && <p className="notice-reason">Reason on file: {row.reason}</p>}
-                  </td>
-                  <td data-label="About" className="strong">@{row.about}</td>
-                  <td data-label="Written">
-                    <span className="notice-meta">
-                      <span>written by <b>{row.actor || 'the system'}</b> {ago(row.created_at)}</span>
-                      <span className="dim" title={stamp(row.created_at)}>{new Date(row.created_at).toLocaleDateString()}</span>
-                    </span>
-                  </td>
-                  <td data-label="Standing">
-                    {row.is_live
-                      ? <span className="pill warn">Standing</span>
-                      : <span className="pill mute">Withdrawn {ago(row.withdrawn_at)}</span>}
-                  </td>
-                  <td data-label="Actions"><div className="grid-acts">
-                    {row.is_live && (
-                      <span className="notice-act">
-                        <button type="button" className="btn danger outline tiny" disabled={busy} onClick={() => withdraw(row)}>
-                          {IC.x}<span>Withdraw notice</span>
-                        </button>
-                      </span>
-                    )}
-                  </div></td>
-                </tr>
-              </tbody>
-            ))}
-          </table>
-          <More hasMore={!!cursor} busy={busy} onMore={older} label="Show older"/>
-        </div>
-      )}
     </ConsoleShell>
   );
 }
