@@ -213,7 +213,7 @@ function Ask({ row }: { row: CoinAsk }) {
   return (
     <tbody className="coin" data-coin={row.id}>
       <tr className="grid-row">
-        <td>
+        <td data-label="Who paid">
           <Link href={`/coins/${row.id}`} className="coin-id">
             <span className="grid-caret">{IC.chevron}</span>
             <span className="coin-name">
@@ -222,24 +222,24 @@ function Ask({ row }: { row: CoinAsk }) {
             </span>
           </Link>
         </td>
-        <td className="strong num" data-coins>{row.coins}</td>
-        <td className="num">NPR {row.amount}</td>
-        <td>
+        <td data-label="Coins" className="strong num" data-coins>{row.coins}</td>
+        <td data-label="Rupees sent" className="num">NPR {row.amount}</td>
+        <td data-label="Bank reference">
           <span className="coin-ref" title={row.reference}>{row.reference || 'no reference given'}</span>
           <p className="coin-way">{row.method === 'bank' ? 'Bank transfer' : row.method.toUpperCase()}</p>
         </td>
-        <td className="dim">
+        <td data-label="Waiting" className="dim">
           <span className={`pile${row.status === 'pending' ? ' open' : ' shut'}`} title={stamp(row.created_at)}>
             {IC.coin}<b>{Math.round(row.age_hours)} h</b>
           </span>
         </td>
-        <td><span className={`pill ${standing.tone}`}>{standing.label}</span></td>
-        <td className="dim">
+        <td data-label="Standing"><span className={`pill ${standing.tone}`}>{standing.label}</span></td>
+        <td data-label="Decided by" className="dim">
           {row.review
             ? <span className="coin-by">{row.review.label} by <b>{row.review.by || 'the system'}</b> {ago(row.review.at)}</span>
             : <span className="coin-by dim">nobody yet</span>}
         </td>
-        <td>
+        <td data-label="Actions">
           <div className="grid-acts">
             <ActLink to={`/coins/${row.id}`} icon="eye" label="Open this request"/>
           </div>

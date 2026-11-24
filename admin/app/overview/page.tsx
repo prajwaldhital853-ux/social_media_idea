@@ -398,14 +398,14 @@ function Campaigns({ campaigns }: { campaigns: PromotionAnalytics | null }) {
                   <span className="who">@{row.owner}</span>
                 </th>
                 {columns.map(metric => (
-                  <td key={metric.id} data-metric={metric.id}
+                  <td key={metric.id} data-metric={metric.id} data-label={metric.label}
                       className={campaigns.unmeasured[metric.id] ? 'is-dim' : ''}>
                     {campaigns.unmeasured[metric.id]
                       ? <span title={campaigns.unmeasured[metric.id]}>—</span>
                       : num(row.metrics[metric.id])}
                   </td>
                 ))}
-                <td>{percent(row.click_rate)}</td>
+                <td data-label="Open rate">{percent(row.click_rate)}</td>
               </tr>
             ))}
           </tbody>
@@ -413,11 +413,11 @@ function Campaigns({ campaigns }: { campaigns: PromotionAnalytics | null }) {
             <tr>
               <th scope="row">These {campaigns.shown} together</th>
               {columns.map(metric => (
-                <td key={metric.id} className={campaigns.unmeasured[metric.id] ? 'is-dim' : ''}>
+                <td key={metric.id} data-label={metric.label} className={campaigns.unmeasured[metric.id] ? 'is-dim' : ''}>
                   {campaigns.unmeasured[metric.id] ? '—' : num(campaigns.totals[metric.id])}
                 </td>
               ))}
-              <td>—</td>
+              <td data-label="Open rate">—</td>
             </tr>
           </tfoot>
         </table>

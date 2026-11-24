@@ -255,7 +255,7 @@ function Campaign({ row }: { row: PromoRow }) {
   return (
     <tbody className="promo" data-promo={row.id}>
       <tr className="grid-row">
-        <td>
+        <td data-label="Who bought reach">
           <Link href={`/promotions/${row.id}`} className="promo-id">
             <span className="grid-caret">{IC.chevron}</span>
             <span className="promo-name">
@@ -264,33 +264,33 @@ function Campaign({ row }: { row: PromoRow }) {
             </span>
           </Link>
         </td>
-        <td className="strong num" data-coins>{row.coins}</td>
-        <td>
+        <td data-label="Coins" className="strong num" data-coins>{row.coins}</td>
+        <td data-label="Package bought">
           <span className="promo-pack" data-package={row.package?.id || ''}>
             {row.package ? `${row.package.days ?? '—'} d` : 'no package'}
           </span>
           <p className="promo-reach">{row.package?.reach || row.delivery}</p>
         </td>
-        <td>
+        <td data-label="What it sells">
           <span className={`kind kind-${row.target.type}`}>{row.target.type}</span>
           <span className="promo-sells" title={row.target.text}>{row.target.text || 'no caption'}</span>
         </td>
-        <td className="dim"><span className="promo-audit">{age(row)}</span></td>
-        <td className="dim">
+        <td data-label="Audience" className="dim"><span className="promo-audit">{age(row)}</span></td>
+        <td data-label="Run left" className="dim">
           <span className={`pile${row.status === 'active' ? ' open' : ' shut'}`} title={stamp(row.created_at)}>
             {IC.pulse}<b>{row.left_hours === null ? 'open run' : `${Math.round(row.left_hours / 24)} d`}</b>
           </span>
           <p className="promo-wait">{Math.round(row.age_hours)} h since bought</p>
         </td>
-        <td><span className={`pill ${standing.tone}`}>{standing.label}</span></td>
-        <td className="dim">
+        <td data-label="Standing"><span className={`pill ${standing.tone}`}>{standing.label}</span></td>
+        <td data-label="Decided" className="dim">
           <span className="promo-by" data-signoff={row.sign_off}>
             {row.review
               ? <>{row.review.label} by <b>{row.review.by || 'the system'}</b></>
               : row.sign_off === 'waiting' ? 'waiting on a seat' : 'nobody yet'}
           </span>
         </td>
-        <td>
+        <td data-label="Actions">
           <div className="grid-acts">
             <ActLink to={`/promotions/${row.id}`} icon="eye" label="Open this campaign"/>
           </div>

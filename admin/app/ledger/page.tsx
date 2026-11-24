@@ -189,22 +189,22 @@ function Entry({ row }: { row: LedgerRow }) {
   return (
     <tbody className="entry" data-entry={row.id}>
       <tr className="grid-row">
-        <td>
+        <td data-label="Whose wallet">
           <span className="entry-who">
             <b>{row.card.name}</b>
             <em>@{row.card.username}{row.card.verified ? ' ✓' : ''}</em>
           </span>
         </td>
-        <td>
+        <td data-label="Movement">
           <span className={`state ${in_ ? 'good' : 'dead'}`} data-move={row.kind}>
             {in_ ? '+' : '−'}{row.amount}
           </span>
         </td>
-        <td>
+        <td data-label="The note on the row">
           <span className="entry-note" title={row.note}>{row.note || 'no note'}</span>
         </td>
-        <td className="dim" title={stamp(row.created_at)}>{ago(row.created_at)}</td>
-        <td className="num strong" title={`The wallet’s own number as this screen reads it: ${row.currency}`}>
+        <td data-label="Written" className="dim" title={stamp(row.created_at)}>{ago(row.created_at)}</td>
+        <td data-label="Wallet now" className="num strong" title={`The wallet’s own number as this screen reads it: ${row.currency}`}>
           {row.balance}
         </td>
       </tr>

@@ -141,19 +141,19 @@ export default function AccessPage() {
               return (
                 <tbody key={seat.username} className="seat">
                   <tr className="grid-row">
-                    <td>
+                    <td data-label="Seat">
                       <Link href={`/access/${seat.username}`} className="seat-id">
                         <span className="grid-caret">{IC.chevron}</span>
                         <span className="id">@{seat.username}</span>
                       </Link>
                     </td>
-                    <td className="strong">{seat.name}</td>
-                    <td className="dim wrap">{seat.email || '—'}</td>
-                    <td>{ROLE_LABEL[seat.role]}</td>
-                    <td className="num">{seat.permissions.length}</td>
-                    <td className="dim">{ago(seat.last_admin_login_at)}</td>
-                    <td className="num">{seat.recovery_left || '—'}</td>
-                    <td>
+                    <td data-label="Name" className="strong">{seat.name}</td>
+                    <td data-label="Email" className="dim wrap">{seat.email || '—'}</td>
+                    <td data-label="Role">{ROLE_LABEL[seat.role]}</td>
+                    <td data-label="Screens" className="num">{seat.permissions.length}</td>
+                    <td data-label="Last sign-in" className="dim">{ago(seat.last_admin_login_at)}</td>
+                    <td data-label="Codes" className="num">{seat.recovery_left || '—'}</td>
+                    <td data-label="Status">
                       <div className="seat-flags">
                         {seat.is_enabled
                           ? <span className="pill good">Active</span>
@@ -168,7 +168,7 @@ export default function AccessPage() {
                         {mine && <span className="pill mute">You</span>}
                       </div>
                     </td>
-                    <td>
+                    <td data-label="Actions">
                       <div className="grid-acts">
                         <ActLink to={`/access/${seat.username}`} icon="eye" label="Open this seat"/>
                         <ActLink

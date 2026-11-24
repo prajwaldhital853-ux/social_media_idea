@@ -231,7 +231,7 @@ function Case({ bucket }: { bucket: QueueRow[] }) {
   return (
     <tbody className="case" data-case={rep.target}>
       <tr className="grid-row">
-        <td>
+        <td data-label="Target">
           <Link href={href} className="case-id">
             <span className="grid-caret">{IC.chevron}</span>
             <span className="case-name">
@@ -240,27 +240,27 @@ function Case({ bucket }: { bucket: QueueRow[] }) {
             </span>
           </Link>
         </td>
-        <td className="strong">{KINDS[rep.content ? rep.content.kind : ''] || rep.target.split(':')[0]}</td>
-        <td>
+        <td data-label="Kind" className="strong">{KINDS[rep.content ? rep.content.kind : ''] || rep.target.split(':')[0]}</td>
+        <td data-label="Open">
           <span className={`pile${openCount > 0 ? ' open' : ' shut'}`}>
             {IC.flag}
             <b>{openCount}</b>
             <em>of {rep.pile.reports}</em>
           </span>
         </td>
-        <td><div className="case-why">
+        <td data-label="Reasons given"><div className="case-why">
           {rep.pile.reasons.length === 0
             ? <em className="dim">No reason given</em>
             : rep.pile.reasons.map(entry => (
               <span key={entry.reason} className="chip">{TITLED(entry.reason)} × {entry.n}</span>
             ))}
         </div></td>
-        <td>
+        <td data-label="Reporters">
           <Link href={href} className="link">
             {reporters} reporter{reporters === 1 ? '' : 's'}
           </Link>
         </td>
-        <td><div className="case-side">
+        <td data-label="Paid reach"><div className="case-side">
           {rep.campaigns > 0 && (
             <span className="pill warn" title="Taking it down stops these and refunds the days they never ran">
               {IC.coin}<span>{rep.campaigns} campaign running</span>
@@ -268,8 +268,8 @@ function Case({ bucket }: { bucket: QueueRow[] }) {
           )}
           {rep.missing && <span className="pill mute">deleted</span>}
         </div></td>
-        <td className="dim"><span className="case-age">{ago(rep.created_at)}</span></td>
-        <td><div className="grid-acts">
+        <td data-label="Last report" className="dim"><span className="case-age">{ago(rep.created_at)}</span></td>
+        <td data-label="Actions"><div className="grid-acts">
           <ActLink to={href} icon="eye" label="Open this case"/>
         </div></td>
       </tr>

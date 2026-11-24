@@ -220,25 +220,25 @@ function PersonRowView({ row, verbs, mine }: { row: PersonRow; verbs: PersonVerb
   return (
     <tbody className="person" data-person={row.username}>
       <tr className="grid-row">
-        <td>
+        <td data-label="Username">
           <Link href={`/people/${row.username}`} className="person-id">
             <span className="grid-caret">{IC.chevron}</span>
             <span className="id">@{row.username}</span>
           </Link>
         </td>
-        <td className="strong">
+        <td data-label="Name" className="strong">
           <span className="person-name">
             {row.name}
             {row.verified && <span className="verified" title="Verified by staff">✓</span>}
           </span>
         </td>
-        <td className="dim wrap">{row.email || '—'}</td>
-        <td>{ROLE_LABEL[row.role] || row.role}</td>
-        <td className="dim">joined {ago(row.joined)}</td>
-        <td className="num">{num(row.posts)}</td>
-        <td className="num">{num(row.followers)}</td>
-        <td className="num" title="Wallet balance">{row.coins}</td>
-        <td>
+        <td data-label="Email" className="dim wrap">{row.email || '—'}</td>
+        <td data-label="Seat">{ROLE_LABEL[row.role] || row.role}</td>
+        <td data-label="Signed up" className="dim">joined {ago(row.joined)}</td>
+        <td data-label="Posts" className="num">{num(row.posts)}</td>
+        <td data-label="Followers" className="num">{num(row.followers)}</td>
+        <td data-label="Coins" className="num" title="Wallet balance">{row.coins}</td>
+        <td data-label="Standing">
           <div className="person-flags">
             <span className="pill mute" title="How this account first reached the platform">{row.provider_label}</span>
             {!row.email_verified && <span className="pill warn">email unverified</span>}
@@ -260,12 +260,12 @@ function PersonRowView({ row, verbs, mine }: { row: PersonRow; verbs: PersonVerb
             {mine && <span className="pill mute">You</span>}
           </div>
         </td>
-        <td>
+        <td data-label="Access">
           <span className={`state ${verbs.actions || verbs.warn ? 'good' : 'mute'}`}>
             {verbs.actions ? 'Full' : verbs.warn ? 'Warn only' : 'View only'}
           </span>
         </td>
-        <td>
+        <td data-label="Actions">
           <div className="grid-acts">
             <ActLink to={`/people/${row.username}`} icon="eye" label="Open this account"/>
             {offered.map(item => (

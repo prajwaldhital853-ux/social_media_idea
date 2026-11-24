@@ -220,7 +220,7 @@ function Target({ row, canReview }: { row: FlagRow; canReview: boolean }) {
   return (
     <tbody className="entry" data-flag={`${row.kind}:${row.id}`}>
       <tr className="grid-row">
-        <td>
+        <td data-label="Whose it is">
           <span className="entry-who">
             {row.owner ? (
               <>
@@ -230,17 +230,17 @@ function Target({ row, canReview }: { row: FlagRow; canReview: boolean }) {
             ) : <em className="dim">account gone</em>}
           </span>
         </td>
-        <td>
+        <td data-label="What">
           <span className={`kind kind-${row.kind}`}>{row.label}</span>
           <em className="coin-way">#{row.id}</em>
         </td>
-        <td>
+        <td data-label="The pile">
           <span className={`pile${row.live ? ' open' : ' shut'}`} title={`${row.reports} reports from ${row.reporters} people`}>
             <b>{row.reporters}</b>
             <span>{row.reporters === 1 ? 'reporter' : 'reporters'}</span>
           </span>
         </td>
-        <td>
+        <td data-label="What they said">
           <span className="case-why">
             {row.reasons.slice(0, 3).map(why => (
               <span className="chip" key={why.reason} title={`${why.n} report(s)`}>
@@ -250,13 +250,13 @@ function Target({ row, canReview }: { row: FlagRow; canReview: boolean }) {
             {row.reasons.length === 0 && <span className="dim">no reason recorded</span>}
           </span>
         </td>
-        <td>
+        <td data-label="Where it is now">
           <span className={`state ${row.gone ? 'mute' : row.live ? 'warn' : 'dead'}`} data-where={row.state}>
             {row.gone ? 'deleted' : row.state_word || row.state}
           </span>
         </td>
-        <td className="dim" title={stamp(row.newest)}>{ago(row.newest)}</td>
-        <td>
+        <td data-label="Last reported" className="dim" title={stamp(row.newest)}>{ago(row.newest)}</td>
+        <td data-label="Decide it">
           <span className="grid-acts">
             {canReview && <Link className="btn ghost tiny" href={queue} title="Rule on every report on this target">{IC.flag}<span>Rule</span></Link>}
             {canReview && !row.live && !row.gone
@@ -274,21 +274,21 @@ function Account({ person }: { person: FlaggedPage['accounts'][number] }) {
   return (
     <tbody className="entry" data-account={person.username}>
       <tr className="grid-row">
-        <td>
+        <td data-label="Account">
           <span className="entry-who">
             <b>{person.name}</b>
             <em>@{person.username}{person.verified ? ' ✓' : ''}</em>
           </span>
         </td>
-        <td className="num strong">{person.flags.on_account}</td>
-        <td className="num">{person.flags.on_content}</td>
-        <td className="num">{person.flags.reporters}</td>
-        <td>
+        <td data-label="On their person" className="num strong">{person.flags.on_account}</td>
+        <td data-label="On their content" className="num">{person.flags.on_content}</td>
+        <td data-label="Distinct reporters" className="num">{person.flags.reporters}</td>
+        <td data-label="State">
           <span className={`state ${state === 'active' ? 'good' : state === 'deactivated' ? 'mute' : 'dead'}`}>
             {state}
           </span>
         </td>
-        <td className="dim" title={stamp(person.joined)}>{ago(person.joined)}</td>
+        <td data-label="Joined" className="dim" title={stamp(person.joined)}>{ago(person.joined)}</td>
       </tr>
     </tbody>
   );
