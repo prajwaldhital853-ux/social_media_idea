@@ -621,7 +621,7 @@ function VerbButton({
               <label className="field">
                 <span>Who can read this warning</span>
                 <select name="audience" value={audience} onChange={event => setAudience(event.target.value)}>
-                  <option value="private">Private — only this account, on their profile and notifications</option>
+                  <option value="private">Private — only this account</option>
                   <option value="public">Public — everyone who opens their profile</option>
                 </select>
               </label>
