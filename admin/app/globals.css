@@ -2397,8 +2397,10 @@ button.key:hover { border-color: #c3c9d1; color: var(--ink); background: #F7F8FA
   border-radius: 50%;
   background: var(--brand);
 }
-.bell-item.kind-coin_request::before { background: var(--amber); }
+.bell-item.kind-coin_request::before,
+.bell-item.kind-coin_proof::before { background: var(--amber); }
 .bell-item.kind-signup::before { background: var(--green); }
+.bell-item.kind-promotion::before { background: var(--title-link, #1877f2); }
 .bell-item.kind-alert::before { background: var(--red); }
 
 .bell-empty { padding: 14px 12px; color: var(--muted); font-size: 12.5px; }

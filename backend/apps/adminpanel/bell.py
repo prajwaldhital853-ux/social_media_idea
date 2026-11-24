@@ -19,6 +19,7 @@ from django.db.models.signals import post_save
 from django.utils import timezone
 
 from apps.moderation.models import Report
+from apps.promotions.models import Promotion
 from apps.wallet.models import CoinRequest
 
 from . import rbac
@@ -129,9 +130,44 @@ def on_signup(instance, created, **kwargs):
     )
 
 
+def on_coin_update(instance, created, update_fields, **kwargs):
+    """New proof on a request that was already waiting: the desk has something new to open.
+
+    The row is not created again, so `created` is False and only `update_fields`
+    says what changed — the same field the console reads to show "answered".
+    """
+    if created or 'resubmitted_at' not in (update_fields or []) or _demo(instance.user):
+        return
+    announce(
+        'coin_proof',
+        f'@{instance.user.username} sent the proof you asked for ({instance.coins} coins)',
+        '/coins?status=pending',
+        'coins_review',
+    )
+
+
+def on_promotion(instance, created, update_fields, **kwargs):
+    """A campaign that went live: somebody spent coins and the queue has a name on it."""
+    if _demo(instance.owner):
+        return
+    started = (created and instance.status == Promotion.Status.ACTIVE) or (
+        not created and 'status' in (update_fields or []) and instance.status == Promotion.Status.ACTIVE
+    )
+    if not started:
+        return
+    announce(
+        'promotion',
+        f'@{instance.owner.username} put a {instance.target_type} behind a campaign',
+        '/promotions?status=active',
+        'promotions_view',
+    )
+
+
 def connect():
     post_save.connect(on_report, sender=Report, dispatch_uid='bell_report')
     post_save.connect(on_coin_request, sender=CoinRequest, dispatch_uid='bell_coin_request')
+    post_save.connect(on_coin_update, sender=CoinRequest, dispatch_uid='bell_coin_proof')
+    post_save.connect(on_promotion, sender=Promotion, dispatch_uid='bell_promotion')
     post_save.connect(on_signup, sender=get_user_model(), dispatch_uid='bell_signup')
 
 
