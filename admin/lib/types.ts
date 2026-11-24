@@ -218,6 +218,10 @@ export type ContentKind = 'post' | 'comment' | 'listing' | 'user';
 /** The five verbs a decision can take. Which ones a target offers depends on its state. */
 export type Decision = 'dismiss' | 'remove' | 'warn' | 'release' | 'restore';
 
+/** The buttons the Decide aside can show. `withdraw` is not a server verb —
+ * the screen answers it at the notices door instead. */
+export type AsideVerb = 'remove' | 'warn' | 'withdraw' | 'release' | 'restore';
+
 export interface PersonRef {
   id: number;
   username: string;
@@ -321,10 +325,11 @@ export interface NoticeRow {
 
 /** What the server did in answer to one verb — the sentence the screen shows back. */
 export interface Outcome {
-  action: Decision;
+  /** "withdraw" is the screen's own verb, answered at the notices door. */
+  action: Decision | 'withdraw';
   kind: ContentKind;
   target: string;
-  content: ContentPreview;
+  content: ContentPreview | null;
   reports_closed: number;
   campaigns: CampaignStop[];
   refunded: string;

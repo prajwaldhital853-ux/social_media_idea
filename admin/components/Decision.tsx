@@ -5,7 +5,7 @@ import { useConfirm } from '@/components/Confirm';
 import { ApiError } from '@/lib/api';
 import { IC } from '@/lib/icons';
 import { useSession } from '@/lib/session';
-import { Decision as Verb, Outcome } from '@/lib/types';
+import { AsideVerb, Decision as Verb, Outcome } from '@/lib/types';
 
 interface VerbSpec {
   label: string;
@@ -17,14 +17,14 @@ interface VerbSpec {
 }
 
 /**
- * The five verbs, in the words a moderator uses, with what each one costs
- * written on the button rather than discovered after the click.
+ * The verbs a seat can pull, in the words a moderator uses, with what each one
+ * costs written on the button rather than discovered after the click.
+ *
+ * There is no "leave it up": closing a pile without saying anything about it is
+ * the answer nobody can audit. A seat that finds nothing wrong warns or takes
+ * the thing down, and the withdraw verb answers the notice it already sent.
  */
-const VERBS: Record<Verb, VerbSpec> = {
-  dismiss: {
-    label: 'Leave it up', tone: 'ghost', icon: 'check',
-    help: 'Nothing wrong. Closes every open report on this target at once.',
-  },
+const VERBS: Record<AsideVerb, VerbSpec> = {
   remove: {
     label: 'Take it down', tone: 'danger', icon: 'x', reason: 'must', notice: 'can',
     help: 'The author is shown your reason and any campaign on it stops and is refunded.',
@@ -32,6 +32,10 @@ const VERBS: Record<Verb, VerbSpec> = {
   warn: {
     label: 'Warning notice', tone: 'amber', icon: 'mega', notice: 'must', reason: 'can',
     help: 'The content stays up. Choose whether everyone can read this warning or only its author.',
+  },
+  withdraw: {
+    label: 'Withdraw notice', tone: 'ghost', icon: 'x',
+    help: 'The warning sentence stops showing. The notice stays on the record, marked withdrawn, with your name beside it.',
   },
   release: {
     label: 'Release', tone: 'primary', icon: 'go',
@@ -43,7 +47,7 @@ const VERBS: Record<Verb, VerbSpec> = {
   },
 };
 
-const ORDER: Verb[] = ['dismiss', 'remove', 'warn', 'release', 'restore'];
+const ORDER: AsideVerb[] = ['remove', 'warn', 'withdraw', 'release', 'restore'];
 
 /** Only for the sentence shown before a click; the server's own 403 wording wins once asked. */
 const KEY_LABEL: Record<string, string> = {
@@ -54,11 +58,13 @@ const KEY_LABEL: Record<string, string> = {
 };
 
 export default function DecisionBar({
-  actions, permission, run, onDone, footnote, target,
+  actions, permission, standing = 0, run, onDone, footnote, target,
 }: {
   actions: Verb[];
   permission: string | null;
-  run: (verb: Verb, reason: string, notice: string, audience: string) => Promise<Outcome>;
+  /** Warning notices still standing on this target, so the verb only appears with something to take down. */
+  standing?: number;
+  run: (verb: AsideVerb, reason: string, notice: string, audience: string) => Promise<Outcome>;
   onDone: (out: Outcome) => void;
   footnote?: string;
   /** What the seat is about to change, named in the confirmation. */
@@ -66,7 +72,7 @@ export default function DecisionBar({
 }) {
   const { can } = useSession();
   const confirm = useConfirm();
-  const [open, setOpen] = useState<Verb | null>(null);
+  const [open, setOpen] = useState<AsideVerb | null>(null);
   const [reason, setReason] = useState('');
   const [notice, setNotice] = useState('');
   const [audience, setAudience] = useState('public');
@@ -78,8 +84,11 @@ export default function DecisionBar({
     ? (KEY_LABEL[permission] || permission)
     : null;
 
-  const ask = (verb: Verb) => {
-    if (missing || busy) return;
+  const shown = ORDER.filter(verb =>
+    (verb === 'withdraw' ? standing > 0 && can('notices') : actions.includes(verb)));
+
+  const ask = (verb: AsideVerb) => {
+    if (busy || (verb !== 'withdraw' && missing)) return;
     setError(null);
     if (VERBS[verb].reason || VERBS[verb].notice) {
       setOpen(verb);
@@ -88,12 +97,14 @@ export default function DecisionBar({
     submit(verb, '', '');
   };
 
-  const submit = async (verb: Verb, reasonText: string, noticeText: string) => {
+  const submit = async (verb: AsideVerb, reasonText: string, noticeText: string) => {
     const spec = VERBS[verb];
     // The click that decides is never the click that sends.
     const sure = await confirm({
       title: `${spec.label}${target ? ` — ${target}` : ''}?`,
-      body: spec.help,
+      body: verb === 'withdraw' && standing > 1
+        ? `${standing} warning notice(s) standing here come down. Each one stays on the record, marked withdrawn, with your name beside it.`
+        : spec.help,
       confirmLabel: spec.label,
       tone: spec.tone === 'danger' ? 'danger' : 'primary',
     });
@@ -117,7 +128,7 @@ export default function DecisionBar({
     }
   };
 
-  if (actions.length === 0) {
+  if (shown.length === 0) {
     return <p className="note">There is nothing to decide on this target — it is no longer here.</p>;
   }
 
@@ -126,11 +137,11 @@ export default function DecisionBar({
   return (
     <div className="decide">
       <div className="verbs">
-        {ORDER.filter(verb => actions.includes(verb)).map(verb => (
+        {shown.map(verb => (
           <button
             key={verb} type="button" data-verb={verb}
             className={`btn ${VERBS[verb].tone} tiny`}
-            disabled={busy || !!missing}
+            disabled={busy || (!!missing && verb !== 'withdraw')}
             onClick={() => ask(verb)}
             title={VERBS[verb].help}
           >
