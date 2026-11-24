@@ -2781,6 +2781,12 @@ a.trend-item:hover { text-decoration: none; }
   .m-search { text-decoration: none; font-size: 12px; }
   .m-search span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .media-mosaic.single, .thread-view .post-featured .media-mosaic.single { aspect-ratio: auto; height: 58svh; max-height: none; }
+  /* A single photo is shown at its own shape on a phone. The tall frame above is
+     a cover frame: a landscape picture placed in it is scaled until it fills the
+     height, and the sides — the words, usually — are cut off. Videos keep the
+     tall frame because a reel is shot for it. */
+  .media-mosaic.single:has(img), .thread-view .post-featured .media-mosaic.single:has(img) { height: auto; }
+  .media-mosaic.single:has(img) img { height: auto; max-height: 78svh; object-fit: contain; }
   .focused-page .main { padding-top: 0; padding-bottom: 0; }
   .focused-page .detail-header { padding-top: calc(6px + env(safe-area-inset-top)); }
   .focused-page .thread-view { animation: none; padding-bottom: calc(24px + env(safe-area-inset-bottom)); }
@@ -7713,6 +7719,9 @@ a.market-card { text-decoration: none; }
   .post-actions .action-btn .reaction-art { width: 33px; height: 33px; }
   .media-mosaic.single,
   .thread-view .post-featured .media-mosaic.single { height: 66svh; }
+  /* The photo's own shape wins over this frame, as in the block above. */
+  .media-mosaic.single:has(img),
+  .thread-view .post-featured .media-mosaic.single:has(img) { height: auto; }
   .media-mosaic.two, .media-mosaic.three, .media-mosaic.four { height: 320px; }
   .media-mosaic.stack { height: 360px; }
   .media-mosaic.mixed { height: 440px; }
