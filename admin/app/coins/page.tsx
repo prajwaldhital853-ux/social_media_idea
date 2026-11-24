@@ -233,7 +233,12 @@ function Ask({ row }: { row: CoinAsk }) {
             {IC.coin}<b>{Math.round(row.age_hours)} h</b>
           </span>
         </td>
-        <td data-label="Standing"><span className={`pill ${standing.tone}`}>{standing.label}</span></td>
+        <td data-label="Standing">
+          <span className={`pill ${standing.tone}`}>{standing.label}</span>
+          {row.status === 'pending' && (row.asked
+            ? <span className="pill dead" data-owed>Owed proof</span>
+            : row.resubmitted && <span className="pill good" data-resent>Proof resent</span>)}
+        </td>
         <td data-label="Decided by" className="dim">
           {row.review
             ? <span className="coin-by">{row.review.label} by <b>{row.review.by || 'the system'}</b> {ago(row.review.at)}</span>

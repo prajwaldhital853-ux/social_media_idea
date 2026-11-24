@@ -6406,6 +6406,11 @@ a.wallet-sec-note:hover { color: var(--brand); text-decoration: underline; }
 .wallet-status.rejected, .wallet-status.ended { color: var(--red); }
 .wallet-status.rejected::before { background: var(--red); }
 .wallet-status.ended::before { background: var(--line-strong, #c9ccd1); }
+/* The buyer answered an ask; the desk has not looked yet. Not a rejection, so it
+   sits beside Pending rather than replacing it — red, because it is waiting on
+   staff and everyone reading the row should see that. */
+.wallet-status.resubmitted { color: var(--red); }
+.wallet-status.resubmitted::before { background: var(--red); }
 
 .wallet-form { display: flex; flex-direction: column; gap: 14px; max-width: 560px; }
 .wallet-field { display: flex; flex-direction: column; gap: 8px; }

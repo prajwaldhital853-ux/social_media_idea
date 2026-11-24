@@ -210,6 +210,11 @@ export interface CoinRequest {
   ts: number;
   status: 'pending' | 'approved' | 'rejected';
   note?: string;
+  /** The desk asked for a better screenshot and has not been answered yet. */
+  proofAsked?: boolean;
+  proofReason?: string;
+  /** This buyer already answered an ask, so the row is waiting on the desk. */
+  resubmitted?: boolean;
 }
 
 export interface LedgerEntry {

@@ -5,11 +5,36 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAdminUser, IsAuthenticated
 from rest_framework.response import Response
 
+from apps.adminpanel.journal import record
 from apps.common.emails import queue_coin_credit_email
 from apps.common.pagination import KeysetPagination
 from apps.notifications.services import notify
 
 from .models import CoinRequest, Transaction, Wallet, apply
+
+
+def _proof_asks(rows):
+    """The proof an admin still waits on, keyed by request — one query per page.
+
+    A request is owed a new screenshot when its newest proof ask is later than the
+    last time the buyer answered one, so a second ask re-opens the request without
+    any flag that could be left switched on.
+    """
+    from apps.adminpanel.models import CoinReview
+
+    pending = [row.pk for row in rows if row.status == CoinRequest.Status.PENDING]
+    if not pending:
+        return {}
+    answered = {row.pk: row.resubmitted_at for row in rows}
+    asks = {}
+    for review in (CoinReview.objects
+                   .filter(request_id__in=pending, action=CoinReview.Action.PROOF)
+                   .order_by('request_id', '-created_at', '-id')
+                   .distinct('request_id')):
+        stamp = answered.get(review.request_id)
+        if stamp is None or stamp < review.created_at:
+            asks[review.request_id] = review
+    return asks
 
 
 class TransactionSerializer(serializers.ModelSerializer):
@@ -23,8 +48,9 @@ class CoinRequestSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = CoinRequest
-        fields = ['id', 'user', 'username', 'coins', 'amount', 'method', 'reference', 'screenshot_url', 'status', 'created_at']
-        read_only_fields = ['id', 'user', 'status', 'created_at']
+        fields = ['id', 'user', 'username', 'coins', 'amount', 'method', 'reference',
+                  'screenshot_url', 'status', 'created_at', 'resubmitted_at']
+        read_only_fields = ['id', 'user', 'status', 'created_at', 'resubmitted_at']
 
 
 @api_view(['GET'])
@@ -58,7 +84,70 @@ def coin_request_list(request):
         qs = qs.filter(status=request.query_params['status'])
     paginator = KeysetPagination()
     rows = paginator.paginate_queryset(qs.select_related('user'), request)
-    return paginator.get_paginated_response(CoinRequestSerializer(rows, many=True).data)
+    data = CoinRequestSerializer(rows, many=True).data
+    asks = _proof_asks(rows)
+    for row, item in zip(rows, data):
+        review = asks.get(row.pk)
+        item['proof_asked'] = review is not None
+        item['proof_reason'] = review.reason if review else ''
+        item['resubmitted'] = row.resubmitted_at is not None
+    return paginator.get_paginated_response(data)
+
+
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
+def coin_proof_resubmit(request, pk):
+    """Answering "we need more proof", on the purchase that is already open.
+
+    The buyer never raises a second request: the desk is watching one row, and a
+    new row would be a second payment for the same coins that nobody has to
+    reconcile. The screenshot and the reference are replaced in place and the ask
+    is stamped as answered, which is what closes the banner.
+    """
+    req = CoinRequest.objects.filter(pk=pk, user=request.user).first()
+    if not req:
+        return Response({'detail': 'No coin request of yours has that id.'}, status=404)
+    ask = _proof_asks([req]).get(req.pk)
+    if request.method == 'GET':
+        return Response({
+            'request': CoinRequestSerializer(req).data,
+            'asked': ask is not None,
+            'reason': ask.reason if ask else '',
+            'asked_at': ask.created_at if ask else None,
+        })
+    if req.status != CoinRequest.Status.PENDING:
+        return Response(
+            {'detail': f'That request was already {req.status}. There is nothing to add to it.'},
+            status=409,
+        )
+    if ask is None:
+        return Response({'detail': 'Nobody has asked you for more proof on this request.'}, status=409)
+    screenshot = str(request.data.get('screenshot_url') or '').strip()
+    reference = str(request.data.get('reference') or '').strip()
+    if not screenshot:
+        return Response({'detail': 'Attach the screenshot of the payment.'}, status=400)
+    if len(screenshot) > 200 or len(reference) > 80:
+        return Response({'detail': 'That is too long to record.'}, status=400)
+
+    req.screenshot_url = screenshot
+    if reference:
+        req.reference = reference
+    req.resubmitted_at = timezone.now()
+    req.save(update_fields=['screenshot_url', 'reference', 'resubmitted_at'])
+    # The seat that asked is the seat that has to see the answer. The target is
+    # the request itself, not the member's proof page: staff reading this belongs
+    # in the console, and the resubmit screen would only tell them it is not theirs.
+    if ask.actor_id:
+        notify(
+            ask.actor, req.user, 'coins',
+            f'@{req.user.username} sent new proof for the {req.coins} coin purchase '
+            f'of NPR {req.amount}. The request is still open.',
+            'coin_request', req.pk,
+        )
+    record(req.user, 'coins_resubmit', f'coin_request:{req.pk}',
+           f'{req.coins} coins / NPR {req.amount} — new proof uploaded')
+    return Response({'detail': 'Proof sent. The request stays open until the desk decides.',
+                     'request': CoinRequestSerializer(req).data})
 
 
 @api_view(['POST'])

@@ -1785,6 +1785,8 @@ button.key:hover { border-color: #c3c9d1; color: var(--ink); background: #F7F8FA
 
 .grid-body.coin-body, .grid-body.promo-body { grid-template-columns: minmax(0, 1fr) 330px; }
 
+.coins .pill + .pill { margin-left: 5px; }
+
 .coin-facts, .promo-facts {
   display: flex;
   flex-direction: column;
