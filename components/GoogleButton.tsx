@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { credentialAccount, googleAccountHint, rememberGoogleAccount, renderGoogleButton } from '@/lib/google';
+import { renderGoogleButton } from '@/lib/google';
 
 /**
  * Google's own sign-in button, drawn into the page.
@@ -20,40 +20,24 @@ export default function GoogleButton({ clientId, onToken, onError, fallback }: {
 }) {
   const box = useRef<HTMLDivElement>(null);
   const [failed, setFailed] = useState(false);
-  const [hint, setHint] = useState<string | null>(null);
   // The handlers change on every render, but Google's callback is registered once, so
   // it reads the live pair rather than the one that happened to exist when it was drawn.
   const live = useRef({ onToken, onError });
   live.current = { onToken, onError };
 
   useEffect(() => {
-    setHint(googleAccountHint());
-  }, []);
-
-  const hintReady = hint !== null;
-  useEffect(() => {
-    if (failed || hint === null || !box.current) return;
+    if (failed || !box.current) return;
     let alive = true;
     renderGoogleButton(box.current, clientId, {
-      token: token => {
-        if (!alive) return;
-        // Remember the account Google really returned, without putting its name or
-        // address on the button. The chooser still gets it as a hint next time.
-        const picked = credentialAccount(token).email;
-        if (picked && picked !== hint) {
-          rememberGoogleAccount(picked);
-          setHint(picked);
-        }
-        live.current.onToken(token);
-      },
+      token: token => { if (alive) live.current.onToken(token); },
       error: message => {
         if (!alive) return;
         setFailed(true);
         live.current.onError(message);
       },
-    }, hint).catch(() => { if (alive) setFailed(true); });
+    }).catch(() => { if (alive) setFailed(true); });
     return () => { alive = false; };
-  }, [clientId, failed, hintReady]);
+  }, [clientId, failed]);
 
   if (failed) return <>{fallback}</>;
   return <div className="gbtn" ref={box} />;

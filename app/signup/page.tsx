@@ -7,7 +7,6 @@ import AuthCode from '@/components/AuthCode';
 import BrandLogo from '@/components/BrandLogo';
 import { AuthResult, useApp } from '@/lib/AppContext';
 import { API_ENABLED } from '@/lib/api';
-import { rememberGoogleAccount } from '@/lib/google';
 import { COUNTRIES, THEME_KEY, ageFromDob, uid } from '@/lib/utils';
 import { IC } from '@/lib/icons';
 import { SignupProvider, User } from '@/lib/types';
@@ -114,7 +113,6 @@ export default function SignupPage() {
       twoStep: false, joined: Date.now(), coins: 0, warning: null
     };
     setDb(prev => ({ ...prev, users: [...prev.users, user], meId: user.id }));
-    rememberGoogleAccount(user.email);
     showToast(t('welcome', { name: user.name }));
     router.push('/');
   };
