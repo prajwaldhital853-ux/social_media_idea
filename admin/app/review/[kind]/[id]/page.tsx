@@ -11,7 +11,7 @@ import { api } from '@/lib/api';
 import { IC } from '@/lib/icons';
 import { ago, stamp } from '@/lib/time';
 import { useSession } from '@/lib/session';
-import { ContentKind, Decision as Verb, NoticeRow, Outcome, ReviewCase } from '@/lib/types';
+import { AsideVerb, ContentKind, Decision as Verb, NoticeRow, Outcome, ReviewCase } from '@/lib/types';
 
 const KINDS: ContentKind[] = ['post', 'comment', 'listing', 'user'];
 
@@ -72,6 +72,25 @@ export default function ReviewCasePage({ params }: { params: { kind: string; id:
       method: 'POST',
       body: { action: verb, reason, notice, audience },
     });
+
+  const standing = (detail?.notices || []).filter(notice => notice.is_live);
+
+  /** The aside's withdraw verb asks at the notices door, not the decide door:
+   * every sentence still standing on this target comes down, each one kept on
+   * the record with the seat's name beside it. */
+  const withdrawAll = async (): Promise<Outcome> => {
+    for (const notice of standing) {
+      await api<NoticeRow>(`admin/notices/${notice.id}/withdraw/`, { method: 'POST', body: {} });
+    }
+    return {
+      action: 'withdraw', kind: detail!.kind, target: detail!.target, content: detail!.content,
+      reports_closed: 0, campaigns: [], refunded: '0', notice: null,
+      detail: `${standing.length} warning notice(s) withdrawn. The author is not told again.`,
+    };
+  };
+
+  const run = (verb: AsideVerb, reason: string, notice: string, audience: string) =>
+    (verb === 'withdraw' ? withdrawAll() : decide(verb, reason, notice, audience));
 
   const handled = (out: Outcome) => {
     setBanner({ kind: 'ok', text: out.detail });
@@ -244,8 +263,9 @@ export default function ReviewCasePage({ params }: { params: { kind: string; id:
             <DecisionBar
               actions={detail.actions}
               permission={detail.permission}
+              standing={standing.length}
               target={detail.target}
-              run={decide}
+              run={run}
               onDone={handled}
               footnote={detail.pile.open > 0
                 ? `One click here answers all ${detail.pile.open} open report(s) on ${detail.target}, not only the one you opened.`
@@ -253,8 +273,8 @@ export default function ReviewCasePage({ params }: { params: { kind: string; id:
             />
             <p className="fineprint">
               The reason you type goes to the author, and the audit row keeps it with your name
-              beside it. Choose whether a warning is public or private. Restore and Release
-              put the thing back exactly as it was.
+              beside it. Choose whether a warning is public or private, and withdraw takes that
+              sentence back down again. Restore and Release put the thing back exactly as it was.
             </p>
           </aside>
         </div>
