@@ -6,6 +6,7 @@ from unittest import mock
 
 from django.conf import settings
 from django.core import mail
+from django.core.mail import EmailMessage, EmailMultiAlternatives
 
 from django.db import connection
 from django.http import Http404
@@ -372,3 +373,44 @@ class MailDeliveryTests(TestCase):
             send_off_request(task, 'a@b.test', '123456', 'verify')
         thread.return_value.start.assert_called_once_with()
         task.delay.assert_not_called()
+
+
+class ProviderBodyTests(TestCase):
+    """The exact body the provider is posted.
+
+    A letter whose attachment is read the wrong way dies on the mail thread with a
+    Python error and never reaches an inbox, which is how every branded email on
+    this platform went silent at once. The two shapes Django carries — a tuple and
+    a MIME part — are both checked here because only one of them is a picture.
+    """
+
+    def test_an_inline_logo_carries_the_id_the_html_refers_to(self):
+        from email.mime.image import MIMEImage
+
+        from .email import payload
+
+        logo = MIMEImage(b'\x89PNG\r\n\x1a\nprobe', 'png')
+        logo.add_header('Content-ID', '<exposing-logo>')
+        logo.add_header('Content-Disposition', 'inline', filename='exposing-logo.png')
+        letter = EmailMultiAlternatives('Notice', 'text body', 'Exposing <no-reply@exposing.app>',
+                                        ['to@test.local'])
+        letter.attach_alternative('<img src="cid:exposing-logo">', 'text/html')
+        letter.attach(logo)
+
+        body = payload(letter)
+        self.assertEqual(body['html'], '<img src="cid:exposing-logo">')
+        part = body['attachments'][0]
+        self.assertEqual(part['content_id'], 'exposing-logo')
+        self.assertEqual(part['filename'], 'exposing-logo.png')
+        self.assertEqual(part['content_type'], 'image/png')
+        self.assertTrue(part['content'])
+
+    def test_a_plain_tuple_attachment_keeps_its_own_name_and_type(self):
+        from .email import payload
+
+        letter = EmailMessage('Notice', 'text body', 'no-reply@exposing.app', ['to@test.local'],
+                              attachments=[('proof.pdf', b'%PDF-1.4', 'application/pdf')])
+        part = payload(letter)['attachments'][0]
+        self.assertEqual(part['filename'], 'proof.pdf')
+        self.assertEqual(part['content_type'], 'application/pdf')
+        self.assertNotIn('content_id', part)

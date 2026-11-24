@@ -287,7 +287,7 @@ def attach(kind, target_id, actor, reason, text, audience=PublicNotice.Audience.
     _say(kind, row, actor, text, notice=notice)
     out = notice_row(notice)
     if email:
-        out['emailed'] = email_owner(kind, row, text)
+        out['emailed'] = email_owner(kind, row, 'A note from the Exposing team', text, warning=True)
     return out
 
 
@@ -323,20 +323,23 @@ def _say(kind, row, actor, text, notice=None):
     return notify(owner_for(kind, row), actor, 'warning', text, kind, row.pk, notice=notice)
 
 
-def email_owner(kind, row, text):
-    """The same sentence in their mailbox, unless they turned that letter off.
+def email_owner(kind, row, subject, body, *, warning=False):
+    """Send the content owner the same branded notice that account enforcement uses.
 
-    Queued rather than sent, like every other notice this console posts: a seat
-    should not wait on a provider to find out the notice went up.
+    `warning` marks a letter the member asked not to receive: a sentence over live
+    content is optional, so their setting decides it. A takedown is not — they
+    cannot sign in to find out why, so the mailbox is the only notice they get.
     """
     owner = owner_for(kind, row)
-    profile = getattr(owner, 'profile', None) if owner is not None else None
-    if owner is None or not owner.email or (profile is not None and not profile.notify_email):
+    if owner is None or not owner.email:
+        return None
+    profile = getattr(owner, 'profile', None)
+    if warning and profile is not None and not profile.notify_email:
         return None
     # people imports this module for account warnings, so the return visit stays inside the call.
     from .people import enforcement_email
 
-    return enforcement_email(owner, 'A note from the Exposing team', text)
+    return enforcement_email(owner, subject, body)
 
 
 def suspension_notice(kind, row, actor, reason):
@@ -371,6 +374,7 @@ def act(kind, target_id, actor, action, reason='', notice_text='', audience=Publ
         'content': preview(kind, row), 'reports_closed': 0,
         'campaigns': [], 'refunded': '0', 'notice': None, 'audience': audience, 'detail': '',
     }
+    owner_mail = None
 
     if action == 'dismiss':
         out['reports_closed'] = close_reports(kind, row.pk, Report.Status.DISMISSED, now)
@@ -391,6 +395,10 @@ def act(kind, target_id, actor, action, reason='', notice_text='', audience=Publ
         campaigns, refunded = cancel_campaigns(kind, row.pk, now)
         out['campaigns'], out['refunded'] = campaigns, str(refunded)
         _say(kind, row, actor, suspension_notice(kind, row, actor, reason))
+        owner_mail = (f'Your Exposing {kind} was suspended',
+                      suspension_notice(kind, row, actor, reason)
+                      + '\n\nIt is out of the feed and cannot be seen by anyone else while it is '
+                        'suspended. Reason: ' + reason, False)
         if notice_text:
             notice = _notice(kind, row, actor, reason, notice_text, audience)
             out['notice'] = notice_row(notice)
@@ -411,6 +419,7 @@ def act(kind, target_id, actor, action, reason='', notice_text='', audience=Publ
         out['notice'] = notice_row(notice)
         out['reports_closed'] = close_reports(kind, row.pk, Report.Status.RESOLVED, now)
         _say(kind, row, actor, notice_text, notice=notice)
+        owner_mail = ('A note from the Exposing team', notice_text, True)
         out['detail'] = (
             f'Left up with a notice {"only the author reads" if audience == PublicNotice.Audience.PRIVATE else "everyone reads"}. '
             f'{out["reports_closed"]} report(s) closed as resolved.'
@@ -447,6 +456,13 @@ def act(kind, target_id, actor, action, reason='', notice_text='', audience=Publ
         out['detail'] = 'Restored. The author is told it is back.'
 
     record(actor, AUDIT[action], f'{kind}:{row.pk}', reason or out['detail'])
+    if owner_mail:
+        subject, body, warning = owner_mail
+        mailed = out['emailed'] = email_owner(kind, row, subject, body, warning=warning)
+        out['detail'] += (
+            f' A copy is on its way to {mailed["to"]}.' if mailed
+            else ' Nothing was emailed: that account has no address, or asks not to be written to.'
+        )
     # The preview is rebuilt from the row as it now stands, so the console can
     # paint the decision it just made without a second read of the queue.
     out['content'] = preview(kind, row)

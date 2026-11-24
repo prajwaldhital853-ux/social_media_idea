@@ -67,6 +67,7 @@ urlpatterns = [
     path('admin/people/<str:username>/clear-flags/', views_people.person_clear_flags),
     path('admin/people/<str:username>/delete/', views_people.person_delete),
     path('admin/welcome/', views_welcome.welcome_desk),
+    path('admin/welcome/mail-test/', views_welcome.welcome_mail_test),
     path('welcome/', views_welcome.welcome_public),
     # Contract 6.8. `packages` and `algorithm` are literal segments, so they are
     # listed before the id routes and stay readable as desks rather than campaigns.

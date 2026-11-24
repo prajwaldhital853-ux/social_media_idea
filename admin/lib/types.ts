@@ -629,10 +629,23 @@ export interface WelcomeCard {
   contact: { label: string; value: string }[];
 }
 
+/** What the mail settings on this deployment really are, read without sending anything. */
+export interface WelcomeMail {
+  backend: string;
+  provider: string;
+  sender: string;
+  reply_to: string;
+  site: string;
+  provider_key: boolean;
+  dispatch: string;
+  problem: string;
+}
+
 /** What the welcome desk holds, and what the website will show on first load. */
 export interface WelcomeDesk {
   lines: WelcomeLine[];
   card: WelcomeCard;
+  mail?: WelcomeMail;
   detail?: string;
 }
 

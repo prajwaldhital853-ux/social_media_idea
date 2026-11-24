@@ -171,7 +171,13 @@ class DecisionTests(CoinTestCase):
         self.assertEqual(Wallet.objects.get(user=self.member).balance, Decimal(0))
         note = Notification.objects.filter(recipient=self.member, kind='coins').last()
         self.assertIn('reference does not match', note.text)
-        self.assertEqual(len(mail.outbox), 0, 'a rejection is not a purchase confirmation')
+        self.assertEqual(len(mail.outbox), 1, 'a refusal is answered in the mailbox as well as the bell')
+        letter = mail.outbox[0]
+        self.assertEqual(letter.to, [self.member.email])
+        self.assertIn('refused', letter.subject.lower())
+        self.assertNotIn('confirmed', letter.subject.lower(), 'a refusal never reads as a receipt')
+        self.assertIn('the reference does not match the amount', letter.body)
+        self.assertIn('#E40104', letter.alternatives[0].content)
 
     def test_asking_for_more_proof_keeps_the_request_open_and_can_be_asked_twice(self):
         request = self.request_for()

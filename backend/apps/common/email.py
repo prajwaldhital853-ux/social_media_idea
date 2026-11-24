@@ -26,6 +26,35 @@ class MailError(Exception):
     """The provider said no, or was not reachable at all."""
 
 
+def attachment_part(attachment):
+    """One attachment as the provider wants it: the name, the type and the bytes.
+
+    Django carries two shapes here and they are not the same object. A tuple is
+    `(filename, content, mimetype)`; a `MIMEImage` — which is how the brand mark
+    travels — is a mail part that answers `__getitem__` with a *header*, so
+    indexing it at 0 asks the parser for a header named `0`. Reading it as a
+    tuple is what made every branded letter die before it reached the provider.
+    """
+    if isinstance(attachment, tuple):
+        fields = list(attachment) + [None, None, None]
+        filename, content, mimetype = fields[0], fields[1], fields[2]
+        raw = content if isinstance(content, bytes) else str(content or '').encode()
+        content_id = ''
+    else:
+        filename = attachment.get_filename() or 'attachment'
+        raw = attachment.get_payload(decode=True) or b''
+        mimetype = attachment.get_content_type()
+        # `content_id` is the provider's own field for an inline picture, and the
+        # angle brackets Django puts around the header are not part of the id.
+        content_id = str(attachment.get('Content-ID') or '').strip().strip('<>')
+    return {
+        'content': base64.b64encode(raw).decode(),
+        'filename': filename,
+        'content_type': mimetype or 'application/octet-stream',
+        **({'content_id': content_id} if content_id else {}),
+    }
+
+
 def payload(message):
     """The Resend body for one Django message.
 
@@ -58,21 +87,9 @@ def payload(message):
     headers = getattr(message, 'headers', None) or getattr(message, 'extra_headers', None)
     if headers:
         out['headers'] = dict(headers)
-    attachments = []
-    for attachment in message.attachments:
-        filename = getattr(attachment, 'name', None) or attachment[0]
-        content = getattr(attachment, 'content', None)
-        if content is None:
-            content = attachment[1]
-        mimetype = getattr(attachment, 'mimetype', None) or (attachment[2] if len(attachment) > 2 else None)
-        raw = content if isinstance(content, bytes) else str(content).encode()
-        attachments.append({
-            'content': base64.b64encode(raw).decode(),
-            'filename': filename,
-            'content_type': mimetype or 'application/octet-stream',
-        })
-    if attachments:
-        out['attachments'] = attachments
+    parts = [attachment_part(attachment) for attachment in message.attachments]
+    if parts:
+        out['attachments'] = parts
     return {key: value for key, value in out.items() if value not in (None, '', [], {})}
 
 

@@ -8,7 +8,9 @@ import { api } from '@/lib/api';
 import { IC } from '@/lib/icons';
 import { ago } from '@/lib/time';
 import { useSession } from '@/lib/session';
-import { WelcomeDesk, WelcomeLine } from '@/lib/types';
+import { WelcomeDesk, WelcomeLine, WelcomeMail } from '@/lib/types';
+
+const ADDRESS = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
 export default function WelcomePage() {
   const { noteGate } = useSession();
@@ -17,6 +19,8 @@ export default function WelcomePage() {
   const [draft, setDraft] = useState<Record<string, string>>({});
   const [banner, setBanner] = useState<{ kind: 'ok' | 'bad'; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [to, setTo] = useState('');
+  const [sending, setSending] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -57,6 +61,28 @@ export default function WelcomePage() {
       if (!noteGate(err)) setBanner({ kind: 'bad', text: (err as Error).message });
     } finally {
       setBusy(false);
+    }
+  };
+
+  const sendTest = async () => {
+    const address = to.trim().toLowerCase();
+    if (!ADDRESS.test(address)) {
+      setBanner({ kind: 'bad', text: 'Write the address the test letter goes to.' });
+      return;
+    }
+    setSending(true);
+    setBanner(null);
+    try {
+      const out = await api<{ detail: string; mail?: WelcomeMail }>('admin/welcome/mail-test/', {
+        method: 'POST', body: { to: address },
+      });
+      if (out.mail) setDesk(current => (current ? { ...current, mail: out.mail } : current));
+      setBanner({ kind: 'ok', text: out.detail });
+    } catch (err) {
+      // A refused letter is the answer this button exists for, so it is shown whole.
+      setBanner({ kind: 'bad', text: (err as Error).message });
+    } finally {
+      setSending(false);
     }
   };
 
@@ -173,6 +199,72 @@ export default function WelcomePage() {
                 log with who changed which line and when.
               </span>
             </p>
+          </section>
+
+          <section className="panel" data-welcome="mail">
+            <div className="panel-head">
+              <div>
+                <h2>Mail as this deployment can send it</h2>
+                <p>
+                  A coin receipt, a promotion decision, a warning and a first letter are each also
+                  an email. This is what those letters pass through, read off the server rather than
+                  guessed from an inbox that stays quiet.
+                </p>
+              </div>
+            </div>
+
+            <ul className="terms">
+              {[
+                ['Provider', desk.mail?.provider || 'reading…'],
+                ['Sent from', desk.mail?.sender || 'reading…'],
+                ['Replies go to', desk.mail?.reply_to || 'not filled in'],
+                ['Links point at', desk.mail?.site || 'reading…'],
+                ['Posting', desk.mail
+                  ? (desk.mail.dispatch === 'queue'
+                    ? 'handed to the Celery queue'
+                    : 'on its own thread, after the request returns')
+                  : 'reading…'],
+              ].map(([label, value]) => (
+                <li className="term" key={label}>
+                  <div className="term-body">
+                    <b className="term-text">{label}</b>
+                    <em className="term-note">{value}</em>
+                  </div>
+                </li>
+              ))}
+            </ul>
+
+            {desk.mail?.problem && (
+              <div className="notice-line">
+                <p className="notice-copy"><span className="notice-text">{desk.mail.problem}</span></p>
+              </div>
+            )}
+
+            <label className="field" data-mail="to">
+              <span>Send a test letter to</span>
+              <input
+                name="mailtest" value={to} autoComplete="off" placeholder="you@example.com"
+                onChange={event => setTo(event.target.value)}
+              />
+              <em className="welcome-who">
+                It is posted through the provider named above and comes back with that
+                provider’s own answer, so the check takes a few seconds and proves more than this
+                screen can.
+              </em>
+            </label>
+
+            <div className="ask-actions">
+              <button
+                type="button" className={`btn primary${sending ? ' spinning' : ''}`}
+                disabled={sending || !ADDRESS.test(to.trim().toLowerCase())}
+                title={ADDRESS.test(to.trim().toLowerCase())
+                  ? 'Post one real letter and report the answer'
+                  : 'An address first'}
+                onClick={sendTest}
+              >
+                {IC.check}<span>{sending ? 'Sending…' : 'Send the test letter'}</span>
+              </button>
+            </div>
           </section>
         </div>
       )}

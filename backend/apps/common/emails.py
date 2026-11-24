@@ -63,6 +63,10 @@ def mail_delivery_problem():
         connection = django_mail.get_connection()
     except Exception:
         return 'The mail settings on this deployment do not load, so no letter can be posted.'
+    if not getattr(settings, 'CELERY_TASK_ALWAYS_EAGER', True):
+        return ('Mail is handed to the Celery queue, and nothing on this deployment consumes it, '
+                'so every letter is dropped without an error. Set CELERY_ALWAYS_EAGER=1, or run a '
+                'worker that reads that queue.')
     name = f'{connection.__class__.__module__}.{connection.__class__.__name__}'
     if name.startswith('django.core.mail.backends.console') or name.startswith('django.core.mail.backends.locmem'):
         return ('No mail provider is configured: EMAIL_BACKEND is still Django\'s log-only backend, '

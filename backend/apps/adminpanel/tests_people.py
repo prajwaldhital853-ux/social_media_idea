@@ -201,7 +201,9 @@ class SuspendTests(ReviewTestCase):
         self.assertIn('+977-9812345678', letter.body)
         self.assertIn('next request', letter.body)
         self.assertIn('#E40104', letter.alternatives[0].content)
-        self.assertIn('exposing-icon.png', letter.alternatives[0].content)
+        self.assertIn('cid:exposing-logo', letter.alternatives[0].content,
+                      'the mark rides inside the letter, since a mail client will not fetch it')
+        self.assertTrue(letter.attachments, 'the brand mark is attached rather than linked')
         self.assertEqual(out.data['emailed']['to'], 'ordinary@test.local')
 
         bell = Notification.objects.filter(recipient=self.member, kind='warning').first()

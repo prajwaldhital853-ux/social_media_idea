@@ -216,7 +216,9 @@ class MoneyTests(PromoTestCase):
         self.assertEqual(self.decide(self.campaign, 'reject', reason='not approved').status_code, 200)
         another = self.running(target=self.another_post())
         self.assertEqual(self.decide(another, 'stop', reason='policy issue', refund='credit').status_code, 200)
-        self.assertEqual(len(mail.outbox), 0)
+        self.assertEqual(len(mail.outbox), 4, 'every decision the desk makes is answered by letter')
+        self.assertFalse([sent for sent in mail.outbox if 'approved' in sent.subject.lower()],
+                         'nothing that did not pass review arrives as an approval')
 
     def test_a_refusal_needs_the_sentence_the_payer_is_sent(self):
         out = self.decide(self.campaign, 'reject', reason='  ')

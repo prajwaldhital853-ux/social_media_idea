@@ -9,11 +9,13 @@ changes, and every change is written to the same audit log as a takedown. The
 other is an open read, because the card appears before anybody has an account.
 """
 
+import re
+
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
-from . import rbac, settings_store
+from . import maildesk, rbac, settings_store
 from .journal import record
 from .models import AdminSetting
 
@@ -69,7 +71,7 @@ def lines():
 @rbac.staff_only('welcome_text')
 def welcome_desk(request):
     if request.method == 'GET':
-        return Response({'lines': lines(), 'card': card()})
+        return Response({'lines': lines(), 'card': card(), 'mail': maildesk.status()})
 
     stored = {row.key: (row.value or '') for row in AdminSetting.objects.filter(key__in=BY_KEY)}
     updates, too_long = {}, []
@@ -94,10 +96,27 @@ def welcome_desk(request):
     record(request.user, 'welcome_text', 'first-load wording',
            'Wrote ' + ', '.join(moved) + '.')
     return Response({
-        'lines': lines(), 'card': card(),
+        'lines': lines(), 'card': card(), 'mail': maildesk.status(),
         'detail': f'Saved {", ".join(moved).lower()}. The website reads it on the next first load; '
                   'a line left empty falls back to the platform’s own wording.',
     })
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+@rbac.staff_only('welcome_text')
+def welcome_mail_test(request):
+    """Send one real letter through this deployment's own mail settings.
+
+    The contact details written here are the reply-to of every letter the platform
+    posts, so the desk that edits them is the desk that has to prove they work.
+    """
+    to = str(request.data.get('to') or '').strip().lower()
+    if not re.fullmatch(r'[^@\s]+@[^@\s]+\.[^@\s]+', to):
+        return Response({'detail': 'Write the address the test letter goes to.'}, status=400)
+    code, body = maildesk.test_send(to)
+    record(request.user, 'mail_test', to, body['detail'][:200])
+    return Response(body, status=code)
 
 
 @api_view(['GET'])
