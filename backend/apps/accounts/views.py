@@ -7,6 +7,7 @@ from django.core import signing
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.core.validators import validate_email
 from django.db import IntegrityError, transaction
+from django.db.models import Q
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes, authentication_classes
@@ -52,6 +53,23 @@ def _email(value):
     and 'me@x.com' from the next is the account that 'disappeared'.
     """
     return (value or '').strip().lower()
+
+
+def _is_staff_member(user):
+    if user is None:
+        return False
+    if user.is_staff or user.is_superuser:
+        return True
+    from apps.adminpanel.models import StaffAccount
+    return StaffAccount.objects.filter(user=user, is_enabled=True).exists()
+
+
+def _reserved_email(email):
+    if not email:
+        return False
+    return User.objects.filter(email=email).filter(
+        Q(is_staff=True) | Q(is_superuser=True) | Q(staff_account__is_enabled=True)
+    ).exists()
 
 
 def _device_id(request):
@@ -194,6 +212,9 @@ def signup(request):
     banned = safety.blocking(request, email)
     if banned is not None:
         return safety.refuse(banned)
+    if _reserved_email(email):
+        message = 'This email address cannot be used.'
+        return Response({'detail': message, 'email': [message]}, status=400)
     if User.objects.filter(username=username).exists():
         message = 'That username is taken.'
         return Response({'detail': message, 'username': [message]}, status=400)
@@ -239,7 +260,10 @@ def signup(request):
             )
     except IntegrityError:
         # Two tabs, one address: the exists() checks above both said no.
-        message = 'An account with that email already exists.'
+        if _reserved_email(email):
+            message = 'This email address cannot be used.'
+        else:
+            message = 'An account with that email already exists.'
         return Response({'detail': message, 'email': [message]}, status=400)
     passwords.remember(user)
     queue_event_email(
@@ -284,7 +308,7 @@ def login(request):
     enforce(f'login-id:{email}', 10, 60)
     password = request.data.get('password') or ''
     user = User.objects.filter(email=email).order_by('id').first()
-    if not user:
+    if not user or _is_staff_member(user):
         return Response({'detail': 'No account matches those credentials.'}, status=401)
     if user.is_suspended:
         return _suspended(user)
@@ -368,7 +392,7 @@ def _verify_otp(request, force_purpose=None):
     challenge = request.data.get('challenge')
     enforce(f'otp:{challenge}', 10, 600)
     otp = EmailOTP.objects.filter(pk=challenge, consumed_at__isnull=True).select_related('user').first()
-    if not otp or otp.expires_at < timezone.now():
+    if not otp or otp.expires_at < timezone.now() or _is_staff_member(otp.user):
         return Response({'detail': 'Code expired. Request a new one.'}, status=400)
     if force_purpose and otp.purpose != force_purpose:
         return Response({'detail': 'Wrong code type.'}, status=400)
@@ -458,6 +482,8 @@ def refresh(request):
         ).order_by('-created_at').first()
         if not session:
             return Response({'detail': 'Session revoked or expired. Sign in again.'}, status=401)
+    if _is_staff_member(session.user):
+        return clear_auth_cookies(Response({'detail': 'Session revoked or expired. Sign in again.'}, status=401))
     session.revoked_at = timezone.now()
     session.save(update_fields=['revoked_at'])
     resp = Response({'refreshed': True})
@@ -518,16 +544,8 @@ def reset_request(request):
     if banned is not None:
         return safety.refuse(banned)
     user = User.objects.filter(email=email).order_by('id').first()
-    if not user or user.is_suspended:
+    if not user or user.is_suspended or _is_staff_member(user):
         return Response({'detail': 'If that email has an account, a reset code is on its way.'})
-    if user.is_staff:
-        # A seat opens every desk on the platform, so it is not recovered through
-        # the door meant for one member's own profile. The console screen says the
-        # same thing back, and that is where the letter has to be asked for.
-        return Response({
-            'detail': 'This is a staff account. Reset it from “Forgot password” on the admin console sign-in.',
-            'staff_door': True,
-        }, status=400)
     otp, code = _make_otp(user, 'reset', _device_id(request))
     return Response({
         'detail': 'If that email has an account, a reset code is on its way.',
@@ -548,7 +566,7 @@ def reset_verify(request):
     challenge = request.data.get('challenge')
     enforce(f'reset-verify:{challenge}', 10, 600)
     otp = EmailOTP.objects.filter(pk=challenge, purpose='reset', consumed_at__isnull=True).select_related('user').first()
-    if not otp or otp.expires_at < timezone.now():
+    if not otp or otp.expires_at < timezone.now() or _is_staff_member(otp.user):
         return Response({'detail': 'Code expired. Request a new one.'}, status=400)
     if otp.attempts >= OTP_MAX_ATTEMPTS:
         otp.consumed_at = timezone.now()
@@ -588,7 +606,7 @@ def reset_confirm(request):
     if not payload or str(payload.get('otp')) != str(challenge):
         return Response({'detail': 'Confirm the code first.'}, status=400)
     otp = EmailOTP.objects.filter(pk=challenge, purpose='reset', consumed_at__isnull=True).select_related('user').first()
-    if not otp:
+    if not otp or _is_staff_member(otp.user):
         return Response({'detail': 'Code expired. Request a new one.'}, status=400)
     password = str(request.data.get('password') or '')
     bad = passwords.refusal(password, otp.user)
@@ -714,6 +732,8 @@ def google(request):
     if banned is not None:
         return safety.refuse(banned)
     user = User.objects.filter(email=email).order_by('id').first()
+    if user and _is_staff_member(user):
+        return Response({'detail': 'This email address cannot be used.'}, status=400)
     device_id = _device_id(request)
     if user:
         if user.is_suspended:

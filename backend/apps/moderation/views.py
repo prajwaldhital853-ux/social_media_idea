@@ -166,9 +166,12 @@ def audit_log(request):
 @api_view(['GET'])
 @permission_classes([IsAdminUser])
 def user_directory(request):
-    """The roster the admin console works on: accounts, balances and moderation state."""
+    """The member roster the admin console works on: accounts, balances and moderation state."""
     qs = (
         User.objects.select_related('profile')
+        .exclude(
+            Q(is_staff=True) | Q(is_superuser=True) | Q(staff_account__is_enabled=True)
+        )
         .annotate(
             created_at=F('date_joined'),
             posts_count=Count('posts', filter=Q(posts__status='live'), distinct=True),

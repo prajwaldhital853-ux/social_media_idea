@@ -27,6 +27,12 @@ def _is_http_url(value):
     return parsed.scheme in ('http', 'https') and bool(parsed.netloc)
 
 
+def _member_only(queryset):
+    return queryset.exclude(
+        Q(is_staff=True) | Q(is_superuser=True) | Q(staff_account__is_enabled=True)
+    )
+
+
 class ProfileSerializer(serializers.ModelSerializer):
     # Every other person payload carries the account id; without it the client
     # cannot tell this row is the same person a feed card already holds.
@@ -114,7 +120,7 @@ def _can_view_full(viewer, target):
 @api_view(['GET', 'PATCH'])
 @permission_classes([AllowAny])
 def profile_detail(request, username):
-    user = get_object_or_404(User, username=username)
+    user = get_object_or_404(_member_only(User.objects.all()), username=username)
     profile = get_object_or_404(Profile, user=user)
     if request.method == 'PATCH':
         if not request.user.is_authenticated or request.user.pk != user.pk:
@@ -152,7 +158,7 @@ def profile_detail(request, username):
 @permission_classes([AllowAny])
 def user_search(request):
     """People search for the search page, @-mentions and the picker."""
-    qs = (
+    qs = _member_only(
         User.objects.filter(is_active=True)
         .select_related('profile')
         .annotate(

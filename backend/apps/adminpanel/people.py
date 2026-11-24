@@ -75,9 +75,12 @@ def threshold():
 
 
 def directory(query='', state='', provider=''):
-    """The accounts the people screen works on, newest joiner first."""
+    """The member accounts the people screen works on, newest joiner first."""
     rows = (
         User.objects.select_related('profile', 'staff_account', 'wallet')
+        .exclude(
+            Q(is_staff=True) | Q(is_superuser=True) | Q(staff_account__is_enabled=True)
+        )
         .annotate(
             # `created_at` is an alias for `date_joined`: the shared cursor pager
             # walks that column name, and a roster has to page like every screen.
