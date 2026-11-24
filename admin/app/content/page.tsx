@@ -291,7 +291,7 @@ function ShelfCase({ row, onWarn }: { row: ShelfRow; onWarn: (text: string, bad?
   return (
     <tbody className="case" data-case={row.target}>
       <tr className="grid-row">
-        <td>
+        <td data-label="Target">
           <Link href={href} className="case-id">
             <span className="grid-caret">{IC.chevron}</span>
             <span className="case-name">
@@ -300,20 +300,20 @@ function ShelfCase({ row, onWarn }: { row: ShelfRow; onWarn: (text: string, bad?
             </span>
           </Link>
         </td>
-        <td className="strong">{KIND_LABEL[row.content.kind] || row.content.kind}</td>
-        <td>{statePill(row.content.state, row.content.kind)}</td>
-        <td><div className="case-why">
+        <td data-label="Kind" className="strong">{KIND_LABEL[row.content.kind] || row.content.kind}</td>
+        <td data-label="Standing">{statePill(row.content.state, row.content.kind)}</td>
+        <td data-label="Why it is here"><div className="case-why">
           {chips.length === 0
             ? <span className="dim">—</span>
             : chips.map(entry => <span key={entry} className="chip">{entry}</span>)}
         </div></td>
-        <td className="dim">
+        <td data-label="Decided" className="dim">
           {row.decision
             ? `${DONE_LABEL[row.decision.action] || row.decision.action} by ${row.decision.actor || 'the system'}`
             : 'nothing yet'}
         </td>
-        <td className="dim">{ago(row.content.created_at)}</td>
-        <td><div className="grid-acts">
+        <td data-label="Posted" className="dim">{ago(row.content.created_at)}</td>
+        <td data-label="Actions"><div className="grid-acts">
           <ActLink to={href} icon="eye" label="Open this row"/>
           {mayWarn && (
             <Act

@@ -226,24 +226,24 @@ function Entry({ row }: { row: AuditLine }) {
   return (
     <tbody className="entry" data-entry={row.id}>
       <tr className="grid-row">
-        <td>
+        <td data-label="Who">
           <span className="entry-who">
             {row.actor
               ? <><b>{row.actor}</b><em>staff seat</em></>
               : <><b>the platform itself</b><em>no account behind it</em></>}
           </span>
         </td>
-        <td>
+        <td data-label="What they did">
           <span className={`verb verb-${row.action}`}>{row.action.replace(/_/g, ' ')}</span>
           <em className="coin-way">{row.family}</em>
         </td>
-        <td className="dim">
+        <td data-label="To what" className="dim">
           <span className="entry-note" title={row.target}>{row.target || '—'}</span>
         </td>
-        <td>
+        <td data-label="The reason on the row">
           <span className="entry-note" title={row.detail}>{row.detail || 'no reason was typed'}</span>
         </td>
-        <td className="dim" title={stamp(row.created_at)}>{ago(row.created_at)}</td>
+        <td data-label="When" className="dim" title={stamp(row.created_at)}>{ago(row.created_at)}</td>
       </tr>
     </tbody>
   );

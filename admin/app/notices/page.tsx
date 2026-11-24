@@ -372,26 +372,26 @@ export default function NoticesPage() {
             {rows.map(row => (
               <tbody key={row.id} data-notice={row.id} data-target={row.target} className={`notice${row.is_live ? '' : ' gone'}`}>
                 <tr className="grid-row">
-                  <td><span className="id">{row.target}</span></td>
-                  <td>
+                  <td data-label="Target"><span className="id">{row.target}</span></td>
+                  <td data-label="What the reader is shown">
                     <span className="notice-text" title={row.text}>{row.text}</span>
                     {row.audience === 'private'
                       ? <p className="notice-reason">Only @{row.about} reads this one.</p>
                       : row.reason && <p className="notice-reason">Reason on file: {row.reason}</p>}
                   </td>
-                  <td className="strong">@{row.about}</td>
-                  <td>
+                  <td data-label="About" className="strong">@{row.about}</td>
+                  <td data-label="Written">
                     <span className="notice-meta">
                       <span>written by <b>{row.actor || 'the system'}</b> {ago(row.created_at)}</span>
                       <span className="dim" title={stamp(row.created_at)}>{new Date(row.created_at).toLocaleDateString()}</span>
                     </span>
                   </td>
-                  <td>
+                  <td data-label="Standing">
                     {row.is_live
                       ? <span className="pill warn">Standing</span>
                       : <span className="pill mute">Withdrawn {ago(row.withdrawn_at)}</span>}
                   </td>
-                  <td><div className="grid-acts">
+                  <td data-label="Actions"><div className="grid-acts">
                     {row.is_live && (
                       <span className="notice-act">
                         <button type="button" className="btn danger outline tiny" disabled={busy} onClick={() => withdraw(row)}>

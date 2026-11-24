@@ -381,7 +381,7 @@ function CategoryTable({
                 const opens = editing === row.id;
                 return (
                   <tr key={row.id} data-cat={row.name} className={row.is_active ? '' : ' off'}>
-                    <td>
+                    <td data-label="Category">
                       {opens ? (
                         <input
                           name="name" value={draft.name} maxLength={80} autoComplete="off" aria-label="Category name"
@@ -389,7 +389,7 @@ function CategoryTable({
                         />
                       ) : <b>{row.name}</b>}
                     </td>
-                    <td>
+                    <td data-label="Order">
                       {opens ? (
                         <input
                           className="order" type="number" min={0} max={9999} value={draft.sort_order}
@@ -398,11 +398,11 @@ function CategoryTable({
                         />
                       ) : row.sort_order}
                     </td>
-                    <td>{row.listings === null ? '—' : num(row.listings)}</td>
-                    <td>
+                    <td data-label="Live listings">{row.listings === null ? '—' : num(row.listings)}</td>
+                    <td data-label="State">
                       {row.is_active ? <span className="pill good">On the shelf</span> : <span className="pill mute">Hidden</span>}
                     </td>
-                    <td className="cat-acts">
+                    <td data-label="Actions" className="cat-acts">
                       {can && !opens && (
                         <button
                           type="button" className="btn ghost tiny"

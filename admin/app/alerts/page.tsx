@@ -371,24 +371,24 @@ function Row({ row, mark, busy, seat }: {
   return (
     <tbody className="entry" data-alert={row.id}>
       <tr className="grid-row">
-        <td>
+        <td data-label="What it says">
           <span className="case-name">
             <b>{row.title}</b>
             <em className="case-line" title={row.detail}>{row.detail}</em>
           </span>
         </td>
-        <td className="dim">{row.kind.replace(/_/g, ' ')}</td>
-        <td>
+        <td data-label="Condition" className="dim">{row.kind.replace(/_/g, ' ')}</td>
+        <td data-label="Severity">
           <span className={`state ${row.severity === 'critical' ? 'dead' : row.severity === 'warning' ? 'warn' : 'mute'}`}>
             {SEVERITY_LABEL[row.severity] || row.severity}
           </span>
         </td>
-        <td><span className={`pill ${row.status}`}>{row.status}</span></td>
-        <td className="num" title={`First seen ${stamp(row.first_seen)}`}>
+        <td data-label="Status"><span className={`pill ${row.status}`}>{row.status}</span></td>
+        <td data-label="Seen" className="num" title={`First seen ${stamp(row.first_seen)}`}>
           {row.occurrences > 1 ? `${row.occurrences}×` : 'once'}
         </td>
-        <td className="dim" title={stamp(row.last_seen)}>{ago(row.last_seen)}</td>
-        <td>
+        <td data-label="Last true" className="dim" title={stamp(row.last_seen)}>{ago(row.last_seen)}</td>
+        <td data-label="Say about it">
           <span className="grid-acts">
             {where && <Link className="btn ghost tiny" href={where}>{IC.go}<span>Open</span></Link>}
             {row.status === 'open' && (

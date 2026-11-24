@@ -204,7 +204,7 @@ function Entry({ file, busy, saved, onDownload }: {
   return (
     <tbody className={`entry${shown ? ' open' : ''}`} data-export={file.id}>
       <tr className={`grid-row${shown ? ' open' : ''}`}>
-        <td>
+        <td data-label="File">
           <button type="button" className="case-id" aria-expanded={shown} onClick={() => setOpen(v => !v)}>
             <span className="grid-caret">{IC.chevron}</span>
             <span className="case-name">
@@ -213,12 +213,12 @@ function Entry({ file, busy, saved, onDownload }: {
             </span>
           </button>
         </td>
-        <td>
+        <td data-label="What it holds">
           <span className="entry-note" title={file.blurb}>{file.blurb}</span>
         </td>
-        <td className="num strong">{num(file.rows)}</td>
-        <td className="num dim" title={file.columns.join(', ')}>{file.columns.length}</td>
-        <td>
+        <td data-label="Rows now" className="num strong">{num(file.rows)}</td>
+        <td data-label="Columns" className="num dim" title={file.columns.join(', ')}>{file.columns.length}</td>
+        <td data-label="Take it">
           <span className="grid-acts">
             <button type="button" className="btn primary tiny" data-download={file.id} disabled={busy !== null} onClick={onDownload}>
               {busy === file.id ? IC.refresh : IC.download}<span>{busy === file.id ? 'Building…' : 'Download CSV'}</span>
