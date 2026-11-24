@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import (views_alerts, views_audit, views_coins, views_export, views_limits, views_overview,
+from . import (views_alerts, views_audit, views_bell, views_coins, views_export, views_limits, views_overview,
                views_people, views_promotions, views_review, views_safety, views_session, views_staff,
                views_welcome)
 
@@ -18,6 +18,10 @@ urlpatterns = [
     path('admin/session/recovery/', views_session.admin_recovery),
     path('admin/overview/', views_overview.admin_overview),
     path('admin/analytics/promotions/', views_overview.admin_promotion_analytics),
+    # Contract 6.11: the bell. Readable by any seat — which rows a seat is shown is
+    # decided per notice, by the permission the event was announced against.
+    path('admin/bell/', views_bell.bell_desk),
+    path('admin/bell/read/', views_bell.bell_read),
     path('admin/permissions/', views_staff.permission_catalog),
     path('admin/staff/', views_staff.staff_directory),
     path('admin/staff/grant/', views_staff.staff_grant),

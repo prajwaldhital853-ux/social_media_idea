@@ -33,6 +33,7 @@ export default function CoinRequestPage({ params }: { params: { id: string } }) 
   const [proof, setProof] = useState<ProofLink | null>(null);
   const [closed, setClosed] = useState(false);
   const [working, setWorking] = useState(false);
+  const [mail, setMail] = useState('');
   const timer = useRef<number | null>(null);
 
   const review = can('coins_review');
@@ -90,13 +91,17 @@ export default function CoinRequestPage({ params }: { params: { id: string } }) 
     setWorking(true);
     setError(null);
     try {
-      const out = await api<{ detail: string }>(`admin/coins/${params.id}/${which}/`, {
+      const out = await api<{ detail: string; mail?: string } & CoinDetail>(`admin/coins/${params.id}/${which}/`, {
         method: 'POST', body: { reason: which === 'approve' ? '' : reason.trim() },
       });
       setVerb(null);
       setReason('');
       setBanner({ kind: 'ok', text: out.detail });
-      await load();
+      // The decision answer already carries the settled row, so the screen is
+      // rewritten from it. Reloading here spent a second round trip to be told the
+      // same thing, and the seat watched the page blank itself for no reason.
+      setDetail(current => (current ? { ...current, request: out.request, asks: out.asks } : current));
+      setMail(out.mail || '');
     } catch (err) {
       if (!noteGate(err)) setError((err as Error).message);
     } finally {
@@ -123,6 +128,12 @@ export default function CoinRequestPage({ params }: { params: { id: string } }) 
       )}
     >
       <Banner banner={banner} />
+
+      {mail && (
+        <p className="note row" data-mail>
+          <span>{mail}</span>
+        </p>
+      )}
 
       {!detail && !error && (
         <div className="skeleton-stack">

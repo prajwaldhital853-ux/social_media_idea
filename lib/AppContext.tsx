@@ -112,7 +112,7 @@ interface AppContextType {
   signupAccount: (payload: SignupPayload) => Promise<AuthResult>;
   verifyCode: (challenge: string | number, code: string) => Promise<AuthResult>;
   resendCode: (challenge: string | number) => Promise<CodeResult>;
-  googleSignIn: (token: { id_token?: string; demo?: { email: string; name: string; sub: string } }) => Promise<AuthResult>;
+  googleSignIn: (token: { id_token: string }) => Promise<AuthResult>;
   /** Step one of a forgotten password: mail a code to the address. */
   requestPasswordReset: (email: string) => Promise<CodeResult>;
   /** Step two: the code alone, which buys the ticket the password is spent on. */
@@ -121,7 +121,7 @@ interface AppContextType {
   confirmPasswordReset: (challenge: string | number, password: string, ticket: string, email?: string) => Promise<AuthResult>;
   updateProfile: (patch: Record<string, any>) => Promise<void>;
   /** Step one: the typed word goes to the server, which mails the code. */
-  requestAccountDeletion: (confirm: string) => Promise<{ challenge?: number; dev_code?: string; detail?: string }>;
+  requestAccountDeletion: (confirm: string) => Promise<{ challenge?: number; detail?: string }>;
   /** Step two: the code deletes the account, its rows and its pictures. */
   confirmAccountDeletion: (challenge: number, code: string) => Promise<void>;
   loadPerson: (username: string) => Promise<PersonRead | null>;
@@ -171,7 +171,6 @@ export interface AuthResult {
   user?: User;
   /** An email code must be confirmed before the session is usable. */
   challenge?: string;
-  devCode?: string;
   /** Seconds the challenge stays valid, so the UI can count it down. */
   expiresIn?: number;
   emailHint?: string;
@@ -203,7 +202,6 @@ export interface AuthResult {
 
 export interface CodeResult {
   challenge?: string;
-  devCode?: string;
   expiresIn?: number;
   detail?: string;
   error?: string;
@@ -553,7 +551,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
         errors: err.fieldErrors,
         requestId: err.requestId || undefined,
         challenge: err.data?.challenge ? idOf(err.data.challenge) : undefined,
-        devCode: err.data?.dev_code,
         expiresIn: err.data?.expires_in ? Number(err.data.expires_in) : undefined,
         emailHint: err.data?.email_hint,
         newDevice: !!err.data?.new_device,
@@ -582,7 +579,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const challenge = data?.challenge ? idOf(data.challenge) : undefined;
     const expiresIn = data?.expires_in ? Number(data.expires_in) : undefined;
     if (!data?.user) {
-      return { ok: true, status: 200, challenge, expiresIn, devCode: data?.dev_code, emailHint: data?.email_hint, newDevice: !!data?.new_device };
+      return { ok: true, status: 200, challenge, expiresIn, emailHint: data?.email_hint, newDevice: !!data?.new_device };
     }
     const user = await pullSession();
     setReady(true);
@@ -592,7 +589,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       user: user || undefined,
       challenge,
       expiresIn,
-      devCode: data.dev_code,
       emailHint: data.email_hint,
       newDevice: !!data.new_device,
       needsVerify: !!challenge,
@@ -610,7 +606,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
     return {
       challenge: data?.challenge ? idOf(data.challenge) : undefined,
-      devCode: data?.dev_code,
       expiresIn: data?.expires_in ? Number(data.expires_in) : undefined,
       detail: data?.detail,
       resendIn: data?.resend_in === undefined ? undefined : Number(data.resend_in),
@@ -651,7 +646,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const googleSignIn = async (token: { id_token?: string; demo?: { email: string; name: string; sub: string } }): Promise<AuthResult> => {
+  const googleSignIn = async (token: { id_token: string }): Promise<AuthResult> => {
     try {
       const data = await api.post('/api/auth/google/', { ...token, device_id: api.deviceId() });
       if (data?.needs_signup) {
@@ -746,8 +741,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const requestAccountDeletion = async (confirm: string) => {
-    if (!API_ENABLED) return { detail: 'Demo accounts are kept in this browser only.' };
-    return api.post<{ challenge?: number; dev_code?: string; detail?: string }>('/api/auth/delete/request/', { confirm });
+    if (!API_ENABLED) return { detail: 'Local accounts are kept in this browser only.' };
+    return api.post<{ challenge?: number; detail?: string }>('/api/auth/delete/request/', { confirm });
   };
 
   const confirmAccountDeletion = async (challenge: number, code: string) => {

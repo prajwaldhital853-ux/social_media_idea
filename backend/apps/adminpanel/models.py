@@ -431,3 +431,37 @@ class AdminPulse(models.Model):
 
     def __str__(self):
         return f'{self.key} {self.state} at {self.stamped_at:%Y-%m-%d %H:%M}'
+
+
+class StaffNotice(models.Model):
+    """One event, told to one seat.
+
+    Not the same animal as `AdminAlert`: an alert is a condition that stays true
+    until it stops being true, and it dedupes on `key`. This is a happening — a
+    report arrived, a payment proof landed — and it is only worth keeping while
+    somebody has not seen it yet, so `bell.KEEP` deletes what a seat walks past.
+    """
+
+    recipient = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='staff_notices',
+    )
+    kind = models.CharField(max_length=32)
+    text = models.CharField(max_length=200)
+    # The screen that answers the event, query included, and the bare path the
+    # drawer counts by. Split because the badge on "Report queue" has to survive
+    # the seat filtering that queue down to `?status=open`.
+    href = models.CharField(max_length=160, blank=True)
+    route = models.CharField(max_length=80, blank=True)
+    permission = models.CharField(max_length=40, blank=True)
+    read_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['recipient', '-created_at'], name='bell_recipient_newest'),
+            models.Index(fields=['recipient'], condition=models.Q(read_at__isnull=True), name='bell_unread'),
+        ]
+
+    def __str__(self):
+        return f'{self.kind} -> {self.recipient.username}'

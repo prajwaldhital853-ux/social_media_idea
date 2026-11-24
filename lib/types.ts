@@ -283,8 +283,6 @@ export interface FeatureFlags {
   marketplace: boolean;
   promotion: boolean;
   googleLogin: boolean;
-  /** A DEBUG server offers an explicitly labelled demo Google identity. */
-  googleDemo: boolean;
   facebookLogin: boolean;
   appleLogin: boolean;
 }
@@ -301,7 +299,6 @@ export interface Settings {
   categories: string[];
   /** Set when the server has a real Google OAuth app; the SPA then loads GIS. */
   googleClientId?: string;
-  demoGoogle?: { email: string; name: string; sub: string } | null;
   /**
    * The wording the console's desk writes for the first load: the sentence on
    * the card, the line under it, and the contacts below that. Empty until a seat

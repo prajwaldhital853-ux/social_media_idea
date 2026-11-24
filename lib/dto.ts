@@ -359,7 +359,6 @@ export function mapSettings(config: any): Settings {
       marketplace: config.features?.marketplace !== false,
       promotion: config.features?.promotion !== false,
       googleLogin: !!config.features?.googleLogin,
-      googleDemo: !!config.features?.googleDemo,
       facebookLogin: !!config.features?.facebookLogin,
       appleLogin: !!config.features?.appleLogin,
     },
@@ -368,7 +367,6 @@ export function mapSettings(config: any): Settings {
     })),
     categories: config.categories || [],
     googleClientId: config.googleClientId || undefined,
-    demoGoogle: config.demoGoogle || null,
     wording: config.wording && Object.keys(config.wording).length
       ? {
         message: config.wording.message || '',

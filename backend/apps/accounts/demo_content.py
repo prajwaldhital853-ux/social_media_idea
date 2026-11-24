@@ -6,8 +6,8 @@ actually write, and conversations with a beginning. Numbers are deterministic
 (the seed command drives one ``random.Random``), so two runs give the same demo.
 """
 
-# People the demo is built around. These four keep their accounts (and their
-# known password) because the QA suites sign in as them.
+# People the demo is built around. These four keep their accounts across content
+# rebuilds; all seeded profiles are content-only and cannot sign in.
 CORE_PEOPLE = [
     # username, first, last, city, province, portrait, verified, private
     ('sita', 'Sita', 'Karki', 'Kathmandu', 'Bagmati', 'women/44', True, False),

@@ -18,13 +18,32 @@ EMAIL_COPY = {
 }
 
 
+# The bell holds twenty rows and no more, read or unread. A member who lets it pile
+# up for a month is not going to work through sixty pages to reach this week's, and
+# the tray is not an archive — the post, the thread and the follow list each still
+# say what happened where it happened.
+KEEP = 20
+
+
 def notify(recipient, actor, kind, text, target_type='', target_id='', notice=None):
     if recipient is None or (actor is not None and recipient.pk == actor.pk):
         return None
-    return Notification.objects.create(
+    row = Notification.objects.create(
         recipient=recipient, actor=actor, kind=kind, text=text[:240],
         target_type=target_type, target_id=str(target_id), notice=notice,
     )
+    _trim(recipient)
+    return row
+
+
+def _trim(recipient):
+    """Delete whatever the newest twenty pushed off the end."""
+    stale = list(
+        Notification.objects.filter(recipient=recipient)
+        .order_by('-created_at', '-pk').values_list('pk', flat=True)[KEEP:]
+    )
+    if stale:
+        Notification.objects.filter(pk__in=stale).delete()
 
 
 def notify_latest(recipient, actor, kind, text, target_type='', target_id=''):

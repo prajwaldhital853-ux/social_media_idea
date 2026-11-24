@@ -10,8 +10,6 @@ interface AuthCodeProps {
   hint?: string;
   /** Epoch ms when the challenge stops working. */
   expiresAt?: number;
-  /** Only present when the server runs in DEBUG and cannot send real email. */
-  devCode?: string;
   error?: string;
   busy?: boolean;
   submitLabel?: string;
@@ -28,7 +26,7 @@ const clock = (ms: number) => {
 };
 
 export default function AuthCode({
-  title, detail, hint, expiresAt, devCode, error, busy,
+  title, detail, hint, expiresAt, error, busy,
   submitLabel = 'Confirm', resendLabel = 'Resend code', backLabel = 'Back',
   onCode, onResend, onBack,
 }: AuthCodeProps) {
@@ -84,12 +82,6 @@ export default function AuthCode({
         }}
         onKeyDown={e => { if (e.key === 'Enter') submit(code); }}
       />
-
-      {devCode ? (
-        <button type="button" className="auth-code-dev" onClick={() => { setCode(devCode); void onCode(devCode); }}>
-          {t('devCode')} <b>{devCode}</b>
-        </button>
-      ) : null}
 
       {left > 0 ? <p className="auth-code-meta">{t('codeExpiresIn')} {clock(left)}</p> : <p className="auth-code-meta">{t('codeExpired')}</p>}
       {error ? <p className="signup-error" role="alert">{error}</p> : null}

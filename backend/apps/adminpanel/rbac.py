@@ -134,6 +134,8 @@ def check(request, keys):
     user = getattr(request, 'user', None)
     if user is None or not user.is_authenticated:
         return denial('sign_in_required', 'Sign in to reach the admin console.')
+    if user.seeded:
+        return denial('staff_disabled', 'This account cannot access the admin console.')
     # The roster row is asked before the is_staff flag, because switching a seat
     # off clears that flag too: "the console is for staff accounts" would be a
     # misleading answer to someone whose access was ended a minute ago.

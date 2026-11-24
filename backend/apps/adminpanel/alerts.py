@@ -106,10 +106,12 @@ def _raise(key, kind, title, detail, href, severity=AdminAlert.Severity.WARNING,
     now = timezone.now()
     row = AdminAlert.objects.filter(key=key).first()
     if row is None:
-        return AdminAlert.objects.create(
+        created = AdminAlert.objects.create(
             key=key, kind=kind, title=title[:160], detail=detail[:240], href=href,
             severity=severity, context=context or {},
         )
+        _ring(created)
+        return created
     row.occurrences += 1
     row.last_seen = now
     row.title = title[:160]
@@ -117,13 +119,28 @@ def _raise(key, kind, title, detail, href, severity=AdminAlert.Severity.WARNING,
     row.href = href
     row.severity = severity
     row.context = context or {}
-    if row.status == AdminAlert.Status.RESOLVED:
+    reopened = row.status == AdminAlert.Status.RESOLVED
+    if reopened:
         row.status = AdminAlert.Status.OPEN
         row.resolved_at = None
     row.save(update_fields=[
         'occurrences', 'last_seen', 'title', 'detail', 'href', 'severity', 'context', 'status', 'resolved_at',
     ])
+    if reopened:
+        _ring(row)
     return row
+
+
+def _ring(item):
+    """A condition nobody has been told about yet goes into the staff bell.
+
+    A re-stamp stays quiet: an alert that has been true all afternoon is already on
+    the screen, and a bell that rings once a minute for it gets muted by lunch.
+    """
+    from . import bell
+    if item.severity == AdminAlert.Severity.INFO:
+        return
+    bell.announce('alert', item.title, item.href or '/alerts', 'alerts')
 
 
 def _close(keys):

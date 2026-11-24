@@ -3,8 +3,9 @@
 import { ReactNode, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
-import { crumbsFor, navFor, requires } from '@/lib/nav';
+import { crumbsFor, drawerFor, navFor, requires } from '@/lib/nav';
 import { IC } from '@/lib/icons';
+import { useBell } from '@/lib/bell';
 import { cameFrom, visit } from '@/lib/trail';
 import { useSession } from '@/lib/session';
 
@@ -13,15 +14,27 @@ import { useSession } from '@/lib/session';
 // every click, so the offset outlives the element that was scrolled.
 let navScroll = 0;
 
+function ago(minutes: number): string {
+  if (minutes < 1) return 'just now';
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
+}
+
 export default function ConsoleShell({
   title, subtitle, actions, children,
 }: { title: string; subtitle?: string; actions?: ReactNode; children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const { status, session, lapsed, error, verify, signOut, busy, can } = useSession();
+  const bell = useBell();
   const [jump, setJump] = useState('');
   const [back, setBack] = useState<{ href: string; label: string } | null>(null);
+  const [theme, setTheme] = useState('light');
+  const [full, setFull] = useState(false);
   const navRef = useRef<HTMLElement>(null);
+  const trayRef = useRef<HTMLDivElement>(null);
 
   // The trail is stamped before anything below it reads, so a detail page opened
   // from a list can name that list on the same paint.
@@ -42,6 +55,59 @@ export default function ConsoleShell({
   useEffect(() => {
     if (status === 'out') router.replace('/login');
   }, [status, router]);
+
+  // The drawer row this screen sits under — a user's page is still the directory.
+  const here = drawerFor(pathname);
+
+  useEffect(() => {
+    setTheme(document.documentElement.dataset.theme || 'light');
+    const tracked = () => setFull(!!document.fullscreenElement);
+    document.addEventListener('fullscreenchange', tracked);
+    return () => document.removeEventListener('fullscreenchange', tracked);
+  }, []);
+
+  // Walking into the queue is the same answer as opening the bell about it: a seat
+  // who is already reading the report pile has read what was waiting there, and a
+  // badge left standing over their shoulder only teaches them to ignore badges.
+  useEffect(() => {
+    if (status !== 'in' || !here || !(bell.routes[here] > 0)) return;
+    bell.readRoute(here);
+  }, [status, here, bell.routes, bell]);
+
+  useEffect(() => {
+    if (!bell.open) return undefined;
+    const away = (event: MouseEvent) => {
+      if (trayRef.current && !trayRef.current.contains(event.target as Node)) bell.setOpen(false);
+    };
+    const key = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') bell.setOpen(false);
+    };
+    document.addEventListener('mousedown', away);
+    document.addEventListener('keydown', key);
+    return () => {
+      document.removeEventListener('mousedown', away);
+      document.removeEventListener('keydown', key);
+    };
+  }, [bell]);
+
+  const flipTheme = () => {
+    const next = theme === 'dark' ? 'light' : 'dark';
+    setTheme(next);
+    document.documentElement.dataset.theme = next;
+    // A console open at two in the morning should stay the colour it was left.
+    try { localStorage.setItem('exposing-admin-theme', next); } catch { /* private window: this visit only */ }
+  };
+
+  const flipFull = () => {
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => undefined);
+    else document.documentElement.requestFullscreen().catch(() => undefined);
+  };
+
+  const openTray = (href: string, id: number) => {
+    bell.read(id);
+    bell.setOpen(false);
+    router.push(href);
+  };
 
   if (status === 'loading') {
     return (
@@ -93,9 +159,14 @@ export default function ConsoleShell({
               <span className="side-group-label">{group.label}</span>
               {group.items.map(item => (
                 <Link key={item.href} href={item.href}
-                      className={`side-item ${pathname === item.href ? 'active' : ''}`}>
+                      className={`side-item ${here === item.href ? 'active' : ''}`}>
                   <span className="side-item-icon">{IC[item.icon]}</span>
                   <span className="side-item-label">{item.label}</span>
+                  {bell.routes[item.href] > 0 && (
+                    <span className="side-item-count" aria-label={`${bell.routes[item.href]} waiting`}>
+                      {bell.routes[item.href] > 9 ? '9+' : bell.routes[item.href]}
+                    </span>
+                  )}
                 </Link>
               ))}
             </div>
@@ -136,6 +207,56 @@ export default function ConsoleShell({
             />
           </label>
           <span className="bar-spacer" />
+          <div className="bar-tools">
+            <button type="button" className="icon-btn" onClick={flipTheme}
+                    aria-label={theme === 'dark' ? 'Switch to light' : 'Switch to dark'}
+                    title={theme === 'dark' ? 'Switch to light' : 'Switch to dark'}>
+              {theme === 'dark' ? IC.sun : IC.moon}
+            </button>
+            <button type="button" className="icon-btn" onClick={flipFull}
+                    aria-label={full ? 'Leave full screen' : 'Show the console full screen'}
+                    title={full ? 'Leave full screen (Esc in most browsers)' : 'Full screen'}>
+              {full ? IC.collapse : IC.expand}
+            </button>
+            <div className="bell" ref={trayRef}>
+              <button type="button"
+                      className={`icon-btn ${bell.total > 0 ? 'armed' : ''}`}
+                      aria-label={bell.total > 0 ? `${bell.total} unread notices` : 'No unread notices'}
+                      aria-expanded={bell.open}
+                      onClick={() => { bell.setOpen(!bell.open); if (!bell.open) bell.refresh(); }}>
+                {IC.bell}
+                {bell.total > 0 && (
+                  <span className="bell-count">{bell.total > 99 ? '99+' : bell.total}</span>
+                )}
+              </button>
+              {bell.open && (
+                <div className="bell-tray" role="dialog" aria-label="Notices for this seat">
+                  <div className="bell-tray-head">
+                    <b>What arrived</b>
+                    {bell.total > 0 && (
+                      <button type="button" className="link" onClick={() => bell.readAll()}>Mark all read</button>
+                    )}
+                  </div>
+                  {bell.items.length === 0 ? (
+                    <p className="bell-empty">Nothing is waiting. New reports, payment proofs and alerts land here
+                      as they arrive, and only for the screens your seat can open.</p>
+                  ) : (
+                    <ul className="bell-list">
+                      {bell.items.map(item => (
+                        <li key={item.id}>
+                          <button type="button" className={`bell-item kind-${item.kind}`}
+                                  onClick={() => openTray(item.href, item.id)}>
+                            <span className="bell-item-text">{item.text}</span>
+                            <span className="bell-item-ago">{ago(item.age_minutes)}</span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
           <span className="window-meter" title="This seat ends when you sign out or close the tab, not on a clock">
             {IC.lock}<span>Signed in</span>
           </span>
