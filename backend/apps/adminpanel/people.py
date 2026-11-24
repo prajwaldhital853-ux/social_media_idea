@@ -21,7 +21,7 @@ writes to the same audit log the rest of the console reads.
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
-from django.conf import settings as django_settings
+from django.db import transaction
 from django.db.models import Count, F, Q
 from django.utils import timezone
 from django.utils.dateparse import parse_date, parse_datetime
@@ -30,11 +30,10 @@ from apps.accounts import safety
 from apps.accounts.models import RefreshSession, User
 from apps.comments.models import Comment
 from apps.common.api import person
-from apps.common.mail import send_off_request
+from apps.common.emails import queue_event_email
 from apps.marketplace.models import Listing
 from apps.moderation.models import AuditLog, Report
 from apps.notifications.services import notify
-from apps.notifications.tasks import send_activity_email
 from apps.posts.models import Post
 from apps.promotions.models import Promotion
 from apps.wallet.models import CoinRequest, Transaction, Wallet
@@ -382,6 +381,7 @@ def detail(user):
             'id': item.pk, 'target': f'{item.target_type}:{item.target_id}', 'text': item.text,
             'reason': item.reason, 'is_live': item.is_live, 'created_at': item.created_at,
             'actor': item.actor.username if item.actor else None, 'audience': item.audience,
+            'withdrawn_at': item.withdrawn_at,
         } for item in notices.order_by('-created_at')[:10]],
         'audit': [{
             'id': log.pk, 'action': log.action, 'actor': log.actor.username if log.actor else None,
@@ -442,35 +442,14 @@ def locked_out(user, now=None):
     return RefreshSession.objects.filter(user=user, revoked_at__isnull=True).update(revoked_at=now)
 
 
-def contact_lines():
-    """How the Client wants to be reached, from the platform settings."""
-    out = []
-    for key, label in (('contact_email', 'Email'), ('contact_phone', 'Phone'),
-                       ('contact_form', 'Support form')):
-        value = str(settings_store.get(key) or '').strip()
-        if value:
-            out.append(f'{label}: {value}')
-    return out
-
-
-def support_link():
-    """The link at the foot of an enforcement email — the Client's own form if set."""
-    return str(settings_store.get('contact_form') or '').strip() or django_settings.SITE_URL
-
-
 def enforcement_email(user, subject, body):
-    """The email a barred or warned account gets. None when there is no address on file."""
+    """The branded email a barred or warned account gets, with the Client's contact foot."""
     if not user.email:
         return None
-    lines = [body]
-    contact = contact_lines()
-    if contact:
-        lines.append('Questions or an appeal? ' + ' · '.join(contact))
-    # Off the request's clock, like every other mail in the platform: `.delay()`
-    # here is a synchronous SMTP conversation inside the view, and a provider that
-    # stops answering would otherwise answer the seat with a 500 instead of a
-    # warning that did arrive but was not emailed.
-    send_off_request(send_activity_email, user.email, subject, '\n\n'.join(lines), support_link())
+    queue_event_email(
+        user.email, subject, subject, body,
+        footnote='If you believe this action was taken in error, contact the Exposing team using the details below.',
+    )
     return {'to': user.email, 'subject': subject}
 
 
@@ -526,12 +505,11 @@ def suspend(user, caller, *, reason, days=None, until=None, permanent=False):
     user.suspend_reason = reason[:200]
     user.save(update_fields=['suspended_until', 'suspend_reason'])
     kicked = locked_out(user, now)
-    # Suspension ends the seat they are sitting in. The ban is the door: the
-    # address, the connection it last arrived on and every browser that account was
-    # ever trusted on are closed for as long as the suspension runs, so a
-    # suspension cannot be signed around with a new account or the Google button.
+    # Suspension ends the seat they are sitting in. The address and every browser
+    # that account was trusted on are closed for as long as the suspension runs.
+    # The public IP is deliberately not included: other people may share it.
     closed = safety.raise_bans(
-        user.email, end, 'admin', ip=user.last_ip,
+        user.email, end, 'admin',
         devices=[user.last_device, *list(user.trusted_devices.values_list('device_id', flat=True))],
     )
     notify(user, caller, 'warning',
@@ -552,7 +530,8 @@ def suspend(user, caller, *, reason, days=None, until=None, permanent=False):
         'suspension': suspension_of(user), 'emailed': emailed, 'sessions_revoked': kicked,
         'detail': (f'Suspended {"for good" if permanent else f"until {end:%d %b %Y}"}. '
                    f'{kicked} open session(s) cannot be renewed. '
-                   + (f'Sign-in, sign-up and Google are blocked on {", ".join(closed)}. ' if closed else '')
+                   + ('Sign-in, sign-up and Google are blocked for this account and its trusted browsers. '
+                      if closed else '')
                    + (f'An email went to {emailed["to"]}.' if emailed
                       else 'There is no email address on this account.')),
         'banned': closed,
@@ -629,7 +608,7 @@ def warn(user, caller, *, text, reason='', audience=PublicNotice.Audience.PRIVAT
 
 
 def clear_flags(user, caller, *, reason=''):
-    """The pile is gone: reports closed, lockout cleared, and nothing else touched.
+    """The pile is gone: reports closed, warnings withdrawn, lockout cleared.
 
     Content a moderator took down deliberately stays down — that is a decision,
     not a flag — and the answer says so, because an admin who expected the feed

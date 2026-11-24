@@ -1,5 +1,7 @@
 from decimal import Decimal
+from unittest import mock
 
+from django.core import mail
 from django.core.cache import cache
 from django.test import TestCase, TransactionTestCase
 
@@ -67,6 +69,19 @@ class WalletTests(TestCase):
         self.assertTrue(self.user.notifications.filter(kind='coins').exists() or self.user.notifications.exists())
         resp = staff.post(f'/api/wallet/requests/{req_id}/approve/')
         self.assertEqual(resp.status_code, 404)
+
+    def test_legacy_coin_approval_emails_one_receipt(self):
+        req = CoinRequest.objects.create(user=self.user, coins=250, amount=2500, reference='LEGACY-1')
+        staff = staff_client()
+        with mock.patch('apps.common.emails.send_off_request', side_effect=lambda task, *args: task(*args)):
+            first = staff.post(f'/api/wallet/requests/{req.pk}/approve/')
+            twice = staff.post(f'/api/wallet/requests/{req.pk}/approve/')
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(twice.status_code, 404)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, [self.user.email])
+        self.assertIn('250 coins', mail.outbox[0].body)
+        self.assertIn('LEGACY-1', mail.outbox[0].body)
 
     def test_coin_request_reject(self):
         req = CoinRequest.objects.create(user=self.user, coins=100, amount=100)

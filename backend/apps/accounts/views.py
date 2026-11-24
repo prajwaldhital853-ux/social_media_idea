@@ -13,6 +13,7 @@ from rest_framework.decorators import api_view, permission_classes, authenticati
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
+from apps.common.emails import queue_event_email
 from apps.common.ratelimit import client_ip, enforce
 from apps.profiles.models import Profile
 
@@ -188,10 +189,8 @@ def signup(request):
     except DjangoValidationError:
         message = 'Enter a valid email address.'
         return Response({'detail': message, 'email': [message]}, status=400)
-    # A new account is the widest door of the three, so a connection or a browser
-    # that was closed for guessing passwords cannot simply start over. The address
-    # is read too: the lock that covers it says so here instead of pretending the
-    # email is merely taken.
+    # Signup reads the same account, device and deliberate manual-IP bans as the
+    # other doors. A password cooloff never closes the shared connection.
     banned = safety.blocking(request, email)
     if banned is not None:
         return safety.refuse(banned)
@@ -243,6 +242,15 @@ def signup(request):
         message = 'An account with that email already exists.'
         return Response({'detail': message, 'email': [message]}, status=400)
     passwords.remember(user)
+    queue_event_email(
+        user.email, 'Welcome to Exposing', f'Welcome to Exposing, {name or username}',
+        ('Your Exposing account is ready. You can sign in with Google and start sharing your work.'
+         if google else
+         'Your Exposing account has been created. Use the code in your verification email to finish confirming this address.'),
+        details=[('Username', f'@{username}'), ('Email', user.email)],
+        cta_label='Open Exposing', cta_path='/login',
+        footnote=None if google else 'Your account stays signed out until you confirm the verification code.',
+    )
     if google:
         _trust_device(user, device_id)
         resp = Response({'user': {'id': user.pk, 'username': user.username, 'email': user.email}},
@@ -260,9 +268,9 @@ def signup(request):
 def login(request):
     ip = client_ip(request)
     # This counter only refuses a flood from one address; the credential defence
-    # is the three-try lock below and the per-account cap after it. At five per
-    # minute a household behind one router, or anyone who mistypes twice and
-    # reloads, gets refused before the lock has anything to say.
+    # is the three-try account lock below. At ten per minute a household behind
+    # one router gets a brief cooldown without one person's password lock
+    # closing the connection for everyone else.
     enforce(f'login-ip:{ip}', 10, 60)
     # Email and a password, nothing else. A handle is public, other members can
     # read it off a profile, and it is changeable — accepting it here meant two
@@ -305,9 +313,8 @@ def login(request):
     if not user.check_password(password):
         user.failed_attempts += 1
         if user.failed_attempts >= LOCK_THRESHOLD:
-            # The cooloff itself is only worth anything if the doors beside it shut
-            # at the same time: the address, this connection and this browser are
-            # banned for exactly as long as the account stays locked.
+            # The cooloff closes this account and this browser, never the public
+            # address shared by a household or mobile carrier.
             minutes, until = safety.trip(request, user)
             user.save(update_fields=['failed_attempts'])
             return Response({
@@ -318,9 +325,8 @@ def login(request):
         return Response({
             'detail': 'Wrong password.', 'attempts_left': LOCK_THRESHOLD - user.failed_attempts,
         }, status=401)
-    # The password is right, so the cooloff this address caused stops holding its
-    # side doors shut: a household must not lose the honest member's sign-in to
-    # somebody else's guessing. A staff ban is not lifted by a password.
+    # The password is right, so this account's cooloff and browser ban lift.
+    # A deliberate staff or manual IP ban is not lifted by a password.
     safety.lift(user.email, reasons=['lock'])
     banned = safety.blocking(request, email)
     if banned is not None:
@@ -390,9 +396,8 @@ def _verify_otp(request, force_purpose=None):
         user.failed_attempts = 0
         user.locked_until = None
         user.save(update_fields=['failed_attempts', 'locked_until'])
-        # The code went to the address, which is the proof that the person on the
-        # other side owns it — so the connection and the browser that trip closed
-        # open again with it. Staff bans survive an unlock.
+        # The code went to the address, which proves who owns the account — so its
+        # password cooloff and browser ban open again. Staff bans survive an unlock.
         safety.lift(user.email, reasons=['lock'])
         return Response({'detail': 'Account unlocked. Sign in with your password.'})
     if otp.purpose == 'verify':

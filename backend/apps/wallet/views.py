@@ -1,9 +1,11 @@
+from django.db import transaction
 from django.utils import timezone
 from rest_framework import serializers, status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAdminUser, IsAuthenticated
 from rest_framework.response import Response
 
+from apps.common.emails import queue_coin_credit_email
 from apps.common.pagination import KeysetPagination
 from apps.notifications.services import notify
 
@@ -62,19 +64,28 @@ def coin_request_list(request):
 @api_view(['POST'])
 @permission_classes([IsAdminUser])
 def coin_request_review(request, pk, action):
-    obj = CoinRequest.objects.filter(pk=pk, status=CoinRequest.Status.PENDING).select_related('user').first()
-    if not obj:
-        return Response({'detail': 'No pending request with that id.'}, status=404)
-    if action == 'approve':
-        wallet, _ = Wallet.objects.get_or_create(user=obj.user)
-        apply(wallet.pk, Transaction.Kind.CREDIT, obj.coins, f'Coin purchase {obj.pk} approved')
-        obj.status = CoinRequest.Status.APPROVED
-        notify(obj.user, request.user, 'coins', f'Your purchase of {obj.coins} coins was approved.', 'wallet', wallet.pk)
-    elif action == 'reject':
-        obj.status = CoinRequest.Status.REJECTED
-        notify(obj.user, request.user, 'coins', 'Your coin purchase was rejected.', 'wallet', obj.pk)
-    else:
+    if action not in ('approve', 'reject'):
         return Response({'detail': 'Unknown action.'}, status=400)
-    obj.reviewed_at = timezone.now()
-    obj.save(update_fields=['status', 'reviewed_at'])
+    with transaction.atomic():
+        obj = (CoinRequest.objects.select_for_update()
+               .filter(pk=pk, status=CoinRequest.Status.PENDING).select_related('user').first())
+        if not obj:
+            return Response({'detail': 'No pending request with that id.'}, status=404)
+        if action == 'approve':
+            wallet, _ = Wallet.objects.get_or_create(user=obj.user)
+            apply(wallet.pk, Transaction.Kind.CREDIT, obj.coins, f'Coin purchase {obj.pk} approved')
+            wallet.refresh_from_db()
+            obj.status = CoinRequest.Status.APPROVED
+        else:
+            obj.status = CoinRequest.Status.REJECTED
+        obj.reviewed_at = timezone.now()
+        obj.save(update_fields=['status', 'reviewed_at'])
+    if action == 'approve':
+        notify(obj.user, request.user, 'coins', f'Your purchase of {obj.coins} coins was approved.', 'wallet', wallet.pk)
+        queue_coin_credit_email(
+            obj.user, coins=obj.coins, amount=obj.amount, balance=wallet.balance,
+            request_id=obj.pk, reference=obj.reference,
+        )
+    else:
+        notify(obj.user, request.user, 'coins', 'Your coin purchase was rejected.', 'wallet', obj.pk)
     return Response(CoinRequestSerializer(obj).data)

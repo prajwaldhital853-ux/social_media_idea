@@ -181,7 +181,7 @@ def review_case(request):
     terms = policy.words()
     haystack = f"{(content or {}).get('text') or ''} {(content or {}).get('title') or ''}"
     decided = AuditLog.objects.filter(
-        target=f'{kind}:{pk}', action__in=set(review.AUDIT.values()),
+        target=f'{kind}:{pk}', action__in=set(review.AUDIT.values()) | {'attach_notice', 'withdraw_notice'},
     ).select_related('actor').order_by('-created_at')[:20]
     return Response({
         'target': f'{kind}:{pk}',
@@ -205,7 +205,7 @@ def review_case(request):
         } for report in reports],
         'notices': [review.notice_row(notice) for notice in PublicNotice.objects.filter(
             target_type=kind, target_id=str(pk),
-        ).select_related('about', 'actor').order_by('-created_at')[:10]],
+        ).select_related('about', 'actor').order_by('-created_at')],
         'history': [{
             'id': entry.pk,
             'action': entry.action,
@@ -580,7 +580,7 @@ def notice_create(request):
     if PublicNotice.objects.filter(target_type=kind, target_id=str(pk), is_live=True, text=text).exists():
         return Response({'detail': 'That sentence is already standing on this content.'}, status=400)
     try:
-        notice = review.attach(kind, str(pk), request.user, reason, text, audience)
+        notice = review.attach(kind, str(pk), request.user, reason, text, audience, email=True)
     except ValueError as err:
         return Response({'detail': str(err)}, status=404)
     record(request.user, 'attach_notice', f'{kind}:{pk}', f'{reason} — {text[:120]}')
@@ -605,12 +605,10 @@ def notice_withdraw(request, pk):
     notice = PublicNotice.objects.filter(pk=pk).first()
     if notice is None:
         return Response({'detail': 'No such notice.'}, status=404)
-    if not notice.is_live:
-        return Response({'detail': 'That notice was already withdrawn.'}, status=400)
-    notice.is_live = False
-    notice.withdrawn_at = timezone.now()
-    notice.save(update_fields=['is_live', 'withdrawn_at'])
-    record(request.user, 'withdraw_notice', f'{notice.target_type}:{notice.target_id}', notice.text[:120])
+    try:
+        review.withdraw(notice, request.user)
+    except ValueError as err:
+        return Response({'detail': str(err)}, status=400)
     return Response(review.notice_row(notice))
 
 

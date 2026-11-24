@@ -23,9 +23,8 @@ from apps.accounts.auth import REFRESH_TTL, clear_auth_cookies, hash_code, set_a
 from apps.accounts.models import EmailOTP, RefreshSession, User
 from apps.accounts import passwords, safety
 from apps.accounts.tasks import deliver_otp_email
-from apps.common.mail import send_off_request
+from apps.common.emails import queue_event_email
 from apps.common.ratelimit import client_ip, enforce
-from apps.notifications.tasks import send_activity_email
 
 from . import rbac, totp
 from .journal import record
@@ -534,11 +533,11 @@ def admin_recovery(request):
     record(user, 'staff_password_reset', user.email, f'by emailed code; {kicked} session(s) closed')
     # Whoever held a session here is signed out, and the address is told about it:
     # a reset nobody announces is how an account change goes unnoticed for a week.
-    send_off_request(
-        send_activity_email, user.email, 'Your Exposing staff password changed',
+    queue_event_email(
+        user.email, 'Your Exposing staff password changed', 'Your staff password changed',
         f'The password on the staff seat @{user.username} was reset with an emailed code. '
         f'{kicked} signed-in session(s) were closed. If this was not you, a Superadmin must revoke '
-        'the seat before the next sign-in.', 'https://exposing.app/admin/',
+        'the seat before the next sign-in.',
     )
     response = Response({
         'detail': 'Password changed. Sign in with it and your authenticator code.',

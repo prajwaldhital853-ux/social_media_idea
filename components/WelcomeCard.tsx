@@ -7,25 +7,25 @@ import { useApp } from '@/lib/AppContext';
 const SEEN = 'exposing-welcomed';
 
 /**
- * The wording the console's desk writes, shown the first time this browser opens
- * the site — before anybody has an account, which is why it comes in through the
- * public config rather than the session.
+ * The wording the console's desk writes, shown the first time this browser opens the site
+ * *signed in* — it is a welcome to the account, so the signin and signup screens stay clean
+ * and the card only comes up once somebody is actually in.
  *
  * Nothing on the desk means no card: an empty box is not a welcome.
  */
 export default function WelcomeCard() {
-  const { db, ready } = useApp();
+  const { db, me, ready } = useApp();
   const [open, setOpen] = useState(false);
   const wording = db.settings.wording;
 
   useEffect(() => {
-    if (!ready) return;
+    if (!ready || !me) return;
     if (!((wording?.message || '').trim() || (wording?.tagline || '').trim())) return;
     try {
       if (localStorage.getItem(SEEN)) return;
     } catch { /* a blocked store only means the card is shown again */ }
     setOpen(true);
-  }, [ready, wording]);
+  }, [ready, me, wording]);
 
   const close = () => {
     setOpen(false);

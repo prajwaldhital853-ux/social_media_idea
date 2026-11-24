@@ -18,6 +18,7 @@ the algorithm desk.
 from datetime import timedelta
 from decimal import Decimal
 
+from django.core import mail
 from django.utils import timezone
 from rest_framework.test import APIClient
 
@@ -193,6 +194,22 @@ class MoneyTests(PromoTestCase):
         self.campaign.refresh_from_db()
         self.assertEqual(self.campaign.status, Promotion.Status.ACTIVE)
         self.assertEqual(PromoReview.objects.filter(action='approve').count(), 1)
+        self.assertEqual(len(mail.outbox), 1)
+        approved = mail.outbox[0]
+        self.assertEqual(approved.to, [self.author.email])
+        self.assertIn('promotion', approved.subject.lower())
+        self.assertIn('approved', approved.body.lower())
+        self.assertIn(str(self.campaign.pk), approved.body)
+        self.assertIn('#E40104', approved.alternatives[0].content)
+
+    def test_other_campaign_decisions_do_not_send_an_approval_email(self):
+        self.assertEqual(self.decide(self.campaign, 'resume').status_code, 400)
+        self.assertEqual(self.decide(self.campaign, 'pause', reason='review pending').status_code, 200)
+        self.assertEqual(self.decide(self.campaign, 'resume').status_code, 200)
+        self.assertEqual(self.decide(self.campaign, 'reject', reason='not approved').status_code, 200)
+        another = self.running(target=self.another_post())
+        self.assertEqual(self.decide(another, 'stop', reason='policy issue', refund='credit').status_code, 200)
+        self.assertEqual(len(mail.outbox), 0)
 
     def test_a_refusal_needs_the_sentence_the_payer_is_sent(self):
         out = self.decide(self.campaign, 'reject', reason='  ')

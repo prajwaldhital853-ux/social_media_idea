@@ -18,7 +18,7 @@ from django.conf import settings
 from django.core import mail
 from django.utils import timezone
 
-from apps.accounts.models import RefreshSession, User
+from apps.accounts.models import AuthBan, RefreshSession, User
 from apps.common.testutils import auth_client, make_user
 from apps.moderation.models import AuditLog, Report
 from apps.notifications.models import Notification
@@ -200,6 +200,8 @@ class SuspendTests(ReviewTestCase):
         self.assertIn('support@exposing.app', letter.body)
         self.assertIn('+977-9812345678', letter.body)
         self.assertIn('next request', letter.body)
+        self.assertIn('#E40104', letter.alternatives[0].content)
+        self.assertIn('exposing-icon.png', letter.alternatives[0].content)
         self.assertEqual(out.data['emailed']['to'], 'ordinary@test.local')
 
         bell = Notification.objects.filter(recipient=self.member, kind='warning').first()
@@ -210,6 +212,17 @@ class SuspendTests(ReviewTestCase):
         self.assertEqual(entry.target, 'ordinary')
         self.assertEqual(entry.actor.username, 'desk_admin')
         self.assertIn('selling counterfeits', entry.detail)
+
+    def test_suspension_does_not_ban_the_accounts_shared_public_ip(self):
+        shared_ip = '192.0.2.77'
+        User.objects.filter(pk=self.member.pk).update(last_ip=shared_ip, last_device='dev-ordinary')
+        out = self.admin_seat.post(
+            f'{PEOPLE_URL}ordinary/suspend/', {'days': 3, 'reason': 'policy violation'}, format='json',
+        )
+        self.assertEqual(out.status_code, 200, out.data)
+        self.assertFalse(AuthBan.objects.filter(scope='ip', value=shared_ip).exists())
+        self.assertTrue(AuthBan.objects.filter(scope='email', value=self.member.email, reason='admin').exists())
+        self.assertTrue(AuthBan.objects.filter(scope='device', value='dev-ordinary', reason='admin').exists())
 
     def test_an_end_date_the_seat_picked_is_the_end_that_bars_them(self):
         soon = self.admin_seat.post(
@@ -346,6 +359,7 @@ class WarnTests(ReviewTestCase):
         self.assertEqual(len(mail.outbox), 1)
         self.assertIn('Repeated harassment reports', mail.outbox[0].body)
         self.assertIn('support@exposing.app', mail.outbox[0].body)
+        self.assertIn('#E40104', mail.outbox[0].alternatives[0].content)
 
         entry = AuditLog.objects.filter(action='warn_user').first()
         self.assertEqual(entry.target, 'warned_person')

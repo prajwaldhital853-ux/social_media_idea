@@ -12,8 +12,8 @@ class User(AbstractUser):
     locked_until = models.DateTimeField(null=True, blank=True)
     suspended_until = models.DateTimeField(null=True, blank=True)
     suspend_reason = models.CharField(max_length=200, blank=True)
-    # Where this account last came in from. A staff ban needs something beyond the
-    # row to close, and these are the only two handles a login leaves behind.
+    # Where this account last came in from. The device can be banned with the
+    # account; the IP is kept for staff visibility and deliberate network bans only.
     last_ip = models.CharField(max_length=60, blank=True)
     last_device = models.CharField(max_length=80, blank=True)
     # Stamped by seed_demo on every account it owns. The purge in that command may
@@ -109,8 +109,9 @@ class AuthBan(models.Model):
     The lockout used to live only on the User row, so three wrong passwords closed
     one door and left the others open: the same person signed up again, or took the
     Google door on the very address that had just locked — which then cleared its own
-    counter. A trip now writes a row for the address, the connection and the browser,
-    and every way in reads them before it looks at a credential.
+    counter. A password trip writes rows for the address and browser, and every way
+    in reads them before it looks at a credential. IP rows are for deliberate staff
+    bans, never automatic password lockouts on a shared connection.
     """
 
     SCOPES = [('email', 'Email address'), ('ip', 'Connection'), ('device', 'Device')]
@@ -118,8 +119,8 @@ class AuthBan(models.Model):
 
     scope = models.CharField(max_length=8, choices=SCOPES)
     value = models.CharField(max_length=190)
-    # The address this ban was raised for, so lifting one account's lock does not
-    # reopen a connection that somebody else's guesswork also closed.
+    # The account responsible for this ban, so lifting its password lock does not
+    # lift a separate staff decision covering the same browser.
     identity = models.CharField(max_length=190, blank=True)
     reason = models.CharField(max_length=8, choices=REASONS, default='lock')
     until = models.DateTimeField()

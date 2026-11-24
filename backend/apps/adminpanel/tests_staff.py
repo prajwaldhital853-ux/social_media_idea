@@ -1,6 +1,7 @@
 """Contract 6.1 RBAC: three roles, explicit grants, and nobody edits their own seat."""
 
 from datetime import timedelta
+from unittest import mock
 
 from django.core.cache import cache
 from django.test import TestCase
@@ -29,6 +30,12 @@ class RbacTestCase(TestCase):
         self.admin = make_user('desk_admin', password=PASSWORD, is_staff=True)
         self.mod = make_user('night_mod', password=PASSWORD, is_staff=True)
         self.member = make_user('ordinary', password=PASSWORD)
+        # Event mail must be visible before an assertion runs; eager Celery otherwise
+        # hands it to a thread whose timing belongs to the test runner.
+        for path in ('apps.common.emails.send_off_request', 'apps.accounts.tasks.send_off_request'):
+            patcher = mock.patch(path, side_effect=lambda task, *args: task(*args))
+            patcher.start()
+            self.addCleanup(patcher.stop)
 
     def session(self, username):
         """A signed-in console tab for that person: password, then a live code."""

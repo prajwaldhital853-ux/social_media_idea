@@ -26,6 +26,7 @@ from django.db import transaction as db_atomic
 from django.utils import timezone
 
 from apps.common.config import PACKAGE_CATALOG
+from apps.common.emails import queue_event_email
 from apps.marketplace.models import Listing
 from apps.notifications.services import notify
 from apps.posts.models import Post
@@ -361,6 +362,23 @@ def decide(promo, actor, action, reason='', choice=''):
     record(actor, f'promo_{action}', f'promotion:{promo.pk}',
            f'{promo.target_type}:{promo.target_id} — {promo.budget} coins reserved — '
            + (reason if reason else f'{refund} coins back'))
+    if action == 'approve':
+        pack = package_by_id(promo.package)
+        queue_event_email(
+            promo.owner.email,
+            f'Exposing promotion {promo.pk} approved',
+            'Your promotion is approved',
+            'The Exposing team has approved your promotion. It is now active and eligible to run in the feed.',
+            details=[
+                ('Campaign', f'#{promo.pk}'),
+                ('Package', pack['name'] if pack else promo.package or 'Custom budget'),
+                ('Budget', f'{promo.budget} coins'),
+                ('Promoted content', promo.target_type.title()),
+                ('Status', 'Approved and running'),
+            ],
+            cta_label='View your promotion', cta_path='/wallet/promotions',
+            footnote='No additional coins were charged for this approval.',
+        )
     return 200, {
         'detail': _said(action, promo, refund),
         'campaign': row(promo, entry),

@@ -1,11 +1,12 @@
-"""The doors around an account: its address, its connection, its browser.
+"""The doors around an account: its address and its browser.
 
 A password lock used to be a note on one row, which meant three wrong passwords
 closed one door and left the rest standing open — sign up again, or take the
 Google door on the very address that had just locked, which cleared its own
-counter on the way in. A trip now writes a ban for the address, the connection
-and the browser, and every way in reads those rows before it looks at a
-credential.
+counter on the way in. A trip now writes a ban for the address and the browser,
+and every way in reads those rows before it looks at a credential. A connection
+ban is reserved for a deliberate staff decision: a household or mobile carrier
+shares one public address, so a password mistake must never close it for everyone.
 """
 
 from datetime import timedelta
@@ -33,8 +34,7 @@ COPY = {
              'closed for {time} — sign in with the right password once it lifts.',
     'device': 'This browser was used to guess passwords too many times. Signing up and '
               'signing in are closed here for {time}.',
-    'ip': 'Too many wrong passwords came from this connection. Signing up and signing in '
-          'are closed for {time}.',
+    'ip': 'This connection is blocked by staff until {time}.',
 }
 
 
@@ -58,7 +58,7 @@ def blocking(request, email=''):
     """The closed door this request is standing in front of, or None.
 
     The address is asked first: it is the answer the person earned, and a
-    connection ban that happens to cover them too would say the wrong thing.
+    deliberate connection ban that happens to cover them too would say the wrong thing.
     """
     now = timezone.now()
     wanted = [('email', email), ('ip', client_ip(request)), ('device', device_of(request))]
@@ -73,7 +73,7 @@ def blocking(request, email=''):
 
 def refuse(row):
     """423, in the shape the password lock already answers with, so one countdown
-    panel in the client serves a lock, a banned device and a banned address."""
+    panel serves an account lock, a device ban or a deliberate connection ban."""
     seconds = max(1, int((row.until - timezone.now()).total_seconds()))
     return Response({
         'detail': COPY[row.scope].format(time=_spoken(seconds)),
@@ -83,11 +83,11 @@ def refuse(row):
 
 
 def raise_bans(email, until, reason, *, ip='', devices=()):
-    """Close the address, the connection and each browser that reached this decision.
+    """Close the address, an explicitly supplied connection and each browser.
 
-    One row per scope, and never a shorter answer than the one already written: an
-    admin ban that runs to the end of time must not be trimmed by a cooloff. Returns
-    the scopes it closed, which is what the console has to say it did.
+    Password trips and account suspensions do not pass an IP. One row per scope,
+    and never a shorter answer than the one already written: an admin ban that runs
+    to the end of time must not be trimmed by a cooloff. Returns the scopes it closed.
     """
     identity = (email or '').strip().lower()
     now = timezone.now()
@@ -115,7 +115,7 @@ def raise_bans(email, until, reason, *, ip='', devices=()):
 
 
 def trip(request, user):
-    """Three wrong passwords: lock the account and every door beside it, together."""
+    """Three wrong passwords: lock this account and the browser that guessed."""
     now = timezone.now()
     strikes = AuthBan.objects.filter(
         scope='email', value=user.email, created_at__gte=now - STRIKE_WINDOW,
@@ -124,7 +124,7 @@ def trip(request, user):
     until = now + timedelta(minutes=minutes)
     user.locked_until = until
     user.save(update_fields=['locked_until'])
-    raise_bans(user.email, until, 'lock', ip=client_ip(request), devices=[device_of(request)])
+    raise_bans(user.email, until, 'lock', devices=[device_of(request)])
     return minutes, until
 
 
@@ -132,8 +132,8 @@ def lift(email, *, reasons=None):
     """Open again everything raised on behalf of this address.
 
     Bans are keyed by the identity that caused them, so the emailed unlock code
-    lifts that account's connection and browser too — and not the neighbour who
-    happened to share the address.
+    lifts that account and its browser bans. Deliberate connection bans remain a
+    separate staff decision and are not inferred from a password mistake.
     """
     identity = (email or '').strip().lower()
     if not identity:

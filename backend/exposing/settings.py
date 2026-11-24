@@ -259,6 +259,9 @@ EMAIL_USE_SSL = (os.environ.get('EMAIL_USE_SSL') or '').lower() in ('1', 'true',
 # the call — one key per deployment decides who the mail is from.
 DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL') or 'no-reply@exposing.app'
 SERVER_EMAIL = DEFAULT_FROM_EMAIL
+# A public absolute URL is required by mail clients. Blank uses the Exposing icon
+# on SITE_URL; deployments can point this at their own CDN without a code change.
+EMAIL_LOGO_URL = os.environ.get('EMAIL_LOGO_URL') or ''
 # Render's free web services refuse outbound SMTP on 25, 465 and 587, so on that
 # host EMAIL_BACKEND is apps.common.email.EmailBackend and this key is the mail
 # settings. Both exist because neither provider works on the other's network.

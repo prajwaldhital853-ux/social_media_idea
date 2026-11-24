@@ -1,7 +1,11 @@
 import itertools
 from datetime import timedelta
+from importlib import import_module
+from unittest import mock
 
+from django.apps import apps
 from django.contrib.auth.hashers import PBKDF2PasswordHasher
+from django.core import mail
 from django.core.cache import cache
 from django.db import connections
 from django.test import TestCase, TransactionTestCase, override_settings
@@ -9,7 +13,7 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 
 from apps.accounts.management.commands.seed_demo import Command
-from apps.accounts.models import DeviceTrust, EmailOTP, RefreshSession, User
+from apps.accounts.models import AuthBan, DeviceTrust, EmailOTP, RefreshSession, User
 from apps.common.testutils import auth_client, make_user
 
 _ips = itertools.count(1)
@@ -129,6 +133,42 @@ class SignupTests(TestCase):
 
 
 @override_settings(DEBUG=True)
+class WelcomeEmailTests(TestCase):
+    def setUp(self):
+        cache.clear()
+        self.client = APIClient()
+        self.client.credentials(HTTP_X_FORWARDED_FOR=fresh_ip())
+        for path in ('apps.common.emails.send_off_request', 'apps.accounts.tasks.send_off_request'):
+            patcher = mock.patch(path, side_effect=lambda task, *args: task(*args))
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
+    def welcome(self, email):
+        return [letter for letter in mail.outbox
+                if letter.to == [email] and letter.subject == 'Welcome to Exposing']
+
+    def test_email_signup_sends_one_branded_welcome(self):
+        resp = self.client.post('/api/auth/signup/', signup_payload('welcomeme'), format='json')
+        self.assertEqual(resp.status_code, 201, resp.data)
+        letters = self.welcome('welcomeme@test.local')
+        self.assertEqual(len(letters), 1)
+        self.assertIn('@welcomeme', letters[0].body)
+        self.assertIn('confirming', letters[0].body.lower())
+        html = letters[0].alternatives[0].content
+        self.assertIn('#E40104', html)
+        self.assertIn('exposing-icon.png', html)
+
+    def test_google_signup_sends_one_branded_welcome(self):
+        resp = self.client.post('/api/auth/signup/', signup_payload(
+            'googlewelcome', google={'sub': 'google-welcome-1'}, password='',
+        ), format='json')
+        self.assertEqual(resp.status_code, 201, resp.data)
+        letters = self.welcome('googlewelcome@test.local')
+        self.assertEqual(len(letters), 1)
+        self.assertIn('Google', letters[0].body)
+
+
+@override_settings(DEBUG=True)
 class LoginLockoutTests(TestCase):
     def setUp(self):
         cache.clear()
@@ -226,6 +266,53 @@ class LoginLockoutTests(TestCase):
         self.user.refresh_from_db()
         self.assertTrue(self.user.email_verified)
 
+    def test_password_lock_does_not_ban_other_accounts_on_the_same_ip(self):
+        ip = fresh_ip()
+        self.client.credentials(HTTP_X_FORWARDED_FOR=ip)
+        for _ in range(3):
+            self.login('wrong-password')
+        self.assertFalse(AuthBan.objects.filter(scope='ip', value=ip).exists())
+        self.assertTrue(AuthBan.objects.filter(scope='email', value=self.user.email, reason='lock').exists())
+        self.assertTrue(AuthBan.objects.filter(scope='device', value='dev-lockme', reason='lock').exists())
+
+        housemate = make_user('housemate')
+        DeviceTrust.objects.create(user=housemate, device_id='dev-housemate')
+        other = APIClient()
+        other.credentials(HTTP_X_FORWARDED_FOR=ip)
+        resp = other.post('/api/auth/login/', {
+            'email': housemate.email, 'password': 'Test-Pass-9271', 'device_id': 'dev-housemate',
+        }, format='json')
+        self.assertEqual(resp.status_code, 200, resp.data)
+
+    def test_password_lock_does_not_block_signup_or_reset_on_the_same_ip(self):
+        ip = fresh_ip()
+        self.client.credentials(HTTP_X_FORWARDED_FOR=ip)
+        for _ in range(3):
+            self.login('wrong-password')
+        housemate = make_user('resethousemate')
+        other = APIClient()
+        other.credentials(HTTP_X_FORWARDED_FOR=ip)
+
+        joined = other.post('/api/auth/signup/', signup_payload(
+            'newhousemate', device_id='dev-newhousemate',
+        ), format='json')
+        self.assertEqual(joined.status_code, 201, joined.data)
+        reset = other.post('/api/auth/reset/', {
+            'email': housemate.email, 'device_id': 'dev-resethousemate',
+        }, format='json')
+        self.assertEqual(reset.status_code, 200, reset.data)
+        self.assertIn('challenge', reset.data)
+
+    def test_a_deliberate_manual_ip_ban_still_blocks_signin(self):
+        ip = fresh_ip()
+        self.client.credentials(HTTP_X_FORWARDED_FOR=ip)
+        AuthBan.objects.create(
+            scope='ip', value=ip, reason='manual', until=timezone.now() + timedelta(minutes=30),
+        )
+        resp = self.login('Test-Pass-9271')
+        self.assertEqual(resp.status_code, 423)
+        self.assertEqual(resp.data['scope'], 'ip')
+
     def test_login_ip_rate_limit(self):
         ip = fresh_ip()
         self.client.credentials(HTTP_X_FORWARDED_FOR=ip)
@@ -251,6 +338,23 @@ class LoginLockoutTests(TestCase):
         User.objects.filter(pk=self.user.pk).update(email='')
         resp = self.client.post('/api/auth/login/', {'password': 'Test-Pass-9271'}, format='json')
         self.assertEqual(resp.status_code, 400)
+
+
+class AutomaticIpBanCleanupTests(TestCase):
+    def test_cleanup_removes_only_old_automatic_ip_bans(self):
+        until = timezone.now() + timedelta(hours=1)
+        for reason in ('lock', 'admin', 'manual'):
+            AuthBan.objects.create(scope='ip', value=f'192.0.2.{len(AuthBan.objects.all()) + 1}',
+                                   reason=reason, until=until)
+        account = AuthBan.objects.create(scope='email', value='keep@test.local', reason='lock', until=until)
+        browser = AuthBan.objects.create(scope='device', value='keep-device', reason='admin', until=until)
+
+        migration = import_module('apps.accounts.migrations.0009_remove_automatic_ip_bans')
+        migration.remove_automatic_ip_bans(apps, None)
+
+        self.assertEqual(list(AuthBan.objects.filter(scope='ip').values_list('reason', flat=True)), ['manual'])
+        self.assertTrue(AuthBan.objects.filter(pk=account.pk).exists())
+        self.assertTrue(AuthBan.objects.filter(pk=browser.pk).exists())
 
 
 @override_settings(DEBUG=True)
