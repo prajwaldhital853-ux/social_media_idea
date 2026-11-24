@@ -134,7 +134,7 @@ export default function WarningDetailPage() {
                     <div><dt>{t('warningStatus')}</dt><dd>{target.status}</dd></div>
                   </dl>
                   <Link className="warning-target-link" href={target.href}>
-                    {t('openWarningTarget')} {IC.go}
+                    {t('openWarningTarget')} {IC.link}
                   </Link>
                 </>
               ) : <p className="warning-copy">{t('warningMissingTarget')}</p>}
