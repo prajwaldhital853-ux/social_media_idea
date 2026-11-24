@@ -239,6 +239,7 @@ export interface ContentPreview {
   condition?: string;
   location?: string;
   image?: string;
+  images?: string[];
   audience?: string;
   media?: { kind: string; url: string; duration: number | null }[];
   likes?: number;
@@ -526,6 +527,8 @@ export interface NoticeBrief {
   is_live: boolean;
   created_at: string;
   actor: string | null;
+  audience: 'public' | 'private';
+  withdrawn_at: string | null;
 }
 
 export interface AuditBrief {
@@ -561,6 +564,7 @@ export interface PersonPost {
   created_at: string;
   likes: number;
   comments: number;
+  preview?: ContentPreview;
 }
 
 export interface PersonComment {
@@ -569,6 +573,7 @@ export interface PersonComment {
   state: string;
   created_at: string;
   post: string;
+  preview?: ContentPreview;
 }
 
 export interface PersonListing {
@@ -578,6 +583,7 @@ export interface PersonListing {
   currency: string;
   state: string;
   created_at: string;
+  preview?: ContentPreview;
 }
 
 /** The server's answer to one verb, including what the guards refused. */
@@ -593,6 +599,7 @@ export interface PersonOutcome {
   opted_out?: boolean;
   sessions_revoked?: number;
   reports_closed?: number;
+  notices_withdrawn?: number;
   held_posts?: number;
   holdings?: Holdings;
 }

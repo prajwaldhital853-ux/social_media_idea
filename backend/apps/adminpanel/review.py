@@ -16,7 +16,8 @@ is written to the same audit log the rest of the console uses.
 
 from decimal import Decimal
 
-from django.db.models import Count, Q
+from django.db.models import Count, F, Q
+from django.db.models.functions import Greatest
 from django.utils import timezone
 
 from apps.accounts.models import User
@@ -183,43 +184,55 @@ def pile(kind, target_id):
     }
 
 
-def _media(post):
+def _media(post, limit=4):
     out = []
-    for item in post.media.all()[:4]:
+    items = post.media.all()
+    if limit is not None:
+        items = items[:limit]
+    for item in items:
         url = item.url or (item.file.url if item.file else '')
         out.append({'kind': item.kind, 'url': url, 'duration': item.duration})
     return out
 
 
-def preview(kind, row):
+def preview(kind, row, full=False):
     """The thing itself, in the words a decision is made from."""
     if row is None:
         return None
     if kind == 'post':
         return {
-            'kind': kind, 'id': row.pk, 'state': row.status, 'text': row.text[:600],
+            'kind': kind, 'id': row.pk, 'state': row.status,
+            'text': row.text if full else row.text[:600],
             'author': person(row.author), 'created_at': row.created_at,
-            'audience': row.audience, 'category': row.category, 'media': _media(row),
+            'audience': row.audience, 'category': row.category,
+            'media': _media(row, None if full else 4),
             'likes': row.like_count, 'comments': row.comment_count,
         }
     if kind == 'comment':
         return {
-            'kind': kind, 'id': row.pk, 'state': row.status, 'text': row.text[:600],
+            'kind': kind, 'id': row.pk, 'state': row.status,
+            'text': row.text if full else row.text[:600],
             'author': person(row.author), 'created_at': row.created_at,
             'on_post': {
-                'id': row.post_id, 'text': (row.post.text or '')[:160],
+                'id': row.post_id, 'text': row.post.text if full else (row.post.text or '')[:160],
                 'author': row.post.author.username, 'state': row.post.status,
             },
         }
     if kind == 'listing':
-        first = row.images.first()
-        return {
+        images = [item.url for item in row.images.all() if item.url]
+        if row.image_url:
+            images = [row.image_url] + [url for url in images if url != row.image_url]
+        out = {
             'kind': kind, 'id': row.pk, 'state': row.status, 'title': row.title,
-            'text': row.description[:600], 'price': str(row.price), 'currency': row.currency,
+            'text': row.description if full else row.description[:600],
+            'price': str(row.price), 'currency': row.currency,
             'category': row.category, 'condition': row.condition, 'location': row.location,
-            'image': row.image_url or (first.url if first else ''),
+            'image': images[0] if images else '',
             'author': person(row.seller), 'created_at': row.created_at,
         }
+        if full:
+            out['images'] = images
+        return out
     return {
         'kind': kind, 'id': row.pk, 'state': state_of(kind, row),
         'author': person(row), 'created_at': row.date_joined,
@@ -285,6 +298,16 @@ def notice_row(notice):
     }
 
 
+def withdraw(notice, actor):
+    if not notice.is_live:
+        raise ValueError('That notice was already withdrawn.')
+    notice.is_live = False
+    notice.withdrawn_at = timezone.now()
+    notice.save(update_fields=['is_live', 'withdrawn_at'])
+    record(actor, 'withdraw_notice', f'{notice.target_type}:{notice.target_id}', notice.text[:120])
+    return notice
+
+
 def _say(kind, row, actor, text, notice=None):
     """The author-facing half of a moderation decision, in their bell."""
     return notify(owner_for(kind, row), actor, 'warning', text, kind, row.pk, notice=notice)
@@ -336,6 +359,8 @@ def act(kind, target_id, actor, action, reason='', notice_text='', audience=Publ
             raise ValueError(f'That {kind} is already taken down — restore it, or leave it down.')
         row.status = REMOVED_STATE[kind]
         row.save(update_fields=['status'])
+        if kind == 'comment':
+            Post.objects.filter(pk=row.post_id).update(comment_count=Greatest(F('comment_count') - 1, 0))
         out['reports_closed'] = close_reports(kind, row.pk, Report.Status.RESOLVED, now)
         campaigns, refunded = cancel_campaigns(kind, row.pk, now)
         out['campaigns'], out['refunded'] = campaigns, str(refunded)
@@ -374,6 +399,8 @@ def act(kind, target_id, actor, action, reason='', notice_text='', audience=Publ
             raise ValueError('Only content hidden pending review can be released.')
         row.status = LIVE_STATE[kind]
         row.save(update_fields=['status'])
+        if kind == 'comment':
+            Post.objects.filter(pk=row.post_id).update(comment_count=F('comment_count') + 1)
         out['reports_closed'] = close_reports(kind, row.pk, Report.Status.DISMISSED, now)
         _say(kind, row, actor, f'Your {kind} was reviewed and is back in the feed.')
         out['detail'] = (
@@ -388,6 +415,8 @@ def act(kind, target_id, actor, action, reason='', notice_text='', audience=Publ
             raise ValueError('Only something already taken down can be restored.')
         row.status = LIVE_STATE[kind]
         row.save(update_fields=['status'])
+        if kind == 'comment':
+            Post.objects.filter(pk=row.post_id).update(comment_count=F('comment_count') + 1)
         _say(kind, row, actor, f'Your {kind} was restored by moderation.')
         out['detail'] = 'Restored. The author is told it is back.'
 

@@ -93,6 +93,7 @@ export default function ContentCard({ content, matched = [] }: {
 
   const photos = (content.media || []).filter(item => item.kind !== 'video');
   const films = (content.media || []).filter(item => item.kind === 'video');
+  const listingImages = content.images?.length ? content.images : content.image ? [content.image] : [];
 
   return (
     <article className="cwrap">
@@ -133,8 +134,8 @@ export default function ContentCard({ content, matched = [] }: {
 
             {content.kind === 'listing' && (
               <div className="clisting">
-                {content.image
-                  ? <img className="cthumb" src={content.image} alt="" loading="lazy"/>
+                {listingImages[0]
+                  ? <img className="cthumb" src={listingImages[0]} alt="" loading="lazy"/>
                   : <span className="cthumb blank">{IC.store}</span>}
                 <div>
                   <h3>{content.title}</h3>
@@ -144,6 +145,14 @@ export default function ContentCard({ content, matched = [] }: {
                     {content.location && <span>{content.location}</span>}
                   </p>
                 </div>
+              </div>
+            )}
+
+            {content.kind === 'listing' && listingImages.length > 1 && (
+              <div className={`cmedia n${Math.min(4, listingImages.length - 1)}`}>
+                {listingImages.slice(1).map((url, index) => (
+                  <img key={index} className="cphoto" src={url} alt="" loading="lazy"/>
+                ))}
               </div>
             )}
 

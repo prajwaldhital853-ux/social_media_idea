@@ -4,13 +4,15 @@ import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import Banner from '@/components/Banner';
 import ConsoleShell from '@/components/ConsoleShell';
+import ContentCard from '@/components/ContentCard';
 import { useConfirm } from '@/components/Confirm';
+import { Act } from '@/components/List';
 import { api } from '@/lib/api';
 import { num } from '@/lib/format';
 import { IC } from '@/lib/icons';
 import { ago, stamp } from '@/lib/time';
 import { useSession } from '@/lib/session';
-import { PersonDetail, PersonOutcome, PersonRow, PersonVerbs } from '@/lib/types';
+import { ContentPreview, PersonDetail, PersonOutcome, PersonRow, PersonVerbs } from '@/lib/types';
 
 type Verb = 'suspend' | 'reinstate' | 'verify' | 'warn' | 'clear_flags' | 'delete';
 
@@ -42,7 +44,7 @@ const SPEC: Record<Verb, { label: string; tone: string; icon: keyof typeof IC; h
   },
   clear_flags: {
     label: 'Clear spam flags', tone: 'primary', icon: 'refresh',
-    help: 'Closes every open report on the account and its content and clears a sign-in lockout. It does not undo a takedown somebody decided.',
+    help: 'Closes every open report on the account and its content, withdraws its public and private warning notices, and clears a sign-in lockout. It does not undo a takedown somebody decided.',
   },
   delete: {
     label: 'Delete account', tone: 'danger', icon: 'x',
@@ -69,6 +71,7 @@ export default function PersonRecordPage({ params }: { params: { username: strin
   const [error, setError] = useState<string | null>(null);
   const [banner, setBanner] = useState<{ kind: 'ok' | 'bad'; text: string } | null>(null);
   const [askFor, setAskFor] = useState<Verb | null>(null);
+  const [preview, setPreview] = useState<ContentPreview | null>(null);
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
@@ -93,6 +96,20 @@ export default function PersonRecordPage({ params }: { params: { username: strin
     const verb = new URLSearchParams(window.location.search).get('act');
     if (verb && verb in SPEC) setAskFor(verb as Verb);
   }, []);
+
+  useEffect(() => {
+    if (!preview) return;
+    const previous = document.body.style.overflow;
+    const close = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setPreview(null);
+    };
+    document.body.style.overflow = 'hidden';
+    window.addEventListener('keydown', close);
+    return () => {
+      document.body.style.overflow = previous;
+      window.removeEventListener('keydown', close);
+    };
+  }, [preview]);
 
   const done = (out: PersonOutcome) => {
     setBanner({ kind: 'ok', text: out.detail });
@@ -126,6 +143,22 @@ export default function PersonRecordPage({ params }: { params: { username: strin
       )}
     >
       <Banner banner={banner} />
+
+      {preview && (
+        <div className="scrim" onMouseDown={event => { if (event.target === event.currentTarget) setPreview(null); }}>
+          <div className="prompt content-prompt" role="dialog" aria-modal="true" aria-label={`Preview ${preview.kind} ${preview.id}`}>
+            <div className="content-prompt-head">
+              <h2>{preview.kind === 'post' ? 'Post' : preview.kind === 'comment' ? 'Comment' : 'Listing'} #{preview.id}</h2>
+              <button type="button" className="btn ghost tiny" autoFocus onClick={() => setPreview(null)}>
+                {IC.x}<span>Close</span>
+              </button>
+            </div>
+            <div className="content-prompt-scroll">
+              <ContentCard content={preview}/>
+            </div>
+          </div>
+        </div>
+      )}
 
       {!detail && !error && (
         <div className="skeleton-stack">
@@ -195,8 +228,11 @@ export default function PersonRecordPage({ params }: { params: { username: strin
                           {ago(item.created_at)} · {item.audience} · {item.likes} likes · {item.comments} comments
                         </span>
                       </span>
-                      <span className={`state ${item.state === 'live' ? 'good' : 'mute'}`}>
-                        {STATE_LABEL[item.state] || item.state}
+                      <span className="record-row-acts">
+                        <span className={`state ${item.state === 'live' ? 'good' : 'mute'}`}>
+                          {STATE_LABEL[item.state] || item.state}
+                        </span>
+                        <Act icon="eye" label={`Preview post ${item.id}`} disabled={!item.preview} onClick={() => item.preview && setPreview(item.preview)}/>
                       </span>
                     </li>
                   ))}
@@ -220,8 +256,11 @@ export default function PersonRecordPage({ params }: { params: { username: strin
                         <span className="record-text">{item.text}</span>
                         <span className="record-meta">on post {item.post} · {ago(item.created_at)}</span>
                       </span>
-                      <span className={`state ${item.state === 'live' ? 'good' : 'mute'}`}>
-                        {STATE_LABEL[item.state] || item.state}
+                      <span className="record-row-acts">
+                        <span className={`state ${item.state === 'live' ? 'good' : 'mute'}`}>
+                          {STATE_LABEL[item.state] || item.state}
+                        </span>
+                        <Act icon="eye" label={`Preview comment ${item.id}`} disabled={!item.preview} onClick={() => item.preview && setPreview(item.preview)}/>
                       </span>
                     </li>
                   ))}
@@ -244,7 +283,10 @@ export default function PersonRecordPage({ params }: { params: { username: strin
                           {item.currency} {item.price} · {ago(item.created_at)}
                         </span>
                       </span>
-                      <span className="state mute">{STATE_LABEL[item.state] || item.state}</span>
+                      <span className="record-row-acts">
+                        <span className="state mute">{STATE_LABEL[item.state] || item.state}</span>
+                        <Act icon="eye" label={`Preview listing ${item.id}`} disabled={!item.preview} onClick={() => item.preview && setPreview(item.preview)}/>
+                      </span>
                     </li>
                   ))}
                 </ul>

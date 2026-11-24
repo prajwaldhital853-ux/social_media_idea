@@ -15,6 +15,7 @@ import VerifiedBadge from './VerifiedBadge';
 import ReactionButton from './ReactionButton';
 import ReactionIcon from './ReactionIcon';
 import NoticeBanner from './NoticeBanner';
+import ReportModal from './ReportModal';
 
 const SUGGESTIONS = ['Nice!', 'Beautiful!', 'Congrats!', 'Love this!', 'Amazing!', 'So good!', 'Well done!'];
 const EMOJIS = ['😀', '😂', '🥰', '😍', '😎', '🤩', '😢', '😡', '👍', '👏', '🙏', '🔥', '❤️', '💯', '🎉', '✨', '🌸', '🍜', '🏔️', '📸', '🥳', '😴', '🤔', '😅', '😊', '🙌', '👌', '✌️', '💖', '😭', '🤣', '💪', '😇', '🥺', '😤', '🤯', '😋', '😘', '😜', '🤗'];
@@ -43,6 +44,8 @@ export default function Comments({ postId, onClose, mediaIndex }: { postId: stri
   const [openThreads, setOpenThreads] = useState<Record<string, boolean>>({});
   const [threadLimit, setThreadLimit] = useState<Record<string, number>>({});
   const [emojiOpen, setEmojiOpen] = useState(false);
+  const [menuFor, setMenuFor] = useState<string | null>(null);
+  const [reporting, setReporting] = useState<string | null>(null);
   const [closing, setClosing] = useState(false);
   const dialog = useRef<HTMLDivElement>(null);
   const list = useRef<HTMLDivElement>(null);
@@ -237,25 +240,27 @@ export default function Comments({ postId, onClose, mediaIndex }: { postId: stri
       <div key={comment.id} data-comment={comment.id} className={`comments-row ${isReply ? 'reply' : ''}`}>
         <Avatar user={author} size={isReply ? 26 : 30} />
         <div className="comments-content">
-          <NoticeBanner notices={comment.notices}/>
-          <div className="comment-bubble">
-            <div>
-              <b>{author.name}</b>
-              {author.verified && <VerifiedBadge size={13} />}
-              {isAuthor && (
-                <span className="comment-author-badge">
-                  <span className="comment-author-badge-icon">{IC.edit}</span>
-                  {t('author')}
+          <div className="comment-card">
+            <NoticeBanner notices={comment.notices}/>
+            <div className="comment-bubble">
+              <div>
+                <b>{author.name}</b>
+                {author.verified && <VerifiedBadge size={13} />}
+                {isAuthor && (
+                  <span className="comment-author-badge">
+                    <span className="comment-author-badge-icon">{IC.edit}</span>
+                    {t('author')}
+                  </span>
+                )}
+              </div>
+              <p><CommentText text={comment.text} replyToName={replyToName} /></p>
+              {kinds.length > 0 && (
+                <span className="comment-bubble-reactions">
+                  {kinds.map(kind => <span key={kind} className="comment-reaction-badge" title={kind}><ReactionIcon kind={kind} /></span>)}
+                  <em>{commentReactions.length}</em>
                 </span>
               )}
             </div>
-            <p><CommentText text={comment.text} replyToName={replyToName} /></p>
-            {kinds.length > 0 && (
-              <span className="comment-bubble-reactions">
-                {kinds.map(kind => <span key={kind} className="comment-reaction-badge" title={kind}><ReactionIcon kind={kind} /></span>)}
-                <em>{commentReactions.length}</em>
-              </span>
-            )}
           </div>
           <div className="comment-meta">
             <time>{ago(comment.ts, db.lang)}</time>
@@ -267,6 +272,26 @@ export default function Comments({ postId, onClose, mediaIndex }: { postId: stri
               <button type="button" className="delete-comment-btn" onClick={() => deleteComment(comment.id)}>
                 Delete
               </button>
+            )}
+            {me && me.id !== comment.uid && (
+              <div className="post-menu-wrap comment-menu-wrap">
+                <button
+                  type="button"
+                  className="icon-btn post-menu-btn"
+                  aria-label={t('report')}
+                  aria-expanded={menuFor === comment.id}
+                  onClick={() => setMenuFor(current => current === comment.id ? null : comment.id)}
+                >
+                  {IC.dots}
+                </button>
+                {menuFor === comment.id && (
+                  <div className="post-menu">
+                    <button type="button" className="post-menu-item danger" onClick={() => { setMenuFor(null); setReporting(comment.id); }}>
+                      {t('report')}
+                    </button>
+                  </div>
+                )}
+              </div>
             )}
           </div>
           {replyCount > 0 && (
@@ -440,6 +465,7 @@ export default function Comments({ postId, onClose, mediaIndex }: { postId: stri
           <Link href="/login" onClick={() => closeLayerWithoutBack()}>Sign in to comment</Link>
         </div>
       )}
+      {reporting && <ReportModal type="comment" targetId={reporting} onClose={() => setReporting(null)} />}
     </div>
   );
 

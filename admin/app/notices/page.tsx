@@ -220,6 +220,7 @@ export default function NoticesPage() {
   const [q, setQ] = useState('');
   const [target, setTarget] = useState('');
   const [banner, setBanner] = useState<{ kind: 'ok' | 'bad'; text: string } | null>(null);
+  const [helpOpen, setHelpOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   // The search box answers every keystroke, so three requests for one word can
   // land in any order, and the one that arrives last is not the one that was
@@ -255,6 +256,20 @@ export default function NoticesPage() {
     load();
   }, [load]);
 
+  useEffect(() => {
+    if (!helpOpen) return;
+    const previous = document.body.style.overflow;
+    const close = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setHelpOpen(false);
+    };
+    document.body.style.overflow = 'hidden';
+    window.addEventListener('keydown', close);
+    return () => {
+      document.body.style.overflow = previous;
+      window.removeEventListener('keydown', close);
+    };
+  }, [helpOpen]);
+
   const older = async () => {
     if (!cursor) return;
     const mine = seq.current + 1;
@@ -278,7 +293,7 @@ export default function NoticesPage() {
   const withdraw = async (notice: NoticeRow) => {
     const sure = await confirm({
       title: 'Withdraw this notice?',
-      body: `The sentence about @${notice.about} stops showing to the community. It stays on the record, marked withdrawn, with your name on it.`,
+      body: `The sentence about @${notice.about} stops showing on the content or profile. It stays on the record, marked withdrawn, with your name on it.`,
       confirmLabel: 'Withdraw',
       tone: 'danger',
     });
@@ -303,9 +318,14 @@ export default function NoticesPage() {
       title="Public warning notices"
       subtitle="What the community has been told about a piece of content or an account — the sentence, who wrote it, and whether it is still standing."
       actions={(
-        <button type="button" className={`btn ghost${busy ? ' spinning' : ''}`} onClick={() => load()} title="Reload the notices">
-          {IC.refresh}<span>Refresh</span>
-        </button>
+        <>
+          <button type="button" className="btn ghost" onClick={() => setHelpOpen(true)}>
+            {IC.chat}<span>How notices work</span>
+          </button>
+          <button type="button" className={`btn ghost${busy ? ' spinning' : ''}`} onClick={() => load()} title="Reload the notices">
+            {IC.refresh}<span>Refresh</span>
+          </button>
+        </>
       )}
     >
       <Chips
@@ -330,19 +350,28 @@ export default function NoticesPage() {
 
       <Banner banner={banner} />
 
+      {helpOpen && (
+        <div className="scrim" onMouseDown={event => { if (event.target === event.currentTarget) setHelpOpen(false); }}>
+          <div className="prompt" role="dialog" aria-modal="true" aria-labelledby="notice-help-title">
+            <div className="prompt-actions">
+              <h2 id="notice-help-title">How notices work</h2>
+              <button type="button" className="btn ghost tiny" autoFocus onClick={() => setHelpOpen(false)}>
+                {IC.x}<span>Close</span>
+              </button>
+            </div>
+            <p>
+              The same sentence is also written by the <b>Public notice</b> decision on the report queue
+              and the takedown shelf. A notice is the half the community sees; the author gets a private
+              warning in their own bell as well, and that is sent from the account itself.
+            </p>
+          </div>
+        </div>
+      )}
+
       <AttachDesk busy={busy} onDone={next => {
         setBanner(next);
         if (next.kind === 'ok') load();
       }}/>
-
-      <p className="note row">
-        {IC.mega}
-        <span>
-          The same sentence is also written by the <b>Public notice</b> decision on the report queue
-          and the takedown shelf. A notice is the half the community sees; the author gets a private
-          warning in their own bell as well, and that is sent from the account itself.
-        </span>
-      </p>
 
       {rows === null ? (
         <div className="skeleton-stack">
