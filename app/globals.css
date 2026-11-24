@@ -1571,6 +1571,30 @@ a:focus:not(:focus-visible) {
 }
 
 /* Google draws its own button here: same pill, same width, same gap as ours. */
+.gbtn-account {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: fit-content;
+  max-width: 100%;
+  margin: 0 auto 8px;
+  padding: 5px 12px;
+  border: 1px solid var(--line);
+  border-radius: 9999px;
+  background: var(--tint);
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.gbtn-account svg {
+  width: 18px;
+  height: 18px;
+  flex: none;
+}
+
 .gbtn {
   display: flex;
   justify-content: center;

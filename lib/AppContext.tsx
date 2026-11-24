@@ -14,6 +14,7 @@ import {
   mapReport, mapSettings, mediaPayload, profilePatch, reactionsOfPost, toPostPayload, toProfilePayload,
 } from './dto';
 import { bindListCache, forgetLists, inboxListDef, listingsFragment, notificationsFragment, postsFragment, pushListRow, refreshList } from './lists';
+import { rememberGoogleAccount } from './google';
 
 type Target = 'post' | 'comment' | 'media';
 
@@ -352,6 +353,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return null;
     }
     const self = mapMe(payload.me);
+    rememberGoogleAccount(self.email);
     const serverNow = at(payload.server_time);
     setDb(prev => ({
       ...applyFragment(prev, {
@@ -1687,7 +1689,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (typeof window !== 'undefined') localStorage.setItem(LANG_KEY, lang);
   };
 
-  const login = (userId: string) => setDb(prev => ({ ...prev, meId: userId }));
+  const login = (userId: string) => {
+    const user = db.users.find(row => row.id === userId);
+    if (user?.email) rememberGoogleAccount(user.email);
+    setDb(prev => ({ ...prev, meId: userId }));
+  };
 
   const toggleTheme = () => {
     const next: ThemeMode = theme === 'dark' ? 'light' : 'dark';

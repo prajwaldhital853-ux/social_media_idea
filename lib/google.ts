@@ -51,22 +51,23 @@ let initializedFor = '';
  * starts, nothing arrives, and the console stays clean. The button flow carries no such
  * cooldown, and this is the shape Google's branding rules ask for anyway.
  *
- * `hint` is the address this browser last signed in with. Without it the button keeps
- * naming whichever account the browser as a whole is using, which is a different thing
- * from the account that has an Exposing seat — and a chip that names the wrong one is
- * read as the sign-in having gone to the wrong one.
+ * `hint` belongs to initialize(), not renderButton(): it tells Google which account to
+ * preselect. The button itself stays generic, because Google's personalized label names
+ * the browser profile rather than the Exposing seat and cannot be overridden.
  */
 export async function renderGoogleButton(
   box: HTMLElement,
   clientId: string,
   handlers: { token: (token: string) => void; error: (message: string) => void },
-  hint = '',
+  hint: string | null,
 ): Promise<void> {
+  if (hint === null) return;
   const id = await loadGis();
   if (initializedFor !== clientId) {
     id.initialize({
       client_id: clientId,
       auto_select: false,
+      ...(hint ? { login_hint: hint } : {}),
       // The account chooser as a dialog in the middle of the screen, on phones too.
       use_fedcm_for_button: true,
       callback: (response: any) => {
@@ -81,9 +82,8 @@ export async function renderGoogleButton(
     theme: 'outline',
     shape: 'pill',
     size: 'large',
-    text: 'continue_with',
+    text: 'signin_with',
     width: Math.round(Math.min(360, Math.max(200, box.clientWidth || 320))),
-    ...(hint ? { hint, hint_version: '3' } : {}),
   });
 }
 

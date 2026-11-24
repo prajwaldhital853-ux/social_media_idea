@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { credentialAccount, googleAccountHint, rememberGoogleAccount, renderGoogleButton } from '@/lib/google';
+import { IC } from '@/lib/icons';
 
 /**
  * Google's own sign-in button, drawn into the page.
@@ -20,7 +21,7 @@ export default function GoogleButton({ clientId, onToken, onError, fallback }: {
 }) {
   const box = useRef<HTMLDivElement>(null);
   const [failed, setFailed] = useState(false);
-  const [hint, setHint] = useState('');
+  const [hint, setHint] = useState<string | null>(null);
   // The handlers change on every render, but Google's callback is registered once, so
   // it reads the live pair rather than the one that happened to exist when it was drawn.
   const live = useRef({ onToken, onError });
@@ -30,16 +31,17 @@ export default function GoogleButton({ clientId, onToken, onError, fallback }: {
     setHint(googleAccountHint());
   }, []);
 
+  const hintReady = hint !== null;
   useEffect(() => {
-    if (failed || !box.current) return;
+    if (failed || hint === null || !box.current) return;
     let alive = true;
     renderGoogleButton(box.current, clientId, {
       token: token => {
         if (!alive) return;
-        // The chip is redrawn for the account that was really used, so it never keeps
-        // naming the browser's own profile after a different one signed in here.
+        // The chip follows the credential Google really returned, never the profile
+        // the browser happens to be using outside Exposing.
         const picked = credentialAccount(token).email;
-        if (picked !== hint) {
+        if (picked && picked !== hint) {
           rememberGoogleAccount(picked);
           setHint(picked);
         }
@@ -52,8 +54,16 @@ export default function GoogleButton({ clientId, onToken, onError, fallback }: {
       },
     }, hint).catch(() => { if (alive) setFailed(true); });
     return () => { alive = false; };
-  }, [clientId, failed, hint]);
+  }, [clientId, failed, hintReady]);
 
   if (failed) return <>{fallback}</>;
-  return <div className="gbtn" ref={box} />;
+  return <>
+    {hint ? (
+      <div className="gbtn-account" title="Last Exposing account">
+        {IC.g}
+        <span>{hint}</span>
+      </div>
+    ) : null}
+    <div className="gbtn" ref={box} />
+  </>;
 }
