@@ -12,6 +12,7 @@ owns what each action does; this file only turns a request into a call and a
 refusal into the sentence the console shows.
 """
 
+from django.db.models import Q
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -26,8 +27,10 @@ NO_SEAT = {'detail': 'That username is not an account on the platform.'}
 
 
 def _account(username):
-    """(user, None) or (None, the 404 to hand back)."""
-    user = User.objects.filter(username=username).first()
+    """(user, None) or (None, the 404 to hand back). Staff seats have their own screen."""
+    user = User.objects.filter(username=username).exclude(
+        Q(is_staff=True) | Q(is_superuser=True) | Q(staff_account__is_enabled=True)
+    ).first()
     if user is None:
         return None, Response(NO_SEAT, status=404)
     return user, None
