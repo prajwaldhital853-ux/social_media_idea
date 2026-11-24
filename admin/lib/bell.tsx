@@ -3,6 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { ReactNode } from 'react';
 import { api } from './api';
+import { useSession } from './session';
 
 export interface BellItem {
   id: number;
@@ -46,7 +47,10 @@ const EMPTY: Tray = { items: [], total: 0, routes: {}, poll_seconds: 20 };
  * interval stops while the tab is hidden and one read starts on the way back, so a
  * console left open overnight costs nothing until somebody comes back to it.
  */
-export function BellProvider({ enabled, children }: { enabled: boolean; children: ReactNode }) {
+export function BellProvider({ children }: { children: ReactNode }) {
+  // The bell belongs to a seat, not to the door: no session, nothing to poll.
+  const { status } = useSession();
+  const enabled = status === 'in';
   const [tray, setTray] = useState<Tray>(EMPTY);
   const [open, setOpen] = useState(false);
 

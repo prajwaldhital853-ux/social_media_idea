@@ -3,7 +3,7 @@ import { ReactNode } from 'react';
 import './globals.css';
 import { ConfirmProvider } from '@/components/Confirm';
 import { BellProvider } from '@/lib/bell';
-import { SessionProvider, useSession } from '@/lib/session';
+import { SessionProvider } from '@/lib/session';
 
 export const metadata: Metadata = {
   title: 'Exposing — admin console',
@@ -32,17 +32,11 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       </head>
       <body>
         <SessionProvider>
-          <BellWrapper>
+          <BellProvider>
             <ConfirmProvider>{children}</ConfirmProvider>
-          </BellWrapper>
+          </BellProvider>
         </SessionProvider>
       </body>
     </html>
   );
-}
-
-// The bell belongs to a seat, not to the door: no session, nothing to poll.
-function BellWrapper({ children }: { children: ReactNode }) {
-  const { status } = useSession();
-  return <BellProvider enabled={status === 'in'}>{children}</BellProvider>;
 }
