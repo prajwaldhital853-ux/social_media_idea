@@ -71,6 +71,7 @@ export default function CampaignPage({ params }: { params: { id: string } }) {
   const [reason, setReason] = useState('');
   const [refund, setRefund] = useState<'credit' | 'withhold' | ''>('');
   const [working, setWorking] = useState(false);
+  const [mail, setMail] = useState('');
 
   const review = can('promotions_review');
 
@@ -100,7 +101,7 @@ export default function CampaignPage({ params }: { params: { id: string } }) {
     setWorking(true);
     setError(null);
     try {
-      const out = await api<{ detail: string; campaign: PromoRow }>(`admin/promotions/${params.id}/${which}/`, {
+      const out = await api<{ detail: string; campaign: PromoRow; mail?: string }>(`admin/promotions/${params.id}/${which}/`, {
         method: 'POST',
         body: { reason: which === 'approve' || which === 'pause' || which === 'resume' ? '' : reason.trim(), refund: which === 'stop' ? refund : '' },
       });
@@ -108,8 +109,10 @@ export default function CampaignPage({ params }: { params: { id: string } }) {
       setReason('');
       setRefund('');
       setBanner({ kind: 'ok', text: out.detail });
+      // Same reason as the coin desk: the answer already holds the campaign in its
+      // new standing, so the screen is rewritten from it instead of emptied.
       setDetail(current => (current ? { ...current, campaign: out.campaign } : current));
-      await load();
+      setMail(out.mail || '');
     } catch (err) {
       if (!noteGate(err)) setError((err as Error).message);
     } finally {
@@ -141,6 +144,12 @@ export default function CampaignPage({ params }: { params: { id: string } }) {
       )}
     >
       <Banner banner={banner} />
+
+      {mail && (
+        <p className="note row" data-mail>
+          <span>{mail}</span>
+        </p>
+      )}
 
       {!detail && !error && (
         <div className="skeleton-stack">

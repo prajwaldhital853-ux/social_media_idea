@@ -26,7 +26,7 @@ from django.db import transaction as db_atomic
 from django.utils import timezone
 
 from apps.common.config import PACKAGE_CATALOG
-from apps.common.emails import queue_event_email
+from apps.common.emails import mail_delivery_problem, queue_event_email
 from apps.marketplace.models import Listing
 from apps.notifications.services import notify
 from apps.posts.models import Post
@@ -362,29 +362,81 @@ def decide(promo, actor, action, reason='', choice=''):
     record(actor, f'promo_{action}', f'promotion:{promo.pk}',
            f'{promo.target_type}:{promo.target_id} — {promo.budget} coins reserved — '
            + (reason if reason else f'{refund} coins back'))
-    if action == 'approve':
-        pack = package_by_id(promo.package)
-        queue_event_email(
-            promo.owner.email,
-            f'Exposing promotion {promo.pk} approved',
-            'Your promotion is approved',
-            'The Exposing team has approved your promotion. It is now active and eligible to run in the feed.',
-            details=[
-                ('Campaign', f'#{promo.pk}'),
-                ('Package', pack['name'] if pack else promo.package or 'Custom budget'),
-                ('Budget', f'{promo.budget} coins'),
-                ('Promoted content', promo.target_type.title()),
-                ('Status', 'Approved and running'),
-            ],
-            cta_label='View your promotion', cta_path='/wallet/promotions',
-            footnote='No additional coins were charged for this approval.',
-        )
+    letter = _letter(promo, action, reason, refund)
+    if letter:
+        queue_event_email(promo.owner.email, **letter)
     return 200, {
         'detail': _said(action, promo, refund),
         'campaign': row(promo, entry),
         'refunded': str(refund),
         'reviews': reviews(promo.pk),
+        'mail': _mail_note(bool(letter)),
     }
+
+
+def _mail_note(queued):
+    """Empty when the letter can travel; the reason it cannot when it cannot."""
+    problem = mail_delivery_problem() if queued else ''
+    return '' if not problem else ('The owner was notified in the app, but the email was NOT sent. '
+                                   + problem)
+
+
+def _letter(promo, action, reason, refund):
+    """The email that answers a campaign decision, or nothing when there is no news.
+
+    Every verb the desk can pull is covered, because the in-app bell is the only
+    other channel and a campaign that was refused while its owner slept is exactly
+    the letter worth posting.
+    """
+    pack = package_by_id(promo.package)
+    common = {
+        'details': [
+            ('Campaign', f'#{promo.pk}'),
+            ('Package', pack['name'] if pack else promo.package or 'Custom budget'),
+            ('Budget', f'{promo.budget} coins'),
+            ('Promoted content', promo.target_type.title()),
+        ],
+        'cta_label': 'View your promotion',
+        'cta_path': '/wallet/promotions',
+    }
+    if action == 'approve':
+        return {
+            'subject': f'Exposing promotion {promo.pk} approved',
+            'heading': 'Your promotion is approved',
+            'message': 'The Exposing team has approved your promotion. It is now active and '
+                       'eligible to run in the feed.',
+            'footnote': 'No additional coins were charged for this approval.',
+            **common,
+        }
+    if action == 'reject':
+        return {
+            'subject': f'Exposing promotion {promo.pk} was refused',
+            'heading': 'The campaign did not pass review',
+            'message': f'Your campaign {promo.pk} was refused. Reason: {reason or "not stated"}. '
+                       + (f'{refund} coins were returned to your wallet.' if refund else ''),
+            'footnote': 'You can edit the campaign and send it for review again.',
+            **common,
+        }
+    if action in ('pause', 'resume'):
+        return {
+            'subject': f'Exposing promotion {promo.pk} {"paused" if action == "pause" else "running again"}',
+            'heading': 'Your promotion is paused' if action == 'pause' else 'Your promotion is live again',
+            'message': (f'Your campaign {promo.pk} was paused by the platform.'
+                        if action == 'pause' else f'Your campaign {promo.pk} is running again.'),
+            'footnote': 'Nothing new was charged for this change.',
+            **common,
+        }
+    if action == 'stop':
+        return {
+            'subject': f'Exposing promotion {promo.pk} was stopped',
+            'heading': 'The campaign has ended',
+            'message': f'Your campaign {promo.pk} was stopped. Reason: {reason or "not stated"}. '
+                       + (f'{refund} coins were returned to your wallet.' if refund
+                          else 'No coins were returned for this run.'),
+            'footnote': 'The numbers it gathered stay on the campaign page.',
+            **common,
+        }
+    return None
 
 
 def algorithm():

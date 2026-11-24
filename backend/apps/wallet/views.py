@@ -6,7 +6,7 @@ from rest_framework.permissions import IsAdminUser, IsAuthenticated
 from rest_framework.response import Response
 
 from apps.adminpanel.journal import record
-from apps.common.emails import queue_coin_credit_email
+from apps.common.emails import queue_coin_decision_email
 from apps.common.pagination import KeysetPagination
 from apps.notifications.services import notify
 
@@ -171,10 +171,14 @@ def coin_request_review(request, pk, action):
         obj.save(update_fields=['status', 'reviewed_at'])
     if action == 'approve':
         notify(obj.user, request.user, 'coins', f'Your purchase of {obj.coins} coins was approved.', 'wallet', wallet.pk)
-        queue_coin_credit_email(
-            obj.user, coins=obj.coins, amount=obj.amount, balance=wallet.balance,
-            request_id=obj.pk, reference=obj.reference,
+        queue_coin_decision_email(
+            obj.user, action='approve', coins=obj.coins, amount=obj.amount,
+            balance=wallet.balance, request_id=obj.pk, reference=obj.reference,
         )
     else:
         notify(obj.user, request.user, 'coins', 'Your coin purchase was rejected.', 'wallet', obj.pk)
+        queue_coin_decision_email(
+            obj.user, action='reject', coins=obj.coins, amount=obj.amount,
+            request_id=obj.pk, reference=obj.reference,
+        )
     return Response(CoinRequestSerializer(obj).data)

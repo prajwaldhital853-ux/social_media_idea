@@ -27,7 +27,7 @@ from django.http import FileResponse
 from django.utils import timezone
 
 from apps.common.api import person
-from apps.common.emails import queue_coin_credit_email
+from apps.common.emails import mail_delivery_problem, queue_coin_decision_email
 from apps.notifications.services import notify
 from apps.wallet.models import CoinRequest, Transaction, Wallet, apply
 
@@ -179,13 +179,22 @@ def decide(req, actor, action, reason=''):
            'coin_proof' if action == 'proof' else 'wallet', req.pk)
     record(actor, f'coins_{action}', f'coin_request:{req.pk}',
            f'{req.coins} coins / NPR {req.amount} — ' + (reason or 'approved, wallet credited'))
-    if action == 'approve':
-        queue_coin_credit_email(
-            req.user, coins=req.coins, amount=req.amount, balance=wallet.balance,
-            request_id=req.pk, reference=req.reference,
+    if action in ('approve', 'reject', 'proof'):
+        queue_coin_decision_email(
+            req.user, action=action, coins=req.coins, amount=req.amount,
+            balance=(wallet.balance if action == 'approve' else None),
+            request_id=req.pk, reference=req.reference, reason=reason,
         )
     return 200, {'detail': _said(action, req, entry), 'request': row(req, review),
-                 'asks': asks(req.pk), **body}
+                 'asks': asks(req.pk), 'mail': _mail_note(action), **body}
+
+
+def _mail_note(action):
+    """What the seat is told about the letter, so a dead provider stops being invisible."""
+    problem = mail_delivery_problem()
+    if not problem:
+        return ''
+    return (f'The member was notified in the app, but the email was NOT sent. {problem}')
 
 
 def _said(action, req, entry):
