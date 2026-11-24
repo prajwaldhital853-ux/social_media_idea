@@ -138,6 +138,21 @@ export function requires(pathname: string): string | null {
 }
 
 /**
+ * Which drawer row a screen belongs to. A user's page is still inside the directory,
+ * so the drawer keeps that row lit — and whatever is waiting in that queue stays
+ * counted against the same row.
+ */
+export function drawerFor(pathname: string): string {
+  const clean = (pathname || '/').replace(/\/$/, '') || '/';
+  for (const group of NAV) {
+    const hit = group.items.find(item => isUnder(clean, item.href));
+    if (hit) return hit.href;
+  }
+  const off = OFF_DRAWER.find(item => clean.startsWith(item.href));
+  return off ? off.href.replace(/\/$/, '') : '';
+}
+
+/**
  * Whether this seat may open a route an alert points at. The dashboard links an
  * alert to the screen that clears it, and two different things make a screen
  * unreachable: it may not have shipped yet, or it may have shipped and be a door

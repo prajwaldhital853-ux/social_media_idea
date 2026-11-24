@@ -2298,3 +2298,255 @@ button.key:hover { border-color: #c3c9d1; color: var(--ink); background: #F7F8FA
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }
+
+/* ── bar tools: theme, full screen, the bell ─────────────── */
+/* Three small squares rather than three words: a seat learns which is which in one
+   visit, and the strip above the screen has to stay one line tall at 13px. */
+
+.bar-tools { display: flex; align-items: center; gap: 4px; }
+
+.icon-btn {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--paper);
+  color: var(--muted);
+  transition: color 0.12s var(--ease), background 0.12s var(--ease), border-color 0.12s var(--ease);
+}
+
+.icon-btn:hover { color: var(--ink); border-color: #c3c9d1; background: #F7F8FA; }
+.icon-btn.armed { color: var(--brand); border-color: var(--brand-ring); background: var(--brand-tint); }
+
+.bell { position: relative; }
+
+.bell-count {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  border: 2px solid var(--paper);
+  border-radius: 9999px;
+  color: #fff;
+  background: var(--red);
+  font-size: 10px;
+  font-weight: 750;
+  line-height: 1;
+  display: grid;
+  place-items: center;
+}
+
+.bell-tray {
+  position: absolute;
+  top: 36px;
+  right: -4px;
+  z-index: 1250;
+  width: min(330px, calc(100vw - 28px));
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--paper);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+}
+
+.bell-tray-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 11px;
+  border-bottom: 1px solid var(--line);
+  background: #F7F8FA;
+}
+
+.bell-tray-head b { font-size: 12.5px; }
+
+.bell-list { list-style: none; margin: 0; padding: 4px; max-height: 340px; overflow-y: auto; }
+.bell-list + .bell-list { border-top: 1px solid var(--line); }
+
+.bell-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 9px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  text-align: left;
+  font-size: 12.8px;
+  color: var(--ink);
+}
+
+.bell-item:hover { background: var(--tint); }
+.bell-item-text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.bell-item-ago { flex: none; color: var(--muted); font-size: 11px; padding-top: 1px; }
+.bell-item::before {
+  content: '';
+  flex: none;
+  width: 6px;
+  height: 6px;
+  margin-top: 6px;
+  border-radius: 50%;
+  background: var(--brand);
+}
+.bell-item.kind-coin_request::before { background: var(--amber); }
+.bell-item.kind-signup::before { background: var(--green); }
+.bell-item.kind-alert::before { background: var(--red); }
+
+.bell-empty { padding: 14px 12px; color: var(--muted); font-size: 12.5px; }
+
+/* The red number on the drawer row: the queue itself carries the count, so the seat
+   who closes the tray still sees which desk is waiting. */
+.side-item-count {
+  margin-left: auto;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9999px;
+  color: #fff;
+  background: var(--red);
+  font-size: 10.5px;
+  font-weight: 750;
+  display: grid;
+  place-items: center;
+}
+
+.side-item.active .side-item-count { color: var(--brand-d); background: #fff; }
+
+@media (max-width: 720px) {
+  .bell-tray { position: fixed; top: 54px; right: 10px; left: 10px; width: auto; }
+  .icon-btn { width: 28px; height: 28px; }
+}
+
+/* ── dark seat ──────────────────────────────────────────── */
+/* The same desk at night: grey-black surfaces, the brand red lifted so it still
+   reads on black, and the payment QR and the proof photographs deliberately left on
+   white — those are somebody's screenshot, and dimming them makes them unreadable. */
+
+[data-theme='dark'] {
+  --ink: #ECEEF1;
+  --muted: #98A1AC;
+  --line: #2A2E35;
+  --paper: #16181C;
+  --canvas: #0F1114;
+  --tint: rgba(255, 255, 255, 0.07);
+  --brand: #C8494F;
+  --brand-d: #A93A41;
+  --brand-tint: rgba(200, 73, 79, 0.16);
+  --brand-ring: rgba(200, 73, 79, 0.34);
+  --amber: #FDA041;
+  --amber-ink: #F3B168;
+  --amber-tint: rgba(253, 160, 65, 0.18);
+  --green: #23C08A;
+  --green-ink: #4FD3A2;
+  --green-tint: rgba(35, 192, 138, 0.16);
+  --red: #F05252;
+  --red-ink: #F3A0A5;
+  --red-tint: rgba(240, 82, 82, 0.16);
+  --side: #0B0D10;
+  --side-2: #14171B;
+  --side-line: rgba(255, 255, 255, 0.08);
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 18px 50px rgba(0, 0, 0, 0.62);
+}
+
+[data-theme='dark'] body { color: var(--ink); background: var(--canvas); }
+
+[data-theme='dark'] .side { border-right-color: var(--line); }
+[data-theme='dark'] .side-group-label { color: #6E7681; }
+[data-theme='dark'] .side-item { color: #B9C0C9; }
+[data-theme='dark'] .side-item-icon { color: #8A93A0; }
+[data-theme='dark'] .side-signout { color: #B9C0C9; }
+
+[data-theme='dark'] .bar-query { background: #1B1F25; color: #8A93A0; }
+[data-theme='dark'] .bar-query kbd { color: #8A93A0; background: #16181C; }
+[data-theme='dark'] .window-meter { background: #1B1F25; }
+[data-theme='dark'] .icon-btn:hover { color: var(--ink); border-color: #3A404A; background: #1B1F25; }
+[data-theme='dark'] .bell-tray-head { background: #1B1F25; }
+[data-theme='dark'] .bell-count { border-color: #16181C; }
+
+[data-theme='dark'] .crumb b { color: #C6CCD4; }
+[data-theme='dark'] .crumb span { color: #6E7681; }
+
+[data-theme='dark'] .role-chip { background: #1B1F25; color: #B9C0C9; }
+[data-theme='dark'] .role-admin { border-color: #3A404A; color: #DCE1E7; background: #232830; }
+[data-theme='dark'] .role-user { border-color: #3A404A; }
+
+[data-theme='dark'] .pill { background: #1B1F25; color: #B9C0C9; }
+[data-theme='dark'] .pill.dead { color: #F3A0A5; }
+[data-theme='dark'] .pill.resolved { color: #4FD3A2; }
+[data-theme='dark'] .state.dead { color: #F3A0A5; }
+[data-theme='dark'] .chip { background: #1B1F25; }
+
+[data-theme='dark'] .btn { color: #DCE1E7; }
+[data-theme='dark'] .btn:hover:not(:disabled) { border-color: #3A404A; background: #1B1F25; }
+[data-theme='dark'] .btn.danger { border-color: #C0454B; background: #B03A40; }
+[data-theme='dark'] .btn.danger:hover:not(:disabled) { background: #98333A; }
+[data-theme='dark'] .btn.danger.outline { color: #E1878C; }
+[data-theme='dark'] .btn.amber { color: #2B1A05; }
+[data-theme='dark'] .btn.amber:hover:not(:disabled) { background: #FFB457; border-color: #F0912B; }
+
+[data-theme='dark'] input::placeholder,
+[data-theme='dark'] textarea::placeholder { color: #6E7681; }
+[data-theme='dark'] .card-error { color: #F3A0A5; }
+[data-theme='dark'] .banner-bad { color: #F3A0A5; }
+[data-theme='dark'] .prompt-error { color: #F3A0A5; }
+[data-theme='dark'] .pk-problems { color: #F3A0A5; }
+[data-theme='dark'] .key.deny { color: #F3A0A5; }
+[data-theme='dark'] .verb-remove_content,
+[data-theme='dark'] .verb-public_notice { color: #F3A0A5; }
+[data-theme='dark'] .verb-release_content,
+[data-theme='dark'] .verb-restore_content { color: #4FD3A2; }
+
+[data-theme='dark'] .search { background: #1B1F25; color: #8A93A0; }
+[data-theme='dark'] .fchip { color: #B9C0C9; }
+[data-theme='dark'] .fchip:hover:not(:disabled) { border-color: #3A404A; background: #1B1F25; }
+[data-theme='dark'] .fchip.on { color: #fff; }
+[data-theme='dark'] .facets .dot { background: #3A404A; }
+[data-theme='dark'] button.key:hover { border-color: #3A404A; color: var(--ink); background: #1B1F25; }
+
+[data-theme='dark'] .grid thead th { background: #1A1E24; color: #8A93A0; }
+[data-theme='dark'] .grid td,
+[data-theme='dark'] .grid tbody th { border-bottom-color: #23272E; }
+[data-theme='dark'] .grid tbody > tr.grid-row:hover { background: #191D22; }
+[data-theme='dark'] .grid-detail > td { background: #14171C; }
+[data-theme='dark'] .grid-caret { color: #6E7681; }
+[data-theme='dark'] .iact { color: #8A93A0; }
+[data-theme='dark'] .campaigns tbody tr:hover,
+[data-theme='dark'] .cats tbody tr:hover { background: #191D22; }
+[data-theme='dark'] .campaigns .is-dim { color: #6E7681; }
+
+[data-theme='dark'] .qr-row,
+[data-theme='dark'] .codes-grid code,
+[data-theme='dark'] .health-item,
+[data-theme='dark'] .cwrap,
+[data-theme='dark'] .ask,
+[data-theme='dark'] .quote { background: #12151A; }
+[data-theme='dark'] .health-unknown { border-left-color: #3A404A; }
+[data-theme='dark'] .health-unknown .health-dot { background: #6E7681; }
+[data-theme='dark'] .alert-info .alert-dot { background: #7C8896; }
+
+[data-theme='dark'] .ctext,
+[data-theme='dark'] .cmd { color: #DCE1E7; }
+[data-theme='dark'] .cmd { background: #1B1F25; }
+[data-theme='dark'] .kind-comment { background: rgba(150, 160, 175, 0.16); color: #C6CCD4; }
+[data-theme='dark'] .kind-listing { color: #4FD3A2; }
+[data-theme='dark'] .hit { color: #2B1A05; }
+[data-theme='dark'] .verdict-line,
+[data-theme='dark'] .verdict-note b { color: #4FD3A2; }
+[data-theme='dark'] .verdict-money,
+[data-theme='dark'] .verdict-note { color: #7BE0BC; }
+[data-theme='dark'] .cphoto.blank,
+[data-theme='dark'] .cthumb.blank,
+[data-theme='dark'] .cfilm.blank { color: #6E7681; }
+[data-theme='dark'] .coin-by.dim { color: #6E7681; }
+
+[data-theme='dark'] .skeleton {
+  background: linear-gradient(90deg, #1A1E24 0%, #232830 40%, #1A1E24 80%);
+}
