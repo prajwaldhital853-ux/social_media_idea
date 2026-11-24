@@ -22,7 +22,7 @@ import { Listing, Post, User } from '@/lib/types';
 export default function UserProfilePage() {
   const params = useParams();
   const router = useRouter();
-  const { db, me, t, isFollowing, followState, toggleFollow, showToast, serverMode, loadPerson, ready, updateProfile } = useApp();
+  const { db, me, t, isFollowing, followState, toggleFollow, showToast, serverMode, loadPerson, ready, updateProfile, openCreateChooser } = useApp();
   const username = String(params.username || '');
   const user = db.users.find(u => u.username.toLowerCase() === username.toLowerCase());
   const [tab, setTab] = useState<'posts' | 'reels' | 'photos' | 'about' | 'listings'>('posts');
@@ -282,7 +282,7 @@ export default function UserProfilePage() {
             {own ? (
               <>
                 <button type="button" className="follow-btn" onClick={() => setEditing(true)}>{IC.user}<span>{t('editProfile')}</span></button>
-                <button type="button" className="ghost-btn" onClick={() => router.push('/create')}>{IC.plus}<span>{t('post')}</span></button>
+                <button type="button" className="ghost-btn" onClick={() => needSession(openCreateChooser)}>{IC.plus}<span>{t('post')}</span></button>
               </>
             ) : !who ? (
               <span className="profile-actions-wait" aria-hidden="true" />
