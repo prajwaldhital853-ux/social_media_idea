@@ -2,6 +2,7 @@ from datetime import timedelta
 
 from django.conf import settings as django_settings
 from django.db.models import Count, F, Q
+from django.db.models.functions import Greatest
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import serializers, status
@@ -86,9 +87,10 @@ def _remove_target(report, actor):
             owner = content.author
     elif kind == 'comment' and tid.isdigit():
         content = Comment.objects.filter(pk=int(tid)).first()
-        if content:
+        if content and content.status != Comment.Status.REMOVED:
             content.status = Comment.Status.REMOVED
             content.save(update_fields=['status'])
+            Post.objects.filter(pk=content.post_id).update(comment_count=Greatest(F('comment_count') - 1, 0))
             owner = content.author
     elif kind == 'listing' and tid.isdigit():
         content = Listing.objects.filter(pk=int(tid)).first()

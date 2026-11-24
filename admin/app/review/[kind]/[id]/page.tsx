@@ -6,11 +6,12 @@ import Banner from '@/components/Banner';
 import ConsoleShell from '@/components/ConsoleShell';
 import ContentCard from '@/components/ContentCard';
 import DecisionBar from '@/components/Decision';
+import { useConfirm } from '@/components/Confirm';
 import { api } from '@/lib/api';
 import { IC } from '@/lib/icons';
 import { ago, stamp } from '@/lib/time';
 import { useSession } from '@/lib/session';
-import { ContentKind, Decision as Verb, Outcome, ReviewCase } from '@/lib/types';
+import { ContentKind, Decision as Verb, NoticeRow, Outcome, ReviewCase } from '@/lib/types';
 
 const KINDS: ContentKind[] = ['post', 'comment', 'listing', 'user'];
 
@@ -21,7 +22,9 @@ const KIND_LABEL: Record<string, string> = {
 const VERB_LABEL: Record<string, string> = {
   dismiss_reports: 'Left it up',
   remove_content: 'Took it down',
-  public_notice: 'Put a public notice on it',
+  public_notice: 'Put a warning notice on it',
+  attach_notice: 'Put a notice on it',
+  withdraw_notice: 'Withdrew a notice',
   release_content: 'Released it back to the feed',
   restore_content: 'Restored it',
 };
@@ -35,11 +38,13 @@ const VERB_LABEL: Record<string, string> = {
  * five verbs are decided against one screen that shows the whole of it.
  */
 export default function ReviewCasePage({ params }: { params: { kind: string; id: string } }) {
-  const { status, noteGate } = useSession();
+  const { status, noteGate, can } = useSession();
+  const confirm = useConfirm();
   const [detail, setDetail] = useState<ReviewCase | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [banner, setBanner] = useState<{ kind: 'ok' | 'bad'; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [withdrawing, setWithdrawing] = useState<number | null>(null);
 
   const known = KINDS.includes(params.kind as ContentKind);
 
@@ -71,6 +76,27 @@ export default function ReviewCasePage({ params }: { params: { kind: string; id:
   const handled = (out: Outcome) => {
     setBanner({ kind: 'ok', text: out.detail });
     load();
+  };
+
+  const withdrawNotice = async (notice: NoticeRow) => {
+    const sure = await confirm({
+      title: 'Withdraw this notice?',
+      body: `The sentence about @${notice.about} stops showing on this ${notice.target_type}. It stays on the record, marked withdrawn, with your name on it.`,
+      confirmLabel: 'Withdraw',
+      tone: 'danger',
+    });
+    if (!sure) return;
+    setWithdrawing(notice.id);
+    setBanner(null);
+    try {
+      await api(`admin/notices/${notice.id}/withdraw/`, { method: 'POST', body: {} });
+      setBanner({ kind: 'ok', text: `The notice about @${notice.about} is withdrawn. The audit row says who took it down.` });
+      await load();
+    } catch (err) {
+      if (!noteGate(err)) setBanner({ kind: 'bad', text: (err as Error).message });
+    } finally {
+      setWithdrawing(null);
+    }
   };
 
   const author = detail?.content?.author;
@@ -173,6 +199,17 @@ export default function ReviewCasePage({ params }: { params: { kind: string; id:
                           {notice.actor ? `@${notice.actor}` : 'staff'} · {ago(notice.created_at)}
                         </em>
                         {notice.reason && <span className="ctext">{notice.reason}</span>}
+                        {notice.is_live && can('notices') && (
+                          <div className="notice-act">
+                            <button
+                              type="button" className="btn danger outline tiny"
+                              disabled={busy || withdrawing !== null}
+                              onClick={() => withdrawNotice(notice)}
+                            >
+                              {IC.x}<span>{withdrawing === notice.id ? 'Working…' : 'Withdraw notice'}</span>
+                            </button>
+                          </div>
+                        )}
                       </li>
                     ))}
                   </ul>

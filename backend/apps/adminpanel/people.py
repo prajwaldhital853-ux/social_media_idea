@@ -358,15 +358,21 @@ def detail(user):
             'id': str(item.pk), 'text': item.text[:280], 'state': item.status,
             'audience': item.audience, 'created_at': item.created_at,
             'likes': item.like_count, 'comments': item.comment_count,
-        } for item in Post.objects.filter(author=user).order_by('-created_at')[:25]],
+            'preview': review.preview('post', item, full=True),
+        } for item in Post.objects.filter(author=user).select_related('author__profile')
+               .prefetch_related('media').order_by('-created_at')[:25]],
         'comments': [{
             'id': str(item.pk), 'text': item.text[:280], 'state': item.status,
             'created_at': item.created_at, 'post': str(item.post_id),
-        } for item in Comment.objects.filter(author=user).order_by('-created_at')[:25]],
+            'preview': review.preview('comment', item, full=True),
+        } for item in Comment.objects.filter(author=user).select_related('author__profile', 'post__author')
+               .order_by('-created_at')[:25]],
         'listings': [{
             'id': str(item.pk), 'title': item.title, 'price': str(item.price),
             'currency': item.currency, 'state': item.status, 'created_at': item.created_at,
-        } for item in Listing.objects.filter(seller=user).order_by('-created_at')[:25]],
+            'preview': review.preview('listing', item, full=True),
+        } for item in Listing.objects.filter(seller=user).select_related('seller__profile')
+               .prefetch_related('images').order_by('-created_at')[:25]],
         'reports': [{
             'id': report.pk, 'reason': report.reason, 'details': report.details,
             'status': report.status, 'created_at': report.created_at,
@@ -607,6 +613,7 @@ def warn(user, caller, *, text, reason='', audience=PublicNotice.Audience.PRIVAT
     }
 
 
+@transaction.atomic
 def clear_flags(user, caller, *, reason=''):
     """The pile is gone: reports closed, warnings withdrawn, lockout cleared.
 
@@ -629,6 +636,10 @@ def clear_flags(user, caller, *, reason=''):
             closed += Report.objects.filter(target_type=kind, target_id__in=pks,
                                             status__in=OPEN_STATES) \
                 .update(status=Report.Status.DISMISSED, resolved_at=now)
+    withdrawn = 0
+    for notice in PublicNotice.objects.select_for_update().filter(about=user, is_live=True):
+        review.withdraw(notice, caller)
+        withdrawn += 1
     user.failed_attempts = 0
     user.locked_until = None
     user.save(update_fields=['failed_attempts', 'locked_until'])
@@ -637,15 +648,16 @@ def clear_flags(user, caller, *, reason=''):
     safety.lift(user.email, reasons=['lock'])
     held = Post.objects.filter(author=user, status=Post.Status.HIDDEN).count()
     notify(user, caller, 'warning',
-           'The reports on your account were reviewed and cleared.'
+           'The reports and warnings on your account were reviewed and cleared.'
            + (f' {held} post(s) are still held for a separate decision.' if held
               else ' Nothing else is held against you.'), 'user', user.pk)
     record(caller, 'clear_spam_flags', user.username,
-           f'{closed} report(s) dismissed, lockout cleared. {reason}'[:240])
+           f'{closed} report(s) dismissed, {withdrawn} notice(s) withdrawn, lockout cleared. {reason}'[:240])
     return {
         'action': 'clear_flags', 'username': user.username, 'reports_closed': closed,
-        'held_posts': held,
-        'detail': (f'{closed} open report(s) closed and the login lockout cleared. '
+        'notices_withdrawn': withdrawn, 'held_posts': held,
+        'detail': (f'{closed} open report(s) closed, {withdrawn} warning notice(s) withdrawn '
+                   'and the login lockout cleared. '
                    + (f'{held} post(s) of theirs are still out of the feed on an earlier '
                       'decision — release them from the Takedown shelf.' if held
                       else 'Nothing of theirs is held.')),

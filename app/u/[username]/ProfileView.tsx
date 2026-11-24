@@ -308,6 +308,8 @@ export default function UserProfilePage() {
             <button type="button" className="icon-btn" aria-label={t('share')} title={t('share')} onClick={() => void shareProfile()}>{IC.share}</button>
           </div>
 
+          <NoticeBanner notices={user.notices} full/>
+
           <h1 className="profile-name">
             {user.name || user.username}
             {user.verified && <VerifiedBadge size={20} />}
@@ -322,7 +324,6 @@ export default function UserProfilePage() {
             <span className="profile-meta-chip">{IC.calendar}{t('joined')} {joinedLabel}</span>
           </div>
           {suspended && <p className="profile-susp">{IC.flag}{t('suspNotice')} {user.susp?.reason}</p>}
-          <NoticeBanner notices={user.notices} full/>
 
           <div className="profile-stats">
             <button

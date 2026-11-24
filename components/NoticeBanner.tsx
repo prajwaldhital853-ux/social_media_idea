@@ -16,9 +16,11 @@ export default function NoticeBanner({ notices, full = false }: { notices?: Noti
             {full && notice.reason && <span className="notice-reason">{notice.reason}</span>}
             {full && notice.by && <span className="notice-by">@{notice.by}</span>}
           </p>
-          <Link href={notice.notificationId ? `/notifications/${notice.notificationId}` : '/notifications'}>
-            {t('visitInbox')}
-          </Link>
+          {notice.private && (
+            <Link href={notice.notificationId ? `/notifications/${notice.notificationId}` : '/notifications'}>
+              {t('visitInbox')}
+            </Link>
+          )}
         </div>
       ))}
     </div>

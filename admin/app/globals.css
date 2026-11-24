@@ -789,7 +789,9 @@ button.link:disabled:hover { color: var(--muted); text-decoration: none; }
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--paper);
-  overflow: hidden;
+  max-height: 360px;
+  overflow: auto;
+  scrollbar-gutter: stable;
 }
 
 .grid { width: 100%; border-collapse: collapse; }
@@ -800,6 +802,9 @@ button.link:disabled:hover { color: var(--muted); text-decoration: none; }
 .grid.review tr.grid-row > td { overflow: hidden; }
 
 .grid thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
   padding: 8px 10px;
   text-align: left;
   border-bottom: 1px solid var(--line);
@@ -990,7 +995,9 @@ button.link:disabled:hover { color: var(--muted); text-decoration: none; }
   list-style: none;
   border: 1px solid var(--line);
   border-radius: 9px;
-  overflow: hidden;
+  max-height: 360px;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
 }
 
 .record-item {
@@ -1004,6 +1011,7 @@ button.link:disabled:hover { color: var(--muted); text-decoration: none; }
 
 .record-item:last-child { border-bottom: 0; }
 .record-item > span:first-child { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.record-row-acts { display: flex; align-items: center; gap: 8px; flex: none; }
 .record-text { font-size: 12.8px; overflow-wrap: anywhere; }
 .record-meta { color: var(--muted); font-size: 11.6px; }
 
@@ -1266,6 +1274,17 @@ button.key:hover { border-color: #c3c9d1; color: var(--ink); background: #F7F8FA
 .prompt-actions { display: flex; align-items: center; justify-content: space-between; margin-top: 14px; }
 .prompt-right { display: flex; gap: 8px; }
 
+.content-prompt {
+  width: min(880px, 100%);
+  max-height: calc(100vh - 48px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.content-prompt-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex: none; }
+.content-prompt-head h2 { margin: 0; }
+.content-prompt-scroll { min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+
 /* ── contract 6.3: what is being decided ─────────────────── */
 
 .note.row {
@@ -1492,7 +1511,9 @@ button.key:hover { border-color: #c3c9d1; color: var(--ink); background: #F7F8FA
   list-style: none;
   border: 1px solid var(--line);
   border-radius: 9px;
-  overflow: hidden;
+  max-height: 360px;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
   animation: unfold 0.2s var(--ease) both;
 }
 
