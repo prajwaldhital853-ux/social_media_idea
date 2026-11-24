@@ -18,6 +18,7 @@ urlpatterns = [
     path('admin/session/recovery/', views_session.admin_recovery),
     path('admin/overview/', views_overview.admin_overview),
     path('admin/analytics/promotions/', views_overview.admin_promotion_analytics),
+    path('admin/analytics/alerts/', views_overview.admin_alert_feed),
     # Contract 6.11: the bell. Readable by any seat — which rows a seat is shown is
     # decided per notice, by the permission the event was announced against.
     path('admin/bell/', views_bell.bell_desk),

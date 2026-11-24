@@ -20,6 +20,12 @@ def _int(request, name, fallback, low, high):
         return fallback
 
 
+# Both dashboard panels stop here and offer the rest behind a click, because the
+# tiles are the reason the screen is opened and a long trail should not push them
+# off the top or stretch the page past the seat it is read from.
+PAGE = 7
+
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 @rbac.staff_only('overview')
@@ -32,6 +38,7 @@ def admin_overview(request):
     media = stats.storage_used(refresh=request.query_params.get('refresh') in ('1', 'true'))
     cutoffs = stats.windows()
     alerts.scan(cutoffs['now'], media=media)
+    tally = alerts.counts()
     return Response({
         'generated_at': cutoffs['now'],
         'windows': {
@@ -42,8 +49,26 @@ def admin_overview(request):
         },
         'tiles': stats.tiles(cutoffs, media=media),
         'health': stats.health(cutoffs, media=media),
-        'alerts': {'counts': alerts.counts(), 'recent': alerts.feed(10)},
+        'alerts': {
+            'counts': tally,
+            'recent': alerts.feed(PAGE),
+            'total': tally['open'] + tally['acked'] + tally['resolved'],
+        },
         'thresholds': settings_store.cached(),
+    })
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+@rbac.staff_only('overview')
+def admin_alert_feed(request):
+    """The next page of the dashboard's alerts panel, in the panel's own order."""
+    limit = _int(request, 'limit', PAGE, 1, 40)
+    offset = _int(request, 'offset', 0, 0, 5000)
+    tally = alerts.counts()
+    return Response({
+        'rows': alerts.feed(limit, offset),
+        'total': tally['open'] + tally['acked'] + tally['resolved'],
     })
 
 
@@ -56,10 +81,15 @@ def admin_promotion_analytics(request):
     The two metrics with no event behind them come back as `unmeasured` sentences
     rather than zeros, so the screen says what is not known instead of implying a
     campaign achieved nothing.
+
+    `limit` and `offset` page the table, because scoring a campaign costs a
+    handful of queries and a platform with three hundred promotions should not
+    answer a dashboard that shows seven of them by running three hundred.
     """
     cutoffs = stats.windows()
-    limit = _int(request, 'limit', 12, 1, 40)
-    rows = stats.promotion_performance(cutoffs, limit=limit)
+    limit = _int(request, 'limit', PAGE, 1, 40)
+    offset = _int(request, 'offset', 0, 0, 5000)
+    rows = stats.promotion_performance(cutoffs, limit=limit, offset=offset)
     return Response({
         'generated_at': cutoffs['now'],
         'metrics': [{'id': key, 'label': label} for key, label in stats.METRIC_LABELS],
@@ -67,4 +97,6 @@ def admin_promotion_analytics(request):
         'rows': rows,
         'totals': stats.performance_totals(rows),
         'shown': len(rows),
+        'offset': offset,
+        'total': stats.promotion_count(),
     })

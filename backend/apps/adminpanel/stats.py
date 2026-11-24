@@ -422,9 +422,14 @@ def promotion_row(promo, now):
     }
 
 
-def promotion_performance(cutoffs, limit=24):
-    campaigns = Promotion.objects.select_related('owner').order_by('-created_at')[:limit]
+def promotion_performance(cutoffs, limit=24, offset=0):
+    campaigns = Promotion.objects.select_related('owner').order_by('-created_at')[offset:offset + limit]
     return [promotion_row(promo, cutoffs['now']) for promo in campaigns]
+
+
+def promotion_count():
+    """How many campaigns the performance table could show, page or no page."""
+    return Promotion.objects.count()
 
 
 def performance_totals(rows):

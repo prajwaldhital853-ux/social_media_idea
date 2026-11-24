@@ -181,6 +181,7 @@ export interface Overview {
   alerts: {
     counts: { open: number; acked: number; resolved: number; attention: number; unwired: number };
     recent: AlertRow[];
+    total: number;
   };
   thresholds: Record<string, Threshold>;
 }
@@ -209,6 +210,8 @@ export interface PromotionAnalytics {
   rows: CampaignRow[];
   totals: Record<string, number>;
   shown: number;
+  offset: number;
+  total: number;
 }
 
 /** --- contract 6.3: content and marketplace review -------------------------- */
