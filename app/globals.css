@@ -1427,8 +1427,11 @@ a:focus:not(:focus-visible) {
   justify-content: center;
   /* Reels and the media viewer are fixed full-screen pages at 1200, and every
      sheet is portaled onto <body> beside them — a lower number buries the
-     dialog under the video it was opened from. */
-  z-index: 1300;
+     dialog under the video it was opened from. The comments sheet (1450), the
+     chooser (1500) and the publish screen (1600) are the same trap one layer
+     up: a report opened from inside a sheet was painted under that sheet.
+     Only the toast may sit above a dialog. */
+  z-index: 1650;
   animation: fadeIn 0.2s ease;
 }
 
