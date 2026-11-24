@@ -13,7 +13,6 @@ type Recovery = {
   challenge?: number;
   expires_in?: number;
   resend_in?: number;
-  dev_code?: string;
 };
 
 /**
@@ -469,9 +468,6 @@ export default function LoginPage() {
                 placeholder="123456"
               />
             </label>
-            {sent?.dev_code && (
-              <p className="card-ok">{IC.alert}<span>Local build — the code this page cannot mail is <b>{sent.dev_code}</b>.</span></p>
-            )}
             <label className="field">
               <span>New password</span>
               <input

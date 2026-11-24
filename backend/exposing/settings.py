@@ -294,9 +294,6 @@ CSRF_TRUSTED_ORIGINS = _env_list('DJANGO_CSRF_TRUSTED_ORIGINS')
 
 EXPOSING_REPORT_THRESHOLD = int(os.environ.get('EXPOSING_REPORT_THRESHOLD') or '3')
 EXPOSING_RATE_LIMITS = (os.environ.get('EXPOSING_RATE_LIMITS') or '1') == '1'
-# Demo escape hatch: shows the one-time login code in the UI when no mail
-# provider is configured. Off by default; never enable for a real launch.
-EXPOSING_OTP_VISIBLE = os.environ.get('EXPOSING_OTP_VISIBLE', '0') == '1'
 
 # Hosted platforms keep a log, not a file, and that log is the only way to learn
 # what a "server could not finish that request" screenshot actually was. stdout,

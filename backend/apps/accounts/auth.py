@@ -110,7 +110,9 @@ class CookieJWTAuthentication(BaseAuthentication):
         if not token:
             return None
         payload = decode_token(token, 'access')
-        user = User.objects.filter(pk=int(payload['sub']), is_active=True).first()
+        user = User.objects.filter(pk=int(payload['sub']), is_active=True, seeded=False).exclude(
+            Q(is_staff=True) | Q(is_superuser=True) | Q(staff_account__isnull=False, staff_account__is_enabled=True)
+        ).first()
         if not user:
             raise AuthenticationFailed('Account no longer active.')
         if user.is_suspended:

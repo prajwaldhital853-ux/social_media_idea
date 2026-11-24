@@ -26,10 +26,6 @@ COUNTRIES = [
 MIN_AGE = 13
 COIN_PRICE = 10
 
-# The identity the DEBUG-only /api/auth/google/ demo branch hands back. It is not a
-# seeded account on purpose, so the button also exercises Google-completes-signup.
-DEMO_GOOGLE = {'email': 'guest@demo.test', 'name': 'Guest Demo', 'sub': 'demo-google-guest'}
-
 
 def shelf():
     """The packages the site sells right now: the console's shelf when a seat has
@@ -75,9 +71,6 @@ def features():
         'marketplace': True,
         'promotion': True,
         'googleLogin': google,
-        # A DEBUG server cannot verify a real Google token, so it offers an
-        # explicitly labelled demo identity instead of a broken button.
-        'googleDemo': not google and bool(settings.DEBUG),
         'facebookLogin': os.environ.get('FACEBOOK_APP_ID', '') != '',
         'appleLogin': os.environ.get('APPLE_CLIENT_ID', '') != '',
     }
@@ -94,7 +87,6 @@ def client_config():
         'threshold': int(getattr(settings, 'EXPOSING_REPORT_THRESHOLD', 3)),
         'rateLimits': bool(getattr(settings, 'EXPOSING_RATE_LIMITS', True)),
         'googleClientId': getattr(settings, 'GOOGLE_CLIENT_ID', ''),
-        'demoGoogle': DEMO_GOOGLE if features()['googleDemo'] else None,
         'wording': wording(),
         'bank': {
             'name': os.environ.get('EXPOSING_BANK_NAME', 'Nepal Bank Ltd'),

@@ -94,9 +94,9 @@ def _principal(request):
     """Whose code is being proved: the pending sign-in, or a live staff session."""
     pending = read_admin_token(request.COOKIES.get(SETUP_COOKIE, ''), kind='setup')
     if pending and pending.get('sub'):
-        return User.objects.filter(pk=int(pending['sub']), is_active=True).first()
+        return User.objects.filter(pk=int(pending['sub']), is_active=True, seeded=False).first()
     user = getattr(request, 'user', None)
-    if user is not None and user.is_authenticated and user.is_staff:
+    if user is not None and user.is_authenticated and user.is_staff and not user.seeded:
         return user
     return None
 
@@ -165,7 +165,7 @@ def admin_login(request):
         return Response({'detail': 'Staff sign in with their email address, not their username.'}, status=400)
 
     user = User.objects.filter(email=identifier).order_by('id').first()
-    if not user or not user.is_staff or not user.check_password(password):
+    if not user or user.seeded or not user.is_staff or not user.check_password(password):
         # One sentence for both: whether this address is a staff account is not
         # something a password probe should be allowed to learn.
         return Response({'detail': 'Those credentials did not match a staff account.'}, status=401)
@@ -389,7 +389,7 @@ def _recovery_otp(user, device_id=''):
 def _seat(user):
     """The seat behind an address, or None when there is nothing to recover."""
     staff = StaffAccount.objects.filter(user=user).first() if user else None
-    if staff is None or not staff.is_enabled or not user.is_staff:
+    if staff is None or user.seeded or not staff.is_enabled or not user.is_staff:
         return None
     if not user.is_active or user.is_suspended or not user.email:
         # A closed seat gets no letter: it cannot be signed in to even with a
@@ -419,17 +419,14 @@ def admin_forgot(request):
     user = User.objects.filter(email=email).order_by('id').first()
     if _seat(user) is None:
         return Response({'detail': RECOVERY_SENT})
-    otp, code = _recovery_otp(user, (request.data.get('device_id') or '')[:80])
+    otp, _ = _recovery_otp(user, (request.data.get('device_id') or '')[:80])
     record(user, 'staff_recovery_sent', user.email, 'code mailed to the seat address')
-    body = {
+    return Response({
         'detail': RECOVERY_SENT,
         'challenge': otp.pk,
         'expires_in': RECOVERY_MINUTES * 60,
         'resend_in': RECOVERY_RESEND_SECONDS,
-    }
-    if settings.DEBUG or getattr(settings, 'EXPOSING_OTP_VISIBLE', False):
-        body['dev_code'] = code
-    return Response(body)
+    })
 
 
 @api_view(['POST'])
@@ -455,16 +452,13 @@ def admin_forgot_resend(request):
             'detail': f'You can ask for another code in {left} seconds.',
             'retry_in': left, 'resend_in': left,
         }, status=429)
-    new_otp, code = _recovery_otp(otp.user, otp.device_id)
-    body = {
+    new_otp, _ = _recovery_otp(otp.user, otp.device_id)
+    return Response({
         'detail': RECOVERY_SENT,
         'challenge': new_otp.pk,
         'expires_in': RECOVERY_MINUTES * 60,
         'resend_in': RECOVERY_RESEND_SECONDS,
-    }
-    if settings.DEBUG or getattr(settings, 'EXPOSING_OTP_VISIBLE', False):
-        body['dev_code'] = code
-    return Response(body)
+    })
 
 
 @api_view(['POST'])
