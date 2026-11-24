@@ -111,7 +111,8 @@ export default function ConsoleShell({
               <em>@{session.user.username} · {session.role}</em>
             </span>
           </div>
-          <button type="button" className="side-signout" onClick={() => signOut().then(() => router.replace('/login'))}>
+          <button type="button" className="side-signout" aria-label="Sign out"
+                  onClick={() => signOut().then(() => router.replace('/login'))}>
             {IC.logout}<span>Sign out</span>
           </button>
         </div>
