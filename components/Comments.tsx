@@ -44,7 +44,7 @@ export default function Comments({ postId, onClose, mediaIndex }: { postId: stri
   const [openThreads, setOpenThreads] = useState<Record<string, boolean>>({});
   const [threadLimit, setThreadLimit] = useState<Record<string, number>>({});
   const [emojiOpen, setEmojiOpen] = useState(false);
-  const [menuFor, setMenuFor] = useState<string | null>(null);
+  const [menu, setMenu] = useState<{ id: string; left: number; top: number } | null>(null);
   const [reporting, setReporting] = useState<string | null>(null);
   const [closing, setClosing] = useState(false);
   const dialog = useRef<HTMLDivElement>(null);
@@ -55,6 +55,45 @@ export default function Comments({ postId, onClose, mediaIndex }: { postId: stri
   close.current = onClose;
   const sheet = !!onClose;
   const isMedia = mediaIndex !== undefined;
+  const MENU_W = 170;
+  const MENU_H = 46;
+
+  /**
+   * The three-dot menu is portaled to the body and opened above the comment.
+   * Inside the comments scroller it hung below the row, so opening it lengthened
+   * the list and dragged the reader to the bottom of a page they did not ask to
+   * move; fixed and upward, it costs the layout nothing.
+   */
+  const toggleMenu = (id: string, button: HTMLElement) => {
+    if (menu?.id === id) { setMenu(null); return; }
+    const rect = button.getBoundingClientRect();
+    setMenu({
+      id,
+      left: Math.max(8, Math.min(rect.right - MENU_W, window.innerWidth - MENU_W - 8)),
+      top: Math.max(8, rect.top - MENU_H - 6),
+    });
+  };
+
+  useEffect(() => {
+    if (!menu) return;
+    const away = (event: PointerEvent) => {
+      const node = event.target as HTMLElement;
+      if (node.closest('.comment-menu') || node.closest('.post-menu-btn')) return;
+      setMenu(null);
+    };
+    const key = (event: KeyboardEvent) => { if (event.key === 'Escape') setMenu(null); };
+    const moved = () => setMenu(null);
+    document.addEventListener('pointerdown', away, true);
+    document.addEventListener('keydown', key);
+    window.addEventListener('scroll', moved, true);
+    window.addEventListener('resize', moved);
+    return () => {
+      document.removeEventListener('pointerdown', away, true);
+      document.removeEventListener('keydown', key);
+      window.removeEventListener('scroll', moved, true);
+      window.removeEventListener('resize', moved);
+    };
+  }, [menu]);
   const targetType = isMedia ? 'media' as const : 'post' as const;
   const targetId = isMedia ? `${postId}#m${mediaIndex}` : postId;
   // Demo mode has no server flag, so the cached post answers who owns it.
@@ -279,18 +318,11 @@ export default function Comments({ postId, onClose, mediaIndex }: { postId: stri
                   type="button"
                   className="icon-btn post-menu-btn"
                   aria-label={t('report')}
-                  aria-expanded={menuFor === comment.id}
-                  onClick={() => setMenuFor(current => current === comment.id ? null : comment.id)}
+                  aria-expanded={menu?.id === comment.id}
+                  onClick={e => toggleMenu(comment.id, e.currentTarget)}
                 >
                   {IC.dots}
                 </button>
-                {menuFor === comment.id && (
-                  <div className="post-menu">
-                    <button type="button" className="post-menu-item danger" onClick={() => { setMenuFor(null); setReporting(comment.id); }}>
-                      {t('report')}
-                    </button>
-                  </div>
-                )}
               </div>
             )}
           </div>
@@ -464,6 +496,21 @@ export default function Comments({ postId, onClose, mediaIndex }: { postId: stri
               the layer count, and the counter would stop being a number. */}
           <Link href="/login" onClick={() => closeLayerWithoutBack()}>Sign in to comment</Link>
         </div>
+      )}
+      {menu && createPortal(
+        <div
+          className="post-menu comment-menu" role="menu"
+          style={{ left: menu.left, top: menu.top, width: MENU_W }}
+          onClick={e => e.stopPropagation()}
+        >
+          <button
+            type="button" role="menuitem" className="post-menu-item danger"
+            onClick={() => { const id = menu.id; setMenu(null); setReporting(id); }}
+          >
+            {t('report')}
+          </button>
+        </div>,
+        document.body
       )}
       {reporting && <ReportModal type="comment" targetId={reporting} onClose={() => setReporting(null)} />}
     </div>

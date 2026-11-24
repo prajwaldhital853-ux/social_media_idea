@@ -2565,6 +2565,9 @@ a.trend-item:hover { text-decoration: none; }
 .post-menu-item { display: block; width: 100%; text-align: left; padding: 10px 12px; border-radius: 7px; font-size: 13px; }
 .post-menu-item:hover { background: var(--tint); }
 .post-menu-item.danger { color: var(--brand); }
+/* The comment menu is portaled to the body, above the comments sheet and out of
+   the scroller it would otherwise lengthen when it opened. */
+.post-menu.comment-menu { position: fixed; top: auto; right: auto; z-index: 1500; transform-origin: bottom right; }
 .post-actions { justify-content: flex-start; align-items: center; gap: 12px; padding: 0 0 0 44px; margin: 0; }
 .post-actions .action-btn { min-width: 40px; min-height: 40px; gap: 5px; padding: 8px; justify-content: center; }
 .post-actions .save-action { margin-left: auto; }
