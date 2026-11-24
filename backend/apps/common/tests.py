@@ -237,8 +237,8 @@ class HealthTests(TestCase):
         # Tests swap in the locmem backend, so what is asserted is that a reader
         # can tell a provider from a sink — not which one this process happens to
         # be holding.
-        self.assertTrue(data['email']['backend'].endswith('EmailBackend'))
-        self.assertFalse(data['email']['delivered'])
+        self.assertEqual(data['email']['backend'], 'locmem.EmailBackend')
+        self.assertFalse(data['email']['delivered'], 'a sink never reports delivery')
         self.assertTrue(data['worker']['eager'])
         self.assertIn('backend', data['cache'])
 

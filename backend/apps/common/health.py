@@ -60,9 +60,11 @@ def probe():
         'cache': cache,
         'email': {
             'backend': backend,
-            # Console means no member ever receives a code; the OTP-on-screen
-            # escape hatch is the only thing keeping sign-up alive.
-            'delivered': backend.startswith('smtp'),
+            # Console and locmem are sinks: nothing reaches a member. This
+            # deployment's provider is the Resend backend, which posts over 443
+            # because Render closes SMTP, so an smtp-shaped name was never the
+            # test — and it told every reader that live mail was going nowhere.
+            'delivered': not backend.startswith(('console.', 'locmem.', 'filebased.')),
             'timeout_seconds': settings.EMAIL_TIMEOUT,
         },
         'worker': {'eager': bool(settings.CELERY_TASK_ALWAYS_EAGER)},
