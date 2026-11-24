@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { credentialAccount, googleAccountHint, rememberGoogleAccount, renderGoogleButton } from '@/lib/google';
-import { IC } from '@/lib/icons';
 
 /**
  * Google's own sign-in button, drawn into the page.
@@ -38,8 +37,8 @@ export default function GoogleButton({ clientId, onToken, onError, fallback }: {
     renderGoogleButton(box.current, clientId, {
       token: token => {
         if (!alive) return;
-        // The chip follows the credential Google really returned, never the profile
-        // the browser happens to be using outside Exposing.
+        // Remember the account Google really returned, without putting its name or
+        // address on the button. The chooser still gets it as a hint next time.
         const picked = credentialAccount(token).email;
         if (picked && picked !== hint) {
           rememberGoogleAccount(picked);
@@ -57,13 +56,5 @@ export default function GoogleButton({ clientId, onToken, onError, fallback }: {
   }, [clientId, failed, hintReady]);
 
   if (failed) return <>{fallback}</>;
-  return <>
-    {hint ? (
-      <div className="gbtn-account" title="Last Exposing account">
-        {IC.g}
-        <span>{hint}</span>
-      </div>
-    ) : null}
-    <div className="gbtn" ref={box} />
-  </>;
+  return <div className="gbtn" ref={box} />;
 }

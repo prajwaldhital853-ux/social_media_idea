@@ -181,11 +181,13 @@ def signup(request):
     name = (data.get('name') or '').strip()
     google = data.get('google') or {}
     if not username or not username.replace('_', '').replace('.', '').isalnum() or not 3 <= len(username) <= 30:
-        return Response({'detail': 'Username must be 3-30 letters, numbers, dots or underscores.'}, status=400)
+        message = 'Username must be 3-30 letters, numbers, dots or underscores.'
+        return Response({'detail': message, 'username': [message]}, status=400)
     try:
         validate_email(email)
     except DjangoValidationError:
-        return Response({'detail': 'Enter a valid email address.'}, status=400)
+        message = 'Enter a valid email address.'
+        return Response({'detail': message, 'email': [message]}, status=400)
     # A new account is the widest door of the three, so a connection or a browser
     # that was closed for guessing passwords cannot simply start over. The address
     # is read too: the lock that covers it says so here instead of pretending the
@@ -194,17 +196,24 @@ def signup(request):
     if banned is not None:
         return safety.refuse(banned)
     if User.objects.filter(username=username).exists():
-        return Response({'detail': 'That username is taken.'}, status=400)
+        message = 'That username is taken.'
+        return Response({'detail': message, 'username': [message]}, status=400)
     if User.objects.filter(email=email).exists():
-        return Response({'detail': 'An account with that email already exists.'}, status=400)
+        message = 'An account with that email already exists.'
+        return Response({'detail': message, 'email': [message]}, status=400)
     if not google:
         bad = passwords.strength(password)
         if bad:
-            return Response({'detail': bad}, status=400)
+            return Response({'detail': bad, 'password': [bad]}, status=400)
     dob = data.get('dob') or None
     country = (data.get('country') or '').strip()[:80]
     if not dob or not country:
-        return Response({'detail': 'Date of birth and country are required.'}, status=400)
+        message = 'Date of birth and country are required.'
+        return Response({
+            'detail': message,
+            'dob': [] if dob else ['Date of birth is required.'],
+            'country': [] if country else ['Country is required.'],
+        }, status=400)
     device_id = _device_id(request)
     # The account, its profile and its wallet either all exist or none of them do.
     # Written across three commits, a request that died in the middle left an
@@ -231,7 +240,8 @@ def signup(request):
             )
     except IntegrityError:
         # Two tabs, one address: the exists() checks above both said no.
-        return Response({'detail': 'An account with that email already exists.'}, status=400)
+        message = 'An account with that email already exists.'
+        return Response({'detail': message, 'email': [message]}, status=400)
     passwords.remember(user)
     if google:
         _trust_device(user, device_id)

@@ -115,7 +115,7 @@ export function googleAccountHint(): string {
   }
 }
 
-/** Remembers the account that was just used, so the next button names it. */
+/** Remembers the account that was just used, so the next chooser can preselect it. */
 export function rememberGoogleAccount(email: string): string {
   const value = (email || '').toLowerCase();
   try {
