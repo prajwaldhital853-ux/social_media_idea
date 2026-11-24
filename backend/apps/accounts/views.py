@@ -191,6 +191,13 @@ def _finish_login(request, user, device_id):
     return set_auth_cookies(resp, user, device_id)
 
 
+def _queue_welcome(user):
+    """The first letter, and only once the address behind the account is proved."""
+    queue_welcome_email(
+        user, name=user.get_full_name() or user.username, username=user.username,
+    )
+
+
 @api_view(['POST'])
 @permission_classes([AllowAny])
 @authentication_classes([])
@@ -269,8 +276,8 @@ def signup(request):
             message = 'An account with that email already exists.'
         return Response({'detail': message, 'email': [message]}, status=400)
     passwords.remember(user)
-    queue_welcome_email(user, name=name or username, username=username, verified=bool(google))
     if google:
+        _queue_welcome(user)
         _trust_device(user, device_id)
         resp = Response({'user': {'id': user.pk, 'username': user.username, 'email': user.email}},
                         status=status.HTTP_201_CREATED)
@@ -419,9 +426,11 @@ def _verify_otp(request, force_purpose=None):
         # password cooloff and browser ban open again. Staff bans survive an unlock.
         safety.lift(user.email, reasons=['lock'])
         return Response({'detail': 'Account unlocked. Sign in with your password.'})
-    if otp.purpose == 'verify':
+    if otp.purpose == 'verify' and not user.email_verified:
+        verified = User.objects.filter(pk=user.pk, email_verified=False).update(email_verified=True)
         user.email_verified = True
-        user.save(update_fields=['email_verified'])
+        if verified:
+            _queue_welcome(user)
     return _finish_login(request, user, device_id)
 
 
