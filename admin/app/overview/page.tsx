@@ -9,9 +9,11 @@ import { IC } from '@/lib/icons';
 import { shipped } from '@/lib/nav';
 import { ago, stamp } from '@/lib/time';
 import { useSession } from '@/lib/session';
-import { AlertRow, Overview, PromotionAnalytics, SeriesPoint, Threshold, Tile } from '@/lib/types';
+import { AlertRow, CampaignRow, Overview, PromotionAnalytics, SeriesPoint, Threshold, Tile } from '@/lib/types';
 
 const REFRESH_EVERY = 60000;
+/** Rows either dashboard panel shows before it asks for another page. */
+const PAGE = 7;
 const SEVERITY_LABEL: Record<string, string> = { info: 'Note', warning: 'Needs a look', critical: 'Urgent' };
 const TARGET_LABEL: Record<string, string> = { post: 'posts', comment: 'comments', user: 'people', listing: 'listings' };
 
@@ -30,7 +32,7 @@ export default function OverviewPage() {
       setError(null);
       // Campaign results cost a handful of queries each and sit below the fold,
       // so they arrive after the numbers a person came to read.
-      setCampaigns(await api<PromotionAnalytics>('admin/analytics/promotions/'));
+      setCampaigns(await api<PromotionAnalytics>(`admin/analytics/promotions/?limit=${PAGE}`));
     } catch (err) {
       if (!noteGate(err)) setError((err as Error).message);
     } finally {
@@ -80,7 +82,7 @@ export default function OverviewPage() {
             ))}
           </div>
 
-          <AlertFeed alerts={data.alerts}/>
+          <AlertFeed key={data.generated_at} alerts={data.alerts}/>
 
           <section className="panel performance">
             <header className="panel-head">
@@ -88,9 +90,9 @@ export default function OverviewPage() {
                 <h2>Promotion performance</h2>
                 <p>What each campaign achieved inside the window it ran — not its lifetime total.</p>
               </div>
-              {campaigns && <span className="panel-count">{campaigns.shown} most recent</span>}
+              {campaigns && <span className="panel-count">{campaigns.total} campaigns</span>}
             </header>
-            <Campaigns campaigns={campaigns}/>
+            <Campaigns key={campaigns?.generated_at || 'wait'} campaigns={campaigns}/>
           </section>
         </>
       )}
@@ -309,8 +311,26 @@ function Spark({ points }: { points: SeriesPoint[] }) {
 }
 
 function AlertFeed({ alerts }: { alerts: Overview['alerts'] }) {
-  const rows = alerts.recent;
+  const { noteGate } = useSession();
+  const [rows, setRows] = useState(alerts.recent);
+  const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState('');
+  const more = rows.length < alerts.total;
   const { counts } = alerts;
+
+  const loadMore = async () => {
+    setBusy(true);
+    setFailed('');
+    try {
+      const page = await api<{ rows: AlertRow[] }>(`admin/analytics/alerts/?limit=${PAGE}&offset=${rows.length}`);
+      setRows(current => [...current, ...page.rows]);
+    } catch (err) {
+      if (!noteGate(err)) setFailed((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <section className="panel alerts">
       <header className="panel-head">
@@ -327,9 +347,22 @@ function AlertFeed({ alerts }: { alerts: Overview['alerts'] }) {
       {!rows.length ? (
         <p className="empty-note">{IC.check} Nothing is asking for attention. Alerts appear the moment a queue ages past its limit.</p>
       ) : (
-        <ul className="alert-list">
-          {rows.map(row => <AlertItem key={row.key} row={row}/>)}
-        </ul>
+        <>
+          <ul className={`alert-list${rows.length > PAGE ? ' capped' : ''}`}>
+            {rows.map(row => <AlertItem key={row.key} row={row}/>)}
+          </ul>
+          {alerts.total > PAGE && (
+            <div className="panel-more" data-alert-more>
+              <span>{rows.length} of {alerts.total} shown{more ? '' : ' — that is all of them'}</span>
+              {more && (
+                <button type="button" className="btn ghost tiny" disabled={busy} onClick={loadMore}>
+                  <span>{busy ? 'Reading…' : 'Load more'}</span>
+                </button>
+              )}
+            </div>
+          )}
+          {failed && <p className="card-error" role="status">{IC.alert}<span>{failed}</span></p>}
+        </>
       )}
     </section>
   );
@@ -361,6 +394,24 @@ function AlertItem({ row }: { row: AlertRow }) {
 }
 
 function Campaigns({ campaigns }: { campaigns: PromotionAnalytics | null }) {
+  const { noteGate } = useSession();
+  const [rows, setRows] = useState<CampaignRow[]>(campaigns?.rows || []);
+  const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState('');
+
+  const loadMore = async () => {
+    setBusy(true);
+    setFailed('');
+    try {
+      const page = await api<PromotionAnalytics>(`admin/analytics/promotions/?limit=${PAGE}&offset=${rows.length}`);
+      setRows(current => [...current, ...page.rows]);
+    } catch (err) {
+      if (!noteGate(err)) setFailed((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   if (!campaigns) {
     return (
       <div className="skeleton-stack">
@@ -368,14 +419,19 @@ function Campaigns({ campaigns }: { campaigns: PromotionAnalytics | null }) {
       </div>
     );
   }
-  if (!campaigns.rows.length) {
+  if (!rows.length) {
     return <p className="empty-note">{IC.chart} No campaign has been bought yet, so there is nothing to score.</p>;
   }
 
   const columns = campaigns.metrics;
+  // Each page arrives on its own totals line, so the foot is added from the rows
+  // actually on the screen rather than from the first page alone.
+  const sum = (id: string) => rows.reduce((total, row) => total + (row.metrics[id] || 0), 0);
+  const more = rows.length < campaigns.total;
+
   return (
     <>
-      <div className="table-scroll">
+      <div className={`table-scroll${rows.length > PAGE ? ' capped' : ''}`}>
         <table className="campaigns">
           <thead>
             <tr>
@@ -390,7 +446,7 @@ function Campaigns({ campaigns }: { campaigns: PromotionAnalytics | null }) {
             </tr>
           </thead>
           <tbody>
-            {campaigns.rows.map(row => (
+            {rows.map(row => (
               <tr key={row.id}>
                 <th scope="row">
                   <b>{row.target_type} #{row.target.split(':')[1]}</b>
@@ -411,10 +467,10 @@ function Campaigns({ campaigns }: { campaigns: PromotionAnalytics | null }) {
           </tbody>
           <tfoot>
             <tr>
-              <th scope="row">These {campaigns.shown} together</th>
+              <th scope="row">These {rows.length} together</th>
               {columns.map(metric => (
                 <td key={metric.id} data-label={metric.label} className={campaigns.unmeasured[metric.id] ? 'is-dim' : ''}>
-                  {campaigns.unmeasured[metric.id] ? '—' : num(campaigns.totals[metric.id])}
+                  {campaigns.unmeasured[metric.id] ? '—' : num(sum(metric.id))}
                 </td>
               ))}
               <td data-label="Open rate">—</td>
@@ -422,6 +478,17 @@ function Campaigns({ campaigns }: { campaigns: PromotionAnalytics | null }) {
           </tfoot>
         </table>
       </div>
+      {campaigns.total > PAGE && (
+        <div className="panel-more" data-campaign-more>
+          <span>{rows.length} of {campaigns.total} campaigns shown{more ? '' : ' — that is all of them'}</span>
+          {more && (
+            <button type="button" className="btn ghost tiny" disabled={busy} onClick={loadMore}>
+              <span>{busy ? 'Scoring…' : 'Load more'}</span>
+            </button>
+          )}
+        </div>
+      )}
+      {failed && <p className="card-error" role="status">{IC.alert}<span>{failed}</span></p>}
       {Object.keys(campaigns.unmeasured).length > 0 && (
         <p className="panel-foot">
           {IC.alert}

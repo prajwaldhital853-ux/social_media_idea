@@ -578,9 +578,14 @@ def _ordered(rows):
     return rows.order_by(OPEN_FIRST, WORST_FIRST, '-last_seen', 'pk')
 
 
-def feed(limit=12):
-    """What the dashboard shows: still-true trouble first, worst of it first."""
-    return [line(item) for item in _ordered(AdminAlert.objects.select_related('acked_by'))[:limit]]
+def feed(limit=12, offset=0):
+    """What the dashboard shows: still-true trouble first, worst of it first.
+
+    `offset` is the panel's Load more: seven rows arrive with the tiles and the
+    rest of the trail comes one page at a time, in the same order, so a row from
+    page two cannot jump above one the seat has already read.
+    """
+    return [line(item) for item in _ordered(AdminAlert.objects.select_related('acked_by'))[offset:offset + limit]]
 
 
 def history(status='', kind='', severity='', limit=100):

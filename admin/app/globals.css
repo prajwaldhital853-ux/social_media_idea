@@ -1205,6 +1205,19 @@ button.key:hover { border-color: #c3c9d1; color: var(--ink); background: #F7F8FA
 
 .alert-list { display: flex; flex-direction: column; gap: 0; margin: 0; padding: 0; list-style: none; }
 
+/* Both dashboard panels show seven rows with the page and cap the trail there:
+   a long history scrolls inside its own panel instead of pushing the next
+   section off the screen. The heights are seven rows of each panel's own line
+   rhythm, so they drift a little when a detail wraps — the scroll is the point,
+   not an exact number of rows. */
+.alert-list.capped {
+  max-height: 600px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  padding-right: 6px;
+}
+
 .alert {
   display: grid;
   grid-template-columns: 12px 1fr auto;
@@ -1233,6 +1246,34 @@ button.key:hover { border-color: #c3c9d1; color: var(--ink); background: #F7F8FA
 .pill.resolved { background: var(--green-tint); color: #03603f; }
 
 .table-scroll { overflow: visible; }
+
+/* Seven campaign rows, then the table scrolls with its header held — the rows
+   differ in height, so the cap is in rem of the table's own line box. */
+.table-scroll.capped {
+  max-height: 512px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+.table-scroll.capped .campaigns thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--paper);
+  box-shadow: inset 0 -1px 0 var(--line);
+}
+
+.panel-more {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 12px;
+  padding-top: 11px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 12.2px;
+}
 
 .campaigns { width: 100%; border-collapse: collapse; font-size: 12.6px; }
 .campaigns th, .campaigns td { padding: 9px 10px; text-align: right; white-space: normal; overflow-wrap: anywhere; border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; }
