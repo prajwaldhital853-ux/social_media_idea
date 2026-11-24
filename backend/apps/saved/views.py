@@ -31,7 +31,7 @@ def saved_posts(request):
         return Response({'saved': True}, status=status.HTTP_201_CREATED)
     qs = SavedPost.objects.filter(
         user=request.user, post__status='live', post__in=readable
-    ).select_related('post__author__profile')
+    ).select_related('post__author__profile').prefetch_related('post__media')
     paginator = KeysetPagination()
     rows = paginator.paginate_queryset(qs, request)
     data = PostSerializer([r.post for r in rows], many=True, context={'request': request}).data
@@ -58,7 +58,10 @@ def saved_listings(request):
         except IntegrityError:
             return Response({'detail': 'Already saved.'}, status=400)
         return Response({'saved': True}, status=status.HTTP_201_CREATED)
-    qs = SavedListing.objects.filter(user=request.user).exclude(listing__status='removed').select_related('listing__seller__profile')
+    qs = (SavedListing.objects.filter(user=request.user)
+          .exclude(listing__status='removed')
+          .select_related('listing__seller__profile')
+          .prefetch_related('listing__images'))
     paginator = KeysetPagination()
     rows = paginator.paginate_queryset(qs, request)
     data = ListingSerializer([r.listing for r in rows], many=True).data

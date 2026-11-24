@@ -27,6 +27,7 @@ from apps.wallet.models import CoinRequest, Transaction
 
 from . import coins, rbac, settings_store
 from .journal import record
+from .models import CoinReview
 
 IMAGE_TYPES = {'image/png', 'image/jpeg', 'image/webp'}
 QR_MAX_BYTES = 2 * 1024 * 1024
@@ -62,7 +63,15 @@ def coin_queue(request):
     held = CoinRequest.objects.filter(status=CoinRequest.Status.PENDING).aggregate(
         coins=Sum('coins'), rupees=Sum('amount'),
     )
-    response = paginator.get_paginated_response([coins.row(item) for item in rows])
+    # A pending purchase may already carry an ask, and reading it row by row made
+    # the queue cost one query per row. One grouped read covers the page.
+    pending = [item.pk for item in rows if item.status == CoinRequest.Status.PENDING]
+    last = {}
+    if pending:
+        for review in (CoinReview.objects.filter(request_id__in=pending).select_related('actor')
+                       .order_by('request_id', '-created_at', '-id').distinct('request_id')):
+            last[review.request_id] = review
+    response = paginator.get_paginated_response([coins.row(item, last.get(item.pk)) for item in rows])
     response.data.update({
         'counts': {
             'pending': counts.get(CoinRequest.Status.PENDING, 0),

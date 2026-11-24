@@ -306,7 +306,7 @@ class BrandedEmailTests(TestCase):
         letter = mail.outbox[0]
         html = next(part.content for part in letter.alternatives if part.mimetype == 'text/html')
         self.assertIn('#E40104', html)
-        self.assertIn('https://exposing.app/exposing-icon.png', html)
+        self.assertIn('cid:exposing-logo', html)
         self.assertIn('https://exposing.app/login', html)
         self.assertIn('support@exposing.app', html)
         self.assertIn('+977-9812345678', html)

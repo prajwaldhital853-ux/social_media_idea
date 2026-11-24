@@ -4,7 +4,6 @@ from datetime import timedelta
 
 import jwt
 from django.conf import settings
-from django.db.models import Q
 from django.utils import timezone
 from rest_framework.authentication import BaseAuthentication
 from rest_framework.exceptions import AuthenticationFailed
@@ -88,7 +87,21 @@ def clear_auth_cookies(response):
     return response
 
 
+def _holds_a_seat(user):
+    """Anybody the console signs in: the staff flag, the superuser crown, or a live seat."""
+    if user.is_staff or user.is_superuser:
+        return True
+    from apps.adminpanel.models import StaffAccount
+    return StaffAccount.objects.filter(user=user, is_enabled=True).exists()
+
+
 class CookieJWTAuthentication(BaseAuthentication):
+    # The console hands its seat this very cookie (`set_auth_cookies` in
+    # `_grant`), so the staff check cannot be a refusal here: it would lock every
+    # desk in the admin panel the moment it was written. The console's own doors
+    # are the `api/admin/` ones, and a seat is read as a member nowhere else.
+    CONSOLE_PREFIX = '/api/admin/'
+
     def authenticate_header(self, request):
         return 'Cookie'
 
@@ -104,4 +117,9 @@ class CookieJWTAuthentication(BaseAuthentication):
             raise AuthenticationFailed('Account no longer active.')
         if user.is_suspended:
             raise AuthenticationFailed('Account suspended.')
+        if not request.path.startswith(self.CONSOLE_PREFIX) and _holds_a_seat(user):
+            # No identity at all on the member surface: an authenticated door
+            # would answer 401 with a sentence about credentials, and the person
+            # at it has just proved their credentials. The door stays anonymous.
+            return None
         return user, payload

@@ -1,5 +1,5 @@
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import serializers, status
@@ -38,8 +38,44 @@ class MessageSerializer(serializers.ModelSerializer):
         return 'sent'
 
 
-def _other(conversation, user):
-    return conversation.participants.exclude(pk=user.pk).select_related('profile').first()
+def _inbox_cards(request, ids):
+    """One page of the inbox, in four queries instead of five per row.
+
+    Reading the thread list row by row used to ask for the other person, the last
+    message, the unread count and the receipt stamp separately for each of the ten
+    conversations — sixty round trips before an inbox appeared.
+    """
+    me = request.user.pk
+    edges = Conversation.participants.through.objects.filter(conversation_id__in=ids).exclude(
+        user_id=me,
+    ).select_related('user__profile')
+    others = {edge.conversation_id: edge.user for edge in edges}
+    latest = {
+        message.conversation_id: message
+        for message in Message.objects.filter(conversation_id__in=ids).select_related('sender__profile')
+        .order_by('conversation_id', '-created_at').distinct('conversation_id')
+    }
+    unread = {
+        row['conversation_id']: row['total']
+        for row in Message.objects.filter(conversation_id__in=ids, read_at__isnull=True)
+        .exclude(sender_id=me).values('conversation_id').annotate(total=Count('id'))
+    }
+    # Fetching a thread proves the message reached this device.
+    Message.objects.filter(conversation_id__in=ids, delivered_at__isnull=True).exclude(
+        sender_id=me,
+    ).update(delivered_at=timezone.now())
+    cards = []
+    for conversation_id in ids:
+        other = others.get(conversation_id)
+        message = latest.get(conversation_id)
+        cards.append({
+            'conversation': conversation_id,
+            'user': person(other) if other else None,
+            'last_message': MessageSerializer(message).data if message else None,
+            'unread': unread.get(conversation_id, 0) if other else 0,
+            'mutual': False,
+        })
+    return cards
 
 
 def _mark_delivered(conversation, reader):
@@ -71,29 +107,19 @@ def inbox(request):
     # An inbox walks by the last message, not by when the thread was opened:
     # the conversation you typed in a second ago belongs at the top.
     paginator = KeysetPagination('last_message_at')
-    rows = paginator.paginate_queryset(qs.prefetch_related('participants__profile'), request)
-    results = []
-    for conversation in rows:
-        other = _other(conversation, request.user)
-        _mark_delivered(conversation, request.user)
-        last = conversation.messages.order_by('-created_at').first()
-        unread = conversation.messages.filter(sender=other, read_at__isnull=True).count() if other else 0
-        results.append({
-            'conversation': conversation.pk,
-            'user': person(other) if other else None,
-            'last_message': MessageSerializer(last).data if last else None,
-            'unread': unread,
-            'mutual': False,
-        })
-    response = paginator.get_paginated_response(results)
+    rows = paginator.paginate_queryset(qs, request)
+    ids = [conversation.pk for conversation in rows]
+    response = paginator.get_paginated_response(_inbox_cards(request, ids))
     if not request.query_params.get('cursor'):
         mine = set(Follow.objects.filter(follower=request.user, status='accepted').values_list('followee_id', flat=True))
         theirs = set(Follow.objects.filter(followee=request.user, status='accepted').values_list('follower_id', flat=True))
-        talked = set()
-        for conversation in Conversation.objects.filter(participants=request.user):
-            other = _other(conversation, request.user)
-            if other:
-                talked.add(other.pk)
+        mine_ids = Conversation.participants.through.objects.filter(
+            user_id=request.user.pk,
+        ).values_list('conversation_id', flat=True)
+        talked = set(
+            Conversation.participants.through.objects.filter(conversation_id__in=mine_ids)
+            .exclude(user_id=request.user.pk).values_list('user_id', flat=True)
+        )
         mutual_users = User.objects.filter(pk__in=(mine & theirs) - talked).select_related('profile')
         response.data['mutuals'] = [{'user': person(u), 'mutual': True} for u in mutual_users]
     return response

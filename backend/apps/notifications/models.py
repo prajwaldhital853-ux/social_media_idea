@@ -1,5 +1,6 @@
 from django.conf import settings
 from django.db import models
+from django.db.models import Q
 
 
 class Notification(models.Model):
@@ -18,7 +19,15 @@ class Notification(models.Model):
 
     class Meta:
         ordering = ['-created_at']
-        indexes = [models.Index(fields=['recipient', '-created_at'], name='notif_recipient_newest')]
+        indexes = [
+            models.Index(fields=['recipient', '-created_at'], name='notif_recipient_newest'),
+            # Every write asks "has this person already been told this by this
+            # actor", and the badge counts the unread rows of one recipient.
+            models.Index(fields=['recipient', 'actor', 'kind'], name='notif_dedupe'),
+            models.Index(
+                fields=['recipient'], condition=Q(read_at__isnull=True), name='notif_unread',
+            ),
+        ]
 
     def __str__(self):
         return f'{self.kind} -> {self.recipient.username}'
