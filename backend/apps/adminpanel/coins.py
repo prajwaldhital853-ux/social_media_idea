@@ -81,9 +81,12 @@ def latest(request_pk):
     return CoinReview.objects.filter(request_id=request_pk).order_by('-created_at', '-id').first()
 
 
-def row(req, review=None):
-    """One queue row: the payer, the money, and a link to the proof — never the proof."""
-    review = review if review is not None or req.status != CoinRequest.Status.PENDING else latest(req.pk)
+def row(req, review):
+    """One queue row: the payer, the money, and a link to the proof — never the proof.
+
+    The caller reads the last decision: the queue takes one grouped query for the
+    whole page, so a row must not be able to ask for its own.
+    """
     out = {
         'id': req.pk,
         'card': person(req.user),

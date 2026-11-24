@@ -331,13 +331,20 @@ def candidates(user, limit=2, target_type=None, tuned=None):
                 for promo in promos}
     reached = people_reached([pk for pk, cap in promised.items() if cap]) if any(promised.values()) else {}
     scores = Affinity(user, dial['weights'], dial['target'])
+    # One grouped count for every campaign on the shelf. This used to be one
+    # COUNT per campaign, which made the repeat dial the most expensive part of
+    # every authenticated feed page.
+    shown = {}
+    if dial['repeat']:
+        for row in PromoImpression.objects.filter(
+            viewer=user, promotion_id__in=[promo.pk for promo in promos],
+        ).values('promotion_id').annotate(total=Count('id')):
+            shown[row['promotion_id']] = row['total']
     picked = []
     for promo in promos:
         if promo.pk in already:
             continue
-        if dial['repeat'] and PromoImpression.objects.filter(
-            promotion=promo, viewer=user,
-        ).count() >= dial['repeat']:
+        if dial['repeat'] and shown.get(promo.pk, 0) >= dial['repeat']:
             continue
         if promised[promo.pk] and reached.get(promo.pk, 0) >= promised[promo.pk]:
             continue

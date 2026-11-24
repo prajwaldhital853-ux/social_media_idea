@@ -33,6 +33,9 @@ class Promotion(models.Model):
         ordering = ['-created_at']
         indexes = [
             models.Index(fields=['status', '-ends_at'], name='promo_running'),
+            # The review and people desks ask "is this thing under a campaign" for
+            # every row they show, by target rather than by status.
+            models.Index(fields=['target_type', 'target_id'], name='promo_target'),
         ]
 
     def __str__(self):

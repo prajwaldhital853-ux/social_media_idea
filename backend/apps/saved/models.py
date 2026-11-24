@@ -9,6 +9,11 @@ class SavedPost(models.Model):
 
     class Meta:
         ordering = ['-created_at']
+        indexes = [
+            # The unique pair stops a second save; it is keyed by post, so it
+            # cannot serve the list a member opens — that reads by user, newest first.
+            models.Index(fields=['user', '-created_at'], name='saved_post_user_newest'),
+        ]
         constraints = [
             models.UniqueConstraint(fields=['user', 'post'], name='one_save_per_user_post'),
         ]
@@ -24,6 +29,9 @@ class SavedListing(models.Model):
 
     class Meta:
         ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['user', '-created_at'], name='saved_listing_user_newest'),
+        ]
         constraints = [
             models.UniqueConstraint(fields=['user', 'listing'], name='one_save_per_user_listing'),
         ]

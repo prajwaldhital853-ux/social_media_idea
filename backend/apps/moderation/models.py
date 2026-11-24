@@ -26,7 +26,13 @@ class Report(models.Model):
 
     class Meta:
         ordering = ['-created_at']
-        indexes = [models.Index(fields=['status', '-created_at'], name='report_queue')]
+        indexes = [
+            models.Index(fields=['status', '-created_at'], name='report_queue'),
+            # The auto-hide threshold asks "how many open reports does this thing
+            # have" on every report, and the review desks group the same way —
+            # neither starts with `status`, so the queue index never served them.
+            models.Index(fields=['target_type', 'target_id', 'status'], name='report_target_status'),
+        ]
 
     def __str__(self):
         return f'{self.target_type}:{self.target_id} ({self.status})'
@@ -41,3 +47,10 @@ class AuditLog(models.Model):
 
     class Meta:
         ordering = ['-created_at']
+        # The fastest-growing table in the app, and the audit desk pages straight
+        # through it by time while the alerts sweep filters by action.
+        indexes = [
+            models.Index(fields=['-created_at'], name='audit_newest'),
+            models.Index(fields=['action', '-created_at'], name='audit_action_recent'),
+            models.Index(fields=['target'], name='audit_target'),
+        ]

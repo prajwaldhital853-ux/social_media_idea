@@ -62,6 +62,12 @@ class CoinRequest(models.Model):
 
     class Meta:
         ordering = ['-created_at']
+        # The console opens on the pending pile, and the member's own history is
+        # read by user — neither could use the natural `-created_at` ordering alone.
+        indexes = [
+            models.Index(fields=['status', '-created_at'], name='coins_status_newest'),
+            models.Index(fields=['user', '-created_at'], name='coins_user_newest'),
+        ]
 
 
 def apply(wallet_id, kind, amount, note=''):

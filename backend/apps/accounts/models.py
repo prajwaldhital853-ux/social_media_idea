@@ -1,5 +1,6 @@
 from django.contrib.auth.models import AbstractUser
 from django.db import models
+from django.db.models.functions import Upper
 
 
 class User(AbstractUser):
@@ -19,6 +20,16 @@ class User(AbstractUser):
     # Stamped by seed_demo on every account it owns. The purge in that command may
     # delete only these rows, which is what makes it survivable as a deploy step.
     seeded = models.BooleanField(default=False)
+
+    class Meta:
+        # Every way in looks an address up with `email__iexact`, which Postgres
+        # answers as `UPPER(email::text) = UPPER(...)`. A plain index on the column
+        # cannot serve that expression, so each sign-in read the whole table; these
+        # two match the expression the queries actually produce.
+        indexes = [
+            models.Index(Upper('email'), name='user_email_upper'),
+            models.Index(Upper('username'), name='user_username_upper'),
+        ]
 
     @property
     def is_locked(self):
@@ -48,7 +59,11 @@ class RefreshSession(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        indexes = [models.Index(fields=['user', '-created_at'], name='refresh_user_recent')]
+        indexes = [
+            models.Index(fields=['user', '-created_at'], name='refresh_user_recent'),
+            # The nightly purge deletes by expiry alone.
+            models.Index(fields=['expires_at'], name='refresh_expires'),
+        ]
 
 
 class DeviceTrust(models.Model):
@@ -82,7 +97,10 @@ class EmailOTP(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        indexes = [models.Index(fields=['user', 'purpose', '-created_at'], name='otp_user_purpose_recent')]
+        indexes = [
+            models.Index(fields=['user', 'purpose', '-created_at'], name='otp_user_purpose_recent'),
+            models.Index(fields=['expires_at'], name='otp_expires'),
+        ]
 
 
 class PasswordHistory(models.Model):
@@ -127,7 +145,12 @@ class AuthBan(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        indexes = [models.Index(fields=['scope', 'value', '-created_at'], name='ban_scope_value_recent')]
+        indexes = [
+            models.Index(fields=['scope', 'value', '-created_at'], name='ban_scope_value_recent'),
+            # An unlock lifts every row raised for one account, and `lift()` is the
+            # only reader of `identity` — without this it scans the whole ban table.
+            models.Index(fields=['identity'], name='ban_identity'),
+        ]
 
     @property
     def active(self):
