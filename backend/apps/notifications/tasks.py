@@ -1,14 +1,16 @@
 from celery import shared_task
-from django.conf import settings
-from django.core.mail import send_mail
+
+from apps.common.tasks import send_branded_email
 
 
 @shared_task
-def send_activity_email(to, subject, body, link):
-    send_mail(
-        subject,
-        f'{body}\n\n{link}\n',
-        settings.DEFAULT_FROM_EMAIL,
-        [to],
-        fail_silently=False,
+def send_activity_email(to, subject, body, link, support=None):
+    """Keep the old activity-mail task while giving it the shared branded renderer."""
+    if support is None:
+        from apps.common.emails import support_context
+
+        support = support_context()
+    send_branded_email(
+        to, subject, subject, body,
+        cta_label='Open Exposing', cta_url=link, support=support,
     )

@@ -1,10 +1,8 @@
-from django.conf import settings
 from django.utils import timezone
 
-from apps.common.mail import send_off_request
+from apps.common.emails import queue_event_email
 
 from .models import Notification
-from .tasks import send_activity_email
 
 # Only these events are worth an inbox message; the bell already holds the rest.
 EMAIL_COPY = {
@@ -20,12 +18,12 @@ EMAIL_COPY = {
 }
 
 
-def notify(recipient, actor, kind, text, target_type='', target_id=''):
+def notify(recipient, actor, kind, text, target_type='', target_id='', notice=None):
     if recipient is None or (actor is not None and recipient.pk == actor.pk):
         return None
     return Notification.objects.create(
         recipient=recipient, actor=actor, kind=kind, text=text[:240],
-        target_type=target_type, target_id=str(target_id),
+        target_type=target_type, target_id=str(target_id), notice=notice,
     )
 
 
@@ -55,7 +53,10 @@ def email_activity(recipient, actor, kind):
     if not getattr(recipient.profile, 'notify_email', True):
         return None
     subject, body = (line.format(name=name_of(actor), username=actor.username) for line in copy)
-    send_off_request(send_activity_email, recipient.email, subject, body, f'{settings.SITE_URL}/u/{actor.username}')
+    queue_event_email(
+        recipient.email, subject, subject, body,
+        cta_label='View their profile', cta_path=f'/u/{actor.username}',
+    )
     return subject
 
 

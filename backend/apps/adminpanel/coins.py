@@ -27,6 +27,7 @@ from django.http import FileResponse
 from django.utils import timezone
 
 from apps.common.api import person
+from apps.common.emails import queue_coin_credit_email
 from apps.notifications.services import notify
 from apps.wallet.models import CoinRequest, Transaction, Wallet, apply
 
@@ -165,6 +166,11 @@ def decide(req, actor, action, reason=''):
     notify(req.user, actor, 'coins', say[:240], 'wallet', req.pk)
     record(actor, f'coins_{action}', f'coin_request:{req.pk}',
            f'{req.coins} coins / NPR {req.amount} — ' + (reason or 'approved, wallet credited'))
+    if action == 'approve':
+        queue_coin_credit_email(
+            req.user, coins=req.coins, amount=req.amount, balance=wallet.balance,
+            request_id=req.pk, reference=req.reference,
+        )
     return 200, {'detail': _said(action, req, entry), 'request': row(req, review),
                  'asks': asks(req.pk), **body}
 

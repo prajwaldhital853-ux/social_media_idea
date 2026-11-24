@@ -69,7 +69,7 @@ export default function ReelsFeed({ initialKey }: { initialKey?: string }) {
 
   const byId = new Map(db.posts.map(p => [p.id, p]));
   const reels = serverMode
-    ? stream.ids.map(id => byId.get(id)).filter((p): p is Post => !!p)
+    ? stream.ids.map(id => byId.get(id)).filter((p): p is Post => !!p && p.status === 'live')
     : db.posts
         .filter(p => p.status === 'live' && (p.media || []).some(m => m.type === 'video')
           && canSeePost(p, me?.id ?? null, db.follows, privateIds(db.users))

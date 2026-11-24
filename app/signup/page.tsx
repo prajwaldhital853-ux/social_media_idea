@@ -28,9 +28,9 @@ const serverRef = (res: AuthResult) => (res.requestId && res.status >= 500 && re
   : res.detail);
 
 /**
- * A lock closes the sign-up door as well: the account, the browser and the
- * network it was guessed from are all paused together, so this page has to say
- * which one is holding and for how long instead of blaming the email box.
+ * A lock closes the sign-up door as well: the account or browser is paused.
+ * A connection appears only for a deliberate staff ban, so this page says which
+ * door is holding and for how long instead of blaming the email box.
  */
 const banLine = (res: AuthResult, t: (key: TranslationKey, vars?: Record<string, string | number>) => string) =>
   t(res.banScope === 'device' ? 'e_bannedDevice' : res.banScope === 'ip' ? 'e_bannedIp' : 'e_locked',

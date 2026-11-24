@@ -59,6 +59,8 @@ export interface Notice {
   ts: number;
   /** True when a seat wrote it for the account alone — nobody else reads this one. */
   private?: boolean;
+  /** The recipient's linked warning row, used to open the full detail page. */
+  notificationId?: string;
 }
 
 export interface Post {
@@ -112,7 +114,7 @@ export interface Comment {
   uid: string;
   text: string;
   ts: number;
-  status: 'live' | 'removed';
+  status: 'live' | 'hidden' | 'removed';
   /** What staff have said publicly about this comment, newest first. */
   notices?: Notice[];
   likes?: number;

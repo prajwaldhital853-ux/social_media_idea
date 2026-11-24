@@ -5,14 +5,17 @@ from decimal import Decimal
 from unittest import mock
 
 from django.conf import settings
+from django.core import mail
 
 from django.db import connection
 from django.http import Http404
 from django.test import Client, RequestFactory, TestCase, override_settings
 from django.test.utils import CaptureQueriesContext
 
+from apps.common.emails import queue_event_email
 from apps.common.mail import send_off_request
 from apps.common.media import serve_media
+from apps.common.tasks import safe_link, send_branded_email
 from apps.common.testutils import auth_client, make_user
 from apps.follows.models import Follow
 from apps.marketplace.models import Listing
@@ -287,6 +290,69 @@ class PingTests(TestCase):
     def test_never_throttled(self):
         codes = {self.client.get('/api/ping/').status_code for _ in range(130)}
         self.assertEqual(codes, {200})
+
+
+class BrandedEmailTests(TestCase):
+    def test_html_and_plain_text_include_brand_contact_and_footer(self):
+        send_branded_email(
+            'member@test.local', 'Welcome to Exposing', 'Welcome <script>',
+            '<b>Your account is ready.</b>', details=[('Username', '@member')],
+            cta_label='Open Exposing', cta_url='https://exposing.app/login',
+            footnote='Keep this message.', logo_url='https://exposing.app/exposing-icon.png',
+            support={'email': 'support@exposing.app', 'phone': '+977-9812345678',
+                     'form': 'https://exposing.app/support'},
+        )
+        self.assertEqual(len(mail.outbox), 1)
+        letter = mail.outbox[0]
+        html = next(part.content for part in letter.alternatives if part.mimetype == 'text/html')
+        self.assertIn('#E40104', html)
+        self.assertIn('https://exposing.app/exposing-icon.png', html)
+        self.assertIn('https://exposing.app/login', html)
+        self.assertIn('support@exposing.app', html)
+        self.assertIn('+977-9812345678', html)
+        self.assertIn('All rights reserved.', html)
+        self.assertIn('&lt;script&gt;', html)
+        self.assertIn('&lt;b&gt;Your account is ready.&lt;/b&gt;', html)
+        self.assertNotIn('<script>', html)
+        self.assertIn('Username: @member', letter.body)
+        self.assertIn('Email: support@exposing.app', letter.body)
+        self.assertEqual(letter.reply_to, ['support@exposing.app'])
+
+    def test_unsafe_links_are_not_rendered(self):
+        send_branded_email(
+            'member@test.local', 'Notice', 'Notice', 'Read this.',
+            cta_label='Unsafe button', cta_url='javascript:alert(1)',
+            logo_url='//evil.test/logo.png',
+            support={'email': 'not-an-email', 'phone': 'call me', 'form': 'data:text/html,bad'},
+        )
+        html = mail.outbox[0].alternatives[0].content
+        self.assertNotIn('javascript:', html)
+        self.assertNotIn('evil.test', html)
+        self.assertNotIn('Unsafe button', html)
+        self.assertNotIn('data:text/html', html)
+
+    def test_safe_link_refuses_malformed_urls(self):
+        for value in ('http://[', 'javascript:alert(1)', '//evil.test/path', 'data:text/html,bad'):
+            with self.subTest(value=value):
+                self.assertEqual(safe_link(value), '')
+        self.assertEqual(safe_link('/wallet'), '/wallet')
+        self.assertEqual(safe_link('https://exposing.app/wallet'), 'https://exposing.app/wallet')
+
+    def test_a_broken_mail_queue_does_not_escape_the_event_helper(self):
+        with mock.patch('apps.common.emails.send_off_request', side_effect=RuntimeError('broker down')):
+            self.assertIsNone(queue_event_email('member@test.local', 'Notice', 'Notice', 'Body'))
+
+    @override_settings(SITE_URL='https://exposing.app', EMAIL_LOGO_URL='http://[')
+    def test_a_malformed_logo_setting_still_queues_the_message_without_it(self):
+        with mock.patch('apps.common.emails.send_off_request') as dispatch, \
+                mock.patch('apps.common.emails.support_context', return_value={}):
+            queue_event_email(
+                'member@test.local', 'Notice', 'Notice', 'Body',
+                cta_label='Open Exposing', cta_path='/login',
+            )
+        args = dispatch.call_args.args
+        self.assertEqual(args[-2], '')
+        self.assertEqual(args[7], 'https://exposing.app/login')
 
 
 class MailDeliveryTests(TestCase):

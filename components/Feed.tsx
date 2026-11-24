@@ -11,7 +11,7 @@ import { useBackClose } from '@/lib/useBackClose';
 import { Post } from '@/lib/types';
 
 export default function Feed() {
-  const { db, me, t, isStaff, serverMode, feedTab, setFeedTab } = useApp();
+  const { db, me, t, serverMode, feedTab, setFeedTab } = useApp();
   const tab = feedTab;
   const feed = useList(
     'feed',
@@ -26,16 +26,12 @@ export default function Feed() {
     return feed.ids.map(id => index.get(id)).filter((p): p is Post => !!p);
   }, [db.posts, feed.ids]);
 
-  // The server has already chosen the rows; this pass only keeps staff/self
-  // visibility honest for rows that were cached before something changed.
-  // Staff get the same deal the API gives them: the moderation view is the
-  // point, so a followers-only post from someone they do not follow is a row
-  // they are supposed to see, not one to filter back out.
-  const staff = isStaff();
+  // The server chooses the rows; this also drops a cached row that moderation
+  // suspended after the page arrived.
   const serverPosts = cached.filter(p =>
-    staff || ((p.status === 'live' || me?.id === p.uid) && canSeePost(p, me?.id ?? null, db.follows, privates)));
+    p.status === 'live' && canSeePost(p, me?.id ?? null, db.follows, privates));
   const localPosts = db.posts
-    .filter(p => (p.status === 'live' || me?.id === p.uid || isStaff()) && canSeePost(p, me?.id ?? null, db.follows, privates) && (tab !== 'following' || followingIds.has(p.uid)))
+    .filter(p => p.status === 'live' && canSeePost(p, me?.id ?? null, db.follows, privates) && (tab !== 'following' || followingIds.has(p.uid)))
     .sort((a, b) => b.ts - a.ts);
   const posts = serverMode ? serverPosts : localPosts;
 

@@ -11,6 +11,7 @@ from datetime import timedelta
 from decimal import Decimal
 
 from django.conf import settings
+from django.core import mail
 from django.utils import timezone
 from rest_framework.test import APIClient
 
@@ -231,6 +232,10 @@ class DecideTests(ReviewTestCase):
         self.assertEqual(Report.objects.filter(status=RESOLVED).count(), 2)
         self.assertEqual(AuditLog.objects.get(action='remove_content').detail,
                          'repeated harassment of another member')
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, [self.member.email])
+        self.assertIn('repeated harassment of another member', mail.outbox[0].body)
+        self.assertIn('#E40104', mail.outbox[0].alternatives[0].content)
 
     def test_removing_a_second_time_moves_nothing_and_notifies_once(self):
         post = self.post_of()
@@ -246,6 +251,7 @@ class DecideTests(ReviewTestCase):
         self.assertIn('already taken down', again.data['detail'])
         self.assertEqual(Notification.objects.filter(kind='warning').count(), 1)
         self.assertEqual(AuditLog.objects.filter(action='remove_content').count(), 1)
+        self.assertEqual(len(mail.outbox), 1, 'a refused second takedown sends no second email')
 
     def test_an_account_is_not_taken_down_or_reinstated_from_the_report_queue(self):
         report = self.reported(self.member, kind='user', reason='impersonation')
@@ -312,7 +318,7 @@ class DecideTests(ReviewTestCase):
 
         blank = desk.post(f'{QUEUE_URL}{report.pk}/decide/', {'action': 'warn'}, format='json')
         self.assertEqual(blank.status_code, 400)
-        self.assertIn('the community is shown', blank.data['detail'])
+        self.assertIn('Write the sentence they', blank.data['detail'])
 
         out = desk.post(f'{QUEUE_URL}{report.pk}/decide/', {
             'action': 'warn', 'reason': 'first strike',
@@ -332,8 +338,43 @@ class DecideTests(ReviewTestCase):
         post.refresh_from_db()
         self.assertEqual(post.status, Post.Status.LIVE, 'a warning is not a takedown')
         self.assertEqual(Report.objects.filter(status=RESOLVED).count(), 1)
-        self.assertIn('public warning notice', Notification.objects.get(recipient=self.member).text)
+        self.assertIn('This account has been warned for spam.',
+                         Notification.objects.get(recipient=self.member).text)
         self.assertEqual(AuditLog.objects.get(action='public_notice').target, f'post:{post.pk}')
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, [self.member.email])
+        self.assertIn('This account has been warned for spam.', mail.outbox[0].body)
+
+    def test_an_account_report_warning_emails_the_account_owner(self):
+        report = self.reported(self.member, kind='user', reason='impersonation')
+        out = self.session('night_mod').post(f'{QUEUE_URL}{report.pk}/decide/', {
+            'action': 'warn', 'reason': 'policy', 'notice': 'Stop impersonating other members.',
+        }, format='json')
+        self.assertEqual(out.status_code, 200, out.data)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, [self.member.email])
+        self.assertIn('Stop impersonating other members.', mail.outbox[0].body)
+
+    def test_warning_email_opt_out_is_honored_but_removal_email_is_not(self):
+        self.member.profile.notify_email = False
+        self.member.profile.save(update_fields=['notify_email'])
+        desk = self.session('night_mod')
+        warned = self.post_of()
+        warning = self.reported(warned)
+        out = desk.post(f'{QUEUE_URL}{warning.pk}/decide/', {
+            'action': 'warn', 'reason': 'policy', 'notice': 'This is a warning.',
+        }, format='json')
+        self.assertEqual(out.status_code, 200, out.data)
+        self.assertEqual(len(mail.outbox), 0)
+
+        removed = self.post_of()
+        report = self.reported(removed)
+        out = desk.post(f'{QUEUE_URL}{report.pk}/decide/', {
+            'action': 'remove', 'reason': 'repeated violations',
+        }, format='json')
+        self.assertEqual(out.status_code, 200, out.data)
+        self.assertEqual(len(mail.outbox), 1, 'a suspension notice is not an optional warning')
+        self.assertIn('repeated violations', mail.outbox[0].body)
 
     def test_releasing_an_autohidden_post_clears_the_pile_that_hidd_it(self):
         post = self.post_of(status=Post.Status.HIDDEN)
@@ -803,6 +844,9 @@ class NoticeTests(ReviewTestCase):
         self.assertIn('misinformation', entry.detail)
         self.assertIn('This claim is false.', entry.detail)
         self.assertEqual(Report.objects.count(), 0, 'the notice was not waiting for a report')
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, [self.member.email])
+        self.assertIn('This claim is false.', mail.outbox[0].body)
 
     def test_every_kind_of_content_takes_a_notice_the_same_way(self):
         desk = self.session('night_mod')
@@ -823,6 +867,7 @@ class NoticeTests(ReviewTestCase):
             {f'comment:{comment.pk}', f'listing:{listing.pk}', f'user:{member.pk}'})
         self.assertEqual(APIClient().get(f'/api/notices/comment/{comment.pk}/').data['notices'][0]['about'],
                          'ordinary')
+        self.assertEqual(len(mail.outbox), 3, 'each attached warning reaches its owner')
 
     def test_a_notice_needs_both_the_sentence_and_the_reason_for_it(self):
         desk = self.session('night_mod')
@@ -831,7 +876,7 @@ class NoticeTests(ReviewTestCase):
         blank = desk.post(ATTACH_URL, {'target': f'post:{post.pk}', 'text': '  ',
                                        'reason': 'spam'}, format='json')
         self.assertEqual(blank.status_code, 400)
-        self.assertIn('sentence the community will read', blank.data['detail'])
+        self.assertIn('Write the sentence they', blank.data['detail'])
 
         no_reason = desk.post(ATTACH_URL, {'target': f'post:{post.pk}', 'text': 'False claim.',
                                            'reason': ''}, format='json')
@@ -876,6 +921,7 @@ class NoticeTests(ReviewTestCase):
         self.assertEqual(twice.status_code, 400)
         self.assertIn('already standing', twice.data['detail'])
         self.assertEqual(PublicNotice.objects.count(), 1)
+        self.assertEqual(len(mail.outbox), 1, 'a refused duplicate notice sends no second email')
 
         second = desk.post(ATTACH_URL, {'target': f'post:{post.pk}', 'text': 'And this one is dangerous.',
                                         'reason': 'misinformation'}, format='json')

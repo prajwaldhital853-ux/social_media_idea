@@ -253,6 +253,15 @@ def notice_map(kind, ids, request=None):
             .filter(gate)
             .select_related('actor')
             .order_by('-created_at'))
+    notice_ids = [row.pk for row in rows]
+    notification_by_notice = {}
+    if pk and notice_ids:
+        from apps.notifications.models import Notification
+        for item in (Notification.objects
+                     .filter(recipient_id=pk, kind='warning', notice_id__in=notice_ids)
+                     .order_by('-created_at', '-pk')
+                     .values_list('notice_id', 'pk')):
+            notification_by_notice.setdefault(item[0], item[1])
     for row in rows:
         grouped.setdefault(row.target_id, []).append({
             'id': row.pk,
@@ -261,5 +270,6 @@ def notice_map(kind, ids, request=None):
             'by': row.actor.username if row.actor else 'staff',
             'at': row.created_at,
             'private': row.audience == PublicNotice.Audience.PRIVATE,
+            'notification_id': notification_by_notice.get(row.pk),
         })
     return grouped

@@ -14,6 +14,7 @@ from datetime import timedelta
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
+from django.core import mail
 from django.core.files.base import ContentFile
 from django.core.files.storage import storages
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -137,6 +138,12 @@ class DecisionTests(CoinTestCase):
         request.refresh_from_db()
         self.assertEqual(request.status, CoinRequest.Status.APPROVED)
         self.assertEqual(CoinReview.objects.filter(request=request, coins_credited=500).count(), 1)
+        self.assertEqual(len(mail.outbox), 1)
+        receipt = mail.outbox[0]
+        self.assertEqual(receipt.to, [self.member.email])
+        self.assertIn('coin purchase is confirmed', receipt.subject.lower())
+        self.assertIn('500 coins', receipt.body)
+        self.assertIn('#E40104', receipt.alternatives[0].content)
 
     def test_the_same_receipt_approved_twice_moves_no_coins_at_all(self):
         request = self.request_for()
@@ -148,6 +155,7 @@ class DecisionTests(CoinTestCase):
         wallet = Wallet.objects.get(user=self.member)
         self.assertEqual(wallet.transactions.count(), 1)
         self.assertEqual(wallet.balance, Decimal(500))
+        self.assertEqual(len(mail.outbox), 1, 'a refused duplicate sends no second receipt')
 
     def test_a_rejection_needs_the_sentence_the_payer_is_sent_and_credits_nothing(self):
         request = self.request_for()
@@ -163,6 +171,7 @@ class DecisionTests(CoinTestCase):
         self.assertEqual(Wallet.objects.get(user=self.member).balance, Decimal(0))
         note = Notification.objects.filter(recipient=self.member, kind='coins').last()
         self.assertIn('reference does not match', note.text)
+        self.assertEqual(len(mail.outbox), 0, 'a rejection is not a purchase confirmation')
 
     def test_asking_for_more_proof_keeps_the_request_open_and_can_be_asked_twice(self):
         request = self.request_for()

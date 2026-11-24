@@ -142,6 +142,7 @@ function mapNotices(rows: any): Notice[] | undefined {
   return rows.map((n: any) => ({
     id: idOf(n.id), text: n.text || '', reason: n.reason || undefined,
     by: n.by || undefined, ts: at(n.at), private: !!n.private,
+    notificationId: n.notification_id == null ? undefined : idOf(n.notification_id),
   }));
 }
 
@@ -180,7 +181,7 @@ export function mapComment(row: any): Comment {
     uid: idOf(row.author),
     text: row.text || '',
     ts: at(row.created_at),
-    status: row.status === 'removed' ? 'removed' : 'live',
+    status: row.status === 'hidden' || row.status === 'removed' ? row.status : 'live',
     notices: mapNotices(row.notices),
     likes: amount(row.like_count),
     replies: amount(row.reply_count),
@@ -228,7 +229,9 @@ export function mapNotification(row: any): Notification {
     kind,
     actor: row.actor ? idOf(row.actor) : undefined,
     text: row.text || '',
-    href: hrefOf(kind, row.target_type, idOf(row.target_id), row.actor_username),
+    href: kind === 'warning'
+      ? `/notifications/${idOf(row.id)}`
+      : hrefOf(kind, row.target_type, idOf(row.target_id), row.actor_username),
     ts: at(row.created_at),
     read: !!row.read_at,
   };

@@ -21,17 +21,14 @@ class CommentViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticatedOrReadOnly, IsAuthorOrReadOnly]
 
     def get_queryset(self):
-        qs = Comment.objects.select_related('author', 'author__profile', 'post').annotate(
-            annotated_reply_count=Count('replies', distinct=True)
+        qs = Comment.objects.filter(
+            status=Comment.Status.LIVE,
+            post__in=visible_posts(self.request.user),
+        ).select_related('author', 'author__profile', 'post').annotate(
+            annotated_reply_count=Count(
+                'replies', filter=Q(replies__status=Comment.Status.LIVE), distinct=True,
+            )
         )
-        user = self.request.user
-        # A comment belongs to its post, so whoever cannot read the post cannot
-        # read the conversation under it. Your own comments stay readable: you
-        # wrote them and must always be able to find and delete them.
-        readable = Q(post__in=visible_posts(user))
-        if user.is_authenticated:
-            readable |= Q(author=user)
-        qs = qs.filter(readable)
         post_id = self.request.query_params.get('post')
         if post_id:
             qs = qs.filter(post_id=post_id)

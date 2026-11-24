@@ -30,8 +30,8 @@ const VERBS: Record<Verb, VerbSpec> = {
     help: 'The author is shown your reason and any campaign on it stops and is refunded.',
   },
   warn: {
-    label: 'Public notice', tone: 'amber', icon: 'mega', notice: 'must', reason: 'can',
-    help: 'The content stays up and the community is told. The author also gets a private warning.',
+    label: 'Warning notice', tone: 'amber', icon: 'mega', notice: 'must', reason: 'can',
+    help: 'The content stays up. Choose whether everyone can read this warning or only its author.',
   },
   release: {
     label: 'Release', tone: 'primary', icon: 'go',
@@ -58,7 +58,7 @@ export default function DecisionBar({
 }: {
   actions: Verb[];
   permission: string | null;
-  run: (verb: Verb, reason: string, notice: string) => Promise<Outcome>;
+  run: (verb: Verb, reason: string, notice: string, audience: string) => Promise<Outcome>;
   onDone: (out: Outcome) => void;
   footnote?: string;
   /** What the seat is about to change, named in the confirmation. */
@@ -69,6 +69,7 @@ export default function DecisionBar({
   const [open, setOpen] = useState<Verb | null>(null);
   const [reason, setReason] = useState('');
   const [notice, setNotice] = useState('');
+  const [audience, setAudience] = useState('public');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<Outcome | null>(null);
@@ -100,11 +101,12 @@ export default function DecisionBar({
     setBusy(true);
     setError(null);
     try {
-      const out = await run(verb, reasonText.trim(), noticeText.trim());
+      const out = await run(verb, reasonText.trim(), noticeText.trim(), audience);
       setDone(out);
       setOpen(null);
       setReason('');
       setNotice('');
+      setAudience('public');
       onDone(out);
     } catch (err) {
       const failure = err as ApiError;
@@ -162,14 +164,23 @@ export default function DecisionBar({
             </label>
           )}
           {active.notice && (
-            <label className="field">
-              <span>Sentence the community is shown {active.notice === 'must' ? '' : '(optional — leave blank for no public notice)'}</span>
-              <textarea
-                rows={2} name="notice" value={notice} maxLength={240} autoFocus={active.notice === 'must'}
-                placeholder="e.g. This listing advertises something the marketplace does not allow."
-                onChange={event => setNotice(event.target.value)}
-              />
-            </label>
+            <>
+              <label className="field">
+                <span>Warning sentence {active.notice === 'must' ? '' : '(optional — leave blank for no notice)'}</span>
+                <textarea
+                  rows={2} name="notice" value={notice} maxLength={240} autoFocus={active.notice === 'must'}
+                  placeholder="e.g. This listing advertises something the marketplace does not allow."
+                  onChange={event => setNotice(event.target.value)}
+                />
+              </label>
+              <label className="field">
+                <span>Who can read this warning</span>
+                <select name="audience" value={audience} onChange={event => setAudience(event.target.value)}>
+                  <option value="public">Public — everyone who opens this content</option>
+                  <option value="private">Private — only the account it is about</option>
+                </select>
+              </label>
+            </>
           )}
           <div className="ask-actions">
             <button
@@ -218,7 +229,7 @@ export function Verdict({ out }: { out: Outcome }) {
       )}
       {out.notice && (
         <p className="verdict-note">
-          <span>Public notice on {out.notice.target} about @{out.notice.about}:</span>
+          <span>{out.notice.audience === 'private' ? 'Private' : 'Public'} notice on {out.notice.target} about @{out.notice.about}:</span>
           <b>{out.notice.text}</b>
         </p>
       )}

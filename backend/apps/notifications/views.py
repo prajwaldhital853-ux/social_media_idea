@@ -14,10 +14,15 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from apps.accounts.models import User
+from apps.adminpanel.models import PublicNotice
+from apps.comments.models import Comment
 from apps.common.api import person
 from apps.common.pagination import KeysetPagination
 from apps.common.stream import acquire, release, stream_user
+from apps.marketplace.models import Listing
 from apps.messages.models import Message
+from apps.posts.models import Post
 
 from .models import Notification
 
@@ -31,16 +36,95 @@ class NotificationSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Notification
-        fields = ['id', 'recipient', 'actor', 'actor_username', 'actor_card', 'kind', 'target_type', 'target_id', 'text', 'read_at', 'created_at']
+        fields = ['id', 'recipient', 'actor', 'actor_username', 'actor_card', 'kind', 'target_type', 'target_id', 'text', 'read_at', 'created_at', 'notice']
 
     def get_actor_card(self, obj):
         return person(obj.actor)
 
 
+def warning_target(kind, target_id):
+    if not str(target_id or '').isdigit():
+        return None
+    pk = int(target_id)
+    if kind == 'post':
+        row = Post.objects.filter(pk=pk).select_related('author').first()
+        if row is None:
+            return None
+        return {
+            'kind': kind, 'id': row.pk, 'status': row.status,
+            'created_at': row.created_at, 'text': row.text[:600],
+            'author': person(row.author), 'href': f'/post/{row.pk}',
+        }
+    if kind == 'comment':
+        row = Comment.objects.filter(pk=pk).select_related('author', 'post').first()
+        if row is None:
+            return None
+        return {
+            'kind': kind, 'id': row.pk, 'status': row.status,
+            'created_at': row.created_at, 'text': row.text[:600],
+            'author': person(row.author), 'href': f'/post/{row.post_id}#comment-{row.pk}',
+        }
+    if kind == 'listing':
+        row = Listing.objects.filter(pk=pk).select_related('seller').first()
+        if row is None:
+            return None
+        return {
+            'kind': kind, 'id': row.pk, 'status': row.status,
+            'created_at': row.created_at, 'text': (f'{row.title}\n{row.description}')[:600],
+            'author': person(row.seller), 'href': f'/marketplace/{row.pk}',
+        }
+    if kind == 'user':
+        row = User.objects.filter(pk=pk).first()
+        if row is None:
+            return None
+        return {
+            'kind': kind, 'id': row.pk, 'status': 'suspended' if row.is_suspended else 'active' if row.is_active else 'deactivated',
+            'created_at': row.date_joined, 'text': '', 'author': person(row),
+            'href': f'/u/{row.username}',
+        }
+    return None
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def notification_detail(request, pk):
+    row = Notification.objects.select_related(
+        'recipient', 'actor', 'actor__profile',
+        'notice', 'notice__actor', 'notice__actor__profile',
+        'notice__about', 'notice__about__profile',
+    ).filter(pk=pk, recipient=request.user).first()
+    if row is None:
+        return Response({'detail': 'No such notification.'}, status=404)
+    data = NotificationSerializer(row).data
+    notice = row.notice
+    notice_data = None
+    if notice is not None:
+        if notice.audience == PublicNotice.Audience.PRIVATE and notice.about_id != request.user.pk:
+            return Response({'detail': 'No such notification.'}, status=404)
+        notice_data = {
+            'id': notice.pk, 'text': notice.text, 'reason': notice.reason,
+            'audience': notice.audience, 'created_at': notice.created_at,
+            'is_live': notice.is_live, 'withdrawn_at': notice.withdrawn_at,
+            'by': notice.actor.username if notice.actor else None,
+            'actor_card': person(notice.actor), 'about': person(notice.about),
+        }
+    kind = notice.target_type if notice is not None else row.target_type
+    target_id = notice.target_id if notice is not None else row.target_id
+    data.update({
+        'notice_detail': notice_data,
+        'target': warning_target(kind, target_id),
+    })
+    if row.read_at is None:
+        Notification.objects.filter(pk=row.pk, recipient=request.user).update(read_at=timezone.now())
+        row.read_at = timezone.now()
+        data['read_at'] = row.read_at
+    return Response(data)
+
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def notification_list(request):
-    qs = Notification.objects.filter(recipient=request.user).select_related('actor__profile')
+    qs = Notification.objects.filter(recipient=request.user).select_related('actor__profile', 'notice')
     if request.query_params.get('unread'):
         qs = qs.filter(read_at__isnull=True)
     paginator = KeysetPagination()

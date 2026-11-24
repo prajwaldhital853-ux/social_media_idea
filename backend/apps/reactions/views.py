@@ -34,7 +34,9 @@ def _media_target(target_id):
 
 def _post_of_target(target_type, target_id):
     if target_type == 'comment' and str(target_id).isdigit():
-        return Comment.objects.filter(pk=int(target_id)).values_list('post_id', flat=True).first()
+        return Comment.objects.filter(
+            pk=int(target_id), status=Comment.Status.LIVE,
+        ).values_list('post_id', flat=True).first()
     if target_type == 'media':
         media = _media_target(target_id)
         return media[0] if media else None

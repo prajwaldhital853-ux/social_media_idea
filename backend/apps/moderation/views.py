@@ -68,7 +68,8 @@ def _auto_hide_if_piled_on(report):
     post.status = Post.Status.HIDDEN
     post.save(update_fields=['status'])
     notify(post.author, None, 'warning',
-           f'Your post is hidden from the feed: {distinct} people reported it ({report.reason}).',
+           f'Your post, posted {timezone.localtime(post.created_at):%d %b %Y at %H:%M}, '
+           f'was suspended due to: {distinct} people reported it ({report.reason}).',
            'post', post.pk)
     audit(None, 'auto_hide_post', f'post:{post.pk}', f'{distinct} open reports')
 
@@ -76,26 +77,29 @@ def _auto_hide_if_piled_on(report):
 def _remove_target(report, actor):
     kind, tid = report.target_type, report.target_id
     owner = None
+    content = None
     if kind == 'post' and tid.isdigit():
-        post = Post.objects.filter(pk=int(tid)).first()
-        if post:
-            post.status = Post.Status.REMOVED
-            post.save(update_fields=['status'])
-            owner = post.author
+        content = Post.objects.filter(pk=int(tid)).first()
+        if content:
+            content.status = Post.Status.REMOVED
+            content.save(update_fields=['status'])
+            owner = content.author
     elif kind == 'comment' and tid.isdigit():
-        comment = Comment.objects.filter(pk=int(tid)).first()
-        if comment:
-            comment.status = Comment.Status.REMOVED
-            comment.save(update_fields=['status'])
-            owner = comment.author
+        content = Comment.objects.filter(pk=int(tid)).first()
+        if content:
+            content.status = Comment.Status.REMOVED
+            content.save(update_fields=['status'])
+            owner = content.author
     elif kind == 'listing' and tid.isdigit():
-        listing = Listing.objects.filter(pk=int(tid)).first()
-        if listing:
-            listing.status = Listing.Status.REMOVED
-            listing.save(update_fields=['status'])
-            owner = listing.seller
+        content = Listing.objects.filter(pk=int(tid)).first()
+        if content:
+            content.status = Listing.Status.REMOVED
+            content.save(update_fields=['status'])
+            owner = content.seller
     if owner:
-        notify(owner, actor, 'warning', f'Your {kind} was removed by moderation: {report.reason}.', kind, tid)
+        posted = f', posted {timezone.localtime(content.created_at):%d %b %Y at %H:%M},' if kind != 'listing' else ','
+        notify(owner, actor, 'warning',
+               f'Your {kind}{posted} was suspended due to: {report.reason}.', kind, tid)
 
 
 @api_view(['POST'])

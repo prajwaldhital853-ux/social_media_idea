@@ -60,12 +60,12 @@ export default function ReviewCasePage({ params }: { params: { kind: string; id:
     if (status === 'in') load();
   }, [load, status]);
 
-  const decide = async (verb: Verb, reason: string, notice: string) =>
+  const decide = async (verb: Verb, reason: string, notice: string, audience: string) =>
     api<Outcome>(detail!.reports.length
       ? `admin/review/${detail!.reports[0].id}/decide/`
       : `admin/content/${params.kind}/${params.id}/`, {
       method: 'POST',
-      body: { action: verb, reason, notice },
+      body: { action: verb, reason, notice, audience },
     });
 
   const handled = (out: Outcome) => {
@@ -162,14 +162,14 @@ export default function ReviewCasePage({ params }: { params: { kind: string; id:
 
             <Section title={`Notices standing on it (${detail.notices.length})`}>
               {detail.notices.length === 0
-                ? <p className="note">No public notice has been put on this content.</p>
+                ? <p className="note">No warning notice has been put on this content.</p>
                 : (
                   <ul className="reporters">
                     {detail.notices.map(notice => (
                       <li key={notice.id}>
                         <b>{notice.text}</b>
                         <em>
-                          {notice.is_live ? 'standing' : 'withdrawn'} · put there by {' '}
+                          {notice.is_live ? 'standing' : 'withdrawn'} · {notice.audience} · put there by {' '}
                           {notice.actor ? `@${notice.actor}` : 'staff'} · {ago(notice.created_at)}
                         </em>
                         {notice.reason && <span className="ctext">{notice.reason}</span>}
@@ -216,8 +216,8 @@ export default function ReviewCasePage({ params }: { params: { kind: string; id:
             />
             <p className="fineprint">
               The reason you type goes to the author, and the audit row keeps it with your name
-              beside it. A public notice is read by everyone who opens this afterwards. Restore and
-              Release put the thing back exactly as it was.
+              beside it. Choose whether a warning is public or private. Restore and Release
+              put the thing back exactly as it was.
             </p>
           </aside>
         </div>

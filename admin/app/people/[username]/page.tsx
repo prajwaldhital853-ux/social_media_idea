@@ -37,8 +37,8 @@ const SPEC: Record<Verb, { label: string; tone: string; icon: keyof typeof IC; h
     help: 'The grey tick on their profile. Putting it on needs a reason, and it goes on the audit row.',
   },
   warn: {
-    label: 'Private warning', tone: 'ghost', icon: 'chat',
-    help: 'Lands in their notification bell, and their inbox unless they turned warning emails off. Always written to the record.',
+    label: 'Warning notice', tone: 'ghost', icon: 'chat',
+    help: 'Shown on their profile. Choose whether everyone can read it or only this account; the warning also lands in their bell.',
   },
   clear_flags: {
     label: 'Clear spam flags', tone: 'primary', icon: 'refresh',
@@ -269,15 +269,15 @@ export default function PersonRecordPage({ params }: { params: { username: strin
                 )}
             </Section>
 
-            <Section title="Public notices">
+            <Section title="Warning notices">
               {detail.notices.length === 0
-                ? <p className="note">No public notice has ever been put on this account.</p>
+                ? <p className="note">No warning notice has ever been put on this account.</p>
                 : (
                   <ul className="reporters">
                     {detail.notices.map(item => (
                       <li key={item.id}>
                         <b>{item.text}</b>
-                        <em>{item.is_live ? 'standing' : 'withdrawn'} · on {item.target} · {ago(item.created_at)}</em>
+                        <em>{item.is_live ? 'standing' : 'withdrawn'} · {item.audience} · on {item.target} · {ago(item.created_at)}</em>
                         {item.reason && <span className="ctext">{item.reason}</span>}
                       </li>
                     ))}
@@ -285,9 +285,9 @@ export default function PersonRecordPage({ params }: { params: { username: strin
                 )}
             </Section>
 
-            <Section title="Private warnings sent">
+            <Section title="Other warnings sent">
               {detail.warnings.length === 0
-                ? <p className="note">No private warning on record.</p>
+                ? <p className="note">No other warning on record.</p>
                 : (
                   <ul className="reporters">
                     {detail.warnings.map((entry, index) => (
@@ -345,7 +345,7 @@ export default function PersonRecordPage({ params }: { params: { username: strin
             {!detail.can.actions && !detail.can.warn ? (
               <p className="note">
                 This seat may read the directory but holds neither <b>Suspend, reinstate, verify,
-                delete</b> nor <b>Private warnings to users</b>, so there is nothing to sign here.
+                delete</b> nor <b>Warning notices to users</b>, so there is nothing to sign here.
               </p>
             ) : (
               <div className="verbs">
@@ -428,6 +428,7 @@ function VerbButton({
   const [until, setUntil] = useState('');
   const [reason, setReason] = useState('');
   const [text, setText] = useState('');
+  const [audience, setAudience] = useState('private');
   const [usernameConfirm, setUsernameConfirm] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -506,9 +507,10 @@ function VerbButton({
       return;
     }
     if (verb === 'warn') {
-      send({ text: text.trim(), reason: reason.trim() });
+      send({ text: text.trim(), reason: reason.trim(), audience });
       setText('');
       setReason('');
+      setAudience('private');
       return;
     }
     if (verb === 'clear_flags') {
@@ -527,7 +529,7 @@ function VerbButton({
         type="button" data-verb={verb}
         className={`btn ${spec.tone} tiny`}
         disabled={busy || !allowed}
-        title={allowed ? spec.help : `This seat does not hold ${verb === 'warn' ? 'Private warnings to users' : 'Suspend, reinstate, verify, delete'}`}
+        title={allowed ? spec.help : `This seat does not hold ${verb === 'warn' ? 'Warning notices to users' : 'Suspend, reinstate, verify, delete'}`}
         onClick={start}
       >
         {IC[spec.icon]}
@@ -573,14 +575,23 @@ function VerbButton({
           )}
 
           {verb === 'warn' && (
-            <label className="field">
-              <span>The warning they read</span>
-              <textarea
-                rows={3} name="warn_text" value={text} maxLength={240} autoFocus
-                placeholder="e.g. Third harassment report. Do not post other people's photographs."
-                onChange={event => setText(event.target.value)}
-              />
-            </label>
+            <>
+              <label className="field">
+                <span>Who can read this warning</span>
+                <select name="audience" value={audience} onChange={event => setAudience(event.target.value)}>
+                  <option value="private">Private — only this account, on their profile and notifications</option>
+                  <option value="public">Public — everyone who opens their profile</option>
+                </select>
+              </label>
+              <label className="field">
+                <span>The warning they read</span>
+                <textarea
+                  rows={3} name="warn_text" value={text} maxLength={240} autoFocus
+                  placeholder="e.g. Third harassment report. Do not post other people's photographs."
+                  onChange={event => setText(event.target.value)}
+                />
+              </label>
+            </>
           )}
 
           {verb === 'delete' && (

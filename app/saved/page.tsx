@@ -36,7 +36,7 @@ export default function SavedPage() {
       // The server already applied the audience rule to this page; re-applying a
       // local one here — over a follow graph that is only ever a slice — hides
       // rows the list promised and makes the count disagree with the API.
-      return savedPosts.ids.map(id => index.get(id)).filter((p): p is Post => !!p);
+      return savedPosts.ids.map(id => index.get(id)).filter((p): p is Post => !!p && p.status === 'live');
     }
     if (!me) return [];
     return db.saves

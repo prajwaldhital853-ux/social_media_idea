@@ -12,12 +12,12 @@ import { IC } from '@/lib/icons';
 export default function PostPage() {
   const params = useParams();
   const router = useRouter();
-  const { db, me, isStaff, t } = useApp();
+  const { db, me, t } = useApp();
   const id = String(params.id || '');
   const post = db.posts.find(p => p.id === id);
   const { remote, pull } = useRemoteRow('post', id, !!post);
 
-  const available = !!post && (post.status === 'live' || me?.id === post.uid || isStaff()) && canSeePost(post, me?.id ?? null, db.follows, privateIds(db.users));
+  const available = !!post && post.status === 'live' && canSeePost(post, me?.id ?? null, db.follows, privateIds(db.users));
   const author = post ? db.users.find(u => u.id === post.uid) : undefined;
 
   return <AppShell>

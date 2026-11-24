@@ -37,7 +37,7 @@ export default function ModernLogin() {
   const [googleBusy, setGoogleBusy] = useState(false);
   /** Seconds left on the cooloff, or null once it is over. */
   const [lockedFor, setLockedFor] = useState<number | null>(null);
-  /** Which door the server closed: the account, this browser, or this connection. */
+  /** Which door the server closed: the account, this browser, or a staff-banned connection. */
   const [banScope, setBanScope] = useState('email');
 
   useEffect(() => {

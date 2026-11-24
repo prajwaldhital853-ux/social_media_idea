@@ -47,7 +47,7 @@ function SearchResults() {
     : [];
   const posts = normalized
     ? (serverMode
-      ? postRows.ids.map(postOf).filter((p): p is NonNullable<ReturnType<typeof postOf>> => !!p)
+      ? postRows.ids.map(postOf).filter((p): p is NonNullable<ReturnType<typeof postOf>> => !!p && p.status === 'live')
       : db.posts.filter(p => p.status === 'live' && canSeePost(p, me?.id ?? null, db.follows, privateIds(db.users)) && p.text.toLocaleLowerCase().includes(normalized)).sort((a, b) => b.ts - a.ts))
     : [];
   const loading = serverMode && !!normalized && (!peopleRows.loaded || !postRows.loaded);

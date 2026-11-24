@@ -1471,16 +1471,16 @@ a:focus:not(:focus-visible) {
 }
 
 /* The first-load card the console writes. */
-.welcome-card { max-width: 460px; padding: 26px 24px 20px; text-align: center; }
-.welcome-mark { width: 56px; height: 56px; border-radius: 16px; }
-.welcome-message { margin: 14px 0 0; font-size: 16px; line-height: 1.5; color: var(--ink); }
-.welcome-tagline { margin: 8px 0 0; font-size: 13px; color: var(--muted); }
-.welcome-contact { list-style: none; margin: 16px 0 0; padding: 12px 0 0; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 6px; }
-.welcome-contact li { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; }
+.welcome-card { max-width: 540px; padding: 36px 34px 30px; text-align: center; }
+.welcome-mark { width: 72px; height: 72px; border-radius: 20px; }
+.welcome-message { margin: 20px 0 0; font-size: 18px; line-height: 1.6; color: var(--ink); }
+.welcome-tagline { margin: 10px 0 0; font-size: 14px; color: var(--muted); }
+.welcome-contact { list-style: none; margin: 24px 0 0; padding: 18px 0 0; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 10px; }
+.welcome-contact li { display: flex; justify-content: space-between; gap: 12px; font-size: 14px; }
 .welcome-contact li > span { color: var(--muted); }
 .welcome-go {
-  margin-top: 18px; width: 100%; padding: 11px 16px; border: 0; border-radius: 24px;
-  background: var(--brand); color: #fff; font-size: 14px; font-weight: 650; cursor: pointer;
+  margin-top: 24px; width: 100%; padding: 14px 18px; border: 0; border-radius: 24px;
+  background: var(--brand); color: #fff; font-size: 15px; font-weight: 650; cursor: pointer;
 }
 .footer-tagline { margin: 0 0 6px; font-size: 12px; color: var(--muted); }
 
@@ -1497,14 +1497,21 @@ a:focus:not(:focus-visible) {
 
 .login-content {
   width: 100%;
-  max-width: 450px;
-  padding: 24px;
+  max-width: 540px;
+  padding: 36px;
+}
+
+.login-content:not(.signup-content) {
+  min-height: 540px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 }
 
 .login-title {
-  font-size: 28px;
+  font-size: 30px;
   font-weight: 800;
-  margin-bottom: 24px;
+  margin-bottom: 28px;
 }
 
 .login-input {
@@ -2635,20 +2642,26 @@ a.trend-item:hover { text-decoration: none; }
 .promoted-why { font-size: 10px; padding: 2px; }
 .promoted-pop { position: absolute; top: 24px; left: 0; max-width: 300px; padding: 12px; z-index: 15; background: var(--paper); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow-lg); }
 
-/* A sentence staff put over one piece of content, read before the thing it warns about. */
+/* A moderation warning, in the same unmistakable shape as an account ban. */
 .notice-banner { display: flex; flex-direction: column; gap: 8px; margin: 0 0 10px; }
 .notice-line {
-  display: flex; flex-wrap: wrap; align-items: baseline; gap: 3px 8px;
-  margin: 0; padding: 0 0 8px; border-bottom: 1px solid var(--line);
-  font-size: 13px; line-height: 1.45; color: var(--ink);
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  margin: 0; padding: 13px 16px; border-radius: 12px;
+  background: #c62828; color: #fff; font-size: 14px; line-height: 1.4;
+  box-shadow: 0 2px 6px #8b1a1a22;
 }
-.notice-line:last-child { padding-bottom: 0; border-bottom: 0; }
-.notice-label { flex: none; font-size: 11.5px; font-weight: 600; letter-spacing: .02em; color: var(--muted); text-transform: uppercase; }
-.notice-text { font-weight: 500; }
-.notice-reason { flex-basis: 100%; font-size: 12px; color: var(--muted); }
-.notice-by { font-size: 11.5px; color: var(--muted); }
-.comments-content > .notice-banner { margin: 0 0 4px; }
-.comments-content > .notice-banner .notice-line { font-size: 12.5px; padding-bottom: 6px; }
+.notice-copy { display: flex; flex-direction: column; gap: 3px; margin: 0; min-width: 0; }
+.notice-text { font-weight: 500; overflow-wrap: anywhere; }
+.notice-reason { font-size: 12px; color: #ffffffd9; overflow-wrap: anywhere; }
+.notice-by { font-size: 12px; color: #ffffffd9; }
+.notice-line > a { flex: none; color: #fff; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
+.notice-line > a:hover, .notice-line > a:focus-visible { color: #fff; text-decoration-thickness: 2px; }
+.comments-content > .notice-banner { margin: 0 0 6px; }
+.comment-card { display: inline-block; align-self: flex-start; width: fit-content; max-width: 100%; min-width: 0; vertical-align: top; }
+.comment-card > .notice-banner, .comment-card > .comment-bubble { width: 100%; }
+.comment-card > .comment-bubble { display: block; width: 100%; max-width: 100%; box-sizing: border-box; }
+.comment-card > .notice-banner .notice-line { padding: 9px 12px; border-radius: 10px; font-size: 12.5px; gap: 10px; }
+.comment-menu-wrap { margin-left: auto; }
 .desktop-compose { padding: 14px 16px; border-bottom: 1px solid var(--line); }
 .desktop-compose button { padding: 10px 16px; width: 100%; text-align: left; background: var(--surface); color: var(--muted); border-radius: 24px; }
 .feed-empty { padding: 32px 20px; color: var(--muted); font-size: 14px; }
@@ -6243,6 +6256,7 @@ textarea {
   position: relative; display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px;
   padding: 0 16px 14px; border-bottom: 1px solid var(--line);
 }
+.profile-head > .notice-banner { flex-basis: 100%; }
 .profile-avatar {
   margin-top: -48px; border-radius: 50%; border: 4px solid var(--paper);
   background: var(--paper); line-height: 0; flex-shrink: 0;
@@ -6547,7 +6561,7 @@ a.wallet-sec-note:hover { color: var(--brand); text-decoration: underline; }
 
 /* ---------- Signup ---------- */
 .signup-container { overflow-y: auto; align-items: flex-start; }
-.signup-content { max-width: 460px; padding-bottom: 40px; margin: auto; }
+.signup-content { max-width: 540px; padding: 32px 36px 48px; margin: auto; }
 .signup-sub { margin: -6px 0 14px; font-size: 14px; color: var(--muted); text-align: center; }
 .signup-form { display: flex; flex-direction: column; gap: 11px; width: 100%; }
 .signup-field { display: flex; flex-direction: column; gap: 5px; flex: 1; min-width: 0; }
@@ -6564,6 +6578,13 @@ a.wallet-sec-note:hover { color: var(--brand); text-decoration: underline; }
 .signup-error {
   margin: 0; font-size: 13px; color: var(--red); background: rgba(228, 1, 4, .08);
   border: 1px solid rgba(228, 1, 4, .3); padding: 9px 12px; border-radius: 10px;
+}
+
+@media (max-width: 560px) {
+  .welcome-card { padding: 28px 22px 24px; }
+  .login-content { padding: 28px 22px; }
+  .login-content:not(.signup-content) { min-height: 500px; }
+  .signup-content { padding: 28px 22px 36px; }
 }
 
 /* ---------- Legal ---------- */
@@ -6654,6 +6675,19 @@ a.wallet-sec-note:hover { color: var(--brand); text-decoration: underline; }
 .notif-time { font-size: 12px; color: var(--muted); }
 .notif-time.fresh { color: var(--brand); font-weight: 700; }
 .notif-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--brand); flex-shrink: 0; }
+
+.warning-detail-page { min-height: calc(100vh - 56px); }
+.warning-detail { width: min(640px, 100%); margin: 0 auto; padding: 14px 16px 40px; display: flex; flex-direction: column; gap: 14px; }
+.warning-card { padding: 18px; border: 1px solid var(--line); border-radius: 16px; background: var(--paper); box-shadow: var(--shadow); }
+.warning-card h2 { margin: 0 0 10px; font-size: 16px; }
+.warning-copy { margin: 0; line-height: 1.55; overflow-wrap: anywhere; white-space: pre-wrap; }
+.warning-target-label { margin: 0 0 8px; color: var(--muted); font-size: 13px; }
+.warning-facts { display: flex; flex-direction: column; gap: 10px; margin: 16px 0 0; }
+.warning-facts > div { display: grid; grid-template-columns: 130px minmax(0, 1fr); gap: 12px; }
+.warning-facts dt { color: var(--muted); font-size: 12.5px; }
+.warning-facts dd { margin: 0; overflow-wrap: anywhere; text-transform: capitalize; }
+.warning-target-link { display: inline-flex; align-items: center; gap: 6px; margin-top: 16px; color: var(--brand); font-weight: 700; }
+.warning-target-link svg { width: 16px; height: 16px; }
 
 /* ---------- Inbox ---------- */
 .inbox-view { animation: fadeIn .2s ease; }

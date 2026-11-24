@@ -248,7 +248,7 @@ def _notice(kind, row, actor, reason, text, audience=PublicNotice.Audience.PUBLI
         text=text[:240], reason=reason[:120], actor=actor,
         audience=audience_of(audience),
     )
-    return notice_row(notice)
+    return notice
 
 
 def attach(kind, target_id, actor, reason, text, audience=PublicNotice.Audience.PUBLIC):
@@ -263,12 +263,9 @@ def attach(kind, target_id, actor, reason, text, audience=PublicNotice.Audience.
     if row is None:
         raise ValueError(f'There is no {kind} {target_id} to put a notice on.')
     audience = audience_of(audience)
-    out = _notice(kind, row, actor, reason, text, audience)
-    if audience == PublicNotice.Audience.PRIVATE:
-        # A public notice is found by reading the content. A private one is not,
-        # so the bell is the only way the person it is about learns to go and look.
-        _say(kind, row, actor, f'A notice about your {kind} is standing where only you can read it: {text[:240]}')
-    return out
+    notice = _notice(kind, row, actor, reason, text, audience)
+    _say(kind, row, actor, text, notice=notice)
+    return notice_row(notice)
 
 
 def notice_row(notice):
@@ -288,9 +285,15 @@ def notice_row(notice):
     }
 
 
-def _say(kind, row, actor, text):
-    """The private half of the same decision, in the author's bell."""
-    return notify(owner_for(kind, row), actor, 'warning', text, kind, row.pk)
+def _say(kind, row, actor, text, notice=None):
+    """The author-facing half of a moderation decision, in their bell."""
+    return notify(owner_for(kind, row), actor, 'warning', text, kind, row.pk, notice=notice)
+
+
+def suspension_notice(kind, row, actor, reason):
+    posted = timezone.localtime(row.created_at).strftime('%d %b %Y at %H:%M') if kind != 'user' else ''
+    when = f', posted {posted},' if posted else ','
+    return f'Your {kind}{when} was suspended due to: {reason}'
 
 
 def act(kind, target_id, actor, action, reason='', notice_text='', audience=PublicNotice.Audience.PUBLIC):
@@ -336,9 +339,10 @@ def act(kind, target_id, actor, action, reason='', notice_text='', audience=Publ
         out['reports_closed'] = close_reports(kind, row.pk, Report.Status.RESOLVED, now)
         campaigns, refunded = cancel_campaigns(kind, row.pk, now)
         out['campaigns'], out['refunded'] = campaigns, str(refunded)
-        _say(kind, row, actor, f'Your {kind} was removed by moderation: {reason}')
+        _say(kind, row, actor, suspension_notice(kind, row, actor, reason))
         if notice_text:
-            out['notice'] = _notice(kind, row, actor, reason, notice_text, audience)
+            notice = _notice(kind, row, actor, reason, notice_text, audience)
+            out['notice'] = notice_row(notice)
         out['content']['state'] = row.status
         out['detail'] = (
             f'Taken down. {out["reports_closed"]} report(s) closed'
@@ -352,19 +356,14 @@ def act(kind, target_id, actor, action, reason='', notice_text='', audience=Publ
     elif action == 'warn':
         if not notice_text:
             raise ValueError('Write the sentence they are shown.')
-        out['notice'] = _notice(kind, row, actor, reason, notice_text, audience)
+        notice = _notice(kind, row, actor, reason, notice_text, audience)
+        out['notice'] = notice_row(notice)
         out['reports_closed'] = close_reports(kind, row.pk, Report.Status.RESOLVED, now)
-        if audience == PublicNotice.Audience.PRIVATE:
-            _say(kind, row, actor,
-                 f'A notice about your {kind} is standing where only you can read it: {notice_text}')
-            out['detail'] = (
-                f'Left up with a notice only the author reads. {out["reports_closed"]} report(s) closed as resolved.'
-            )
-        else:
-            _say(kind, row, actor, f'A public warning notice was posted about your {kind}: {notice_text}')
-            out['detail'] = (
-                f'Left up with a public notice. {out["reports_closed"]} report(s) closed as resolved.'
-            )
+        _say(kind, row, actor, notice_text, notice=notice)
+        out['detail'] = (
+            f'Left up with a notice {"only the author reads" if audience == PublicNotice.Audience.PRIVATE else "everyone reads"}. '
+            f'{out["reports_closed"]} report(s) closed as resolved.'
+        )
 
     elif action == 'release':
         if kind == 'user':

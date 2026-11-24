@@ -17,6 +17,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from apps.accounts.models import User
+from apps.adminpanel.models import PublicNotice
 from apps.common.pagination import KeysetPagination
 
 from . import people, rbac
@@ -137,7 +138,7 @@ def person_verify(request, username):
 @permission_classes([IsAuthenticated])
 @rbac.staff_only('warnings')
 def person_warn(request, username):
-    """A private warning: their bell, their inbox unless they turned it off, always the record."""
+    """A public or private warning: their bell, their inbox unless opted out, the record."""
     user, error = _account(username)
     if error is not None:
         return error
@@ -146,8 +147,9 @@ def person_warn(request, username):
             user, request.user,
             text=request.data.get('text') or '',
             reason=request.data.get('reason') or '',
+            audience=request.data.get('audience') or PublicNotice.Audience.PRIVATE,
         )
-    except people.Refused as exc:
+    except (people.Refused, ValueError) as exc:
         return Response({'detail': str(exc)}, status=400)
     return Response(out)
 

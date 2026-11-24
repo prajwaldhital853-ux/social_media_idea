@@ -19,11 +19,9 @@ class IsAuthorOrReadOnly(BasePermission):
 
 
 def visible_posts(user):
-    qs = Post.objects.select_related('author__profile').prefetch_related('media')
-    if user.is_authenticated and user.is_staff:
-        return qs
+    qs = Post.objects.select_related('author__profile').prefetch_related('media').filter(status=Post.Status.LIVE)
     # A block closes the door on both sides: you do not see what you blocked, and
-    # you do not see what blocked you. Staff see everything, since they moderate it.
+    # you do not see what blocked you.
     if user.is_authenticated:
         qs = qs.exclude(
             Q(author_id__in=Block.objects.filter(blocker=user).values('blocked_id'))
@@ -31,13 +29,13 @@ def visible_posts(user):
         )
     # A private account is private whatever the author picked as the audience:
     # only approved followers get its posts, and a pending request gets nothing.
-    visible = Q(status=Post.Status.LIVE, audience=Post.Audience.PUBLIC) & ~Q(author__profile__is_private=True)
+    visible = Q(audience=Post.Audience.PUBLIC) & ~Q(author__profile__is_private=True)
     if user.is_authenticated:
         visible |= Q(author=user)
         # A follower test as a subquery rather than as a join on author__followers:
         # the join is what forced every feed query into a DISTINCT over the whole
         # row, and "does the viewer follow this author" is one boolean either way.
-        visible |= Q(status=Post.Status.LIVE) & Exists(
+        visible |= Exists(
             Follow.objects.filter(followee=OuterRef('author'), follower=user, status=Follow.Status.ACCEPTED)
         )
     return qs.filter(visible)
