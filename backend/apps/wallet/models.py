@@ -59,6 +59,12 @@ class CoinRequest(models.Model):
     status = models.CharField(max_length=10, choices=Status.choices, default=Status.PENDING)
     created_at = models.DateTimeField(auto_now_add=True)
     reviewed_at = models.DateTimeField(null=True, blank=True)
+    # When the buyer last answered a request for more proof. The ask itself lives
+    # in the review rows, so this stamp is only the waterline: an ask older than
+    # this has been answered, and a new ask writes a review after it and re-opens
+    # the banner. The request row is updated in place — resubmitting never makes
+    # a second purchase the admin then has to reconcile with the first.
+    resubmitted_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ['-created_at']

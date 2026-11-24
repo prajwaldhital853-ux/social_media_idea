@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import WalletShell, { StatusChip } from '@/components/WalletShell';
-import { LedgerRows, RequestRows } from '@/components/WalletLists';
+import { LedgerRows, ProofAskBanner, RequestRows } from '@/components/WalletLists';
 import { useApp } from '@/lib/AppContext';
 import { ago } from '@/lib/utils';
 
@@ -21,6 +21,8 @@ export default function WalletOverviewPage() {
 
   return (
     <WalletShell>
+      <ProofAskBanner />
+
       <section className="wallet-sec">
         <div className="wallet-sec-head">
           <h2>{t('addCoins')}</h2>

@@ -217,6 +217,12 @@ export function hrefOf(kind: string, targetType: string, targetId: string, actor
   if (targetType === 'post') return `/post/${targetId}`;
   if (targetType === 'listing') return `/marketplace/${targetId}`;
   if (targetType === 'user') return actorUsername ? `/u/${actorUsername}` : '/messages';
+  // A request for more proof is not a look at the balance: it is a question about
+  // one open purchase, so it lands on the page that answers it.
+  if (targetType === 'coin_proof') return `/wallet/proof/${targetId}`;
+  // The same purchase, seen from the desk: the member answered the ask, and the
+  // proof sits in the console queue rather than on a member screen.
+  if (targetType === 'coin_request') return '/admin';
   if (targetType === 'wallet') return '/wallet';
   return undefined;
 }
@@ -319,6 +325,9 @@ export function mapCoinRequest(row: any): CoinRequest {
     screenshot: mediaUrl(row.screenshot_url) || undefined,
     ts: at(row.created_at),
     status: row.status || 'pending',
+    proofAsked: !!row.proof_asked,
+    proofReason: row.proof_reason || '',
+    resubmitted: !!row.resubmitted,
   };
 }
 

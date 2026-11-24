@@ -148,6 +148,9 @@ export default function CoinRequestPage({ params }: { params: { id: string } }) 
                 <li><span>Bank reference</span><b title={stamp(row.created_at)}>{row.reference || '—'}</b></li>
                 <li><span>Uploaded</span><b>{ago(row.created_at)}</b></li>
                 <li><span>Standing</span><b><span className={`pill ${standing.tone}`}>{standing.label}</span></b></li>
+                {!!row.resubmitted_at && (
+                  <li><span>Proof resent</span><b title={stamp(row.resubmitted_at)}>{ago(row.resubmitted_at)}</b></li>
+                )}
               </ul>
               <p className="fineprint">
                 <Link href={`/people/${row.card.username}`}>@{row.card.username}&apos;s full record</Link>
@@ -176,6 +179,12 @@ export default function CoinRequestPage({ params }: { params: { id: string } }) 
                 )
               ) : (
                 <p className="empty-note">{IC.x}<span>They have not uploaded a receipt yet.</span></p>
+              )}
+              {!!row.resubmitted_at && (
+                <p className="fineprint" data-resent-note>
+                  This is the receipt they sent after being asked for more proof, {ago(row.resubmitted_at)}.
+                  The one they first uploaded was replaced — the request itself never became a second one.
+                </p>
               )}
             </Section>
 

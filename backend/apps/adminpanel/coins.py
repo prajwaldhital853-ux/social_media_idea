@@ -111,7 +111,14 @@ def row(req, review):
             'by': review.actor.username if review.actor else None,
             'at': review.created_at.isoformat(),
         }
-        out['asked'] = review.action == CoinReview.Action.PROOF
+        out['asked'] = (
+            review.action == CoinReview.Action.PROOF
+            and (req.resubmitted_at is None or req.resubmitted_at < review.created_at)
+        )
+    # A newer ask writes a newer review, so the desk can tell a buyer who answered
+    # from one who never did even while both are still pending.
+    out['resubmitted'] = req.resubmitted_at is not None
+    out['resubmitted_at'] = req.resubmitted_at.isoformat() if req.resubmitted_at else None
     return out
 
 
@@ -166,7 +173,10 @@ def decide(req, actor, action, reason=''):
         req.reviewed_at = timezone.now() if action != 'proof' else req.reviewed_at
         req.save(update_fields=['status', 'reviewed_at'])
         review.save()
-    notify(req.user, actor, 'coins', say[:240], 'wallet', req.pk)
+    # An ask sends the buyer to the page that answers it; a decision sends them to
+    # the wallet, where the money they were credited or refused is visible.
+    notify(req.user, actor, 'coins', say[:240],
+           'coin_proof' if action == 'proof' else 'wallet', req.pk)
     record(actor, f'coins_{action}', f'coin_request:{req.pk}',
            f'{req.coins} coins / NPR {req.amount} — ' + (reason or 'approved, wallet credited'))
     if action == 'approve':

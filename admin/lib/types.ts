@@ -654,6 +654,8 @@ export interface CoinAsk {
   took: string | null;
   age_hours: number;
   asked?: boolean;
+  resubmitted?: boolean;
+  resubmitted_at?: string | null;
   review?: {
     action: 'approve' | 'reject' | 'proof';
     label: string;

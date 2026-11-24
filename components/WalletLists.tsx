@@ -113,6 +113,7 @@ export function RequestRows({ cap, href }: { cap?: number; href?: string }) {
               {r.note && <small className="wallet-entry-note">{r.note}</small>}
             </span>
             <StatusChip status={r.status} />
+            {r.resubmitted && r.status === 'pending' && <span className="wallet-status resubmitted">{t('resubmitted')}</span>}
           </div>
         ))}
         {!cap && windowed.hasMore && <div ref={windowed.sentinel} className="feed-sentinel" aria-hidden="true" />}
@@ -121,5 +122,28 @@ export function RequestRows({ cap, href }: { cap?: number; href?: string }) {
         <Link className="wallet-more" href={href}>{t('viewAll')} · {rows.length}</Link>
       )}
     </>
+  );
+}
+
+/**
+ * The sentence the wallet has to say before anything else: the desk looked at a
+ * payment and could not credit it. The server decides whether an ask is still
+ * outstanding, so answering one closes this and a second ask re-opens it.
+ */
+export function ProofAskBanner() {
+  const { t } = useApp();
+  const { rows } = useRequestRows();
+  const open = rows.filter(r => r.proofAsked).sort((a, b) => b.ts - a.ts)[0];
+  if (!open) return null;
+  return (
+    <div className="notice-banner" role="status">
+      <div className="notice-line">
+        <p className="notice-copy">
+          <span className="notice-text">{t('proofNeeded')}</span>
+          {open.proofReason && <span className="notice-reason">{open.proofReason}</span>}
+        </p>
+        <Link href={`/wallet/proof/${open.id}`}>{t('uploadProof')}</Link>
+      </div>
+    </div>
   );
 }
