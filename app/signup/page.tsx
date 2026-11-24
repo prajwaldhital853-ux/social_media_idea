@@ -55,7 +55,7 @@ export default function SignupPage() {
   const fields = useRef<Partial<Record<FieldName, HTMLElement | null>>>({});
   const [busy, setBusy] = useState(false);
   const [mounted, setMounted] = useState(false);
-  const [code, setCode] = useState<{ challenge: string; expiresAt?: number; devCode?: string } | null>(null);
+  const [code, setCode] = useState<{ challenge: string; expiresAt?: number } | null>(null);
 
   useEffect(() => {
     setMounted(true);
@@ -168,7 +168,6 @@ export default function SignupPage() {
         setCode({
           challenge: res.challenge,
           expiresAt: res.expiresIn ? Date.now() + res.expiresIn * 1000 : undefined,
-          devCode: res.devCode,
         });
         return;
       }
@@ -190,7 +189,7 @@ export default function SignupPage() {
         return;
       }
       if (res.ok && res.challenge) {
-        setCode({ challenge: res.challenge, expiresAt: res.expiresIn ? Date.now() + res.expiresIn * 1000 : code.expiresAt, devCode: res.devCode });
+        setCode({ challenge: res.challenge, expiresAt: res.expiresIn ? Date.now() + res.expiresIn * 1000 : code.expiresAt });
         return;
       }
       setError(res.attemptsLeft !== undefined && res.attemptsLeft > 0
@@ -207,7 +206,7 @@ export default function SignupPage() {
     try {
       const res = await resendCode(code.challenge);
       if (res.error) return setError(res.error);
-      setCode({ challenge: res.challenge || code.challenge, expiresAt: res.expiresIn ? Date.now() + res.expiresIn * 1000 : undefined, devCode: res.devCode });
+      setCode({ challenge: res.challenge || code.challenge, expiresAt: res.expiresIn ? Date.now() + res.expiresIn * 1000 : undefined });
       setError('');
     } finally {
       setBusy(false);
@@ -231,7 +230,6 @@ export default function SignupPage() {
             detail={t('codeVerifyDetail', { email })}
             hint={t('codeSentTo', { email })}
             expiresAt={code.expiresAt}
-            devCode={code.devCode}
             error={error}
             busy={busy}
             submitLabel={t('confirm')}

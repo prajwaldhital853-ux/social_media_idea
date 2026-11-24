@@ -1686,18 +1686,6 @@ a:focus:not(:focus-visible) {
   letter-spacing: 10px;
 }
 
-.auth-code-dev {
-  align-self: center;
-  margin-bottom: 10px;
-  padding: 6px 12px;
-  border: 1px dashed var(--line);
-  border-radius: 9999px;
-  background: none;
-  color: var(--brand);
-  font-size: 13px;
-  cursor: pointer;
-}
-
 .auth-code-meta {
   text-align: center;
   color: var(--muted);
@@ -1744,44 +1732,6 @@ a:focus:not(:focus-visible) {
 .login-forgot:hover {
   color: var(--brand);
   text-decoration: underline;
-}
-
-/* One tap into the seeded demo account; the credentials stay visible so a
-   reviewer can also type them on a keyboard they trust. */
-.login-demo {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  width: 100%;
-  margin-top: 14px;
-  padding: 11px 14px;
-  border: 1px dashed var(--line);
-  border-radius: 12px;
-  background: none;
-  cursor: pointer;
-  text-align: center;
-  transition: border-color 0.15s ease, background 0.15s ease;
-}
-
-.login-demo:hover {
-  border-color: var(--brand);
-  background: var(--brand-tint);
-}
-
-.login-demo:disabled {
-  opacity: 0.6;
-  cursor: default;
-}
-
-.login-demo b {
-  font-size: 14px;
-  font-weight: 800;
-  color: var(--ink);
-}
-
-.login-demo span {
-  font-size: 12.5px;
-  color: var(--muted);
 }
 
 .auth-lock-clock {

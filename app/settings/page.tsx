@@ -214,7 +214,6 @@ function DeleteAccountModal({ onClose }: { onClose: () => void }) {
   const [word, setWord] = useState('');
   const [step, setStep] = useState<'word' | 'code'>('word');
   const [challenge, setChallenge] = useState<number>(0);
-  const [devCode, setDevCode] = useState('');
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -237,7 +236,6 @@ function DeleteAccountModal({ onClose }: { onClose: () => void }) {
         return;
       }
       setChallenge(read.challenge);
-      setDevCode(read.dev_code || '');
       setStep('code');
       showToast(t('deleteCodeSent').replace('{email}', me?.email || ''));
       setTimeout(() => codeRef.current?.focus(), 60);
@@ -308,7 +306,6 @@ function DeleteAccountModal({ onClose }: { onClose: () => void }) {
               />
               <small className="field-count">{t('deleteCodeHint')}</small>
             </label>
-            {devCode && <p className="settings-hint">Demo code: <b>{devCode}</b></p>}
             {error && <p className="form-error" role="alert">{error}</p>}
             <button type="submit" className="promote-submit delete-account-submit" disabled={busy}>
               {busy ? '…' : t('deleteConfirm')}

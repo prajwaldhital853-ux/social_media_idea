@@ -46,8 +46,7 @@ from apps.wallet.models import CoinRequest, Transaction as Ledger, Wallet
 User = get_user_model()
 
 SEED = 20261121
-DEMO_PASSWORD = 'exposing-demo-1'
-# Members whose accounts survive a purge: the browser suites sign in as them.
+# Core profiles kept across a content rebuild; seeded accounts cannot sign in.
 KEEP = {'sita', 'maya', 'arjun', 'priya'}
 WINDOW_DAYS = 120
 # Activity younger than this still shows in the bell, so it has to be real.
@@ -261,10 +260,8 @@ class Command(BaseCommand):
             # What tells a purge that this account is the demo's to delete.
             user.seeded = True
             user.date_of_birth = datetime(1980 + (index * 7) % 22, (index % 12) + 1, (index % 27) + 1).date()
-            if username == 'sita':
-                user.is_superuser = user.is_staff = True
-            if not user.password:
-                user.set_password(DEMO_PASSWORD)
+            user.is_superuser = user.is_staff = False
+            user.set_unusable_password()
             user.save()
             # Signing a user up creates their profile row, so this writes into it
             # rather than inserting a second one.
@@ -277,8 +274,6 @@ class Command(BaseCommand):
                     'location': city, 'province': province, 'verified': verified,
                     'is_private': private,
                     **contacts_for(username, index),
-                    # A demo a client can open on a borrowed laptop: seeded
-                    # members sign in with their password, not an email code.
                     'two_step': False,
                 })
             profile = Profile.objects.get(user=user)

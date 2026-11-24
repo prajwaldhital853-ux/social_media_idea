@@ -158,11 +158,8 @@ def _purge_media(user):
         MediaBlob.objects.filter(key__in=keys).delete()
 
 
-def _otp_response(otp, code):
-    body = {'challenge': otp.pk, 'expires_in': OTP_MINUTES * 60}
-    if settings.DEBUG or getattr(settings, 'EXPOSING_OTP_VISIBLE', False):
-        body['dev_code'] = code
-    return body
+def _otp_response(otp):
+    return {'challenge': otp.pk, 'expires_in': OTP_MINUTES * 60}
 
 
 def _trust_device(user, device_id, label=''):
@@ -286,10 +283,10 @@ def signup(request):
         resp = Response({'user': {'id': user.pk, 'username': user.username, 'email': user.email}},
                         status=status.HTTP_201_CREATED)
         return set_auth_cookies(resp, user, device_id)
-    otp, code = _make_otp(user, 'verify', device_id)
+    otp, _ = _make_otp(user, 'verify', device_id)
     # An emailed address is not proved yet, so the body carries only the challenge:
     # handing out cookies here would give every unverified signup a live session.
-    return Response(_otp_response(otp, code), status=status.HTTP_201_CREATED)
+    return Response(_otp_response(otp), status=status.HTTP_201_CREATED)
 
 
 @api_view(['POST'])
@@ -314,7 +311,7 @@ def login(request):
     enforce(f'login-id:{email}', 10, 60)
     password = request.data.get('password') or ''
     user = User.objects.filter(email=email).order_by('id').first()
-    if not user or _is_staff_member(user):
+    if not user or user.seeded or _is_staff_member(user):
         return Response({'detail': 'No account matches those credentials.'}, status=401)
     if user.is_suspended:
         return _suspended(user)
@@ -370,20 +367,20 @@ def login(request):
         # The password is right and the account is real; it was simply never
         # confirmed. Say which of the three it is, and hand back a live code with
         # the resend path, instead of letting this look like a wrong password.
-        otp, code = _make_otp(user, 'verify', device_id)
+        otp, _ = _make_otp(user, 'verify', device_id)
         return Response({
             'detail': 'That email address is not verified yet. We sent a new code to it.',
-            'email_not_verified': True, 'email_hint': user.email, **_otp_response(otp, code),
+            'email_not_verified': True, 'email_hint': user.email, **_otp_response(otp),
         }, status=status.HTTP_403_FORBIDDEN)
     trusted = bool(device_id) and DeviceTrust.objects.filter(user=user, device_id=device_id).exists()
     if trusted or not _two_step(user):
         if device_id:
             DeviceTrust.objects.filter(user=user, device_id=device_id).update(last_seen=timezone.now())
         return _finish_login(request, user, device_id)
-    otp, code = _make_otp(user, 'login', device_id)
+    otp, _ = _make_otp(user, 'login', device_id)
     return Response({
         'detail': 'New device detected. Enter the code sent to your email to continue.',
-        'new_device': True, 'email_hint': user.email, **_otp_response(otp, code),
+        'new_device': True, 'email_hint': user.email, **_otp_response(otp),
     }, status=status.HTTP_202_ACCEPTED)
 
 
@@ -398,7 +395,7 @@ def _verify_otp(request, force_purpose=None):
     challenge = request.data.get('challenge')
     enforce(f'otp:{challenge}', 10, 600)
     otp = EmailOTP.objects.filter(pk=challenge, consumed_at__isnull=True).select_related('user').first()
-    if not otp or otp.expires_at < timezone.now() or _is_staff_member(otp.user):
+    if not otp or otp.expires_at < timezone.now() or otp.user.seeded or _is_staff_member(otp.user):
         return Response({'detail': 'Code expired. Request a new one.'}, status=400)
     if force_purpose and otp.purpose != force_purpose:
         return Response({'detail': 'Wrong code type.'}, status=400)
@@ -444,7 +441,7 @@ def _verify_otp(request, force_purpose=None):
 def otp_resend(request):
     challenge = request.data.get('challenge')
     otp = EmailOTP.objects.filter(pk=challenge).select_related('user').first()
-    if not otp:
+    if not otp or otp.user.seeded:
         return Response({'detail': 'Unknown challenge.'}, status=400)
     enforce(f'otp-resend:{otp.user_id}', 3, 600)
     if otp.purpose == 'reset':
@@ -456,8 +453,8 @@ def otp_resend(request):
                 'detail': f'You can ask for another code in {left} seconds.',
                 'retry_in': left, 'resend_in': left,
             }, status=429)
-    new_otp, code = _make_otp(otp.user, otp.purpose, otp.device_id)
-    body = _otp_response(new_otp, code)
+    new_otp, _ = _make_otp(otp.user, otp.purpose, otp.device_id)
+    body = _otp_response(new_otp)
     if otp.purpose == 'reset':
         body['resend_in'] = RESEND_SECONDS
     return Response(body)
@@ -490,7 +487,7 @@ def refresh(request):
         ).order_by('-created_at').first()
         if not session:
             return Response({'detail': 'Session revoked or expired. Sign in again.'}, status=401)
-    if _is_staff_member(session.user):
+    if _is_staff_member(session.user) or session.user.seeded:
         return clear_auth_cookies(Response({'detail': 'Session revoked or expired. Sign in again.'}, status=401))
     session.revoked_at = timezone.now()
     session.save(update_fields=['revoked_at'])
@@ -520,10 +517,10 @@ def unlock_request(request):
     if not email or '@' not in email:
         return Response({'detail': 'Enter the email address you signed up with.'}, status=400)
     user = User.objects.filter(email=email).order_by('id').first()
-    if not user:
+    if not user or user.seeded:
         return Response({'detail': 'If that email exists, an unlock code is on its way.'})
-    otp, code = _make_otp(user, 'unlock')
-    return Response({'detail': 'Unlock code sent.', **_otp_response(otp, code)})
+    otp, _ = _make_otp(user, 'unlock')
+    return Response({'detail': 'Unlock code sent.', **_otp_response(otp)})
 
 
 @api_view(['POST'])
@@ -552,12 +549,12 @@ def reset_request(request):
     if banned is not None:
         return safety.refuse(banned)
     user = User.objects.filter(email=email).order_by('id').first()
-    if not user or user.is_suspended or _is_staff_member(user):
+    if not user or user.seeded or user.is_suspended or _is_staff_member(user):
         return Response({'detail': 'If that email has an account, a reset code is on its way.'})
-    otp, code = _make_otp(user, 'reset', _device_id(request))
+    otp, _ = _make_otp(user, 'reset', _device_id(request))
     return Response({
         'detail': 'If that email has an account, a reset code is on its way.',
-        'resend_in': RESEND_SECONDS, **_otp_response(otp, code),
+        'resend_in': RESEND_SECONDS, **_otp_response(otp),
     })
 
 
@@ -574,7 +571,7 @@ def reset_verify(request):
     challenge = request.data.get('challenge')
     enforce(f'reset-verify:{challenge}', 10, 600)
     otp = EmailOTP.objects.filter(pk=challenge, purpose='reset', consumed_at__isnull=True).select_related('user').first()
-    if not otp or otp.expires_at < timezone.now() or _is_staff_member(otp.user):
+    if not otp or otp.expires_at < timezone.now() or otp.user.seeded or _is_staff_member(otp.user):
         return Response({'detail': 'Code expired. Request a new one.'}, status=400)
     if otp.attempts >= OTP_MAX_ATTEMPTS:
         otp.consumed_at = timezone.now()
@@ -614,7 +611,7 @@ def reset_confirm(request):
     if not payload or str(payload.get('otp')) != str(challenge):
         return Response({'detail': 'Confirm the code first.'}, status=400)
     otp = EmailOTP.objects.filter(pk=challenge, purpose='reset', consumed_at__isnull=True).select_related('user').first()
-    if not otp or _is_staff_member(otp.user):
+    if not otp or otp.user.seeded or _is_staff_member(otp.user):
         return Response({'detail': 'Code expired. Request a new one.'}, status=400)
     password = str(request.data.get('password') or '')
     bad = passwords.refusal(password, otp.user)
@@ -653,8 +650,8 @@ def account_delete_request(request):
     enforce(f'account-delete:{request.user.pk}', 5, 600)
     if str(request.data.get('confirm') or '').strip().upper() != 'DELETE':
         return Response({'detail': 'Type DELETE to confirm.'}, status=400)
-    otp, code = _make_otp(request.user, 'delete')
-    return Response({'detail': 'A deletion code is on its way to your email.', **_otp_response(otp, code)})
+    otp, _ = _make_otp(request.user, 'delete')
+    return Response({'detail': 'A deletion code is on its way to your email.', **_otp_response(otp)})
 
 
 @api_view(['POST'])
@@ -716,20 +713,12 @@ def google(request):
     enforce(f'google:{client_ip(request)}', 10, 60)
     data = request.data
     client_id = getattr(settings, 'GOOGLE_CLIENT_ID', '')
-    if client_id:
-        claims = _google_claims(data.get('id_token') or '', client_id)
-        if claims is None:
-            return Response({'detail': 'Google token verification failed.'}, status=401)
-        email, name, sub = _email(claims.get('email')), (claims.get('name') or '').strip(), claims.get('sub', '')
-    else:
-        if not settings.DEBUG:
-            # The demo branch believes whatever identity the client claims, so it exists
-            # for local QA only — production must verify a real Google token.
-            return Response({'detail': 'Google sign-in is not configured on this server.'}, status=503)
-        demo = data.get('demo') or {}
-        email, name, sub = _email(demo.get('email')), (demo.get('name') or '').strip(), demo.get('sub') or ''
-        if not email or not sub:
-            return Response({'detail': 'Google sign-in is not configured on this server.'}, status=503)
+    if not client_id:
+        return Response({'detail': 'Google sign-in is not configured on this server.'}, status=503)
+    claims = _google_claims(data.get('id_token') or '', client_id)
+    if claims is None:
+        return Response({'detail': 'Google token verification failed.'}, status=401)
+    email, name, sub = _email(claims.get('email')), (claims.get('name') or '').strip(), claims.get('sub', '')
     if not email:
         # Blank would otherwise match the one row an admin left without an address.
         return Response({'detail': 'Google did not give us an email address for this account.'}, status=400)
@@ -740,7 +729,7 @@ def google(request):
     if banned is not None:
         return safety.refuse(banned)
     user = User.objects.filter(email=email).order_by('id').first()
-    if user and _is_staff_member(user):
+    if user and (user.seeded or _is_staff_member(user)):
         return Response({'detail': 'This email address cannot be used.'}, status=400)
     device_id = _device_id(request)
     if user:
@@ -761,8 +750,8 @@ def google(request):
             user.save(update_fields=['provider'])
         if (device_id and DeviceTrust.objects.filter(user=user, device_id=device_id).exists()) or not _two_step(user):
             return _finish_login(request, user, device_id)
-        otp, code = _make_otp(user, 'login', device_id)
-        return Response({'new_device': True, 'email_hint': email, **_otp_response(otp, code)}, status=202)
+        otp, _ = _make_otp(user, 'login', device_id)
+        return Response({'new_device': True, 'email_hint': email, **_otp_response(otp)}, status=202)
     return Response({
         'needs_signup': True,
         'prefill': {'email': email, 'name': name, 'google_sub': sub},
