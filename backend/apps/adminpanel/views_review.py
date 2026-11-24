@@ -587,9 +587,13 @@ def notice_create(request):
     reach = ('only ' + notice['about'] + ' reads it — they are also told in their bell'
              if audience == PublicNotice.Audience.PRIVATE
              else 'anyone reading it now reads this sentence first')
+    mailed = notice.get('emailed')
+    inbox = (f' A copy is on its way to {mailed["to"]}.' if mailed
+             else ' Nothing was mailed: that account has no address, or asks not to be written to.')
     return Response({'notice': notice,
                      'detail': f'The notice is standing on {kind} {pk}. {reach}, '
-                               'and the audit row says who put it there.'},
+                               'and the audit row says who put it there.' + inbox,
+                     'emailed': mailed},
                     status=201)
 
 

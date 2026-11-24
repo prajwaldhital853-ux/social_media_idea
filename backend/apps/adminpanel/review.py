@@ -268,13 +268,16 @@ def _notice(kind, row, actor, reason, text, audience=PublicNotice.Audience.PUBLI
     return notice
 
 
-def attach(kind, target_id, actor, reason, text, audience=PublicNotice.Audience.PUBLIC):
+def attach(kind, target_id, actor, reason, text, audience=PublicNotice.Audience.PUBLIC, *, email=False):
     """Put a notice on one target with no report and no decision behind it.
 
     The queue writes a notice as half of a verdict; a false-information claim
     nobody reported needs the same sentence over the same content, so both paths
     end in this row rather than in two shapes of it. A private audience keeps the
     sentence on the same content and shows it to the one account it is about.
+
+    `email` asks for the mailbox copy too, which the notices desk wants because a
+    sentence standing on content is only read by someone who comes back to it.
     """
     row = row_for(kind, target_id)
     if row is None:
@@ -282,7 +285,10 @@ def attach(kind, target_id, actor, reason, text, audience=PublicNotice.Audience.
     audience = audience_of(audience)
     notice = _notice(kind, row, actor, reason, text, audience)
     _say(kind, row, actor, text, notice=notice)
-    return notice_row(notice)
+    out = notice_row(notice)
+    if email:
+        out['emailed'] = email_owner(kind, row, text)
+    return out
 
 
 def notice_row(notice):
@@ -315,6 +321,22 @@ def withdraw(notice, actor):
 def _say(kind, row, actor, text, notice=None):
     """The author-facing half of a moderation decision, in their bell."""
     return notify(owner_for(kind, row), actor, 'warning', text, kind, row.pk, notice=notice)
+
+
+def email_owner(kind, row, text):
+    """The same sentence in their mailbox, unless they turned that letter off.
+
+    Queued rather than sent, like every other notice this console posts: a seat
+    should not wait on a provider to find out the notice went up.
+    """
+    owner = owner_for(kind, row)
+    profile = getattr(owner, 'profile', None) if owner is not None else None
+    if owner is None or not owner.email or (profile is not None and not profile.notify_email):
+        return None
+    # people imports this module for account warnings, so the return visit stays inside the call.
+    from .people import enforcement_email
+
+    return enforcement_email(owner, 'A note from the Exposing team', text)
 
 
 def suspension_notice(kind, row, actor, reason):
