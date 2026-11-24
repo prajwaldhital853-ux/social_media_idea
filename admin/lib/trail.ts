@@ -21,9 +21,13 @@ let stops: Stop[] = [];
 export function visit(stop: Stop) {
   const last = stops[stops.length - 1];
   if (last && last.href === stop.href) return;
-  // A visit back to a screen already in the trail lifts it to the end rather than
-  // stamping a second copy, so "back" is never a page the seat is standing on.
-  stops = [...stops.filter(item => item.href !== stop.href), stop].slice(-24);
+  // Walking back to a screen already in the trail leaves everything you opened
+  // after it behind, instead of lifting that one screen to the end. Lifting it
+  // collapsed a two-step route — list, then a row, then a row's own sub-page —
+  // to one stop, and the second step lost the page it came from.
+  const seen = stops.findIndex(item => item.href === stop.href);
+  if (seen >= 0) stops = stops.slice(0, seen);
+  stops = [...stops, stop].slice(-24);
 }
 
 /** Where the seat came from, or nothing when this tab opened right here. */

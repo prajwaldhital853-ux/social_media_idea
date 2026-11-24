@@ -140,7 +140,7 @@ export default function ReportsPage() {
         chips={STATES.map(item => ({
           id: item.id,
           label: item.label,
-          n: item.id === 'open' && facets ? facets.open : undefined,
+          n: facets ? facets[item.id as 'open' | 'resolved' | 'dismissed' | 'all'] : undefined,
         }))}
         value={state}
         onPick={setState}

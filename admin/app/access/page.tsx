@@ -18,9 +18,18 @@ interface Banner {
   text: string;
 }
 
+/** The roster chips, named the way the seat's own status fields are keyed. */
+const SEAT_STATES = [
+  { id: 'all', label: 'Every seat' },
+  { id: 'enabled', label: 'Active' },
+  { id: 'revoked', label: 'Ended' },
+  { id: 'unenrolled', label: 'No authenticator yet' },
+];
+
 export default function AccessPage() {
   const { can, isSuperadmin, session, noteGate } = useSession();
   const [seats, setSeats] = useState<Seat[] | null>(null);
+  const [counts, setCounts] = useState<Record<string, number> | null>(null);
   const [catalogue, setCatalogue] = useState<Catalogue | null>(null);
   const [q, setQ] = useState('');
   const [state, setState] = useState('all');
@@ -40,9 +49,11 @@ export default function AccessPage() {
     if (state !== 'all') params.set('status', state);
     const tail = params.toString();
     try {
-      const data = await api<{ results: Seat[] }>(`admin/staff/${tail ? `?${tail}` : ''}`);
+      const data = await api<{ results: Seat[]; counts?: Record<string, number> }>(
+        `admin/staff/${tail ? `?${tail}` : ''}`);
       if (seq.current !== mine) return;
       setSeats(data.results);
+      setCounts(data.counts || null);
     } catch (err) {
       if (seq.current !== mine) return;
       if (!noteGate(err)) setBanner({ kind: 'bad', text: (err as Error).message });
@@ -83,12 +94,7 @@ export default function AccessPage() {
 
       <Chips
         label="Filter seats" value={state} onPick={setState}
-        chips={[
-          { id: 'all', label: 'Every seat' },
-          { id: 'enabled', label: 'Active' },
-          { id: 'revoked', label: 'Ended' },
-          { id: 'unenrolled', label: 'No authenticator yet' },
-        ]}
+        chips={SEAT_STATES.map(item => ({ ...item, n: counts ? counts[item.id] : undefined }))}
       />
 
       <div className="toolbar">

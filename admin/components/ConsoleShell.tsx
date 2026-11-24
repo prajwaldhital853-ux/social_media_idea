@@ -6,7 +6,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import { crumbsFor, drawerFor, navFor, requires } from '@/lib/nav';
 import { IC } from '@/lib/icons';
 import { useBell } from '@/lib/bell';
-import { cameFrom, visit } from '@/lib/trail';
+import { cameFrom, Stop, visit } from '@/lib/trail';
 import { useSession } from '@/lib/session';
 
 // Every screen renders its own shell, so switching screens rebuilds this drawer
@@ -20,6 +20,19 @@ function ago(minutes: number): string {
   const hours = Math.floor(minutes / 60);
   if (hours < 24) return `${hours}h ago`;
   return `${Math.floor(hours / 24)}d ago`;
+}
+
+/**
+ * The list a nested page belongs to, for the seat that opened it in a fresh tab
+ * or reloaded it and has no history to walk back into. A user's page is still
+ * under the directory and a report case is still under the queue, so the drawer
+ * row that stays lit is the door Back can point at.
+ */
+function parentScreen(pathname: string): Stop | null {
+  const href = drawerFor(pathname);
+  if (!href || href === (pathname || '/').replace(/\/$/, '')) return null;
+  const crumbs = crumbsFor(pathname);
+  return { href, label: crumbs[crumbs.length - 1] || 'the list' };
 }
 
 export default function ConsoleShell({
@@ -40,7 +53,7 @@ export default function ConsoleShell({
   // from a list can name that list on the same paint.
   useLayoutEffect(() => {
     visit({ href: pathname, label: title });
-    setBack(cameFrom());
+    setBack(cameFrom() || parentScreen(pathname));
   }, [pathname, title]);
 
   useLayoutEffect(() => {

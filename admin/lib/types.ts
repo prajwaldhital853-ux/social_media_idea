@@ -286,6 +286,9 @@ export interface QueueRow {
 
 export interface QueueFacets {
   open: number;
+  resolved: number;
+  dismissed: number;
+  all: number;
   by_target: Partial<Record<ContentKind, number>>;
   auto_hide_at: number;
 }
@@ -401,7 +404,10 @@ export interface PolicyPage {
   auto_hide_at: number;
 }
 
-export interface NoticePage extends Page<NoticeRow> {}
+export interface NoticePage extends Page<NoticeRow> {
+  /** How many notices stand on each kind of thing, plus the whole record. */
+  counts?: Partial<Record<ContentKind | 'all', number>>;
+}
 
 /** --- contract 6.4: user management and enforcement ------------------------- */
 
@@ -718,6 +724,7 @@ export interface LedgerRow {
 
 export interface LedgerPage extends Page<LedgerRow> {
   totals: { credited: string; debited: string; entries: number };
+  counts?: Partial<Record<'credit' | 'debit', number>>;
 }
 
 /** A knob on a settings desk, typed by the server so the box knows what it holds. */

@@ -8,7 +8,7 @@ call instead of lingering until the token expires.
 
 import re
 
-from django.db.models import Q
+from django.db.models import Count, Q
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.core.validators import validate_email
 from django.utils import timezone
@@ -150,7 +150,17 @@ def staff_directory(request):
         rows = rows.filter(is_enabled=False)
     elif state == 'unenrolled':
         rows = rows.filter(totp_enrolled_at__isnull=True)
-    return Response({'results': [_row(staff) for staff in rows.distinct().order_by('user__username')]})
+    return Response({
+        'results': [_row(staff) for staff in rows.distinct().order_by('user__username')],
+        # The roster chips are the seat's only warning that a colleague was given
+        # a console and never enrolled, so each one carries its own number.
+        'counts': StaffAccount.objects.aggregate(
+            all=Count('pk'),
+            enabled=Count('pk', filter=Q(is_enabled=True)),
+            revoked=Count('pk', filter=Q(is_enabled=False)),
+            unenrolled=Count('pk', filter=Q(totp_enrolled_at__isnull=True)),
+        ),
+    })
 
 
 @api_view(['POST'])

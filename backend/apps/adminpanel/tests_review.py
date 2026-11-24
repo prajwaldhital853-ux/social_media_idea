@@ -527,7 +527,10 @@ class ShelfTests(ReviewTestCase):
         self.assertEqual(row['decision']['actor'], 'night_mod')
         self.assertEqual(row['decision']['detail'], 'hate speech')
         self.assertEqual(row['actions'], ['restore', 'warn'])
-        self.assertEqual(page.data['counts'], {'live': 1, 'removed': 1})
+        counts = page.data['counts']
+        self.assertEqual((counts['removed'], counts['live']), (1, 1))
+        self.assertEqual(counts['taken_down'], counts['hidden'] + counts['removed'],
+                         'the shelf chips are keyed by the filter words, not the status column')
         self.assertEqual(page.data['type'], 'post')
 
     def test_taken_down_covers_both_halves_of_the_off_feed_state(self):

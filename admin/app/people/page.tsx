@@ -123,7 +123,8 @@ export default function PeoplePage() {
                 : item.id === 'flagged' ? facets.flagged
                   : item.id === 'locked' ? facets.locked
                     : item.id === 'verified' ? facets.verified
-                      : item.id === 'inactive' ? facets.deactivated : null,
+                      : item.id === 'unverified' ? facets.total - facets.verified
+                        : item.id === 'inactive' ? facets.deactivated : null,
         }))}
       />
 

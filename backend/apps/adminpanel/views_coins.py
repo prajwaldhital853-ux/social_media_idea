@@ -175,6 +175,9 @@ def coin_ledger(request):
             'debited': str(totals['debited'] or 0),
             'entries': Transaction.objects.count(),
         },
+        # One grouped read, keyed by the words the chips filter with.
+        'counts': {move['kind']: move['n'] for move in
+                   Transaction.objects.values('kind').annotate(n=Count('pk'))},
     })
     return response
 

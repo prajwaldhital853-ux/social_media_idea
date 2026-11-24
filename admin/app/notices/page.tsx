@@ -216,6 +216,7 @@ export default function NoticesPage() {
   const { noteGate } = useSession();
   const confirm = useConfirm();
   const [rows, setRows] = useState<NoticeRow[] | null>(null);
+  const [counts, setCounts] = useState<NoticePage['counts'] | null>(null);
   const [cursor, setCursor] = useState<string | null>(null);
   const [q, setQ] = useState('');
   const [target, setTarget] = useState('');
@@ -247,6 +248,7 @@ export default function NoticesPage() {
       const page = await fetchPage(null);
       if (seq.current !== mine) return;
       setRows(page.results);
+      setCounts(page.counts || null);
       setCursor(page.next_cursor);
     } catch (err) {
       if (seq.current !== mine) return;
@@ -370,7 +372,11 @@ export default function NoticesPage() {
 
           <Chips
             label="Filter by what it is about"
-            chips={TARGETS.map(item => ({ id: item.id, label: item.label }))}
+            chips={TARGETS.map(item => ({
+              id: item.id,
+              label: item.label,
+              n: counts == null ? null : item.id === '' ? counts.all : counts[item.id],
+            }))}
             value={target}
             onPick={setTarget}
           />

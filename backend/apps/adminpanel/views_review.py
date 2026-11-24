@@ -113,6 +113,11 @@ def _facets():
     opened = Report.objects.filter(status__in=review.OPEN_STATES)
     return {
         'open': opened.count(),
+        # Every chip on the queue carries its own number, so a seat can see the
+        # size of the answered piles without clicking into each one.
+        'resolved': Report.objects.filter(status=Report.Status.RESOLVED).count(),
+        'dismissed': Report.objects.filter(status=Report.Status.DISMISSED).count(),
+        'all': Report.objects.count(),
         'by_target': {kind: opened.filter(target_type=kind).count() for kind in review.KINDS},
         # The number of distinct reporters that pulled a post out of the feed on
         # its own, so the queue can say "hidden at 3" instead of guessing.
@@ -321,8 +326,18 @@ def content_shelf(request):
             },
         })
     response = paginator.get_paginated_response(data)
-    counts = model.objects.values('status').annotate(n=Count('pk'))
-    response.data['counts'] = {row['status']: row['n'] for row in counts}
+    # The shelf's chips are named by what a seat is looking for, not by the raw
+    # status column, so the numbers come back under the same words the chips use.
+    by_status = {row['status']: row['n'] for row in model.objects.values('status').annotate(n=Count('pk'))}
+    hidden_n = by_status.get(hidden, 0) if hidden else 0
+    removed_n = by_status.get(removed, 0)
+    response.data['counts'] = {
+        'taken_down': hidden_n + removed_n,
+        'hidden': hidden_n,
+        'removed': removed_n,
+        'live': by_status.get(review.LIVE_STATE[kind], 0),
+        'all': sum(by_status.values()),
+    }
     response.data['type'] = kind
     return response
 
@@ -535,7 +550,14 @@ def notice_list(request):
         )
     paginator = KeysetPagination()
     page = paginator.paginate_queryset(rows, request)
-    return paginator.get_paginated_response([review.notice_row(notice) for notice in page])
+    response = paginator.get_paginated_response([review.notice_row(notice) for notice in page])
+    # The record is opened from a button now, so the chips have to say how much is
+    # behind each one before a seat commits to the click.
+    by_target = {row['target_type']: row['n']
+                 for row in PublicNotice.objects.values('target_type').annotate(n=Count('pk'))}
+    response.data['counts'] = {**{kind: by_target.get(kind, 0) for kind in review.KINDS},
+                               'all': sum(by_target.values())}
+    return response
 
 
 @api_view(['POST'])

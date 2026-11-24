@@ -94,9 +94,12 @@ export default function AuditScreen() {
     }
   };
 
-  const chips = page
-    ? [ALL, ...page.facets.families.map(item => ({ id: item.id, label: item.label, n: item.n }))]
-    : [ALL];
+  // The families come back with their own numbers; "every kind of action" adds
+  // them up so the first chip is not the one blank page.
+  const chips = [
+    { ...ALL, n: page ? page.facets.families.reduce((sum, item) => sum + item.n, 0) : null },
+    ...(page?.facets.families || []).map(item => ({ id: item.id, label: item.label, n: item.n })),
+  ];
   const missing = (page?.facets.families || []).filter(item => item.contract && item.n === 0);
 
   return (

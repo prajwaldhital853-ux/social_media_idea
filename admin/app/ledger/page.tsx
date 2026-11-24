@@ -113,7 +113,13 @@ export default function LedgerScreen() {
 
       <Chips
         label="Filter by which way the coins moved"
-        chips={MOVES.map(item => ({ id: item.id, label: item.label }))}
+        chips={MOVES.map(item => ({
+          id: item.id,
+          label: item.label,
+          n: page ? (item.id === 'all'
+            ? page.totals.entries
+            : page.counts?.[item.id as 'credit' | 'debit']) : undefined,
+        }))}
         value={kind}
         onPick={setKind}
       />
