@@ -21,7 +21,7 @@ from apps.moderation.models import AuditLog
 FAMILIES = (
     ('exports', 'Data exports', ('export_csv',)),
     ('alerts', 'Alerts', ('alert_',)),
-    ('spam', 'Spam and safety rules', ('spam_settings', 'policy_term', 'policy_category')),
+    ('spam', 'Spam and safety rules', ('spam_settings', 'policy_term', 'policy_category', 'blocked_word')),
     ('coins', 'Coins and payments', ('coin', 'coins')),
     ('promotions', 'Paid reach', ('promo', 'promotion')),
     ('settings', 'Platform settings', ('welcome_text', 'platform_settings', 'post_limits', 'coin_settings',

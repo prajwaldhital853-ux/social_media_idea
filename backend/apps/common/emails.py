@@ -142,6 +142,47 @@ def queue_report_email(report):
     )
 
 
+def queue_staff_created_email(user, *, password, role, permissions=(), by=''):
+    """Hand a new seat what it needs to walk in once: address, password, role, screens, link.
+
+    The password travels in the letter because the console cannot show it again
+    after the write closes: the row is flagged so the door refuses that password a
+    second time and makes the person choose their own, which makes this letter a
+    bridge rather than a place a secret is kept. The screens are spelled out by
+    their own names so nobody has to discover their access by finding a locked door.
+    """
+    from apps.adminpanel.rbac import LABELS, ROLE_LABELS
+
+    try:
+        from apps.adminpanel.settings_store import get
+
+        door = str(get('console_url') or '').strip().rstrip('/')
+    except Exception:
+        logger.exception('Could not read the console address setting')
+        door = ''
+    names = [LABELS.get(key, key) for key in permissions]
+    return queue_event_email(
+        user.email,
+        'Your Exposing staff seat is ready',
+        'You have access to the Exposing console',
+        f'{by or "The platform"} gave you a {ROLE_LABELS.get(role, role)} seat on the Exposing '
+        'admin console. Sign in with the address and temporary password below. The door makes you '
+        'choose your own password first, then set up an authenticator, before any screen opens.',
+        details=(
+            ('Sign in with', user.email or ''),
+            ('Your username', f'@{user.username}'),
+            ('Temporary password', password),
+            ('Your role', ROLE_LABELS.get(role, role)),
+            ('Screens you can open', ', '.join(names) if names else 'None yet'),
+        ),
+        cta_label='Open the staff sign-in',
+        cta_path=f'{door}/login' if door else '/login',
+        footnote='This password stops working the moment you replace it, and it is not sent out '
+                 'again. If this letter reached the wrong person, tell Exposing staff rather than '
+                 'signing in.',
+    )
+
+
 def queue_coin_decision_email(user, *, action, coins, amount, balance=None, request_id,
                               reference='', reason=''):
     """The letter that answers a coin purchase, whichever way the seat decided it."""

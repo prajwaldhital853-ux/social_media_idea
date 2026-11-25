@@ -39,6 +39,10 @@ LINES = (
 BY_KEY = {line[0]: line for line in LINES}
 CONTACT_LABELS = (('contact_email', 'Email'), ('contact_phone', 'Phone'),
                   ('contact_form', 'Support form'))
+# Rows the visitor never sees. They steer where the platform's own letters go, so
+# they are written from the console but never printed on the first-load card.
+MAIL_KEYS = frozenset({'report_inbox', 'console_url'})
+MAIL_LABELS = frozenset({'Complaints inbox', 'Console address'})
 
 
 def card():
@@ -95,12 +99,12 @@ def welcome_desk(request):
     if not moved:
         return Response({'detail': 'Nothing to save, the card already says exactly this.'}, status=400)
 
-    # The inbox is not a sentence the visitor reads, so the promise about the first
-    # load would be a lie when only the inbox moved.
-    wording = [name for name in moved if name != 'Complaints inbox']
+    # The inbox and the console address are not a sentence the visitor reads, so the
+    # promise about the first load would be a lie when only those moved.
+    wording = [name for name in moved if name not in MAIL_LABELS]
     tail = (' The website reads it on the next first load; a line left empty falls back to the '
             'platform’s own wording.' if wording
-            else ' Every complaint a member files is now copied there as it arrives.')
+            else ' The next letter the platform posts uses the new value.')
     settings_store.write(request.user, updates)
     record(request.user, 'welcome_text', 'first-load wording',
            'Wrote ' + ', '.join(moved) + '.')

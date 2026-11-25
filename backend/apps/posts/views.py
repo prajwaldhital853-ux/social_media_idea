@@ -6,6 +6,7 @@ from rest_framework.response import Response
 
 from apps.common.pagination import KeysetPagination
 from apps.common.ratelimit import client_ip, enforce
+from apps.common.rules import blocked_wording
 from apps.follows.models import Block, Follow
 from apps.promotions.services import plan, serving
 
@@ -59,6 +60,20 @@ class PostViewSet(viewsets.ModelViewSet):
         if self.request.query_params.get('media') == 'video':
             qs = qs.filter(Exists(PostMedia.objects.filter(post=OuterRef('pk'), kind='video')))
         return qs
+
+    def create(self, request, *args, **kwargs):
+        """A post carrying blocked wording is answered, not saved."""
+        refused = blocked_wording(request, 'post')
+        if refused:
+            return refused
+        return super().create(request, *args, **kwargs)
+
+    def update(self, request, *args, **kwargs):
+        """So is an edit that puts the wording back in after the fact."""
+        refused = blocked_wording(request, 'post')
+        if refused:
+            return refused
+        return super().update(request, *args, **kwargs)
 
     def perform_create(self, serializer):
         serializer.save(author=self.request.user)

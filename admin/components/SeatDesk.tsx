@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useState } from 'react';
 import { IC } from '@/lib/icons';
 import { useConfirm } from '@/components/Confirm';
 import { Catalogue, Seat } from '@/lib/types';
@@ -146,6 +147,10 @@ export function SeatBody({
           </button>
         )}
 
+        {isSuperadmin && !mine && (
+          <SeatErase username={seat.username} busy={busy} onMutate={onMutate} />
+        )}
+
         {!seat.is_enabled && can('staff_grant') && reachable && (
           <button
             type="button" className="btn ghost" disabled={busy}
@@ -207,6 +212,95 @@ export function SeatBody({
   );
 }
 
+/** What each area of the console is for, said before the person ticks anything. */
+const GROUP_BLURBS: Record<string, string> = {
+  dashboard: 'Numbers about how the site is doing.',
+  moderation: 'Complaints, and the posts, comments and listings they point at.',
+  people: 'Find a member and act on their account.',
+  payments: 'Coin purchases, the ledger and what coins cost.',
+  promotions: 'Paid promotion requests and the settings behind them.',
+  safety: 'Spam rules, alerts, the record of what staff did, and exports.',
+  platform: 'Settings that change the site itself.',
+  staff: 'Other seats: who holds one and what it reaches.',
+};
+
+/** The screens the chosen role opens on its own, before anyone ticks a box. */
+export function roleKeys(catalogue: Catalogue | null, role: string): string[] {
+  return (catalogue?.permissions ?? []).filter(entry => (entry.roles as string[]).includes(role)).map(entry => entry.key);
+}
+
+/**
+ * The screens a seat opens, as a plain tick list.
+ *
+ * A grant form used to show every key as a chip that cycled through three hidden
+ * states, role default, extra grant, explicit denial, with the role's own set only
+ * in a tooltip. Nobody could read it at a glance, and getting it wrong took a
+ * screen away from a colleague. Here the answer to "can this person open it" is the
+ * box: the role only decides where the ticks start.
+ */
+export function ScreenPicker({
+  catalogue, role, checked, labelOf, onToggle, onSetAll,
+}: {
+  catalogue: Catalogue | null;
+  role: string;
+  checked: Record<string, boolean>;
+  labelOf: (key: string) => string;
+  onToggle: (key: string) => void;
+  onSetAll: (kind: 'all' | 'none' | 'role') => void;
+}) {
+  if (!catalogue) {
+    return <div className="skeleton-stack"><div className="skeleton"/><div className="skeleton skeleton-short"/></div>;
+  }
+  const keys = catalogue.permissions.map(entry => entry.key);
+  const open = keys.filter(key => checked[key]).length;
+  return (
+    <div className="picker">
+      <div className="picker-tools">
+        <p className="picker-count">
+          <b>{open}</b> of {keys.length} screens open
+        </p>
+        <div className="picker-jumps">
+          <button type="button" className="btn tiny" onClick={() => onSetAll('role')} title="Back to what this role gets by default">
+            {IC.refresh}<span>{ROLE_LABEL[role] || role} defaults</span>
+          </button>
+          <button type="button" className="btn tiny" onClick={() => onSetAll('none')} title="They open nothing but the console itself">
+            {IC.x}<span>None</span>
+          </button>
+          <button type="button" className="btn tiny" onClick={() => onSetAll('all')} title="Every screen in the console">
+            {IC.check}<span>All</span>
+          </button>
+        </div>
+      </div>
+      <div className="picker-body">
+        {catalogue.groups.map(group => {
+          const entries = catalogue.permissions.filter(entry => entry.group === group.id);
+          if (entries.length === 0) return null;
+          const picked = entries.filter(entry => checked[entry.key]).length;
+          return (
+            <div className="picker-group" key={group.id}>
+              <div className="picker-group-head">
+                <b>{group.label}</b>
+                <em>{GROUP_BLURBS[group.id] || ''}</em>
+                <span className={`picker-group-count${picked === 0 ? ' none' : ''}`}>{picked}/{entries.length}</span>
+              </div>
+              {entries.map(entry => (
+                <label className={`screen${checked[entry.key] ? ' on' : ''}`} key={entry.key}>
+                  <input
+                    type="checkbox" checked={!!checked[entry.key]}
+                    onChange={() => onToggle(entry.key)}
+                  />
+                  <span className="screen-name">{labelOf(entry.key)}</span>
+                  {(entry.roles as string[]).includes(role) && <em className="screen-tag">with this role</em>}
+                </label>
+              ))}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export function KeyGrid({
   catalogue, valueOf, labelOf, onChange,
 }: {
@@ -242,6 +336,72 @@ export function KeyGrid({
           </div>
         );
       })}
+    </div>
+  );
+}
+
+/**
+ * The Client's own verb: end a colleague by destroying the account, not the seat.
+ *
+ * It sits behind both boxes the server insists on, a reason and the username typed
+ * out, because the button takes the posts, the wallet and the messages with the
+ * login, and the only thing left afterwards is the audit row written here.
+ */
+function SeatErase({
+  username, busy, onMutate,
+}: {
+  username: string;
+  busy: boolean;
+  onMutate: (path: string, body: Record<string, unknown>, done: string) => Promise<void>;
+}) {
+  const confirm = useConfirm();
+  const [reason, setReason] = useState('');
+  const [typed, setTyped] = useState('');
+  const ready = reason.trim().length > 0 && typed.trim() === username;
+
+  const run = async () => {
+    const sure = await confirm({
+      title: `Delete @${username} for good?`,
+      body: 'This is not a revocation. Their staff seat, their login and everything that account holds, posts, comments, listings, wallet and messages, are destroyed, and none of it comes back. Only the audit row survives, naming you, the username and the reason written here.',
+      confirmLabel: 'Delete the account',
+      tone: 'danger',
+    });
+    if (!sure) return;
+    await onMutate(`admin/staff/${username}/delete/`,
+      { reason: reason.trim(), confirm: typed.trim() },
+      `@${username} is deleted: seat, login and everything the account held.`);
+  };
+
+  return (
+    <div className="seat-erase">
+      <h4>Delete this seat for good</h4>
+      <p>
+        Superadmin only. Revoking keeps the person and their history; this destroys the
+        account behind the seat too, and nothing of it comes back.
+      </p>
+      <label className="field">
+        <span>Why the account is deleted <em className="fineprint">*</em></span>
+        <textarea
+          rows={2} maxLength={200} value={reason}
+          placeholder="Left the company and asked for their data to be removed."
+          onChange={event => setReason(event.target.value)}
+        />
+      </label>
+      <label className="field">
+        <span>Type the username to confirm</span>
+        <input
+          value={typed} placeholder={username} autoComplete="off" spellCheck={false}
+          onChange={event => setTyped(event.target.value)}
+        />
+      </label>
+      <button type="button" className="btn danger" disabled={busy || !ready} onClick={() => { void run(); }}>
+        {IC.trash}<span>{busy ? 'Working…' : 'Delete the account'}</span>
+      </button>
+      {!ready && (
+        <p className="fineprint">
+          {reason.trim() ? 'Now type the username exactly.' : 'A reason first, then the username.'}
+        </p>
+      )}
     </div>
   );
 }

@@ -3,6 +3,7 @@ from django.db.models import Count, F, Q
 from rest_framework import viewsets
 from rest_framework.permissions import BasePermission, IsAuthenticatedOrReadOnly, SAFE_METHODS
 
+from apps.common.rules import blocked_wording
 from apps.notifications.services import notify
 from apps.posts.models import Post
 from apps.posts.views import visible_posts
@@ -43,6 +44,20 @@ class CommentViewSet(viewsets.ModelViewSet):
         if self.request.query_params.get('top'):
             qs = qs.filter(parent__isnull=True)
         return qs
+
+    def create(self, request, *args, **kwargs):
+        """Words on the console's blocked list are answered, not saved."""
+        refused = blocked_wording(request, 'comment')
+        if refused:
+            return refused
+        return super().create(request, *args, **kwargs)
+
+    def update(self, request, *args, **kwargs):
+        """So is an edit that puts them back in afterwards."""
+        refused = blocked_wording(request, 'comment')
+        if refused:
+            return refused
+        return super().update(request, *args, **kwargs)
 
     def perform_create(self, serializer):
         with transaction.atomic():

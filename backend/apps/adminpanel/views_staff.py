@@ -18,8 +18,9 @@ from rest_framework.response import Response
 
 from apps.accounts import passwords
 from apps.accounts.models import RefreshSession, User
+from apps.common.emails import queue_staff_created_email
 
-from . import rbac
+from . import people, rbac
 from .journal import record
 from .models import StaffAccount
 
@@ -283,9 +284,19 @@ def staff_create(request):
                               'must_change_password', 'granted_keys', 'denied_keys'])
     record(caller.user, 'create_staff', user.username,
            f'role={role} password issued, must be replaced at first sign-in')
+    # The letter carries what this screen cannot keep: the write is done, so the
+    # password is never shown here again. A broker that is down must not turn a
+    # seat that exists into a failed request, so the queue is tried, not trusted.
+    queue_staff_created_email(
+        user, password=password, role=role,
+        permissions=rbac.permissions_for(staff),
+        by=caller.user.get_full_name() or f'@{caller.user.username}',
+    )
     out = _row(staff)
-    out['detail'] = (f'{user.username} holds a {role} seat. Give them this password once, the '
-                     'console will make them choose their own before it opens.')
+    out['detail'] = (f'{user.username} holds a {role} seat. Their sign-in address, this password, '
+                     f'the console link and the {len(rbac.permissions_for(staff))} screens the seat '
+                     'opens were posted to '
+                     f'{user.email}. The door makes them choose their own password first.')
     return Response(out, status=201)
 
 
@@ -371,6 +382,52 @@ def staff_revoke(request, username):
     RefreshSession.objects.filter(user=staff.user).update(revoked_at=timezone.now())
     record(caller.user, 'revoke_staff', username, 'access ended')
     return Response(_row(staff))
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+@rbac.staff_only('staff_grant')
+def staff_delete(request, username):
+    """Erase a staff account for good, seat and login both. Superadmin's own verb.
+
+    Revoking a seat leaves the person, their history and their member account
+    standing, and can be undone the same day. This leaves nothing: the account
+    cascade takes their posts, comments, wallet and messages with it, so the door is
+    held to the Client's own role and the write is handed to the same guarded
+    destruction the People page uses, which insists on a reason, the username typed
+    out, and a settled wallet.
+    """
+    caller = request.staff_account
+    if caller.effective_role != rbac.SUPERADMIN:
+        return rbac.denial(
+            'permission_required',
+            'Only a Superadmin deletes a staff account. Switch the seat off, or revoke its access, instead.',
+        )
+    staff, _caller, error = _target(request, username)
+    if error is not None:
+        return error
+    if staff is None:
+        return Response(_NO_SEAT, status=400)
+    user = staff.user
+    if user.pk == caller.user.pk:
+        return Response(
+            {'detail': 'Your own seat is not yours to erase. Appoint another Client seat first, '
+                       'then delete this one from there.'},
+            status=400,
+        )
+    if user_role(user, staff) == rbac.SUPERADMIN and _superadmins_left(staff.pk) == 0:
+        return Response(_LAST_CLIENT, status=400)
+    try:
+        out = people.delete(
+            user, caller.user,
+            confirm=request.data.get('confirm') or '',
+            reason=request.data.get('reason') or '',
+        )
+    except people.Refused as exc:
+        return Response({'detail': str(exc)}, status=400)
+    out['detail'] = (f'{out["detail"]} The seat went with the account, and no other staff row '
+                     'points at them now.')
+    return Response(out)
 
 
 @api_view(['POST'])

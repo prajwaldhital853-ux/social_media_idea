@@ -6,7 +6,7 @@ import Banner from '@/components/Banner';
 import ConsoleShell from '@/components/ConsoleShell';
 import { useConfirm } from '@/components/Confirm';
 import { ActLink, Chips } from '@/components/List';
-import { CYCLE, KeyGrid, ROLE_LABEL, State } from '@/components/SeatDesk';
+import { ROLE_LABEL, ScreenPicker, roleKeys } from '@/components/SeatDesk';
 import { api } from '@/lib/api';
 import { IC } from '@/lib/icons';
 import { ago } from '@/lib/time';
@@ -201,9 +201,10 @@ export default function AccessPage() {
  * afterwards, under a username a spare account had already taken. "Existing
  * account" stays for the colleague who already joins as a member.
  *
- * In the new-person mode the password on this screen is the only copy that ever
- * exists: the seat is flagged so that the door refuses it a second time and makes
- * the person choose their own before a code is even asked for.
+ * In the new-person mode the password lives in two places and then nowhere: this
+ * screen, and the letter posted to the address written here. The seat is flagged so
+ * the door refuses that password a second time and makes the person choose their own
+ * before a code is even asked for.
  */
 function GrantForm({
   busy, catalogue, labelOf, onDone, onError, noteGate,
@@ -223,10 +224,19 @@ function GrantForm({
   const [email, setEmail] = useState('');
   const [issued, setIssued] = useState('');
   const [role, setRole] = useState('moderator');
-  const [extra, setExtra] = useState<Record<string, State>>({});
+  const [picked, setPicked] = useState<Record<string, boolean>>({});
+  // The role decides where the ticks start, and nothing more: switching it reseeds
+  // the list, and the boxes can then be moved off that starting point by hand.
+  const seed = useCallback(
+    (which: string) => Object.fromEntries(roleKeys(catalogue, which).map(key => [key, true])),
+    [catalogue],
+  );
+  useEffect(() => { setPicked(seed(role)); }, [role, seed]);
+  const openCount = catalogue ? catalogue.permissions.filter(entry => picked[entry.key]).length : 0;
 
   const grant = async () => {
     const who = username.trim();
+    const address = email.trim();
     if (!who) {
       onError(new Error(mode === 'new'
         ? 'Choose the username this person will sign in with.'
@@ -237,10 +247,17 @@ function GrantForm({
       onError(new Error('Give a temporary password of at least 8 characters, or suggest one.'));
       return;
     }
+    // The server refuses a seat with no address, because it is what staff sign in
+    // with and the only way they get a lost password back. Say so before the write.
+    if (mode === 'new' && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(address)) {
+      onError(new Error('Their email address is needed: it is what the new seat signs in with, and '
+        + 'the letter holding the temporary password goes there.'));
+      return;
+    }
     const sure = await confirm(mode === 'new'
       ? {
         title: `Open a new ${ROLE_LABEL[role]} seat for ${name.trim() || '@' + who}?`,
-        body: 'This creates the account itself, not just a seat on it: the username becomes theirs, the console writes their first password, and the door makes them replace it before they get in. Nobody, including you, can read that password back afterwards, so copy it before you close this screen.',
+        body: `This creates the account itself, not just a seat on it: the username becomes theirs, and ${address} gets a letter with the temporary password, the console link and the ${openCount} screen(s) this seat opens. Nobody, including you, can read that password back afterwards, so the letter is the copy that lasts.`,
         confirmLabel: 'Create the seat',
         tone: 'danger',
       }
@@ -252,20 +269,22 @@ function GrantForm({
       });
     if (!sure) return;
     try {
-      const granted = Object.entries(extra).filter(([, value]) => value === 'allow').map(([key]) => key);
-      const denied = Object.entries(extra).filter(([, value]) => value === 'deny').map(([key]) => key);
+      const held = new Set(roleKeys(catalogue, role));
+      const chosen = (catalogue?.permissions ?? []).filter(entry => picked[entry.key]).map(entry => entry.key);
+      const granted = chosen.filter(key => !held.has(key));
+      const denied = Array.from(held).filter(key => !chosen.includes(key));
       const out = await api<Seat & { detail?: string }>(mode === 'new' ? 'admin/staff/create/' : 'admin/staff/grant/', {
         method: 'POST',
         body: mode === 'new'
           ? {
-            username: who, name: name.trim(), email: email.trim(), role, password: issued,
+            username: who, name: name.trim(), email: address, role, password: issued,
             granted_keys: granted, denied_keys: denied,
           }
           : { username: who, role, granted_keys: granted, denied_keys: denied },
       });
       await onDone(out.detail
         || (mode === 'new'
-          ? `${who} holds a ${ROLE_LABEL[role]} seat. Give them the password you typed, the console will make them replace it.`
+          ? `${who} holds a ${ROLE_LABEL[role]} seat with ${openCount} screens. Their password and the console link went to ${address}.`
           : `${who} now holds a ${ROLE_LABEL[role]} seat.`));
     } catch (err) {
       if (!noteGate(err)) onError(err);
@@ -285,8 +304,8 @@ function GrantForm({
       {mode === 'new' ? (
         <p className="note">
           No account needed first. The username is reserved here, the password below is the one they
-          sign in with the first time, and the console makes them choose their own before it opens ,
-          so copy it out of this screen now, because it is never shown again.
+          sign in with the first time, and it is posted to their email along with the console link and
+          the screens they open. The door makes them choose their own password before it opens.
         </p>
       ) : (
         <p className="note">
@@ -313,7 +332,7 @@ function GrantForm({
         </label>
         {mode === 'new' && (
           <label className="field grow">
-            <span>Email <em className="fineprint">optional</em></span>
+            <span>Email <em className="fineprint">*</em></span>
             <input
               type="email" value={email} onChange={event => setEmail(event.target.value)}
               placeholder="sita@company.com" autoComplete="off"
@@ -331,35 +350,55 @@ function GrantForm({
       {mode === 'new' && (
         <div className="grant-row">
           <label className="field grow">
-            <span>Temporary password</span>
+            <span>Temporary password <em className="fineprint">*</em></span>
             <input
               value={issued} onChange={event => setIssued(event.target.value)}
               placeholder="At least 8 characters" autoComplete="new-password" spellCheck={false}
             />
           </label>
           <button
-            type="button" className="btn ghost" title="Write a random one you can read out"
+            type="button" className="btn ghost" title="Write a random one, it goes in their letter"
             onClick={() => setIssued(issuedPassword())}
           >
             {IC.refresh}<span>Suggest one</span>
           </button>
         </div>
       )}
-      <div className="grant-row">
+      {role === 'superadmin' ? (
+        <p className="note">A Superadmin is the Client and opens every screen, so there is nothing to tick.</p>
+      ) : (
+        <div className="grant-screens">
+          <div className="grant-screens-head">
+            <h3>Screens they can open</h3>
+            <p>
+              Tick what this person should reach. A {ROLE_LABEL[role]} starts with the screens that
+              role always gets, marked below; anything you tick extra or untick is written on top of
+              that. A seat that ticks nothing opens the console and no screens.
+            </p>
+          </div>
+          <ScreenPicker
+            catalogue={catalogue} role={role} checked={picked} labelOf={labelOf}
+            onToggle={key => setPicked({ ...picked, [key]: !picked[key] })}
+            onSetAll={kind => {
+              if (kind === 'role') setPicked(seed(role));
+              else if (kind === 'none') setPicked({});
+              else setPicked(Object.fromEntries(
+                (catalogue?.permissions ?? []).map(entry => [entry.key, true]),
+              ));
+            }}
+          />
+        </div>
+      )}
+      <div className="grant-row grant-send">
         <button type="button" className="btn primary" disabled={busy} onClick={grant}>
           {IC.check}<span>{mode === 'new' ? 'Create the seat' : 'Give access'}</span>
         </button>
+        <span className="fineprint">
+          {mode === 'new' && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.trim())
+            ? `The sign-in, the password and these ${openCount} screens are posted to ${email.trim()}.`
+            : `${openCount} screen(s) will be open to this seat.`}
+        </span>
       </div>
-      {role !== 'superadmin' && catalogue && (
-        <KeyGrid
-          catalogue={catalogue} labelOf={labelOf}
-          valueOf={key => extra[key] || 'default'}
-          onChange={key => setExtra({ ...extra, [key]: CYCLE[extra[key] || 'default'] })}
-        />
-      )}
-      {role === 'superadmin' && (
-        <p className="note">A Superadmin holds every screen, so there is nothing to add here.</p>
-      )}
     </section>
   );
 }
