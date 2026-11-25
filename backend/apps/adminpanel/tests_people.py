@@ -200,7 +200,7 @@ class SuspendTests(ReviewTestCase):
         self.assertIn('support@exposing.app', letter.body)
         self.assertIn('+977-9812345678', letter.body)
         self.assertIn('next request', letter.body)
-        self.assertIn('#E40104', letter.alternatives[0].content)
+        self.assertIn('Questions? Contact Exposing support', letter.alternatives[0].content)
         self.assertIn('cid:exposing-logo', letter.alternatives[0].content,
                       'the mark rides inside the letter, since a mail client will not fetch it')
         self.assertTrue(letter.attachments, 'the brand mark is attached rather than linked')
@@ -361,7 +361,7 @@ class WarnTests(ReviewTestCase):
         self.assertEqual(len(mail.outbox), 1)
         self.assertIn('Repeated harassment reports', mail.outbox[0].body)
         self.assertIn('support@exposing.app', mail.outbox[0].body)
-        self.assertIn('#E40104', mail.outbox[0].alternatives[0].content)
+        self.assertIn('Questions? Contact Exposing support', mail.outbox[0].alternatives[0].content)
 
         entry = AuditLog.objects.filter(action='warn_user').first()
         self.assertEqual(entry.target, 'warned_person')

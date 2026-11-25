@@ -235,7 +235,7 @@ class DecideTests(ReviewTestCase):
         self.assertEqual(len(mail.outbox), 1)
         self.assertEqual(mail.outbox[0].to, [self.member.email])
         self.assertIn('repeated harassment of another member', mail.outbox[0].body)
-        self.assertIn('#E40104', mail.outbox[0].alternatives[0].content)
+        self.assertIn('Questions? Contact Exposing support', mail.outbox[0].alternatives[0].content)
 
     def test_removing_a_second_time_moves_nothing_and_notifies_once(self):
         post = self.post_of()
