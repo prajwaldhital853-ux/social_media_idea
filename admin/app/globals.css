@@ -960,11 +960,12 @@ button.link:disabled:hover { color: var(--muted); text-decoration: none; }
 .suspend-kind .field { margin: 0; }
 
 /* ── one account, opened as a page ───────────────────────
-   The desk you sign from is as tall as it needs to be and never scrolls on its
-   own. It used to be a sticky box capped at the viewport with its own two
-   scrollbars: the Delete button hid behind a drag, and one long `<option>`
-   ("Public, everyone who opens their profile") is wider than the 320px column,
-   so a second bar appeared under every reason box. */
+   The verbs follow the page: a seat that reads forty posts, then decides,
+   should not have to scroll back up to find the button. The box is capped at
+   the viewport so a long reason form scrolls inside itself instead of pushing
+   Delete off the bottom of the screen, and one long `<option>` ("Public,
+   everyone who opens their profile") is pinned to the 320px column so no
+   second, sideways bar appears under every reason box. */
 .record {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 320px;
@@ -975,6 +976,8 @@ button.link:disabled:hover { color: var(--muted); text-decoration: none; }
 .record-main { min-width: 0; }
 
 .record-acts {
+  position: sticky;
+  top: 14px;
   padding: 14px 15px 16px;
   border: 1px solid var(--line);
   border-radius: var(--radius);
@@ -982,6 +985,10 @@ button.link:disabled:hover { color: var(--muted); text-decoration: none; }
   display: flex;
   flex-direction: column;
   gap: 9px;
+  max-height: calc(100vh - 28px);
+  max-height: calc(100dvh - 28px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 /* A select sizes itself to its longest option, so it has to be told to fit. */
@@ -2197,6 +2204,9 @@ button.key:hover { border-color: #c3c9d1; color: var(--ink); background: #F7F8FA
   .console-head { flex-direction: column; align-items: flex-start; }
   .record { grid-template-columns: 1fr; }
   .record-main { order: 2; }
+  /* One column: a pinned verbs box would spend half a short screen, so it
+     scrolls with the record and the seat scrolls back for it. */
+  .record-acts { position: static; max-height: none; overflow-y: visible; }
 }
 
 @media (max-width: 900px) {
