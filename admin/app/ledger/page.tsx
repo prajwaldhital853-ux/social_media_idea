@@ -86,6 +86,18 @@ export default function LedgerScreen() {
     }
   };
 
+  const downloadRecord = () => {
+    const gone = page?.deleted;
+    if (!gone) return;
+    const blob = new Blob([JSON.stringify(gone.record, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `money-record-${gone.username}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <ConsoleShell
       title="Coin ledger"
@@ -138,6 +150,25 @@ export default function LedgerScreen() {
       </div>
 
       <Banner banner={banner} />
+
+      {page?.deleted && (
+        <section className="panel archived" data-deleted-record>
+          <div className="panel-head">
+            <div>
+              <h2>@{page.deleted.username}'s account was deleted</h2>
+              <p>
+                The account and its wallet are gone; the money record is kept.{' '}
+                {num(page.deleted.counts.movements)} movement(s), {num(page.deleted.counts.requests)} coin
+                request(s) and {num(page.deleted.counts.campaigns)} campaign(s), archived {ago(page.deleted.archived_at)}.
+                Every amount, reference, staff name and approval decision in it is the paper a dispute is settled from.
+              </p>
+            </div>
+            <button type="button" className="btn ghost" onClick={downloadRecord} title="Download the kept money record as a file">
+              {IC.go}<span>Download the record</span>
+            </button>
+          </div>
+        </section>
+      )}
 
       {page && (
         <p className="facets" data-totals>

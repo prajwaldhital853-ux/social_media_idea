@@ -23,7 +23,7 @@ from rest_framework.response import Response
 from apps.common.media import save_upload
 from apps.common.pagination import KeysetPagination
 from apps.common.uploads import EXTENSIONS
-from apps.wallet.models import CoinRequest, Transaction
+from apps.wallet.models import CoinRequest, DeletedWalletRecord, Transaction
 
 from . import coins, rbac, settings_store
 from .journal import record
@@ -169,7 +169,26 @@ def coin_ledger(request):
     totals = Transaction.objects.aggregate(credited=Sum('amount', filter=Q(kind='credit')),
                                            debited=Sum('amount', filter=Q(kind='debit')))
     response = paginator.get_paginated_response([coins.entry_row(item) for item in rows])
+    # A deleted account is not in any wallet any more, but its money record is.
+    # Searching the desk for its username is how a seat settles a dispute about
+    # money that moved before the account went.
+    archived = None
+    if search:
+        gone = DeletedWalletRecord.objects.filter(username__iexact=search).first()
+        if gone:
+            record_data = gone.record
+            archived = {
+                'username': gone.username,
+                'archived_at': gone.archived_at.isoformat(),
+                'counts': {
+                    'movements': len(record_data.get('movements', [])),
+                    'requests': len(record_data.get('requests', [])),
+                    'campaigns': len(record_data.get('campaigns', [])),
+                },
+                'record': record_data,
+            }
     response.data.update({
+        'deleted': archived,
         'totals': {
             'credited': str(totals['credited'] or 0),
             'debited': str(totals['debited'] or 0),

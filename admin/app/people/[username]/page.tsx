@@ -416,7 +416,8 @@ export default function PersonRecordPage({ params }: { params: { username: strin
             )}
             <p className="fineprint">
               A deletion takes {detail.holdings.posts} post(s), {detail.holdings.comments} comment(s),{' '}
-              {detail.holdings.listings} listing(s) and the wallet with its ledger. It is refused while
+              {detail.holdings.listings} listing(s) and the wallet with its ledger; the money record itself
+              is kept so a payment dispute can still be settled afterwards. It is refused while
               a campaign runs, a payment proof waits, or the balance is not zero.
             </p>
           </aside>

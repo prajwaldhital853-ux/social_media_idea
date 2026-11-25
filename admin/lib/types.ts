@@ -732,6 +732,15 @@ export interface LedgerRow {
 export interface LedgerPage extends Page<LedgerRow> {
   totals: { credited: string; debited: string; entries: number };
   counts?: Partial<Record<'credit' | 'debit', number>>;
+  /** Set when the searched username belongs to a deleted account whose money record is kept. */
+  deleted?: DeletedMoneyRecord | null;
+}
+
+export interface DeletedMoneyRecord {
+  username: string;
+  archived_at: string;
+  counts: { movements: number; requests: number; campaigns: number };
+  record: unknown;
 }
 
 /** A knob on a settings desk, typed by the server so the box knows what it holds. */

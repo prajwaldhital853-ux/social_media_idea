@@ -85,6 +85,28 @@ class CoinRequest(models.Model):
         ]
 
 
+class DeletedWalletRecord(models.Model):
+    """The money record of a deleted account, kept after the cascade takes the rest.
+
+    Deleting a member destroys the wallet and every row in it, so the whole money
+    history is copied here first: every movement, every coin request with its
+    approval history, every campaign with its refund decisions, staff names kept
+    as text. The archive holds no foreign keys, so nothing in it can keep the
+    account alive or be broken by its departure — it is the paper a dispute is
+    settled from after the person it belonged to is gone.
+    """
+
+    username = models.CharField(max_length=150, unique=True)
+    record = models.JSONField()
+    archived_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-archived_at']
+
+    def __str__(self):
+        return f'{self.username} ({self.archived_at:%Y-%m-%d})'
+
+
 def apply(wallet_id, kind, amount, note='', actor=None, ref=''):
     """Atomic balance change + ledger row. Raises ValueError on overdraft."""
     amount = Decimal(amount)
