@@ -161,7 +161,8 @@ export interface SignupPayload {
   country: string;
   province?: string;
   city?: string;
-  google?: { sub: string; email: string; name: string };
+  /** The server-signed hand-off from the Google door; the raw google block is gone. */
+  ticket?: string;
 }
 
 export interface AuthResult {
@@ -178,7 +179,7 @@ export interface AuthResult {
   emailNotVerified?: boolean;
   needsVerify?: boolean;
   needsSignup?: boolean;
-  prefill?: { email: string; name: string; google_sub: string };
+  prefill?: { email: string; name: string; google_sub: string; ticket?: string };
   locked?: boolean;
   lockedUntil?: number;
   /** Seconds of cooloff left, counted on the server clock. */

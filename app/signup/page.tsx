@@ -13,7 +13,7 @@ import { SignupProvider, User } from '@/lib/types';
 import type { TranslationKey } from '@/lib/i18n';
 
 const GOOGLE_KEY = 'exposing-google';
-type Prefill = { email: string; name: string; google_sub: string };
+type Prefill = { email: string; name: string; google_sub: string; ticket?: string };
 type FieldName = 'name' | 'username' | 'email' | 'password' | 'dob' | 'country' | 'province' | 'city' | 'age' | 'legal';
 type FieldErrors = Partial<Record<FieldName, string>>;
 const FIELD_ORDER: FieldName[] = ['name', 'username', 'email', 'password', 'dob', 'country', 'province', 'city'];
@@ -149,7 +149,9 @@ export default function SignupPage() {
     try {
       const res = await signupAccount({
         username, email, password, name: name.trim(), dob, country, province, city,
-        google: prefill ? { sub: prefill.google_sub, email: prefill.email, name: prefill.name } : undefined,
+        // The ticket is the server's own signature on the Google sign-in; a raw
+        // `google` block would be our word for nothing the server verified.
+        ticket: prefill?.ticket,
       });
       if (!res.ok) {
         if (res.locked) return setError(banLine(res, t));

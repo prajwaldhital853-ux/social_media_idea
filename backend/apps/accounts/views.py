@@ -1,8 +1,9 @@
 import logging
 import random
-from datetime import timedelta
+from datetime import date, timedelta
 
 from django.conf import settings
+from django.contrib.auth.hashers import make_password
 from django.core import signing
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.core.validators import validate_email
@@ -38,6 +39,11 @@ RESEND_SECONDS = 120
 # type twice, short enough that an abandoned reset is not a standing invitation.
 RESET_TICKET_SECONDS = 900
 RESET_TICKET_SALT = 'accounts.reset'
+# The hand-off from the Google door to the signup form. Only our own server can
+# mint one — /api/auth/google/ signs it after verifying the token — so signup can
+# trust the address inside it and nothing a client just typed.
+SIGNUP_TICKET_SECONDS = 900
+SIGNUP_TICKET_SALT = 'accounts.google-signup'
 # A refresh call lives at most TIMEOUT_MS (12s on the client) in flight, so two
 # tabs racing each other are this close together; anything presenting a retired
 # token later than that is not the same browser finishing a request.
@@ -131,6 +137,82 @@ def _make_otp(user, purpose, device_id=''):
     return otp, code
 
 
+def _make_pending_signup(payload, device_id=''):
+    """The code step of signup, before there is an account to hang it on.
+
+    The form's payload waits on the EmailOTP row itself; the User row is only
+    written when the code is proved. A person who closes the tab here leaves
+    nothing behind — no address that claims to be taken, no unverified account
+    a password can still reach.
+    """
+    EmailOTP.objects.filter(
+        user__isnull=True, purpose='verify', payload__email=payload.get('email'),
+        consumed_at__isnull=True,
+    ).update(consumed_at=timezone.now())
+    code = f'{random.SystemRandom().randint(0, 999999):06d}'
+    otp = EmailOTP.objects.create(
+        user=None, purpose='verify', payload=payload, code_hash=hash_code(code),
+        device_id=device_id, expires_at=timezone.now() + timedelta(minutes=OTP_MINUTES),
+    )
+    try:
+        deliver_otp_email(payload['email'], code, 'verify')
+    except Exception:
+        # The pending signup is stored, so a mail provider being down costs an
+        # email, never the signup itself.
+        logger.exception('Could not queue the verify code for pending signup %s', payload.get('email'))
+    return otp, code
+
+
+def _finish_pending_signup(request, otp):
+    """The code was right: now, and only now, the account exists."""
+    payload = otp.payload or {}
+    if otp.purpose != 'verify' or payload.get('kind') != 'signup':
+        return Response({'detail': 'Code expired. Request a new one.'}, status=400)
+    username = payload.get('username') or ''
+    email = payload.get('email') or ''
+    name = (payload.get('name') or '').strip()
+    if not username or not email or _reserved_email(email):
+        return Response({'detail': 'This email address cannot be used.'}, status=400)
+    device_id = otp.device_id or _device_id(request)
+    try:
+        with transaction.atomic():
+            if User.objects.filter(username=username).exists():
+                return Response({'detail': 'That username was taken while your code waited. '
+                                           'Start signup again with another one.'}, status=400)
+            if User.objects.filter(email__iexact=email).exists():
+                return Response({'detail': 'An account with that email already exists.'}, status=400)
+            user = User.objects.create_user(
+                username=username, email=email, password=None,
+                first_name=name.split()[0] if name else '', last_name=' '.join(name.split()[1:]) if name else '',
+                date_of_birth=payload.get('dob') or None, country=payload.get('country') or '',
+                city=payload.get('city') or '',
+            )
+            # The code was mailed to this address, so it arrives proved — the same
+            # trust the Google ticket carries, earned here by the letter.
+            user.password = payload.get('password_hash') or user.password
+            user.email_verified = True
+            user.save(update_fields=['password', 'email_verified'])
+            Profile.objects.update_or_create(
+                user=user,
+                defaults={
+                    'display_name': name or username,
+                    'province': payload.get('province') or '',
+                    'location': (payload.get('city') or '')[:120],
+                },
+            )
+    except IntegrityError:
+        if _reserved_email(email):
+            message = 'This email address cannot be used.'
+        elif User.objects.filter(username=username).exists():
+            message = 'That username is taken.'
+        else:
+            message = 'An account with that email already exists.'
+        return Response({'detail': message}, status=400)
+    passwords.remember(user)
+    _queue_welcome(user)
+    return _finish_login(request, user, device_id)
+
+
 def _media_key(url):
     """The MediaBlob key inside a stored media url, or '' for an outside file."""
     marker = '/media/'
@@ -205,7 +287,6 @@ def signup(request):
     email = _email(data.get('email'))
     password = data.get('password') or ''
     name = (data.get('name') or '').strip()
-    google = data.get('google') or {}
     if not username or not username.replace('_', '').replace('.', '').isalnum() or not 3 <= len(username) <= 30:
         message = 'Username must be 3-30 letters, numbers, dots or underscores.'
         return Response({'detail': message, 'username': [message]}, status=400)
@@ -228,7 +309,24 @@ def signup(request):
     if User.objects.filter(email__iexact=email).exists():
         message = 'An account with that email already exists.'
         return Response({'detail': message, 'email': [message]}, status=400)
-    if not google:
+    # A pre-verified account is minted only from a hand-off our own server signed:
+    # /api/auth/google/ verified the real token and put this ticket in the prefill.
+    # The raw `google` block the client used to be allowed to send claimed any
+    # address was verified, so it is simply not read any more.
+    ticket = {}
+    if data.get('ticket'):
+        try:
+            ticket = signing.loads(
+                data['ticket'], salt=SIGNUP_TICKET_SALT, max_age=SIGNUP_TICKET_SECONDS)
+        except signing.BadSignature:
+            return Response({
+                'detail': 'The Google sign-in hand-off expired. Start again with Continue with Google.',
+                'email': ['The Google sign-in hand-off expired. Start again with Continue with Google.'],
+            }, status=400)
+        if _email(ticket.get('email')) != email:
+            message = 'This email does not match the Google sign-in. Start again with Continue with Google.'
+            return Response({'detail': message, 'email': [message]}, status=400)
+    if not ticket:
         bad = passwords.strength(password)
         if bad:
             return Response({'detail': bad, 'password': [bad]}, status=400)
@@ -246,47 +344,56 @@ def signup(request):
             'country': [] if country else ['Country is required.'],
             'city': [] if city else ['City is required.'],
         }, status=400)
-    device_id = _device_id(request)
-    # The account, its profile and its wallet either all exist or none of them do.
-    # Written across three commits, a request that died in the middle left an
-    # address that claimed to be taken while no usable member stood behind it.
     try:
-        with transaction.atomic():
-            user = User.objects.create_user(
-                username=username, email=email, password=password if not google else None,
-                first_name=name.split()[0] if name else '', last_name=' '.join(name.split()[1:]) if name else '',
-                date_of_birth=dob, country=country, city=city,
-                provider='google' if google else 'email',
-            )
-            if google:
-                # A Google address is already proved by the identity provider.
+        dob_date = date.fromisoformat(str(dob))
+    except ValueError:
+        message = 'Enter a valid date of birth.'
+        return Response({'detail': message, 'dob': [message]}, status=400)
+    device_id = _device_id(request)
+    if ticket:
+        # The identity provider proved the address; the form only adds what the
+        # profile needs. This account is born verified and signed in.
+        try:
+            with transaction.atomic():
+                user = User.objects.create_user(
+                    username=username, email=email, password=None,
+                    first_name=name.split()[0] if name else '', last_name=' '.join(name.split()[1:]) if name else '',
+                    date_of_birth=dob_date, country=country, city=city,
+                    provider='google',
+                )
                 user.email_verified = True
                 user.save(update_fields=['email_verified'])
-            Profile.objects.update_or_create(
-                user=user,
-                defaults={
-                    'display_name': name or username,
-                    'province': (data.get('province') or '').strip()[:80],
-                    'location': city[:120],
-                },
-            )
-    except IntegrityError:
-        # Two tabs, one address: the exists() checks above both said no.
-        if _reserved_email(email):
-            message = 'This email address cannot be used.'
-        else:
-            message = 'An account with that email already exists.'
-        return Response({'detail': message, 'email': [message]}, status=400)
-    passwords.remember(user)
-    if google:
+                Profile.objects.update_or_create(
+                    user=user,
+                    defaults={
+                        'display_name': name or username,
+                        'province': (data.get('province') or '').strip()[:80],
+                        'location': city[:120],
+                    },
+                )
+        except IntegrityError:
+            # Two tabs, one address: the exists() checks above both said no.
+            if _reserved_email(email):
+                message = 'This email address cannot be used.'
+            else:
+                message = 'An account with that email already exists.'
+            return Response({'detail': message, 'email': [message]}, status=400)
+        passwords.remember(user)
         _queue_welcome(user)
         _trust_device(user, device_id)
         resp = Response({'user': {'id': user.pk, 'username': user.username, 'email': user.email}},
                         status=status.HTTP_201_CREATED)
         return set_auth_cookies(resp, user, device_id)
-    otp, _ = _make_otp(user, 'verify', device_id)
-    # An emailed address is not proved yet, so the body carries only the challenge:
-    # handing out cookies here would give every unverified signup a live session.
+    # An emailed address is not proved yet, so no account row is written here. The
+    # form's payload waits on the code: only a right code writes the account, marks
+    # it verified and signs the person in. Cancelling at this step leaves nothing
+    # behind — the address is not taken, and no password reaches a half-made account.
+    otp, _ = _make_pending_signup({
+        'kind': 'signup', 'username': username, 'email': email,
+        'password_hash': make_password(password), 'name': name,
+        'dob': str(dob), 'country': country, 'city': city,
+        'province': (data.get('province') or '').strip()[:80],
+    }, device_id)
     return Response(_otp_response(otp), status=status.HTTP_201_CREATED)
 
 
@@ -396,7 +503,9 @@ def _verify_otp(request, force_purpose=None):
     challenge = request.data.get('challenge')
     enforce(f'otp:{challenge}', 10, 600)
     otp = EmailOTP.objects.filter(pk=challenge, consumed_at__isnull=True).select_related('user').first()
-    if not otp or otp.expires_at < timezone.now() or otp.user.seeded or _is_staff_member(otp.user):
+    if not otp or otp.expires_at < timezone.now():
+        return Response({'detail': 'Code expired. Request a new one.'}, status=400)
+    if otp.user_id is not None and (otp.user.seeded or _is_staff_member(otp.user)):
         return Response({'detail': 'Code expired. Request a new one.'}, status=400)
     if force_purpose and otp.purpose != force_purpose:
         return Response({'detail': 'Wrong code type.'}, status=400)
@@ -410,6 +519,9 @@ def _verify_otp(request, force_purpose=None):
         return Response({'detail': 'Wrong code.', 'attempts_left': OTP_MAX_ATTEMPTS - otp.attempts}, status=400)
     otp.consumed_at = timezone.now()
     otp.save(update_fields=['consumed_at'])
+    if otp.user_id is None:
+        # A signup that never became an account: the right code is what creates it.
+        return _finish_pending_signup(request, otp)
     user = otp.user
     device_id = otp.device_id or _device_id(request)
     if otp.purpose == 'delete':
@@ -442,7 +554,18 @@ def _verify_otp(request, force_purpose=None):
 def otp_resend(request):
     challenge = request.data.get('challenge')
     otp = EmailOTP.objects.filter(pk=challenge).select_related('user').first()
-    if not otp or otp.user.seeded:
+    if not otp:
+        return Response({'detail': 'Unknown challenge.'}, status=400)
+    if otp.user_id is None:
+        # A signup that never became an account has no user row to hang the resend
+        # on — the letter goes to the address the pending payload holds.
+        payload = otp.payload or {}
+        if otp.purpose != 'verify' or payload.get('kind') != 'signup':
+            return Response({'detail': 'Unknown challenge.'}, status=400)
+        enforce(f"otp-resend:{payload.get('email')}", 3, 600)
+        new_otp, _ = _make_pending_signup(payload, otp.device_id)
+        return Response(_otp_response(new_otp))
+    if otp.user.seeded:
         return Response({'detail': 'Unknown challenge.'}, status=400)
     enforce(f'otp-resend:{otp.user_id}', 3, 600)
     if otp.purpose == 'reset':
@@ -755,7 +878,13 @@ def google(request):
         return Response({'new_device': True, 'email_hint': email, **_otp_response(otp)}, status=202)
     return Response({
         'needs_signup': True,
-        'prefill': {'email': email, 'name': name, 'google_sub': sub},
+        # The ticket is what lets signup create a verified account: it is signed
+        # here, after the token was proved, and expires with the form it fills.
+        'prefill': {
+            'email': email, 'name': name, 'google_sub': sub,
+            'ticket': signing.dumps({'email': email, 'name': name, 'sub': sub},
+                                    salt=SIGNUP_TICKET_SALT),
+        },
         'detail': 'Finish creating your account: pick a username, date of birth and country.',
     })
 

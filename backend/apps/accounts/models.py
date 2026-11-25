@@ -84,7 +84,11 @@ class EmailOTP(models.Model):
         ('reset', 'Password reset'), ('admin_reset', 'Staff password reset'),
     ]
 
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='otps')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='otps', null=True, blank=True)
+    # A signup is only a promise until its code is proved: the form's payload waits
+    # here rather than in a User row, so a form abandoned at the code step leaves no
+    # account behind to sign into.
+    payload = models.JSONField(null=True, blank=True)
     # A staff code is a different key than a member code: `admin_reset` has to be
     # longer than ten characters, and one door must never be able to spend the
     # other door's letter.
