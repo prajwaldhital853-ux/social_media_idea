@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import ConsoleShell from '@/components/ConsoleShell';
+import { ActivityChart, ChartSeries, MixRing, RingSlice } from '@/components/Charts';
 import { api } from '@/lib/api';
 import { bytes as humanBytes, money, num, percent, waiting } from '@/lib/format';
 import { IC } from '@/lib/icons';
@@ -16,6 +17,30 @@ const REFRESH_EVERY = 60000;
 const PAGE = 7;
 const SEVERITY_LABEL: Record<string, string> = { info: 'Note', warning: 'Needs a look', critical: 'Urgent' };
 const TARGET_LABEL: Record<string, string> = { post: 'posts', comment: 'comments', user: 'people', listing: 'listings' };
+
+/** One hue per tile, shared by that tile's sparkline and by whatever chart the
+ *  same number appears in, a tile and its chart drawn in two colours reads as
+ *  two different measures. */
+const TILE_COLOR: Record<string, string> = {
+  new_users: 'var(--brand)',
+  posts: '#3C4450',
+  comments: 'var(--amber-ink)',
+  listings: 'var(--green-ink)',
+  open_reports: 'var(--brand)',
+  coin_requests: 'var(--amber-ink)',
+  promotions: '#3C4450',
+  storage: 'var(--green-ink)',
+  coins_moved: 'var(--ink)',
+};
+const KIND_COLOR: Record<string, string> = {
+  post: 'var(--brand)',
+  comment: '#3C4450',
+  listing: 'var(--amber-ink)',
+  user: 'var(--green-ink)',
+};
+/** Only the tiles that count things happening per day share one axis. Coins are
+ *  a value, not a volume, so they keep their own tile rather than a fifth line. */
+const ACTIVITY_IDS = ['new_users', 'posts', 'comments', 'listings'];
 
 export default function OverviewPage() {
   const { noteGate } = useSession();
@@ -76,11 +101,26 @@ export default function OverviewPage() {
         <>
           <HealthStrip health={data.health}/>
 
+          <section className="panel activity wide">
+            <header className="panel-head">
+              <div>
+                <h2>What happened each day</h2>
+                <p>New people, posts, comments and listings, counted a day at a time on one
+                  axis. The figure under each name is what that count did over the window.</p>
+              </div>
+              <span className="panel-count">{data.windows.series_days} days counted back</span>
+            </header>
+            <ActivityChart series={activity(data.tiles)}
+                           hint="Each line is one count a day."/>
+          </section>
+
           <div className="tile-grid">
             {data.tiles.map(tile => (
               <TileCard key={tile.id} tile={tile} threshold={data.thresholds[`alert_storage_gb`]}/>
             ))}
           </div>
+
+          <MakeUp tiles={data.tiles}/>
 
           <AlertFeed key={data.generated_at} alerts={data.alerts}/>
 
@@ -132,8 +172,9 @@ const HEALTH_HEADLINE: Record<string, string> = {
 function TileCard({ tile, threshold }: { tile: Tile; threshold?: Threshold }) {
   const { session } = useSession();
   const link = shipped(tile.href, session?.permissions || [], session?.role) ? tile.href : null;
+  const color = TILE_COLOR[tile.id] || 'var(--brand)';
   return (
-    <article className={`tile tile-${tile.kind}`} data-tile={tile.id}>
+    <article className={`tile tile-${tile.kind}`} data-tile={tile.id} style={{ ['--tile' as string]: color }}>
       <header className="tile-head">
         <span className="tile-label">{tile.label}</span>
         <span className="tile-icon">{TILE_ICON[tile.id] || IC.chart}</span>
@@ -181,33 +222,49 @@ function RateBody({ tile }: { tile: Tile }) {
   return (
     <>
       <b className="tile-number">{num(tile.today)}</b>
-      <span className="tile-unit">since midnight</span>
+      <span className="tile-unit">since midnight <Trend points={tile.series}/></span>
       <Spark points={tile.series || []}/>
       <Split items={[['7 days', num(tile.week)], ['30 days', num(tile.month)], ['All time', num(tile.total)]]}/>
     </>
   );
 }
 
+/** This stretch of days against the one before it, in the tile's own hue. A day
+ *  count that has moved is the one thing a snapshot cannot say on its own. */
+function Trend({ points }: { points?: SeriesPoint[] }) {
+  const series = points || [];
+  if (series.length < 14) return null;
+  const half = Math.floor(series.length / 2);
+  const sum = (from: number, to: number) => series.slice(from, to).reduce((total, point) => total + point.n, 0);
+  const now = sum(half, series.length);
+  const before = sum(0, half);
+  if (!before) {
+    return now ? <em className="trend is-new">new</em> : <em className="trend is-flat">steady</em>;
+  }
+  const change = Math.round(((now - before) / before) * 100);
+  if (!change) return <em className="trend is-flat">steady</em>;
+  const up = change > 0;
+  return (
+    <em className={`trend ${up ? 'is-up' : 'is-down'}`}
+        title={`${num(before)} in the first ${half} days, ${num(now)} in the last ${series.length - half}`}>
+      <svg viewBox="0 0 8 8" aria-hidden="true">
+        {up ? <path d="M4 1l3.2 6H0.8z"/> : <path d="M4 7L0.8 1h6.4z"/>}
+      </svg>
+      {up ? '+' : '−'}{Math.abs(change)}%
+    </em>
+  );
+}
+
 function QueueBody({ tile }: { tile: Tile }) {
-  const targets = Object.entries(tile.by_target || {});
-  const reasons = (tile.by_reason || []).slice(0, 2);
   return (
     <>
       <b className={`tile-number ${tile.value ? 'is-debt' : ''}`}>{num(tile.value)}</b>
       <span className="tile-unit">waiting on a decision</span>
-      {targets.length > 0 && (
-        <ul className="chips">
-          {targets.map(([kind, count]) => (
-            <li key={kind} className="chip">{count} {TARGET_LABEL[kind] || kind}</li>
-          ))}
-        </ul>
-      )}
       <Split items={[
         ['Opened today', num(tile.new_today)],
         ['Closed this week', num(tile.closed_week)],
         ['Oldest', tile.value ? waiting(tile.oldest_minutes) : 'nothing waiting'],
       ]}/>
-      {reasons.length > 0 && <p className="tile-note">Most named: {reasons.map(entry => `${entry.reason} (${entry.n})`).join(', ')}</p>}
     </>
   );
 }
@@ -282,10 +339,106 @@ function LedgerBody({ tile }: { tile: Tile }) {
   return (
     <>
       <b className="tile-number">{num(tile.spent_today)}</b>
-      <span className="tile-unit">coins spent since midnight</span>
+      <span className="tile-unit">spent since midnight <Trend points={tile.series}/></span>
       <Spark points={tile.series || []}/>
       <Split items={[['7 days', num(tile.spent_week)], ['30 days', num(tile.spent_month)], ['Bought in 30 d', num(tile.credited_month)]]}/>
     </>
+  );
+}
+
+/** The tiles that share a unit, things that happened per day, become lines. */
+function activity(tiles: Tile[]): ChartSeries[] {
+  return ACTIVITY_IDS
+    .map(id => tiles.find(tile => tile.id === id))
+    .filter((tile): tile is Tile => Boolean(tile?.series?.length))
+    .map(tile => ({
+      id: tile.id,
+      label: tile.label,
+      color: TILE_COLOR[tile.id] || 'var(--brand)',
+      points: tile.series || [],
+    }));
+}
+
+/** The two questions a pile of numbers cannot answer: what is the pile made of,
+ *  and why was it raised. Both read off the same counts the report tile shows. */
+function MakeUp({ tiles }: { tiles: Tile[] }) {
+  const queue = tiles.find(tile => tile.id === 'open_reports');
+  const promo = tiles.find(tile => tile.id === 'promotions');
+  const targets: RingSlice[] = Object.entries(queue?.by_target || {})
+    .map(([kind, value]) => ({
+      id: kind,
+      label: TARGET_LABEL[kind] || kind,
+      value: value || 0,
+      color: KIND_COLOR[kind] || '#79818D',
+    }));
+  const states: RingSlice[] = [
+    { id: 'active', label: 'Running', value: promo?.active || 0, color: 'var(--green-ink)' },
+    { id: 'pending', label: 'Awaiting review', value: promo?.awaiting_review || 0, color: 'var(--brand)' },
+    { id: 'paused', label: 'Paused', value: promo?.paused || 0, color: '#79818D' },
+  ];
+  const reasons = (queue?.by_reason || []).slice(0, 5);
+
+  if (!targets.length && !reasons.length && !states.some(entry => entry.value)) return null;
+
+  return (
+    <div className="make-up">
+      <section className="panel">
+        <header className="panel-head">
+          <div>
+            <h2>What the pile is on</h2>
+            <p>Every open report, split by the kind of thing it names.</p>
+          </div>
+          <span className="panel-count">{num(queue?.value)} open</span>
+        </header>
+        {targets.length
+          ? <MixRing slices={targets} caption="open reports"/>
+          : <p className="empty-note">{IC.check} Nothing is reported right now.</p>}
+      </section>
+
+      <section className="panel">
+        <header className="panel-head">
+          <div>
+            <h2>Why it was reported</h2>
+            <p>The five reasons named most often, and the share of the open pile each
+              one carries. Only the five are listed, so the shares do not add to one hundred.</p>
+          </div>
+        </header>
+        {reasons.length
+          ? <Reasons rows={reasons} total={queue?.value || 0}/>
+          : <p className="empty-note">{IC.check} No reasons to rank, the queue is empty.</p>}
+      </section>
+
+      <section className="panel">
+        <header className="panel-head">
+          <div>
+            <h2>Where the promotions stand</h2>
+            <p>Only the orders someone on shift can still act on: ended and refused
+              campaigns are left out of the ring.</p>
+          </div>
+        </header>
+        {states.some(entry => entry.value)
+          ? <MixRing slices={states} caption="to act on"/>
+          : <p className="empty-note">{IC.chart} Nothing is waiting or running.</p>}
+      </section>
+    </div>
+  );
+}
+
+function Reasons({ rows, total }: { rows: { reason: string; n: number }[]; total: number }) {
+  const peak = Math.max(1, ...rows.map(entry => entry.n));
+  return (
+    <ul className="reasons">
+      {rows.map((entry, index) => (
+        <li key={entry.reason} style={{ animationDelay: `${index * 60}ms` }}>
+          <span className="reason-name">{entry.reason}</span>
+          <span className="reason-track">
+            <i style={{ width: `${(entry.n / peak) * 100}%` }}/>
+          </span>
+          <b>{num(entry.n)}</b>
+          <em>{total ? Math.round((entry.n / total) * 100) : 0}%</em>
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -428,6 +581,9 @@ function Campaigns({ campaigns }: { campaigns: PromotionAnalytics | null }) {
   // actually on the screen rather than from the first page alone.
   const sum = (id: string) => rows.reduce((total, row) => total + (row.metrics[id] || 0), 0);
   const more = rows.length < campaigns.total;
+  // The bar is scaled to the best rate on the screen, not to 100%: no campaign
+  // opens at anything like a third, and a row of quarter-filled tracks says nothing.
+  const topRate = Math.max(1, ...rows.map(row => row.click_rate || 0));
 
   return (
     <>
@@ -461,7 +617,16 @@ function Campaigns({ campaigns }: { campaigns: PromotionAnalytics | null }) {
                       : num(row.metrics[metric.id])}
                   </td>
                 ))}
-                <td data-label="Open rate">{percent(row.click_rate)}</td>
+                <td data-label="Open rate" className="rate-cell">
+                  {row.click_rate === null
+                    ? ','
+                    : (
+                      <span className="rate">
+                        <span className="rate-track"><i style={{ width: `${Math.min(100, (row.click_rate / topRate) * 100)}%` }}/></span>
+                        <b>{percent(row.click_rate)}</b>
+                      </span>
+                    )}
+                </td>
               </tr>
             ))}
           </tbody>
