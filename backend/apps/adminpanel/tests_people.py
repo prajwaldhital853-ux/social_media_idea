@@ -175,14 +175,28 @@ class SuspendTests(ReviewTestCase):
         self.assertIsNone(out.data['suspension']['days_left'])
         self.assertGreater(self.member.suspended_until, people.PERMANENT_UNTIL - timedelta(days=1))
 
+        # A bar that is already standing is not re-dated by a second click, which is
+        # also what stops two screens writing the same account at the same instant.
+        again = self.admin_seat.post(
+            f'{PEOPLE_URL}ordinary/suspend/', {'days': 30, 'reason': 'a very long bar'}, format='json')
+        self.assertEqual(again.status_code, 400, again.data)
+        self.assertIn('already suspended', again.data['detail'])
+        self.assertIn('Reinstate', again.data['detail'])
+        self.member.refresh_from_db()
+        self.assertGreater(self.member.suspended_until, people.PERMANENT_UNTIL - timedelta(days=1),
+                           'the refusal left the permanent bar exactly where it was')
+
         # The screen can only offer "suspend for good" if it can tell it apart
         # from a long temporary bar, and lifting either one is one write.
+        lifted = self.admin_seat.post(f'{PEOPLE_URL}ordinary/reinstate/', {}, format='json')
+        self.assertEqual(lifted.status_code, 200)
         long_out = self.admin_seat.post(
             f'{PEOPLE_URL}ordinary/suspend/', {'days': 30, 'reason': 'a very long bar'}, format='json')
+        self.assertEqual(long_out.status_code, 200, long_out.data)
         self.assertFalse(long_out.data['suspension']['permanent'])
-        lifted = self.admin_seat.post(f'{PEOPLE_URL}ordinary/reinstate/', {}, format='json')
+        back = self.admin_seat.post(f'{PEOPLE_URL}ordinary/reinstate/', {}, format='json')
         self.member.refresh_from_db()
-        self.assertEqual(lifted.status_code, 200)
+        self.assertEqual(back.status_code, 200)
         self.assertIsNone(self.member.suspended_until)
 
     def test_the_suspension_email_carries_the_reason_and_a_way_to_appeal(self):

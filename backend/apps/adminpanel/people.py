@@ -498,6 +498,23 @@ def guard_target(user, caller):
         raise Refused('The last Client seat cannot be suspended or deleted.')
 
 
+def locked(user):
+    """Read the account again, with its row locked until this action is committed.
+
+    The console hands every screen the same plain read, so two seats holding the
+    same page open each decide against the copy of the account they were given.
+    A moderator's Reinstate that starts a moment before your Suspend commits used
+    to write the row back to clear and lift the bans your suspend had just
+    raised, and the account was simply back in the feed. Inside the lock the
+    second seat reads the first one's answer and refuses, which is what the coin
+    and promotion desks already do.
+    """
+    try:
+        return User.objects.select_for_update().get(pk=user.pk)
+    except User.DoesNotExist:
+        raise Refused('That account has already been deleted, nothing here acts on it again.')
+
+
 # --------------------------------------------------------------- the six actions
 
 
@@ -505,36 +522,45 @@ def suspend(user, caller, *, reason, days=None, until=None, permanent=False):
     reason = str(reason or '').strip()
     if not reason:
         raise Refused('Say why the account is suspended. This sentence is emailed to them.')
-    guard_target(user, caller)
     now = timezone.now()
     end = ends_at(days=days, until=until, permanent=permanent, now=now)
-    user.suspended_until = end
-    user.suspend_reason = reason[:200]
-    user.save(update_fields=['suspended_until', 'suspend_reason'])
-    kicked = locked_out(user, now)
-    # Suspension ends the seat they are sitting in. The address and every browser
-    # that account was trusted on are closed for as long as the suspension runs.
-    # The public IP is deliberately not included: other people may share it.
-    closed = safety.raise_bans(
-        user.email, end, 'admin',
-        devices=[user.last_device, *list(user.trusted_devices.values_list('device_id', flat=True))],
-    )
-    notify(user, caller, 'warning',
-           f'Your account is suspended {"for good" if permanent else f"until {end:%Y-%m-%d}"}: {reason}',
-           'user', user.pk)
-    emailed = enforcement_email(
-        user, 'Your Exposing account is suspended',
-        f'Your account @{user.username} is suspended '
-        f'{"for good, until staff put it back" if permanent else f"until {end:%Y-%m-%d %H:%M} UTC"}.\n\n'
-        f'Reason: {reason}\n\n'
-        'While it is suspended you cannot sign in, and a session that is already '
-        'open stops working at your next request.',
-    )
-    record(caller, 'suspend_user', user.username,
-           f'{"permanent" if permanent else f"until {end:%Y-%m-%d %H:%M}"}: {reason}')
+    with transaction.atomic():
+        account = locked(user)
+        guard_target(account, caller)
+        # One verdict at a time. Without this the second seat silently re-dated the
+        # first one's bar and wrote a second email about the same account.
+        if account.suspended_until and account.suspended_until > now:
+            raise Refused(f'They are already suspended until {account.suspended_until:%d %b %Y}. '
+                          'Reinstate the account first, then suspend it again.')
+        account.suspended_until = end
+        account.suspend_reason = reason[:200]
+        account.save(update_fields=['suspended_until', 'suspend_reason'])
+        kicked = locked_out(account, now)
+        # Suspension ends the seat they are sitting in. The address and every browser
+        # that account was trusted on are closed for as long as the suspension runs.
+        # The public IP is deliberately not included: other people may share it.
+        closed = safety.raise_bans(
+            account.email, end, 'admin',
+            devices=[account.last_device,
+                     *list(account.trusted_devices.values_list('device_id', flat=True))],
+        )
+        notify(account, caller, 'warning',
+               f'Your account is suspended {"for good" if permanent else f"until {end:%Y-%m-%d}"}: {reason}',
+               'user', account.pk)
+        emailed = enforcement_email(
+            account, 'Your Exposing account is suspended',
+            f'Your account @{account.username} is suspended '
+            f'{"for good, until staff put it back" if permanent else f"until {end:%Y-%m-%d %H:%M} UTC"}.\n\n'
+            f'Reason: {reason}\n\n'
+            'While it is suspended you cannot sign in, and a session that is already '
+            'open stops working at your next request.',
+        )
+        record(caller, 'suspend_user', account.username,
+               f'{"permanent" if permanent else f"until {end:%Y-%m-%d %H:%M}"}: {reason}')
+        user.refresh_from_db()
     return {
-        'action': 'suspend', 'username': user.username, 'permanent': permanent,
-        'suspension': suspension_of(user), 'emailed': emailed, 'sessions_revoked': kicked,
+        'action': 'suspend', 'username': account.username, 'permanent': permanent,
+        'suspension': suspension_of(account), 'emailed': emailed, 'sessions_revoked': kicked,
         'detail': (f'Suspended {"for good" if permanent else f"until {end:%d %b %Y}"}. '
                    f'{kicked} open session(s) cannot be renewed. '
                    + ('Sign-in, sign-up and Google are blocked for this account and its trusted browsers. '
@@ -546,23 +572,27 @@ def suspend(user, caller, *, reason, days=None, until=None, permanent=False):
 
 
 def reinstate(user, caller):
-    if not user.suspended_until or user.suspended_until <= timezone.now():
-        raise Refused('That account is not suspended.')
-    guard_target(user, caller)
-    user.suspended_until = None
-    user.suspend_reason = ''
-    user.save(update_fields=['suspended_until', 'suspend_reason'])
-    # The seat is back; so are the doors. Only the bans this suspension raised ,
-    # a cooloff someone else caused on the same connection stays where it is.
-    lifted = safety.lift(user.email, reasons=['admin'])
-    notify(user, caller, 'warning', 'Your account suspension was lifted by staff.', 'user', user.pk)
-    record(caller, 'reinstate_user', user.username, 'suspension lifted')
+    with transaction.atomic():
+        account = locked(user)
+        if not account.suspended_until or account.suspended_until <= timezone.now():
+            raise Refused('That account is not suspended.')
+        guard_target(account, caller)
+        account.suspended_until = None
+        account.suspend_reason = ''
+        account.save(update_fields=['suspended_until', 'suspend_reason'])
+        # The seat is back; so are the doors. Only the bans this suspension raised,
+        # a cooloff someone else caused on the same connection stays where it is.
+        lifted = safety.lift(account.email, reasons=['admin'])
+        notify(account, caller, 'warning', 'Your account suspension was lifted by staff.',
+               'user', account.pk)
+        record(caller, 'reinstate_user', account.username, 'suspension lifted')
+        emailed = enforcement_email(account, 'Your Exposing account is back',
+                                    'Your account suspension was lifted by staff. '
+                                    'You can sign in again right now.', footnote='')
+        user.refresh_from_db()
     doors = f'The suspension is lifted and {lifted} sign-in ban(s) with it. ' if lifted else 'The suspension is lifted. '
-    emailed = enforcement_email(user, 'Your Exposing account is back',
-                                'Your account suspension was lifted by staff. '
-                                'You can sign in again right now.', footnote='')
     return {
-        'action': 'reinstate', 'username': user.username, 'suspension': None, 'bans_lifted': lifted,
+        'action': 'reinstate', 'username': account.username, 'suspension': None, 'bans_lifted': lifted,
         'emailed': emailed,
         'detail': doors + 'They can sign in again right now.'
         + (f' An email went to {emailed["to"]}.' if emailed
@@ -572,33 +602,36 @@ def reinstate(user, caller):
 
 def verify(user, caller, *, verified, reason=''):
     """The blue tick, put on or taken off by a seat, with the reason kept."""
-    profile = getattr(user, 'profile', None)
-    if profile is None:
-        raise Refused('That account has no profile to put a tick on.')
     verified = bool(verified)
     reason = str(reason or '').strip()
-    if profile.verified == verified:
-        raise Refused(f'The tick is already {"on" if verified else "off"} this profile.')
-    if verified and not reason:
-        raise Refused('Say what made this account worth a tick. It goes on the audit row.')
-    profile.verified = verified
-    profile.save(update_fields=['verified'])
-    notify(user, caller, 'warning',
-           f'Your profile is {"verified" if verified else "no longer verified"}.'
-           + (f' {reason}' if reason else ''), 'user', user.pk)
-    tick = (f'Your Exposing profile is {"verified" if verified else "no longer verified"}.'
-            + (f' {reason}' if reason else ''))
-    emailed = enforcement_email(user, tick.rstrip('.'), tick, footnote='')
-    record(caller, 'verify_user' if verified else 'unverify_user', user.username,
-           reason or ('tick added' if verified else 'tick removed'))
-    return {
-        'action': 'verify', 'username': user.username, 'verified': verified,
-        'person': row(user), 'emailed': emailed,
-        'detail': (f'@{user.username} is verified, the tick is on their profile.' if verified
-                   else f'The tick is off @{user.username}.')
-        + (f' An email went to {emailed["to"]}.' if emailed
-           else ' There is no email address on this account.'),
-    }
+    with transaction.atomic():
+        account = locked(user)
+        profile = getattr(account, 'profile', None)
+        if profile is None:
+            raise Refused('That account has no profile to put a tick on.')
+        if profile.verified == verified:
+            raise Refused(f'The tick is already {"on" if verified else "off"} this profile.')
+        if verified and not reason:
+            raise Refused('Say what made this account worth a tick. It goes on the audit row.')
+        profile.verified = verified
+        profile.save(update_fields=['verified'])
+        notify(account, caller, 'warning',
+               f'Your profile is {"verified" if verified else "no longer verified"}.'
+               + (f' {reason}' if reason else ''), 'user', account.pk)
+        tick = (f'Your Exposing profile is {"verified" if verified else "no longer verified"}.'
+                + (f' {reason}' if reason else ''))
+        emailed = enforcement_email(account, tick.rstrip('.'), tick, footnote='')
+        record(caller, 'verify_user' if verified else 'unverify_user', account.username,
+               reason or ('tick added' if verified else 'tick removed'))
+        out = {
+            'action': 'verify', 'username': account.username, 'verified': verified,
+            'person': row(account), 'emailed': emailed,
+            'detail': (f'@{account.username} is verified, the tick is on their profile.' if verified
+                       else f'The tick is off @{account.username}.')
+            + (f' An email went to {emailed["to"]}.' if emailed
+               else ' There is no email address on this account.'),
+        }
+    return out
 
 
 def warn(user, caller, *, text, reason='', audience=PublicNotice.Audience.PRIVATE):
@@ -609,16 +642,19 @@ def warn(user, caller, *, text, reason='', audience=PublicNotice.Audience.PRIVAT
     if len(text) > 240:
         raise Refused('A warning is 240 characters or less.')
     reason = str(reason or '').strip()
-    profile = getattr(user, 'profile', None)
-    notice = review.attach('user', user.pk, caller, reason, text, audience)
-    opted_out = profile is not None and not profile.notify_email
-    emailed = None if opted_out else enforcement_email(user, 'A note from the Exposing team', text)
-    record(caller, 'warn_user', user.username,
-           (f'{text}, {reason}' if reason else text)[:240])
+    with transaction.atomic():
+        account = locked(user)
+        profile = getattr(account, 'profile', None)
+        notice = review.attach('user', account.pk, caller, reason, text, audience)
+        opted_out = profile is not None and not profile.notify_email
+        emailed = None if opted_out else enforcement_email(
+            account, 'A note from the Exposing team', text)
+        record(caller, 'warn_user', account.username,
+               (f'{text}, {reason}' if reason else text)[:240])
     return {
-        'action': 'warn', 'username': user.username, 'emailed': emailed, 'opted_out': opted_out,
+        'action': 'warn', 'username': account.username, 'emailed': emailed, 'opted_out': opted_out,
         'notice': notice,
-        'detail': (f'@{user.username} was warned in the app.'
+        'detail': (f'@{account.username} was warned in the app.'
                    + (' They turned warning emails off, so nothing was sent to their inbox.' if opted_out
                       else (f' An email went to {emailed["to"]}.' if emailed
                             else ' There is no email address on this account.'))),
@@ -636,41 +672,53 @@ def clear_flags(user, caller, *, reason=''):
     reason = str(reason or '').strip()
     if not reason:
         raise Refused('Say why the flags are being cleared. The audit row keeps the reason.')
+    # The account row is taken first and the notices under it second, in that order
+    # everywhere, so two seats clearing the same pile queue instead of deadlock.
+    account = locked(user)
     now = timezone.now()
-    closed = Report.objects.filter(target_type='user', target_id=str(user.pk),
+    # One verdict at a time, read under the lock. Without this the second seat
+    # finds an empty pile, still writes its letter and still fills the record.
+    pile = _pile_for([account.pk]).get(account.pk) or {'account': 0, 'content': 0}
+    lockout = bool(account.locked_until and account.locked_until > now) or bool(account.failed_attempts)
+    if not (pile['account'] or pile['content']
+            or PublicNotice.objects.filter(about=account, is_live=True).exists() or lockout):
+        raise Refused('Nothing stands against this account: no open report, no live warning '
+                      'and no login lockout. There is nothing to clear.')
+    closed = Report.objects.filter(target_type='user', target_id=str(account.pk),
                                    status__in=OPEN_STATES) \
         .update(status=Report.Status.DISMISSED, resolved_at=now)
     for kind, model in CONTENT_MODELS.items():
         field = OWNER_FIELD[kind]
-        pks = [str(pk) for pk in model.objects.filter(**{f'{field}': user})
+        pks = [str(pk) for pk in model.objects.filter(**{f'{field}': account})
                .values_list('pk', flat=True)]
         if pks:
             closed += Report.objects.filter(target_type=kind, target_id__in=pks,
                                             status__in=OPEN_STATES) \
                 .update(status=Report.Status.DISMISSED, resolved_at=now)
     withdrawn = 0
-    for notice in PublicNotice.objects.select_for_update().filter(about=user, is_live=True):
+    for notice in PublicNotice.objects.select_for_update().filter(about=account, is_live=True):
         review.withdraw(notice, caller)
         withdrawn += 1
-    user.failed_attempts = 0
-    user.locked_until = None
-    user.save(update_fields=['failed_attempts', 'locked_until'])
+    account.failed_attempts = 0
+    account.locked_until = None
+    account.save(update_fields=['failed_attempts', 'locked_until'])
     # Clearing the lockout means the whole way back in, not just the password box:
     # the cooloff also closed their connection and their browser.
-    safety.lift(user.email, reasons=['lock'])
-    held = Post.objects.filter(author=user, status=Post.Status.HIDDEN).count()
-    notify(user, caller, 'warning',
+    safety.lift(account.email, reasons=['lock'])
+    held = Post.objects.filter(author=account, status=Post.Status.HIDDEN).count()
+    notify(account, caller, 'warning',
            'The reports and warnings on your account were reviewed and cleared.'
            + (f' {held} post(s) are still held for a separate decision.' if held
-              else ' Nothing else is held against you.'), 'user', user.pk)
-    emailed = enforcement_email(user, 'An update on the reports against your account',
+              else ' Nothing else is held against you.'), 'user', account.pk)
+    emailed = enforcement_email(account, 'An update on the reports against your account',
                                 'The reports and warnings on your account were reviewed and cleared.'
                                 + (f' {held} post(s) are still held for a separate decision.' if held
                                    else ' Nothing else is held against you.'), footnote='')
-    record(caller, 'clear_spam_flags', user.username,
+    record(caller, 'clear_spam_flags', account.username,
            f'{closed} report(s) dismissed, {withdrawn} notice(s) withdrawn, lockout cleared. {reason}'[:240])
+    user.refresh_from_db()
     return {
-        'action': 'clear_flags', 'username': user.username, 'reports_closed': closed,
+        'action': 'clear_flags', 'username': account.username, 'reports_closed': closed,
         'notices_withdrawn': withdrawn, 'held_posts': held, 'emailed': emailed,
         'detail': (f'{closed} open report(s) closed, {withdrawn} warning notice(s) withdrawn '
                    'and the login lockout cleared. '
@@ -695,34 +743,39 @@ def delete(user, caller, *, confirm, reason=''):
     confirm = str(confirm or '').strip().lower()
     if not reason:
         raise Refused('Say why the account is deleted. The reason is all that survives.')
-    if confirm != user.username.lower():
-        raise Refused(f'Type the username "{user.username}" to confirm this.')
-    guard_target(user, caller)
-    held = holdings(user)
-    if held['campaigns']:
-        raise Refused(f'They are running {held["campaigns"]} campaign(s). '
-                      'Stop them from Promotions first.')
-    if held['pending_requests']:
-        raise Refused(f'{held["pending_requests"]} payment proof(s) are waiting. '
-                      'Decide them from Coin requests first.')
-    if Decimal(held['balance']) != 0:
-        raise Refused(f'The wallet still holds {held["balance"]} coins. Settle it from '
-                      'Coins and payments first.')
-    username = user.username
-    # The audit row outlives the account: its `actor` is nullable and its
-    # `target` is text, so this sentence is all anyone can read afterwards about
-    # what was destroyed here, which is why it is written before the delete.
-    record(caller, 'delete_user', username,
-           f'{held["posts"]} posts, {held["comments"]} comments, {held["listings"]} listings '
-           f'and {held["balance"]} coins went with the account. {reason}'[:240])
-    # The letter leaves before the row goes: the mailbox is the only place this
-    # member can still be reached, and the address is a string the thread does
-    # not need the account row for.
-    emailed = enforcement_email(user, 'Your Exposing account was deleted',
-                                f'Your Exposing account @{username} was deleted by the Exposing team. '
-                                f'Reason: {reason}. Your posts, comments, listings and wallet went with '
-                                'it, and this cannot be undone.')
-    user.delete()
+    with transaction.atomic():
+        account = locked(user)
+        if confirm != account.username.lower():
+            raise Refused(f'Type the username "{account.username}" to confirm this.')
+        guard_target(account, caller)
+        # Read under the lock: a campaign a second seat stopped a moment ago, or a
+        # wallet a coin approval just refilled, would otherwise be missed and
+        # destroyed with the account.
+        held = holdings(account)
+        if held['campaigns']:
+            raise Refused(f'They are running {held["campaigns"]} campaign(s). '
+                          'Stop them from Promotions first.')
+        if held['pending_requests']:
+            raise Refused(f'{held["pending_requests"]} payment proof(s) are waiting. '
+                          'Decide them from Coin requests first.')
+        if Decimal(held['balance']) != 0:
+            raise Refused(f'The wallet still holds {held["balance"]} coins. Settle it from '
+                          'Coins and payments first.')
+        username = account.username
+        # The audit row outlives the account: its `actor` is nullable and its
+        # `target` is text, so this sentence is all anyone can read afterwards about
+        # what was destroyed here, which is why it is written before the delete.
+        record(caller, 'delete_user', username,
+               f'{held["posts"]} posts, {held["comments"]} comments, {held["listings"]} listings '
+               f'and {held["balance"]} coins went with the account. {reason}'[:240])
+        # The letter leaves before the row goes: the mailbox is the only place this
+        # member can still be reached, and the address is a string the thread does
+        # not need the account row for.
+        emailed = enforcement_email(account, 'Your Exposing account was deleted',
+                                    f'Your Exposing account @{username} was deleted by the Exposing team. '
+                                    f'Reason: {reason}. Your posts, comments, listings and wallet went with '
+                                    'it, and this cannot be undone.')
+        account.delete()
     return {
         'action': 'delete', 'username': username, 'holdings': held, 'emailed': emailed,
         'detail': (f'@{username} is deleted, with their {held["posts"]} post(s), '
