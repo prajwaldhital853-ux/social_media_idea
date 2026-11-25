@@ -49,6 +49,25 @@ def package_by_id(package_id):
     return None
 
 
+def market_categories():
+    """The marketplace's shelves, as the console named them.
+
+    Platform rules owns this list, so a category added there is sellable on the next
+    page load rather than on the next deploy. The shipped eight are not thrown away
+    by the first new name, though: a desk where somebody added one shelf is not a
+    desk where the other seven were decided against. A shipped shelf only leaves the
+    picker once the console has written that exact name down and switched it off,
+    which is how the marketplace's own category door already counts a retired label.
+    """
+    try:
+        from apps.adminpanel import policy
+        named = policy.category_names()
+        written_down = {name.lower() for name in policy.category_names(active_only=False)}
+        return named + [label for label in MARKETPLACE_CATEGORIES if label.lower() not in written_down]
+    except Exception:  # noqa: BLE001 - no policy table yet means the shipped shelves stand
+        return MARKETPLACE_CATEGORIES
+
+
 def wording():
     """The first-load card the console writes: the welcome sentence, the tagline
     and the contacts under them.
@@ -80,7 +99,7 @@ def client_config():
     return {
         'features': features(),
         'packages': shelf(),
-        'categories': MARKETPLACE_CATEGORIES,
+        'categories': market_categories(),
         'countries': COUNTRIES,
         'minAge': MIN_AGE,
         'coinPrice': COIN_PRICE,

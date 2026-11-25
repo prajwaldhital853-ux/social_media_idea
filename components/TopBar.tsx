@@ -40,9 +40,7 @@ export default function TopBar() {
   return (
     <header className="topbar">
       <div className="topbar-left">
-        <Link href="/" className="topbar-brand" aria-label="Exposing home">
-          <BrandLogo height={30} />
-        </Link>
+        <BrandLogo height={30} className="topbar-brand" />
         <Link href="/explore" className="topbar-search" aria-label={t('search')}>
           {IC.search}
           <span>Search Exposing</span>

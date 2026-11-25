@@ -15,6 +15,16 @@ const KIND_LABEL: Record<TermRow['kind'], string> = {
   word: 'Blocked word', item: 'Prohibited item',
 };
 
+/** What each list is used for, since one of them now stops a write and the other one
+ *  only judges what somebody is already selling. */
+const ADD_BODY: Record<TermRow['kind'], string> = {
+  word: 'From the next save, a post or comment carrying it is refused as it is written, '
+    + 'its author is told which word stopped them, and the attempt is logged. Anything '
+    + 'already published is only marked for a person — nothing comes down by itself.',
+  item: 'From the next save, a listing carrying it is marked for a person to look at. '
+    + 'It is a flag, not a takedown, nothing comes down by itself.',
+};
+
 export default function PolicyPageView() {
   const { can, noteGate } = useSession();
   const [data, setData] = useState<PolicyPage | null>(null);
@@ -75,7 +85,7 @@ export default function PolicyPageView() {
             <TermPanel
               kind="word" rows={words} busy={busy} can={can('blocked_words')}
               heading="Blocked words"
-              blurb="Reported text containing one of these is marked in the queue. It is matched inside words on purpose, so a person typing around the filter is still caught."
+              blurb="A post or comment carrying one of these is refused as it is written, and reported text containing one is marked in the queue. It is matched inside words on purpose, so a person typing around the filter is still caught."
               onAdd={(text, note) => mutate('admin/policy/terms/', { kind: 'word', text, note }, `“${text.toLowerCase()}” is on the blocked list.`)}
               onSave={(id, body, label) => mutate(`admin/policy/terms/${id}/`, body, `Saved ${label}.`)}
               onDelete={(id, label) => mutate(`admin/policy/terms/${id}/`, {}, `${label} is off the list.`, 'DELETE')}
@@ -143,7 +153,7 @@ function TermPanel({
     if (!text.trim()) return;
     const sure = await confirm({
       title: `Put “${text.trim()}” on the ${KIND_LABEL[kind]} list?`,
-      body: 'From the next save, anything carrying it is marked for a person to look at. It is a flag, not a takedown, nothing comes down by itself.',
+      body: ADD_BODY[kind],
       confirmLabel: 'Add it',
       tone: 'amber',
     });
@@ -324,8 +334,8 @@ function CategoryTable({
         <div>
           <h2>Marketplace categories <em>{rows.length}</em></h2>
           <p>
-            The shelves sellers choose from. Switching one off leaves the listings that already sit
-            there; the count is what that label is worth today.
+            The shelves sellers choose from, ahead of the ones the site ships with. Switching one off
+            leaves the listings that already sit there; the count is what that label is worth today.
           </p>
         </div>
         <span className="panel-count">order is how the marketplace shows them</span>
@@ -369,7 +379,7 @@ function CategoryTable({
       )}
 
       {rows.length === 0 ? (
-        <p className="empty-note">{IC.x}<span>No categories yet, sellers are typing free text into listings.</span></p>
+        <p className="empty-note">{IC.x}<span>No categories of your own yet, so the site is selling on the default shelves it ships with.</span></p>
       ) : (
         <div className="table-scroll">
           <table className="cats">
