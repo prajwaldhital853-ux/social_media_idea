@@ -24,6 +24,17 @@ def items():
     return list(PolicyTerm.objects.filter(kind=PolicyTerm.Kind.ITEM, is_active=True).values_list('text', flat=True))
 
 
+def terms_for(kind):
+    """What a decision about this kind of thing is read against.
+
+    A listing is judged against the prohibited items too: that list is the
+    vocabulary the marketplace desk is written in, and nothing else on the
+    platform reads it, so an item added in the console would otherwise sit
+    there unquoted.
+    """
+    return words() + (items() if kind == 'listing' else [])
+
+
 def scan(text):
     """Which blocked words appear in this text. Substring, case-insensitive, no regex.
 

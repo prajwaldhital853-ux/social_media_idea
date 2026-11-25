@@ -131,8 +131,25 @@ class ListingViewSet(viewsets.ModelViewSet):
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def categories(request):
-    values = Listing.objects.exclude(status='removed').exclude(category='').values_list('category', flat=True).distinct()
-    return Response({'results': sorted(values)})
+    """The shelves a seller can pick from, in the order the console put them.
+
+    The admin console owns this list: a category added there shows up here, and
+    one switched off stops showing up. A label that already sits on live listings
+    but was never written down stays on the shelf, because hiding it would take
+    down listings whose owners never chose it, and the console cannot switch off
+    a name it has never heard.
+    """
+    from apps.adminpanel import policy
+
+    named = policy.category_names()
+    written_down = {name.lower() for name in policy.category_names(active_only=False)}
+    untracked = sorted({
+        label.strip()
+        for label in Listing.objects.exclude(status='removed').exclude(category='')
+        .values_list('category', flat=True)
+        if label.strip() and label.strip().lower() not in written_down
+    })
+    return Response({'results': named + untracked})
 
 
 @api_view(['POST'])

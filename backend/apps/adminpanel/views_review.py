@@ -150,9 +150,13 @@ def review_queue(request):
         rows = rows.filter(_named(query))
 
     terms = policy.words()
+    listing_terms = terms + policy.items()
     paginator = KeysetPagination()
     page = paginator.paginate_queryset(rows, request)
-    response = paginator.get_paginated_response([_report_row(report, terms) for report in page])
+    response = paginator.get_paginated_response([
+        _report_row(report, listing_terms if report.target_type == 'listing' else terms)
+        for report in page
+    ])
     response.data['facets'] = _facets()
     return response
 
@@ -183,7 +187,7 @@ def review_case(request):
     reports = Report.objects.filter(
         target_type=kind, target_id=str(pk),
     ).select_related('reporter', 'reporter__profile').order_by('-created_at')
-    terms = policy.words()
+    terms = policy.terms_for(kind)
     haystack = f"{(content or {}).get('text') or ''} {(content or {}).get('title') or ''}"
     decided = AuditLog.objects.filter(
         target=f'{kind}:{pk}', action__in=set(review.AUDIT.values()) | {'attach_notice', 'withdraw_notice'},
@@ -296,7 +300,7 @@ def content_shelf(request):
     paginator = KeysetPagination()
     page = paginator.paginate_queryset(rows, request)
 
-    terms = policy.words()
+    terms = policy.terms_for(kind)
     targets = [f'{kind}:{row.pk}' for row in page]
     decisions = {}
     for entry in AuditLog.objects.filter(
