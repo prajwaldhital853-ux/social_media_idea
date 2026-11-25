@@ -173,7 +173,7 @@ REST_FRAMEWORK = {
     'PAGE_SIZE': 10,
     'EXCEPTION_HANDLER': 'apps.common.errors.exception_handler',
     'DEFAULT_THROTTLE_CLASSES': [
-        'rest_framework.throttling.AnonRateThrottle',
+        'apps.common.throttles.AnonIPThrottle',
         'rest_framework.throttling.UserRateThrottle',
     ],
     'DEFAULT_THROTTLE_RATES': {
@@ -294,6 +294,10 @@ CSRF_TRUSTED_ORIGINS = _env_list('DJANGO_CSRF_TRUSTED_ORIGINS')
 
 EXPOSING_REPORT_THRESHOLD = int(os.environ.get('EXPOSING_REPORT_THRESHOLD') or '3')
 EXPOSING_RATE_LIMITS = (os.environ.get('EXPOSING_RATE_LIMITS') or '1') == '1'
+# How many trusted proxies sit in front of the app, each appending the address
+# it saw to X-Forwarded-For. Render's edge is one, so the client's real address
+# is the last hop; the ones before it are whatever the requester wrote.
+EXPOSING_NUM_PROXIES = int(os.environ.get('NUM_PROXIES') or '1')
 
 # Hosted platforms keep a log, not a file, and that log is the only way to learn
 # what a "server could not finish that request" screenshot actually was. stdout,
