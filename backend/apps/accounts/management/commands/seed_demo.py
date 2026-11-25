@@ -679,10 +679,13 @@ class Command(BaseCommand):
         for owner in self.rng.sample(self.others(self.sita), 4):
             mine = [p for p in self.all_posts if p.author_id == owner.id]
             listings = [l for l in self.listing_rows if l.seller_id == owner.id]
-            if mine or listings:
-                kind, row = ('post', self.rng.choice(mine)) if (mine and not listings or self.rng.random() < 0.7) \
-                    else ('listing', self.rng.choice(listings))
-                targets.append((kind, row, owner))
+            if not mine and not listings:
+                continue
+            if mine and (not listings or self.rng.random() < 0.7):
+                kind, row = 'post', self.rng.choice(mine)
+            else:
+                kind, row = 'listing', self.rng.choice(listings)
+            targets.append((kind, row, owner))
         statuses = ['active', 'active', 'active', 'paused', 'ended', 'active']
         rows, stamps = [], []
         self.promos = []
@@ -693,10 +696,11 @@ class Command(BaseCommand):
             budget = self.pick([Decimal('250'), Decimal('500'), Decimal('1200'), Decimal('2500')],
                                [0.4, 0.3, 0.2, 0.1])
             status = statuses[position % len(statuses)]
+            home = self.profiles[owner.id].location or owner.city
             promo = Promotion(
                 owner=owner, target_type=kind, target_id=str(row.pk), category=row.category,
                 age_min=18, age_max=self.pick([35, 45, 55, 65]), country='Nepal',
-                city=self.profiles[owner.id].location, budget=budget, package=self.pick(['starter', 'growth', 'peak']),
+                cities=[home] if home else [], budget=budget, package=self.pick(['starter', 'growth', 'peak']),
                 status=status, impressions=self.rng.randint(1200, 46000), clicks=self.rng.randint(40, 1900),
                 ends_at=(self.now - timedelta(days=self.rng.randint(2, 30)) if status == 'ended'
                          else self.now + timedelta(days=self.rng.randint(3, 21))))
