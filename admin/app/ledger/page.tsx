@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import ExcelJS from 'exceljs';
 import Banner from '@/components/Banner';
 import { useConfirm } from '@/components/Confirm';
 import ConsoleShell from '@/components/ConsoleShell';
@@ -86,14 +87,78 @@ export default function LedgerScreen() {
     }
   };
 
-  const downloadRecord = () => {
+  const downloadRecord = async () => {
     const gone = page?.deleted;
     if (!gone) return;
-    const blob = new Blob([JSON.stringify(gone.record, null, 2)], { type: 'application/json' });
+    const rec = gone.record;
+    const asNum = (v: string | number | null | undefined): string | number => {
+      if (v === null || v === undefined || v === '') return '';
+      const n = Number(v);
+      return Number.isFinite(n) ? n : String(v);
+    };
+    const book = new ExcelJS.Workbook();
+    book.creator = 'Exposing console';
+    const sheet = (name: string, widths: number[]) => {
+      const ws = book.addWorksheet(name);
+      ws.columns = widths.map(width => ({ width }));
+      return ws;
+    };
+
+    const head = sheet('Account', [24, 46]);
+    head.addRow(['Deleted account money record']).font = { bold: true, size: 13 };
+    head.addRow([]);
+    head.addRow(['Account', rec.username]);
+    head.addRow(['Email', rec.email]);
+    head.addRow(['Signed in with', rec.provider]);
+    head.addRow(['Joined', rec.joined]);
+    head.addRow(['Balance at deletion', asNum(rec.balance_at_deletion)]);
+    head.addRow(['Archived', gone.archived_at]);
+    head.addRow(['Movements kept', rec.movements.length]);
+    head.addRow(['Coin requests kept', rec.requests.length]);
+    head.addRow(['Campaigns kept', rec.campaigns.length]);
+
+    const movements = sheet('Movements', [9, 11, 36, 24, 15, 27]);
+    movements.addRow(['Kind', 'Amount', 'Note', 'Reference', 'Staff', 'Date']).font = { bold: true };
+    movements.views = [{ state: 'frozen', ySplit: 1 }];
+    rec.movements.forEach(m => movements.addRow([
+      m.kind, asNum(m.amount), m.note, m.ref, m.staff ?? '', m.created_at,
+    ]));
+
+    const requests = sheet('Coin requests', [6, 8, 10, 12, 24, 11, 27, 27]);
+    requests.addRow(['#', 'Coins', 'Amount', 'Method', 'Reference', 'Status', 'Requested', 'Reviewed']).font = { bold: true };
+    requests.views = [{ state: 'frozen', ySplit: 1 }];
+    rec.requests.forEach((r, i) => requests.addRow([
+      i + 1, asNum(r.coins), asNum(r.amount), r.method, r.reference, r.status, r.created_at, r.reviewed_at ?? '',
+    ]));
+
+    const requestsDecided = sheet('Request decisions', [12, 12, 15, 40, 14, 27]);
+    requestsDecided.addRow(['Request #', 'Action', 'Staff', 'Reason', 'Coins credited', 'Date']).font = { bold: true };
+    requestsDecided.views = [{ state: 'frozen', ySplit: 1 }];
+    rec.requests.forEach((r, i) => r.reviews.forEach(rv => requestsDecided.addRow([
+      i + 1, rv.action, rv.staff ?? '', rv.reason, asNum(rv.coins_credited), rv.created_at,
+    ])));
+
+    const campaigns = sheet('Campaigns', [6, 14, 10, 11, 26, 27, 27]);
+    campaigns.addRow(['#', 'Package', 'Budget', 'Status', 'Target', 'Started', 'Ends']).font = { bold: true };
+    campaigns.views = [{ state: 'frozen', ySplit: 1 }];
+    rec.campaigns.forEach((c, i) => campaigns.addRow([
+      i + 1, c.package, asNum(c.budget), c.status, c.target, c.starts_at ?? '', c.ends_at ?? '',
+    ]));
+
+    const campaignsDecided = sheet('Campaign decisions', [13, 12, 15, 40, 14, 10, 27]);
+    campaignsDecided.addRow(['Campaign #', 'Action', 'Staff', 'Reason', 'Coins refunded', 'Choice', 'Date']).font = { bold: true };
+    campaignsDecided.views = [{ state: 'frozen', ySplit: 1 }];
+    rec.campaigns.forEach((c, i) => c.reviews.forEach(rv => campaignsDecided.addRow([
+      i + 1, rv.action, rv.staff ?? '', rv.reason, asNum(rv.coins_refunded), rv.choice ?? '', rv.created_at,
+    ])));
+
+    const blob = new Blob([await book.xlsx.writeBuffer()], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `money-record-${gone.username}.json`;
+    link.download = `money-record-${gone.username}.xlsx`;
     link.click();
     URL.revokeObjectURL(url);
   };
@@ -163,7 +228,7 @@ export default function LedgerScreen() {
                 Every amount, reference, staff name and approval decision in it is the paper a dispute is settled from.
               </p>
             </div>
-            <button type="button" className="btn ghost" onClick={downloadRecord} title="Download the kept money record as a file">
+            <button type="button" className="btn ghost" onClick={downloadRecord} title="Download the kept money record as an Excel file">
               {IC.go}<span>Download the record</span>
             </button>
           </div>
