@@ -826,6 +826,17 @@ button.link:disabled:hover { color: var(--muted); text-decoration: none; }
   scrollbar-gutter: stable;
 }
 
+/* `flow` is for a list that owns the whole desk, with no seat parked beside it to
+   keep in view: the rows run to their end and the page carries the scroll. Held to
+   the window height such a list shows a second rail inside the first one, and the
+   rows below that rail are only reachable by finding it. */
+.grid-wrap.flow {
+  max-height: none;
+  overflow-y: visible;
+  overscroll-behavior: auto;
+  scrollbar-gutter: auto;
+}
+
 .grid { width: 100%; min-width: 0; border-collapse: collapse; }
 .grid.review { table-layout: auto; }
 .grid.review tr.grid-row > td { overflow: visible; }
