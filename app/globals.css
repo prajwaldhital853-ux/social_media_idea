@@ -2743,6 +2743,13 @@ a.trend-item:hover { text-decoration: none; }
 .comment-bubble { display: inline-block; max-width: 100%; background: var(--surface); padding: 9px 12px; border-radius: 0 16px 16px 16px; }
 .comment-bubble > div { display: flex; align-items: center; gap: 4px; font-size: 12px; }
 .comment-bubble p { margin: 3px 0 0; font-size: 13px; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; }
+/* Both the face and the name open the profile, and neither may look like a
+   link: a comment row that carries blue text reads as a quote, not an author. */
+.comment-author-avatar { flex: none; display: block; }
+.comment-author { color: inherit; }
+.comment-author:hover { text-decoration: none; }
+.comment-author b { font-weight: 700; }
+.comment-author:hover b { text-decoration: underline; }
 .comments-content .comment-meta { font-size: 10px; padding-left: 8px; margin: 0; gap: 12px; }
 .comments-content .action-btn { font-size: 10px; }
 .comments-content .action-btn svg { width: 15px; height: 15px; }
