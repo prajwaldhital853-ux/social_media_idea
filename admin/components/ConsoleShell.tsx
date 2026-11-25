@@ -22,6 +22,17 @@ function ago(minutes: number): string {
   return `${Math.floor(hours / 24)}d ago`;
 }
 
+/** The tray mixes six kinds of arrival; the two words in front of each line say
+ *  which queue it came from, the same way the drawer names the desk it opens. */
+const KIND_LABEL: Record<string, string> = {
+  alert: 'Alert',
+  report: 'Report',
+  coin_request: 'Coins',
+  coin_proof: 'Proof',
+  signup: 'Joined',
+  promotion: 'Campaign',
+};
+
 /**
  * The list a nested page belongs to, for the seat that opened it in a fresh tab
  * or reloaded it and has no history to walk back into. A user's page is still
@@ -259,6 +270,7 @@ export default function ConsoleShell({
                         <li key={item.id}>
                           <button type="button" className={`bell-item kind-${item.kind}`}
                                   onClick={() => openTray(item.href, item.id)}>
+                            <span className="bell-item-kind">{KIND_LABEL[item.kind] || item.kind}</span>
                             <span className="bell-item-text">{item.text}</span>
                             <span className="bell-item-ago">{ago(item.age_minutes)}</span>
                           </button>

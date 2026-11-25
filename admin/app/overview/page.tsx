@@ -8,14 +8,13 @@ import { api } from '@/lib/api';
 import { bytes as humanBytes, money, num, percent, waiting } from '@/lib/format';
 import { IC } from '@/lib/icons';
 import { shipped } from '@/lib/nav';
-import { ago, stamp } from '@/lib/time';
+import { stamp } from '@/lib/time';
 import { useSession } from '@/lib/session';
-import { AlertRow, CampaignRow, Overview, PromotionAnalytics, SeriesPoint, Threshold, Tile } from '@/lib/types';
+import { CampaignRow, Overview, PromotionAnalytics, SeriesPoint, Threshold, Tile } from '@/lib/types';
 
 const REFRESH_EVERY = 60000;
 /** Rows either dashboard panel shows before it asks for another page. */
 const PAGE = 7;
-const SEVERITY_LABEL: Record<string, string> = { info: 'Note', warning: 'Needs a look', critical: 'Urgent' };
 const TARGET_LABEL: Record<string, string> = { post: 'posts', comment: 'comments', user: 'people', listing: 'listings' };
 
 /** One hue per tile, shared by that tile's sparkline and by whatever chart the
@@ -121,8 +120,6 @@ export default function OverviewPage() {
           </div>
 
           <MakeUp tiles={data.tiles}/>
-
-          <AlertFeed key={data.generated_at} alerts={data.alerts}/>
 
           <section className="panel performance">
             <header className="panel-head">
@@ -460,89 +457,6 @@ function Spark({ points }: { points: SeriesPoint[] }) {
       {line && <polyline className="spark-line" points={line}/>}
       <circle className="spark-end" cx={width} cy={height - (last / peak) * (height - 3) - 1.5} r="1.8"/>
     </svg>
-  );
-}
-
-function AlertFeed({ alerts }: { alerts: Overview['alerts'] }) {
-  const { noteGate } = useSession();
-  const [rows, setRows] = useState(alerts.recent);
-  const [busy, setBusy] = useState(false);
-  const [failed, setFailed] = useState('');
-  const more = rows.length < alerts.total;
-  const { counts } = alerts;
-
-  const loadMore = async () => {
-    setBusy(true);
-    setFailed('');
-    try {
-      const page = await api<{ rows: AlertRow[] }>(`admin/analytics/alerts/?limit=${PAGE}&offset=${rows.length}`);
-      setRows(current => [...current, ...page.rows]);
-    } catch (err) {
-      if (!noteGate(err)) setFailed((err as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <section className="panel alerts">
-      <header className="panel-head">
-        <div>
-          <h2>Alerts</h2>
-          <p>Raised by the platform itself, from the queues and limits on this screen.</p>
-        </div>
-        <span className="panel-count" data-alert-counts>
-          {counts.attention} need a look · {counts.unwired} condition{counts.unwired === 1 ? '' : 's'} nothing
-          reports on yet · {counts.open} open, {counts.acked} acknowledged, {counts.resolved} resolved
-        </span>
-      </header>
-
-      {!rows.length ? (
-        <p className="empty-note">{IC.check} Nothing is asking for attention. Alerts appear the moment a queue ages past its limit.</p>
-      ) : (
-        <>
-          <ul className={`alert-list${rows.length > PAGE ? ' capped' : ''}`}>
-            {rows.map(row => <AlertItem key={row.key} row={row}/>)}
-          </ul>
-          {alerts.total > PAGE && (
-            <div className="panel-more" data-alert-more>
-              <span>{rows.length} of {alerts.total} shown{more ? '' : ', that is all of them'}</span>
-              {more && (
-                <button type="button" className="btn ghost tiny" disabled={busy} onClick={loadMore}>
-                  <span>{busy ? 'Reading…' : 'Load more'}</span>
-                </button>
-              )}
-            </div>
-          )}
-          {failed && <p className="card-error" role="status">{IC.alert}<span>{failed}</span></p>}
-        </>
-      )}
-    </section>
-  );
-}
-
-function AlertItem({ row }: { row: AlertRow }) {
-  const { session } = useSession();
-  const target = row.status === 'open' && row.href
-    && shipped(row.href, session?.permissions || [], session?.role) ? row.href : null;
-  return (
-    <li className={`alert alert-${row.severity} alert-${row.status}`}>
-      <span className="alert-dot" title={SEVERITY_LABEL[row.severity] || row.severity}/>
-      <div className="alert-body">
-        <b>{row.title}</b>
-        <p>{row.detail}</p>
-        <span className="alert-meta">
-          <span className={`pill ${row.status}`}>{row.status}</span>
-          {row.occurrences > 1 && <span>seen {row.occurrences}× since {ago(row.first_seen)}</span>}
-          <span>{ago(row.last_seen)}</span>
-          {row.acked_by && <span>acknowledged by @{row.acked_by}</span>}
-          {row.resolved_at && <span>cleared {ago(row.resolved_at)}</span>}
-        </span>
-      </div>
-      {target
-        ? <Link className="btn ghost alert-go" href={target}>Open{IC.go}</Link>
-        : row.href && <span className="alert-here">{(row.href.split('?')[0] || '').slice(1).replace(/-/g, ' ')}</span>}
-    </li>
   );
 }
 

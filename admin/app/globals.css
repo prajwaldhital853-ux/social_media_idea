@@ -7,6 +7,10 @@
      native pickers, the form widgets. The console decides its own theme, so this
      never follows the operating system. */
   color-scheme: light;
+  /* The strip above every screen holds the top on wide desks, and anything
+     else that sticks has to clear its height. On the drawer width it does
+     not stick, so the clearance is nothing. */
+  --bar-h: 0px;
   --ink: #101114;
   --muted: #6B7280;
   --line: #DDE1E6;
@@ -168,7 +172,11 @@ em { font-style: normal; }
 
 .side-signout:hover { color: var(--brand-d); background: var(--brand-tint); }
 
-/* The strip above every screen: what page this is, and the way back. */
+/* The strip above every screen: what page this is, and the way back. It stays
+   put when the screen scrolls, because the search, the seat and the bell are
+   worth more than the four rows of text they used to push off the top. Under
+   the drawer width the brand strip already holds the top, so two sticky rows
+   would only cover each other. */
 .bar {
   display: flex;
   align-items: center;
@@ -176,6 +184,11 @@ em { font-style: normal; }
   padding: 9px 20px;
   border-bottom: 1px solid var(--line);
   background: var(--paper);
+}
+
+@media (min-width: 781px) {
+  :root { --bar-h: 49px; }
+  .bar { position: sticky; top: 0; z-index: 1200; }
 }
 
 .bar-query {
@@ -812,7 +825,7 @@ button.link:disabled:hover { color: var(--muted); text-decoration: none; }
 
 .grid thead th {
   position: sticky;
-  top: 0;
+  top: var(--bar-h);
   z-index: 2;
   padding: 8px 10px;
   text-align: left;
@@ -981,7 +994,7 @@ button.link:disabled:hover { color: var(--muted); text-decoration: none; }
 
 .record-acts {
   position: sticky;
-  top: 14px;
+  top: calc(var(--bar-h) + 14px);
   padding: 14px 15px 16px;
   border: 1px solid var(--line);
   border-radius: var(--radius);
@@ -1214,46 +1227,6 @@ button.key:hover { border-color: #c3c9d1; color: var(--ink); background: #F7F8FA
 
 .empty-note { display: flex; align-items: center; gap: 9px; color: var(--muted); font-size: 13px; }
 .empty-note svg { color: var(--green); flex: none; }
-
-.alerts { margin-bottom: 16px; }
-
-.alert-list { display: flex; flex-direction: column; gap: 0; margin: 0; padding: 0; list-style: none; }
-
-/* Both dashboard panels show seven rows with the page and cap the trail there:
-   a long history scrolls inside its own panel instead of pushing the next
-   section off the screen. The heights are seven rows of each panel's own line
-   rhythm, so they drift a little when a detail wraps, the scroll is the point,
-   not an exact number of rows. */
-.alert-list.capped {
-  max-height: 600px;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  scrollbar-gutter: stable;
-  padding-right: 6px;
-}
-
-.alert {
-  display: grid;
-  grid-template-columns: 12px 1fr auto;
-  gap: 12px;
-  align-items: center;
-  padding: 13px 2px;
-  border-top: 1px solid var(--line);
-  animation: rise 0.3s var(--ease) both;
-}
-
-.alert:first-child { border-top: 0; }
-.alert-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--amber); }
-.alert-critical .alert-dot { background: var(--red); }
-.alert-info .alert-dot { background: #7C8896; }
-.alert-resolved, .alert-acked { opacity: 0.62; }
-.alert-resolved .alert-dot, .alert-acked .alert-dot { background: var(--green); }
-
-.alert-body b { font-size: 13.6px; }
-.alert-body p { color: var(--muted); font-size: 12.6px; margin-top: 2px; max-width: 78ch; }
-.alert-meta { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; margin-top: 6px; color: var(--muted); font-size: 11.6px; }
-.alert-go { align-self: center; }
-.alert-here { color: var(--muted); font-size: 11.8px; text-align: right; max-width: 12ch; }
 
 .pill.open { background: var(--amber-tint); color: var(--amber-ink); }
 .pill.acked { background: var(--tint); color: var(--muted); }
@@ -2488,8 +2461,6 @@ button.key:hover { border-color: #c3c9d1; color: var(--ink); background: #F7F8FA
   .health { padding: 11px 12px; }
   .health-summary { white-space: normal; }
   .tile-grid { grid-template-columns: minmax(0, 1fr); }
-  .alert { grid-template-columns: 12px minmax(0, 1fr); gap: 9px; }
-  .alert-go, .alert-here { grid-column: 2; justify-self: start; max-width: none; text-align: left; }
   .prompt-actions { flex-direction: column; align-items: stretch; gap: 12px; }
   .prompt-right { justify-content: flex-end; flex-wrap: wrap; }
   .ask-actions { flex-wrap: wrap; }
@@ -2578,24 +2549,46 @@ button.key:hover { border-color: #c3c9d1; color: var(--ink); background: #F7F8FA
 
 .bell-tray-head b { font-size: 12.5px; }
 
-.bell-list { list-style: none; margin: 0; padding: 4px; max-height: 340px; overflow-y: auto; }
+/* The tray is a queue, not a card: the same dense hairline rows the lists use,
+   capped so a busy desk scrolls inside the tray instead of growing a second
+   page beside the bell. */
+.bell-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 340px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
 .bell-list + .bell-list { border-top: 1px solid var(--line); }
+.bell-list li + li { border-top: 1px solid var(--line); }
 
 .bell-item {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
+  gap: 9px;
   width: 100%;
-  padding: 8px 9px;
+  padding: 8px 11px;
   border: 0;
-  border-radius: 6px;
   background: none;
   text-align: left;
-  font-size: 12.8px;
+  font-size: 12.6px;
   color: var(--ink);
 }
 
 .bell-item:hover { background: var(--tint); }
+.bell-item-kind {
+  flex: none;
+  min-width: 58px;
+  color: var(--muted);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding-top: 1px;
+}
+.bell-item.kind-alert .bell-item-kind { color: var(--brand); }
 .bell-item-text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .bell-item-ago { flex: none; color: var(--muted); font-size: 11px; padding-top: 1px; }
 .bell-item::before {
@@ -2747,7 +2740,6 @@ button.key:hover { border-color: #c3c9d1; color: var(--ink); background: #F7F8FA
 [data-theme='dark'] .quote { background: #12151A; }
 [data-theme='dark'] .health-unknown { border-left-color: #3A404A; }
 [data-theme='dark'] .health-unknown .health-dot { background: #6E7681; }
-[data-theme='dark'] .alert-info .alert-dot { background: #7C8896; }
 
 [data-theme='dark'] .ctext,
 [data-theme='dark'] .cmd { color: #DCE1E7; }
