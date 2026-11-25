@@ -1,7 +1,8 @@
+from contextlib import contextmanager
 from decimal import Decimal
 
 from django.conf import settings
-from django.db import models, transaction
+from django.db import connection, models, transaction
 from django.db.models import F
 
 
@@ -120,3 +121,20 @@ def apply(wallet_id, kind, amount, note='', actor=None, ref=''):
         Wallet.objects.filter(pk=wallet.pk).update(balance=F('balance') + delta)
         return Transaction.objects.create(wallet=wallet, kind=kind, amount=amount,
                                           note=note[:200], actor=actor, ref=str(ref or '')[:80])
+
+
+@contextmanager
+def purging_ledger():
+    """Allow the wrapped cascade to delete ledger rows, and nothing else.
+
+    The database trigger behind the append-only guarantee rejects every UPDATE,
+    and every DELETE the transaction did not explicitly ask for. Only the
+    account-deletion cascades may remove rows — the money record is copied to
+    the archive first — and SET LOCAL dies with the transaction it was set in,
+    so the permission can never outlive the delete it was granted to.
+    """
+    with transaction.atomic():
+        cursor = connection.cursor()
+        cursor.execute("SET LOCAL exposing.ledger_purge = 'on'")
+        cursor.close()
+        yield

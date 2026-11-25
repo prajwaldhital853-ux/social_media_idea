@@ -18,6 +18,7 @@ from rest_framework.response import Response
 from apps.common.emails import queue_welcome_email
 from apps.common.ratelimit import client_ip, enforce
 from apps.profiles.models import Profile
+from apps.wallet.models import purging_ledger
 
 from .auth import (
     clear_auth_cookies, decode_token, hash_code, set_auth_cookies,
@@ -529,7 +530,8 @@ def _verify_otp(request, force_purpose=None):
         # reach MediaBlob, and a blob left behind is somebody's face in a table
         # nobody can see it from.
         _purge_media(user)
-        user.delete()
+        with purging_ledger():
+            user.delete()
         response = Response({'detail': 'Your account and all of its data have been deleted.'})
         return clear_auth_cookies(response)
     if otp.purpose == 'unlock':

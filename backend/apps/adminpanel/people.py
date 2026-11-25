@@ -36,7 +36,7 @@ from apps.moderation.models import AuditLog, Report
 from apps.notifications.services import notify
 from apps.posts.models import Post
 from apps.promotions.models import Promotion
-from apps.wallet.models import CoinRequest, DeletedWalletRecord, Transaction, Wallet
+from apps.wallet.models import CoinRequest, DeletedWalletRecord, Transaction, Wallet, purging_ledger
 
 from . import rbac, review, settings_store, spam
 from .journal import record
@@ -835,7 +835,11 @@ def delete(user, caller, *, confirm, reason=''):
                                     f'Your Exposing account @{username} was deleted by the Exposing team. '
                                     f'Reason: {reason}. Your posts, comments, listings and wallet went with '
                                     'it, and this cannot be undone.')
-        account.delete()
+        # The cascade takes the wallet and its ledger rows with the account, and
+        # the ledger trigger only lets a transaction that asked for a purge
+        # remove them — this one did, after the archive copy above.
+        with purging_ledger():
+            account.delete()
     return {
         'action': 'delete', 'username': username, 'holdings': held, 'emailed': emailed,
         'detail': (f'@{username} is deleted, with their {held["posts"]} post(s), '
