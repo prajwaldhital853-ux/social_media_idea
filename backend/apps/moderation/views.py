@@ -7,9 +7,10 @@ from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import serializers, status
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import IsAdminUser, IsAuthenticated
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from apps.adminpanel import rbac
 from apps.accounts.models import User
 from apps.comments.models import Comment
 from apps.common.emails import queue_report_email
@@ -121,7 +122,8 @@ def _remove_target(report, actor):
 
 
 @api_view(['POST'])
-@permission_classes([IsAdminUser])
+@permission_classes([IsAuthenticated])
+@rbac.staff_only('reports')
 def report_action(request, pk, action):
     report = get_object_or_404(Report, pk=pk)
     if report.status not in (Report.Status.OPEN, Report.Status.REVIEWING):
@@ -142,7 +144,8 @@ def report_action(request, pk, action):
 
 
 @api_view(['POST'])
-@permission_classes([IsAdminUser])
+@permission_classes([IsAuthenticated])
+@rbac.staff_only('user_actions')
 def suspend(request, username):
     user = get_object_or_404(User, username=username)
     days = int(request.data.get('days', 7))
@@ -156,7 +159,8 @@ def suspend(request, username):
 
 
 @api_view(['POST'])
-@permission_classes([IsAdminUser])
+@permission_classes([IsAuthenticated])
+@rbac.staff_only('user_actions')
 def reinstate(request, username):
     user = get_object_or_404(User, username=username)
     user.suspended_until = None
@@ -168,7 +172,8 @@ def reinstate(request, username):
 
 
 @api_view(['GET'])
-@permission_classes([IsAdminUser])
+@permission_classes([IsAuthenticated])
+@rbac.staff_only('audit')
 def audit_log(request):
     paginator = KeysetPagination()
     rows = paginator.paginate_queryset(AuditLog.objects.select_related('actor'), request)
@@ -180,7 +185,8 @@ def audit_log(request):
 
 
 @api_view(['GET'])
-@permission_classes([IsAdminUser])
+@permission_classes([IsAuthenticated])
+@rbac.staff_only('users')
 def user_directory(request):
     """The member roster the admin console works on: accounts, balances and moderation state."""
     qs = (

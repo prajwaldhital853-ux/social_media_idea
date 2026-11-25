@@ -2,9 +2,10 @@ from django.db import transaction
 from django.utils import timezone
 from rest_framework import serializers, status
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import IsAdminUser, IsAuthenticated
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from apps.adminpanel import rbac
 from apps.adminpanel.journal import record
 from apps.common.emails import queue_coin_decision_email
 from apps.common.pagination import KeysetPagination
@@ -151,7 +152,8 @@ def coin_proof_resubmit(request, pk):
 
 
 @api_view(['POST'])
-@permission_classes([IsAdminUser])
+@permission_classes([IsAuthenticated])
+@rbac.staff_only('coins_review')
 def coin_request_review(request, pk, action):
     if action not in ('approve', 'reject'):
         return Response({'detail': 'Unknown action.'}, status=400)
