@@ -174,6 +174,13 @@ DEFAULTS = {
     'report_inbox': ('', 'str', 'Complaints inbox',
                      'A copy of every report is mailed here as it arrives. Empty keeps complaints '
                      'inside the console queue.', 'platform'),
+    # The console is deployed apart from the member site, so a letter that invites
+    # somebody to sign in cannot guess its address. It is a setting for the same
+    # reason the Client asked for the complaints inbox: a domain can move, and a
+    # deploy should not be the only way to follow it.
+    'console_url': ('https://admin-blue-three-56.vercel.app', 'str', 'Console address',
+                    'The link a new staff seat is sent to, and the door that letter opens. '
+                    'Empty sends staff letters to the member site instead.', 'platform'),
     # Contract 6.6: the wording a visitor reads the first time the site loads. The
     # Client has seven days to supply it, so the platform ships with its own line
     # rather than an empty box, and a box cleared on purpose falls back to it.

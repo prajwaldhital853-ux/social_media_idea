@@ -11,6 +11,14 @@ import { useSession } from '@/lib/session';
 import { WelcomeDesk, WelcomeLine, WelcomeMail } from '@/lib/types';
 
 const ADDRESS = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+const LINK = /^https?:\/\/[^\s@]+\.[^\s@]{2,}$/i;
+// The two boxes that steer where the platform's own letters go. They are written
+// beside the mail status rather than among the sentences a visitor reads.
+const MAIL_FIELDS = ['report_inbox', 'console_url'];
+const MAIL_PLACEHOLDERS: Record<string, string> = {
+  report_inbox: 'complaints@example.com',
+  console_url: 'https://admin.exposing.app',
+};
 
 export default function WelcomePage() {
   const { noteGate } = useSession();
@@ -36,13 +44,13 @@ export default function WelcomePage() {
 
   const line = (field: string): WelcomeLine | undefined => desk?.lines.find(item => item.field === field);
   const valueOf = (field: string) => draft[field] ?? line(field)?.value ?? '';
-  const inbox = line('report_inbox');
-  // The inbox is a mail setting, not a sentence a visitor reads, so it is written
-  // on its own and stays out of the wording save.
-  const editable = desk?.lines.filter(item => item.field !== 'report_inbox') ?? [];
+  const mailOf = (field: string) => draft[field] ?? line(field)?.value ?? '';
+  // A mail setting is not a sentence a visitor reads, so it stays out of the
+  // wording save and is written on its own from the mail panel.
+  const mailLines = desk?.lines.filter(item => MAIL_FIELDS.includes(item.field)) ?? [];
+  const editable = desk?.lines.filter(item => !MAIL_FIELDS.includes(item.field)) ?? [];
   const dirty = !!desk && editable.some(item => (draft[item.field] ?? item.value) !== item.value);
-  const inboxDraft = draft.report_inbox ?? inbox?.value ?? '';
-  const inboxDirty = !!inbox && inboxDraft.trim() !== (inbox.value ?? '');
+  const mailDirty = mailLines.some(item => mailOf(item.field).trim() !== (item.value ?? ''));
 
   const save = async () => {
     if (!desk) return;
@@ -92,25 +100,33 @@ export default function WelcomePage() {
     }
   };
 
-  const saveInbox = async () => {
-    const address = inboxDraft.trim();
+  const saveMail = async () => {
+    const address = mailOf('report_inbox').trim();
     if (address && !ADDRESS.test(address)) {
-      setBanner({ kind: 'bad', text: 'Write a whole email address, or leave the box empty to keep complaints inside the console.' });
+      setBanner({ kind: 'bad', text: 'Write a whole email address, or leave the complaints box empty to keep reports inside the console.' });
       return;
     }
+    const door = mailOf('console_url').trim();
+    if (door && !LINK.test(door)) {
+      setBanner({ kind: 'bad', text: 'The console address needs the whole link, starting with https://, or leave it empty and staff letters point at the member site.' });
+      return;
+    }
+    const moved = mailLines.filter(item => mailOf(item.field).trim() !== (item.value ?? ''));
     const sure = await confirm({
-      title: address ? 'Move the complaints inbox?' : 'Close the complaints inbox?',
-      body: address
-        ? `Every report a member files is copied to ${address} as it arrives, with the reporter, the thing reported and their words. Nobody else is told the address.`
-        : 'Reports stop being emailed and are only visible in the console review queue.',
-      confirmLabel: address ? 'Save the inbox' : 'Stop the copies',
+      title: moved.length === 1 ? `Change the ${moved[0].label.toLowerCase()}?` : 'Change where the console posts?',
+      body: 'These two decide where the platform letters go: complaints are copied to the inbox as '
+        + 'they arrive, and a new staff seat is mailed its sign-in, its password and the link it opens. '
+        + 'Both take effect on the next letter the platform posts.',
+      confirmLabel: 'Save the mail settings',
       tone: 'amber',
     });
     if (!sure) return;
     setBusy(true);
     setBanner(null);
     try {
-      const out = await api<WelcomeDesk>('admin/welcome/', { method: 'POST', body: { report_inbox: address } });
+      const body: Record<string, string> = {};
+      mailLines.forEach(item => { body[item.field] = mailOf(item.field).trim(); });
+      const out = await api<WelcomeDesk>('admin/welcome/', { method: 'POST', body });
       setDesk(out);
       setDraft({});
       setBanner({ kind: 'ok', text: out.detail || 'Saved.' });
@@ -241,9 +257,10 @@ export default function WelcomePage() {
               <div>
                 <h2>Mail as this deployment can send it</h2>
                 <p>
-                  A coin receipt, a promotion decision, a warning, a complaint and a first letter are
-                  each also an email. This is what those letters pass through, read off the server
-                  rather than guessed from an inbox that stays quiet.
+                  A coin receipt, a promotion decision, a warning, a complaint, a new staff seat and
+                  a first letter are each also an email. This is what those letters pass through, and
+                  where two of them are told to go, read off the server rather than guessed from an
+                  inbox that stays quiet.
                 </p>
               </div>
             </div>
@@ -275,41 +292,45 @@ export default function WelcomePage() {
               </div>
             )}
 
-            {inbox && (
+            {mailLines.length > 0 && (
               <>
-                <label className="field" data-mail="inbox">
-                  <span>
-                    {inbox.label}{' '}
-                    <em>{inboxDraft.length}/{inbox.limit}</em>
-                  </span>
-                  <input
-                    name="report_inbox" type="email" maxLength={inbox.limit} autoComplete="off"
-                    value={inboxDraft}
-                    placeholder="complaints@example.com"
-                    onChange={event => setDraft({ ...draft, report_inbox: event.target.value })}
-                  />
-                  <em className="welcome-who">
-                    {inbox.set
-                      ? <>written by <b>{inbox.by}</b> {ago(inbox.at || '')}, {inbox.help}</>
-                      : <>never written, so nothing is mailed — {inbox.help.toLowerCase()}</>}
-                  </em>
-                </label>
+                {mailLines.map(item => (
+                  <label className="field" data-mail={item.field} key={item.field}>
+                    <span>
+                      {item.label}{' '}
+                      <em>{mailOf(item.field).length}/{item.limit}</em>
+                    </span>
+                    <input
+                      name={item.field}
+                      type={item.field === 'report_inbox' ? 'email' : 'text'}
+                      maxLength={item.limit} autoComplete="off" spellCheck={false}
+                      value={mailOf(item.field)}
+                      placeholder={MAIL_PLACEHOLDERS[item.field] || item.default}
+                      onChange={event => setDraft({ ...draft, [item.field]: event.target.value })}
+                    />
+                    <em className="welcome-who">
+                      {item.set
+                        ? <>written by <b>{item.by}</b> {ago(item.at || '')}, {item.help}</>
+                        : <>still the platform’s own value and never written here — {item.help.toLowerCase()}</>}
+                    </em>
+                  </label>
+                ))}
 
                 <div className="ask-actions">
                   <button
                     type="button" className={`btn primary${busy ? ' spinning' : ''}`}
-                    disabled={busy || !inboxDirty}
-                    title={inboxDirty ? 'Write the complaints inbox' : 'The address has not changed'}
-                    onClick={saveInbox}
+                    disabled={busy || !mailDirty}
+                    title={mailDirty ? 'Write where these letters go' : 'Nothing has changed yet'}
+                    onClick={saveMail}
                   >
-                    {IC.check}<span>{busy ? 'Working…' : 'Save the inbox'}</span>
+                    {IC.check}<span>{busy ? 'Working…' : 'Save the mail settings'}</span>
                   </button>
-                  {inboxDirty && (
+                  {mailDirty && (
                     <button
                       type="button" className="btn ghost" disabled={busy}
                       onClick={() => setDraft(current => {
                         const next = { ...current };
-                        delete next.report_inbox;
+                        MAIL_FIELDS.forEach(field => { delete next[field]; });
                         return next;
                       })}
                     >

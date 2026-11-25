@@ -65,7 +65,7 @@ class CardTests(WelcomeTestCase):
         page = self.desk().get(DESK_URL)
         self.assertEqual(page.status_code, 200)
         self.assertEqual([line['field'] for line in page.data['lines']],
-                         ['message', 'tagline', 'email', 'phone', 'form'])
+                         ['message', 'tagline', 'email', 'phone', 'form', 'report_inbox', 'console_url'])
         message = page.data['lines'][0]
         self.assertEqual(message['limit'], 300)
         self.assertTrue(message['value'])
