@@ -8885,3 +8885,29 @@ html { overscroll-behavior-y: none; }
 }
 .edit-remove-btn svg { width: 15px; height: 15px; }
 .edit-remove-btn:hover { color: var(--red); }
+
+/* A refused write paints its blocked words where they sit: the echo is a
+   transparent twin of the field it covers, so the red marks land on the exact
+   letters the server named instead of the word living somewhere in a paragraph. */
+.field-echo-wrap { position: relative; display: block; }
+.compose-field { position: relative; flex: 1; min-width: 0; display: flex; }
+.blocked-echo {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  border: 0;
+  background: transparent;
+  overflow: hidden;
+  pointer-events: none;
+  color: transparent;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  z-index: 1;
+}
+.blocked-echo.one-line { display: flex; align-items: center; white-space: pre; overflow-wrap: normal; }
+.blocked-echo mark {
+  background: rgba(239, 68, 68, 0.22);
+  color: transparent;
+  border-radius: 3px;
+  box-shadow: inset 0 -2px 0 rgba(239, 68, 68, 0.85);
+}

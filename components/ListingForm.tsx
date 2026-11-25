@@ -11,6 +11,7 @@ import { IC } from '@/lib/icons';
 import { mediaFromFile } from '@/lib/mediaFile';
 import { uid } from '@/lib/utils';
 import { Media } from '@/lib/types';
+import BlockedEcho from './BlockedEcho';
 
 interface ListingFormProps {
   onClose: () => void;
@@ -51,9 +52,12 @@ export default function ListingForm({ onClose, onSaved, listingId }: ListingForm
   const [media, setMedia] = useState<Media[]>(existing?.media || []);
   const [url, setUrl] = useState('');
   const [error, setError] = useState('');
+  const [blocked, setBlocked] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [sending, setSending] = useState<{ name: string; pct: number } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const titleRef = useRef<HTMLInputElement>(null);
+  const descRef = useRef<HTMLTextAreaElement>(null);
   useBackClose(true, onClose);
   // While the sheet is open it is the page: without this the marketplace behind
   // it scrolls under the form and the reader loses the row they came from.
@@ -130,10 +134,13 @@ export default function ListingForm({ onClose, onSaved, listingId }: ListingForm
         merge({ listings: [mapListing(row)] });
         // The market, the seller's grid and every saved page all list this row.
         ['market', 'profile-listings', 'saved-listings'].forEach(forgetLists);
+        setBlocked([]);
         showToast(existing ? t('listingUpdated') : t('listingCreated'));
         onSaved(String(row.id));
         onClose();
       } catch (err) {
+        const data = (err as { data?: { blocked?: string[] } })?.data;
+        if (data?.blocked?.length) setBlocked(data.blocked);
         setError(err instanceof Error ? err.message : 'The listing could not be saved.');
         setBusy(false);
       }
@@ -170,17 +177,24 @@ export default function ListingForm({ onClose, onSaved, listingId }: ListingForm
         <form className="listing-form" onSubmit={submit}>
           <label className="field">
             <span>{t('listingTitle')}</span>
-            <input value={title} onChange={e => setTitle(e.target.value)} maxLength={90} placeholder={t('listingTitle')}/>
+            <span className="field-echo-wrap">
+              <input ref={titleRef} value={title} onChange={e => setTitle(e.target.value)} maxLength={90} placeholder={t('listingTitle')}/>
+              <BlockedEcho text={title} words={blocked} fieldRef={titleRef} />
+            </span>
           </label>
           <label className="field">
             <span>{t('description')}</span>
-            <textarea
-              value={desc}
-              onChange={e => setDesc(capWords(e.target.value))}
-              maxLength={5000}
-              rows={3}
-              placeholder={t('description')}
-            />
+            <span className="field-echo-wrap">
+              <textarea
+                ref={descRef}
+                value={desc}
+                onChange={e => setDesc(capWords(e.target.value))}
+                maxLength={5000}
+                rows={3}
+                placeholder={t('description')}
+              />
+              <BlockedEcho text={desc} words={blocked} fieldRef={descRef} />
+            </span>
             <span className="field-count">{wordsOf(desc)}/{MAX_WORDS}</span>
           </label>
           <div className="field-row">

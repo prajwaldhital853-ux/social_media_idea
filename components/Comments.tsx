@@ -16,6 +16,7 @@ import ReactionButton from './ReactionButton';
 import ReactionIcon from './ReactionIcon';
 import NoticeBanner from './NoticeBanner';
 import ReportModal from './ReportModal';
+import BlockedEcho from './BlockedEcho';
 
 const SUGGESTIONS = ['Nice!', 'Beautiful!', 'Congrats!', 'Love this!', 'Amazing!', 'So good!', 'Well done!'];
 const EMOJIS = ['😀', '😂', '🥰', '😍', '😎', '🤩', '😢', '😡', '👍', '👏', '🙏', '🔥', '❤️', '💯', '🎉', '✨', '🌸', '🍜', '🏔️', '📸', '🥳', '😴', '🤔', '😅', '😊', '🙌', '👌', '✌️', '💖', '😭', '🤣', '💪', '😇', '🥺', '😤', '🤯', '😋', '😘', '😜', '🤗'];
@@ -38,6 +39,7 @@ function CommentText({ text, replyToName }: { text: string; replyToName?: string
 export default function Comments({ postId, onClose, mediaIndex }: { postId: string; onClose?: () => void; mediaIndex?: number }) {
   const { db, me, addComment, deleteComment, react, myReaction, reactionCount, reactionMix, t, serverMode, showToast } = useApp();
   const [text, setText] = useState('');
+  const [blocked, setBlocked] = useState<string[]>([]);
   const [sending, setSending] = useState(false);
   const [sort, setSort] = useState('newest');
   const [replyingTo, setReplyingTo] = useState<{ id: string; name: string } | null>(null);
@@ -199,11 +201,13 @@ export default function Comments({ postId, onClose, mediaIndex }: { postId: stri
       });
     } catch (err: any) {
       // Keep the draft in the box; a rejected comment must not silently vanish.
+      if (err?.data?.blocked?.length) setBlocked(err.data.blocked);
       showToast(err?.message || 'Could not send your comment.');
       setSending(false);
       return;
     }
     setSending(false);
+    setBlocked([]);
     if (serverMode) {
       if (parentId) pushListRow(`replies:${parentId}`, { parent: parentId }, saved.id);
       else pushListRow(`comments:${targetId}`, streamQuery, saved.id);
@@ -471,21 +475,24 @@ export default function Comments({ postId, onClose, mediaIndex }: { postId: stri
           )}
           <div className="compose-row">
             <Avatar user={me} size={30} />
-            <input
-              ref={inputRef}
-              type="text"
-              name="comment"
-              autoComplete="off"
-              autoCapitalize="sentences"
-              autoCorrect="on"
-              inputMode="text"
-              enterKeyHint="send"
-              aria-label="Write a comment"
-              placeholder={replyingTo ? 'Write a reply…' : `Comment as ${me.name}`}
-              maxLength={1000}
-              value={text}
-              onChange={e => setText(e.target.value)}
-            />
+            <div className="compose-field">
+              <input
+                ref={inputRef}
+                type="text"
+                name="comment"
+                autoComplete="off"
+                autoCapitalize="sentences"
+                autoCorrect="on"
+                inputMode="text"
+                enterKeyHint="send"
+                aria-label="Write a comment"
+                placeholder={replyingTo ? 'Write a reply…' : `Comment as ${me.name}`}
+                maxLength={1000}
+                value={text}
+                onChange={e => setText(e.target.value)}
+              />
+              <BlockedEcho text={text} words={blocked} fieldRef={inputRef} />
+            </div>
             <button type="button" className="emoji-btn" aria-label="Emoji" aria-expanded={emojiOpen} onPointerDown={e => e.preventDefault()} onClick={() => { setEmojiOpen(v => !v); inputRef.current?.focus(); }}>{IC.smile}</button>
             <button type="submit" aria-label="Send comment" disabled={!text.trim() || sending} onPointerDown={e => e.preventDefault()}>
               {IC.send}

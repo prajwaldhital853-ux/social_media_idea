@@ -5,6 +5,7 @@ from rest_framework.permissions import AllowAny, BasePermission, IsAuthenticated
 from rest_framework.response import Response
 
 from apps.common.api import notice_map
+from apps.common.rules import blocked_wording
 
 from .models import Listing, ListingImage
 
@@ -87,6 +88,20 @@ class IsSellerOrReadOnly(BasePermission):
 class ListingViewSet(viewsets.ModelViewSet):
     serializer_class = ListingSerializer
     permission_classes = [IsAuthenticatedOrReadOnly, IsSellerOrReadOnly]
+
+    def create(self, request, *args, **kwargs):
+        """A listing naming something the console forbids is answered, not saved."""
+        refused = blocked_wording(request, 'listing')
+        if refused:
+            return refused
+        return super().create(request, *args, **kwargs)
+
+    def update(self, request, *args, **kwargs):
+        """So is an edit that puts the wording back in afterwards."""
+        refused = blocked_wording(request, 'listing')
+        if refused:
+            return refused
+        return super().update(request, *args, **kwargs)
 
     def get_queryset(self):
         qs = Listing.objects.select_related('seller__profile').prefetch_related('images')
