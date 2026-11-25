@@ -169,6 +169,11 @@ DEFAULTS = {
                       'Left out of the email when blank.', 'platform'),
     'contact_form': ('', 'str', 'Support form link',
                      'The link at the bottom of an enforcement email, instead of the site root.', 'platform'),
+    # Who gets told a complaint arrived. The Client asked for this to be a setting,
+    # not a constant, because the person who reads reports changes without a deploy.
+    'report_inbox': ('', 'str', 'Complaints inbox',
+                     'A copy of every report is mailed here as it arrives. Empty keeps complaints '
+                     'inside the console queue.', 'platform'),
     # Contract 6.6: the wording a visitor reads the first time the site loads. The
     # Client has seven days to supply it, so the platform ships with its own line
     # rather than an empty box, and a box cleared on purpose falls back to it.

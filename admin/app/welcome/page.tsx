@@ -36,11 +36,17 @@ export default function WelcomePage() {
 
   const line = (field: string): WelcomeLine | undefined => desk?.lines.find(item => item.field === field);
   const valueOf = (field: string) => draft[field] ?? line(field)?.value ?? '';
-  const dirty = !!desk && desk.lines.some(item => (draft[item.field] ?? item.value) !== item.value);
+  const inbox = line('report_inbox');
+  // The inbox is a mail setting, not a sentence a visitor reads, so it is written
+  // on its own and stays out of the wording save.
+  const editable = desk?.lines.filter(item => item.field !== 'report_inbox') ?? [];
+  const dirty = !!desk && editable.some(item => (draft[item.field] ?? item.value) !== item.value);
+  const inboxDraft = draft.report_inbox ?? inbox?.value ?? '';
+  const inboxDirty = !!inbox && inboxDraft.trim() !== (inbox.value ?? '');
 
   const save = async () => {
     if (!desk) return;
-    const moved = desk.lines.filter(item => (draft[item.field] ?? item.value) !== item.value);
+    const moved = editable.filter(item => (draft[item.field] ?? item.value) !== item.value);
     const sure = await confirm({
       title: `Save the first-load wording${moved.length ? ` (${moved.length} line(s) changed)` : ''}?`,
       body: 'This is what every visitor reads before they have an account, and the numbers in it are the only way a stranger can reach the person running the site. It goes live on the next page load.',
@@ -49,7 +55,7 @@ export default function WelcomePage() {
     });
     if (!sure) return;
     const body: Record<string, string> = {};
-    desk.lines.forEach(item => { body[item.field] = valueOf(item.field).trim(); });
+    editable.forEach(item => { body[item.field] = valueOf(item.field).trim(); });
     setBusy(true);
     setBanner(null);
     try {
@@ -86,6 +92,35 @@ export default function WelcomePage() {
     }
   };
 
+  const saveInbox = async () => {
+    const address = inboxDraft.trim();
+    if (address && !ADDRESS.test(address)) {
+      setBanner({ kind: 'bad', text: 'Write a whole email address, or leave the box empty to keep complaints inside the console.' });
+      return;
+    }
+    const sure = await confirm({
+      title: address ? 'Move the complaints inbox?' : 'Close the complaints inbox?',
+      body: address
+        ? `Every report a member files is copied to ${address} as it arrives, with the reporter, the thing reported and their words. Nobody else is told the address.`
+        : 'Reports stop being emailed and are only visible in the console review queue.',
+      confirmLabel: address ? 'Save the inbox' : 'Stop the copies',
+      tone: 'amber',
+    });
+    if (!sure) return;
+    setBusy(true);
+    setBanner(null);
+    try {
+      const out = await api<WelcomeDesk>('admin/welcome/', { method: 'POST', body: { report_inbox: address } });
+      setDesk(out);
+      setDraft({});
+      setBanner({ kind: 'ok', text: out.detail || 'Saved.' });
+    } catch (err) {
+      if (!noteGate(err)) setBanner({ kind: 'bad', text: (err as Error).message });
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const card = desk?.card;
 
   return (
@@ -117,7 +152,7 @@ export default function WelcomePage() {
               </div>
             </div>
 
-            {desk.lines.map(item => (
+            {editable.map(item => (
               <label className="field" key={item.field} data-line={item.field}>
                 <span>
                   {item.label}{' '}
@@ -206,9 +241,9 @@ export default function WelcomePage() {
               <div>
                 <h2>Mail as this deployment can send it</h2>
                 <p>
-                  A coin receipt, a promotion decision, a warning and a first letter are each also
-                  an email. This is what those letters pass through, read off the server rather than
-                  guessed from an inbox that stays quiet.
+                  A coin receipt, a promotion decision, a warning, a complaint and a first letter are
+                  each also an email. This is what those letters pass through, read off the server
+                  rather than guessed from an inbox that stays quiet.
                 </p>
               </div>
             </div>
@@ -238,6 +273,51 @@ export default function WelcomePage() {
               <div className="notice-line">
                 <p className="notice-copy"><span className="notice-text">{desk.mail.problem}</span></p>
               </div>
+            )}
+
+            {inbox && (
+              <>
+                <label className="field" data-mail="inbox">
+                  <span>
+                    {inbox.label}{' '}
+                    <em>{inboxDraft.length}/{inbox.limit}</em>
+                  </span>
+                  <input
+                    name="report_inbox" type="email" maxLength={inbox.limit} autoComplete="off"
+                    value={inboxDraft}
+                    placeholder="complaints@example.com"
+                    onChange={event => setDraft({ ...draft, report_inbox: event.target.value })}
+                  />
+                  <em className="welcome-who">
+                    {inbox.set
+                      ? <>written by <b>{inbox.by}</b> {ago(inbox.at || '')}, {inbox.help}</>
+                      : <>never written, so nothing is mailed — {inbox.help.toLowerCase()}</>}
+                  </em>
+                </label>
+
+                <div className="ask-actions">
+                  <button
+                    type="button" className={`btn primary${busy ? ' spinning' : ''}`}
+                    disabled={busy || !inboxDirty}
+                    title={inboxDirty ? 'Write the complaints inbox' : 'The address has not changed'}
+                    onClick={saveInbox}
+                  >
+                    {IC.check}<span>{busy ? 'Working…' : 'Save the inbox'}</span>
+                  </button>
+                  {inboxDirty && (
+                    <button
+                      type="button" className="btn ghost" disabled={busy}
+                      onClick={() => setDraft(current => {
+                        const next = { ...current };
+                        delete next.report_inbox;
+                        return next;
+                      })}
+                    >
+                      <span>Undo my typing</span>
+                    </button>
+                  )}
+                </div>
+              </>
             )}
 
             <label className="field" data-mail="to">

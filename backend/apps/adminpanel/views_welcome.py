@@ -32,6 +32,9 @@ LINES = (
      'Left off the card and the email when the box is empty.'),
     ('contact_form', 'form', 200, 'Support form link',
      'The link at the bottom of the card, and the one an enforcement email points at.'),
+    ('report_inbox', 'report_inbox', 120, 'Complaints inbox',
+     'A copy of every report a user files is mailed to this address as it arrives. '
+     'Left empty, complaints stay inside the console queue.'),
 )
 BY_KEY = {line[0]: line for line in LINES}
 CONTACT_LABELS = (('contact_email', 'Email'), ('contact_phone', 'Phone'),
@@ -92,13 +95,18 @@ def welcome_desk(request):
     if not moved:
         return Response({'detail': 'Nothing to save, the card already says exactly this.'}, status=400)
 
+    # The inbox is not a sentence the visitor reads, so the promise about the first
+    # load would be a lie when only the inbox moved.
+    wording = [name for name in moved if name != 'Complaints inbox']
+    tail = (' The website reads it on the next first load; a line left empty falls back to the '
+            'platform’s own wording.' if wording
+            else ' Every complaint a member files is now copied there as it arrives.')
     settings_store.write(request.user, updates)
     record(request.user, 'welcome_text', 'first-load wording',
            'Wrote ' + ', '.join(moved) + '.')
     return Response({
         'lines': lines(), 'card': card(), 'mail': maildesk.status(),
-        'detail': f'Saved {", ".join(moved).lower()}. The website reads it on the next first load; '
-                  'a line left empty falls back to the platform’s own wording.',
+        'detail': f'Saved {", ".join(moved).lower()}.{tail}',
     })
 
 
