@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import ExcelJS from 'exceljs';
 import Banner from '@/components/Banner';
 import { useConfirm } from '@/components/Confirm';
 import ConsoleShell from '@/components/ConsoleShell';
@@ -10,7 +11,7 @@ import { num } from '@/lib/format';
 import { IC } from '@/lib/icons';
 import { ago, stamp } from '@/lib/time';
 import { useSession } from '@/lib/session';
-import { LedgerPage, LedgerRow } from '@/lib/types';
+import { LedgerPage, LedgerRow, SuggestRow } from '@/lib/types';
 
 /**
  * Contract 6.7, the ledger. Every wallet has a `balance` column, but this screen
@@ -86,6 +87,82 @@ export default function LedgerScreen() {
     }
   };
 
+  const downloadRecord = async () => {
+    const gone = page?.deleted;
+    if (!gone) return;
+    const rec = gone.record;
+    const asNum = (v: string | number | null | undefined): string | number => {
+      if (v === null || v === undefined || v === '') return '';
+      const n = Number(v);
+      return Number.isFinite(n) ? n : String(v);
+    };
+    const book = new ExcelJS.Workbook();
+    book.creator = 'Exposing console';
+    const sheet = (name: string, widths: number[]) => {
+      const ws = book.addWorksheet(name);
+      ws.columns = widths.map(width => ({ width }));
+      return ws;
+    };
+
+    const head = sheet('Account', [24, 46]);
+    head.addRow(['Deleted account money record']).font = { bold: true, size: 13 };
+    head.addRow([]);
+    head.addRow(['Account', rec.username]);
+    head.addRow(['Email', rec.email]);
+    head.addRow(['Signed in with', rec.provider]);
+    head.addRow(['Joined', rec.joined]);
+    head.addRow(['Balance at deletion', asNum(rec.balance_at_deletion)]);
+    head.addRow(['Archived', gone.archived_at]);
+    head.addRow(['Movements kept', rec.movements.length]);
+    head.addRow(['Coin requests kept', rec.requests.length]);
+    head.addRow(['Campaigns kept', rec.campaigns.length]);
+
+    const movements = sheet('Movements', [9, 11, 36, 24, 15, 27]);
+    movements.addRow(['Kind', 'Amount', 'Note', 'Reference', 'Staff', 'Date']).font = { bold: true };
+    movements.views = [{ state: 'frozen', ySplit: 1 }];
+    rec.movements.forEach(m => movements.addRow([
+      m.kind, asNum(m.amount), m.note, m.ref, m.staff ?? '', m.created_at,
+    ]));
+
+    const requests = sheet('Coin requests', [6, 8, 10, 12, 24, 11, 27, 27]);
+    requests.addRow(['#', 'Coins', 'Amount', 'Method', 'Reference', 'Status', 'Requested', 'Reviewed']).font = { bold: true };
+    requests.views = [{ state: 'frozen', ySplit: 1 }];
+    rec.requests.forEach((r, i) => requests.addRow([
+      i + 1, asNum(r.coins), asNum(r.amount), r.method, r.reference, r.status, r.created_at, r.reviewed_at ?? '',
+    ]));
+
+    const requestsDecided = sheet('Request decisions', [12, 12, 15, 40, 14, 27]);
+    requestsDecided.addRow(['Request #', 'Action', 'Staff', 'Reason', 'Coins credited', 'Date']).font = { bold: true };
+    requestsDecided.views = [{ state: 'frozen', ySplit: 1 }];
+    rec.requests.forEach((r, i) => r.reviews.forEach(rv => requestsDecided.addRow([
+      i + 1, rv.action, rv.staff ?? '', rv.reason, asNum(rv.coins_credited), rv.created_at,
+    ])));
+
+    const campaigns = sheet('Campaigns', [6, 14, 10, 11, 26, 27, 27]);
+    campaigns.addRow(['#', 'Package', 'Budget', 'Status', 'Target', 'Started', 'Ends']).font = { bold: true };
+    campaigns.views = [{ state: 'frozen', ySplit: 1 }];
+    rec.campaigns.forEach((c, i) => campaigns.addRow([
+      i + 1, c.package, asNum(c.budget), c.status, c.target, c.starts_at ?? '', c.ends_at ?? '',
+    ]));
+
+    const campaignsDecided = sheet('Campaign decisions', [13, 12, 15, 40, 14, 10, 27]);
+    campaignsDecided.addRow(['Campaign #', 'Action', 'Staff', 'Reason', 'Coins refunded', 'Choice', 'Date']).font = { bold: true };
+    campaignsDecided.views = [{ state: 'frozen', ySplit: 1 }];
+    rec.campaigns.forEach((c, i) => c.reviews.forEach(rv => campaignsDecided.addRow([
+      i + 1, rv.action, rv.staff ?? '', rv.reason, asNum(rv.coins_refunded), rv.choice ?? '', rv.created_at,
+    ])));
+
+    const blob = new Blob([await book.xlsx.writeBuffer()], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `money-record-${gone.username}.xlsx`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <ConsoleShell
       title="Coin ledger"
@@ -139,6 +216,25 @@ export default function LedgerScreen() {
 
       <Banner banner={banner} />
 
+      {page?.deleted && (
+        <section className="panel archived" data-deleted-record>
+          <div className="panel-head">
+            <div>
+              <h2>@{page.deleted.username}'s account was deleted</h2>
+              <p>
+                The account and its wallet are gone; the money record is kept.{' '}
+                {num(page.deleted.counts.movements)} movement(s), {num(page.deleted.counts.requests)} coin
+                request(s) and {num(page.deleted.counts.campaigns)} campaign(s), archived {ago(page.deleted.archived_at)}.
+                Every amount, reference, staff name and approval decision in it is the paper a dispute is settled from.
+              </p>
+            </div>
+            <button type="button" className="btn ghost" onClick={downloadRecord} title="Download the kept money record as an Excel file">
+              {IC.go}<span>Download the record</span>
+            </button>
+          </div>
+        </section>
+      )}
+
       {page && (
         <p className="facets" data-totals>
           <b>{num(Number(page.totals.credited))}</b> coins in
@@ -166,11 +262,12 @@ export default function LedgerScreen() {
           <table className="grid review" data-list="ledger">
             <thead>
               <tr>
-                <th style={{ width: '20%' }}>Whose wallet</th>
-                <th style={{ width: '14%' }}>Movement</th>
-                <th style={{ width: '38%' }}>The note on the row</th>
-                <th style={{ width: '14%' }}>Written</th>
-                <th style={{ width: '14%' }}>Wallet now</th>
+                <th style={{ width: '19%' }}>Whose wallet</th>
+                <th style={{ width: '12%' }}>Movement</th>
+                <th style={{ width: '31%' }}>The note on the row</th>
+                <th style={{ width: '13%' }}>Staff / reference</th>
+                <th style={{ width: '12%' }}>Written</th>
+                <th style={{ width: '13%' }}>Wallet now</th>
               </tr>
             </thead>
             {rows.map(row => <Entry key={row.id} row={row}/>)}
@@ -209,6 +306,11 @@ function Entry({ row }: { row: LedgerRow }) {
         <td data-label="The note on the row">
           <span className="entry-note" title={row.note}>{row.note || 'no note'}</span>
         </td>
+        <td data-label="Staff / reference" className="dim">
+          {row.staff && <span className="entry-staff" title="The seat that moved the coins">@{row.staff}</span>}
+          {row.ref && <span className="entry-ref" title="What the money was for">{row.ref}</span>}
+          {!row.staff && !row.ref && <span>—</span>}
+        </td>
         <td data-label="Written" className="dim" title={stamp(row.created_at)}>{ago(row.created_at)}</td>
         <td data-label="Wallet now" className="num strong" title={`The wallet’s own number as this screen reads it: ${row.currency}`}>
           {row.balance}
@@ -233,7 +335,37 @@ function Adjust({ onWritten, noteGate }: {
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [matches, setMatches] = useState<SuggestRow[] | null>(null);
   const confirm = useConfirm();
+  const suggestSeq = useRef(0);
+
+  // A money row cannot be edited away, so the account is offered, not spelled:
+  // every keystroke asks the ledger door who is real, and the answer paints
+  // under the field until the seat picks one or clears the box.
+  useEffect(() => {
+    const query = username.trim();
+    if (!query) {
+      setMatches(null);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      const mine = suggestSeq.current + 1;
+      suggestSeq.current = mine;
+      try {
+        const out = await api<{ results: SuggestRow[] }>(
+          `admin/coins/ledger/suggest/?q=${encodeURIComponent(query)}`);
+        if (suggestSeq.current === mine) setMatches(out.results);
+      } catch {
+        if (suggestSeq.current === mine) setMatches(null);
+      }
+    }, 200);
+    return () => clearTimeout(timer);
+  }, [username]);
+
+  const pick = (row: SuggestRow) => {
+    setUsername(row.username);
+    setMatches(null);
+  };
 
   const move = async () => {
     const sure = await confirm({
@@ -271,12 +403,33 @@ function Adjust({ onWritten, noteGate }: {
       </div>
 
       <div className="adjust-grid">
-        <label className="field">
+        <label className="field suggest-wrap">
           <span>Account</span>
           <input
             value={username} onChange={event => setUsername(event.target.value)}
+            onBlur={() => setTimeout(() => setMatches(null), 150)}
             placeholder="username" autoComplete="off" name="username"
           />
+          {matches !== null && matches.length > 0 && (
+            <div className="suggest-pop" role="listbox" aria-label="Matching accounts">
+              {matches.map(row => (
+                <button
+                  key={row.username} type="button" role="option" aria-selected={row.username === username.trim()}
+                  className="suggest-item" onMouseDown={() => pick(row)}
+                  title={`@${row.username} holds ${row.balance} coins`}
+                >
+                  {row.avatar
+                    ? <img className="suggest-avatar" src={row.avatar} alt=""/>
+                    : <span className="suggest-avatar suggest-blank">{row.username.slice(0, 1).toUpperCase()}</span>}
+                  <span className="suggest-who">
+                    <b>@{row.username}</b>
+                    <em>{row.name}</em>
+                  </span>
+                  <span className="suggest-balance">{row.balance} coins</span>
+                </button>
+              ))}
+            </div>
+          )}
         </label>
         <div className="field">
           <span>Which way</span>

@@ -36,11 +36,11 @@ from apps.moderation.models import AuditLog, Report
 from apps.notifications.services import notify
 from apps.posts.models import Post
 from apps.promotions.models import Promotion
-from apps.wallet.models import CoinRequest, Transaction, Wallet
+from apps.wallet.models import CoinRequest, DeletedWalletRecord, Transaction, Wallet, purging_ledger
 
 from . import rbac, review, settings_store, spam
 from .journal import record
-from .models import PublicNotice, StaffAccount
+from .models import CoinReview, PromoReview, PublicNotice, StaffAccount
 
 OPEN_STATES = (Report.Status.OPEN, Report.Status.REVIEWING)
 PROVIDERS = {'email': 'Email', 'google': 'Google', 'facebook': 'Facebook', 'apple': 'Apple'}
@@ -327,6 +327,7 @@ def ledger_rows(user):
         return []
     return [{
         'id': move.pk, 'kind': move.kind, 'amount': str(move.amount), 'note': move.note,
+        'staff': move.actor.username if move.actor_id else None, 'ref': move.ref,
         'created_at': move.created_at,
     } for move in Transaction.objects.filter(wallet=wallet).order_by('-created_at')[:10]]
 
@@ -730,6 +731,58 @@ def clear_flags(user, caller, *, reason=''):
     }
 
 
+def money_record(account):
+    """The account's whole money history, read before the deletion cascade takes it.
+
+    Kept as plain values with staff names as text: a dispute months from now has
+    to be answerable without the account row, the wallet, or any staff seat it
+    names still existing. The delete guards mean the balance reads zero by the
+    time this runs, so the figure is recorded anyway, as the number the ledger
+    added up to on the day.
+    """
+    wallet = Wallet.objects.filter(user=account).first()
+    movements = [] if wallet is None else [{
+        'kind': move.kind, 'amount': str(move.amount), 'note': move.note,
+        'ref': move.ref, 'staff': move.actor.username if move.actor_id else None,
+        'created_at': move.created_at.isoformat(),
+    } for move in Transaction.objects.filter(wallet=wallet).order_by('created_at', 'id')]
+    requests = [{
+        'coins': req.coins, 'amount': str(req.amount), 'method': req.method,
+        'reference': req.reference, 'status': req.status,
+        'created_at': req.created_at.isoformat(),
+        'reviewed_at': req.reviewed_at.isoformat() if req.reviewed_at else None,
+        'reviews': [{
+            'action': item.action, 'reason': item.reason,
+            'staff': item.actor.username if item.actor_id else None,
+            'coins_credited': item.coins_credited,
+            'created_at': item.created_at.isoformat(),
+        } for item in CoinReview.objects.filter(request=req).order_by('created_at', 'id')],
+    } for req in CoinRequest.objects.filter(user=account).order_by('created_at', 'id')]
+    campaigns = [{
+        'package': promo.package, 'budget': str(promo.budget), 'status': promo.status,
+        'target': f'{promo.target_type}:{promo.target_id}',
+        'starts_at': promo.starts_at.isoformat() if promo.starts_at else None,
+        'ends_at': promo.ends_at.isoformat() if promo.ends_at else None,
+        'created_at': promo.created_at.isoformat(),
+        'reviews': [{
+            'action': item.action, 'reason': item.reason,
+            'staff': item.actor.username if item.actor_id else None,
+            'coins_refunded': str(item.coins_refunded), 'choice': item.choice,
+            'created_at': item.created_at.isoformat(),
+        } for item in PromoReview.objects.filter(promotion=promo).order_by('created_at', 'id')],
+    } for promo in Promotion.objects.filter(owner=account).order_by('created_at', 'id')]
+    return {
+        'username': account.username,
+        'email': account.email,
+        'provider': account.provider,
+        'joined': account.date_joined.isoformat(),
+        'balance_at_deletion': str(wallet.balance) if wallet else '0',
+        'movements': movements,
+        'requests': requests,
+        'campaigns': campaigns,
+    }
+
+
 def delete(user, caller, *, confirm, reason=''):
     """An account destroyed, on the record, with the money settled first.
 
@@ -737,7 +790,9 @@ def delete(user, caller, *, confirm, reason=''):
     messages and the wallet with its ledger go with the account and none of it
     comes back. So the balance has to be zero, no campaign may still be running
     and no payment proof may be waiting, each settled from the screen that owns
-    it, which is what the refusal names.
+    it, which is what the refusal names. The money record is the one thing kept:
+    every movement, deposit reference and approval decision is copied to the
+    archive before the rows go, because a payment dispute outlives the account.
     """
     reason = str(reason or '').strip()
     confirm = str(confirm or '').strip().lower()
@@ -762,12 +817,17 @@ def delete(user, caller, *, confirm, reason=''):
             raise Refused(f'The wallet still holds {held["balance"]} coins. Settle it from '
                           'Coins and payments first.')
         username = account.username
+        # The money record leaves first: once the cascade runs there is no wallet
+        # and no ledger to read, and the archive is the copy a dispute is settled
+        # from. It holds no foreign keys, so the delete takes nothing from it.
+        DeletedWalletRecord.objects.create(username=username, record=money_record(account))
         # The audit row outlives the account: its `actor` is nullable and its
         # `target` is text, so this sentence is all anyone can read afterwards about
         # what was destroyed here, which is why it is written before the delete.
         record(caller, 'delete_user', username,
                f'{held["posts"]} posts, {held["comments"]} comments, {held["listings"]} listings '
-               f'and {held["balance"]} coins went with the account. {reason}'[:240])
+               f'and {held["balance"]} coins went with the account; the money record is kept. '
+               f'{reason}'[:240])
         # The letter leaves before the row goes: the mailbox is the only place this
         # member can still be reached, and the address is a string the thread does
         # not need the account row for.
@@ -775,12 +835,18 @@ def delete(user, caller, *, confirm, reason=''):
                                     f'Your Exposing account @{username} was deleted by the Exposing team. '
                                     f'Reason: {reason}. Your posts, comments, listings and wallet went with '
                                     'it, and this cannot be undone.')
-        account.delete()
+        # The cascade takes the wallet and its ledger rows with the account, and
+        # the ledger trigger only lets a transaction that asked for a purge
+        # remove them — this one did, after the archive copy above.
+        with purging_ledger():
+            account.delete()
     return {
         'action': 'delete', 'username': username, 'holdings': held, 'emailed': emailed,
         'detail': (f'@{username} is deleted, with their {held["posts"]} post(s), '
                    f'{held["comments"]} comment(s) and {held["listings"]} listing(s). '
-                   'This cannot be undone; the audit row names who did it.')
+                   'This cannot be undone; the audit row names who did it, and the '
+                   'money record — every movement, deposit reference and approval '
+                   'decision — is kept for disputes.')
         + (f' An email went to {emailed["to"]}.' if emailed
            else ' There is no email address on this account.'),
     }

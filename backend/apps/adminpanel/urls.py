@@ -53,6 +53,7 @@ urlpatterns = [
     path('admin/coins/desk/', views_coins.coin_desk),
     path('admin/coins/qr/', views_coins.coin_qr_upload),
     path('admin/coins/ledger/', views_coins.coin_ledger),
+    path('admin/coins/ledger/suggest/', views_coins.ledger_suggest),
     path('admin/coins/ledger/adjust/', views_coins.coin_adjust),
     path('admin/coins/<int:pk>/receipt/', views_coins.coin_proof),
     path('admin/coins/<int:pk>/receipt-link/', views_coins.coin_proof_link),

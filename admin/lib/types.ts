@@ -722,6 +722,8 @@ export interface LedgerRow {
   kind: 'credit' | 'debit';
   amount: string;
   note: string;
+  staff?: string | null;
+  ref?: string;
   created_at: string;
   balance: string;
   currency: string;
@@ -730,6 +732,42 @@ export interface LedgerRow {
 export interface LedgerPage extends Page<LedgerRow> {
   totals: { credited: string; debited: string; entries: number };
   counts?: Partial<Record<'credit' | 'debit', number>>;
+  /** Set when the searched username belongs to a deleted account whose money record is kept. */
+  deleted?: DeletedMoneyRecord | null;
+}
+
+export interface DeletedMoneyRecord {
+  username: string;
+  archived_at: string;
+  counts: { movements: number; requests: number; campaigns: number };
+  record: MoneyRecord;
+}
+
+/** The money history the deletion archive keeps, as the server wrote it. */
+export interface MoneyRecord {
+  username: string;
+  email: string;
+  provider: string;
+  joined: string;
+  balance_at_deletion: string;
+  movements: { kind: string; amount: string; note: string; ref: string; staff: string | null; created_at: string }[];
+  requests: {
+    coins: number; amount: string; method: string; reference: string; status: string;
+    created_at: string; reviewed_at: string | null;
+    reviews: { action: string; reason: string; staff: string | null; coins_credited: number; created_at: string }[];
+  }[];
+  campaigns: {
+    package: string; budget: string; status: string; target: string;
+    starts_at: string | null; ends_at: string | null; created_at: string;
+    reviews: { action: string; reason: string; staff: string | null; coins_refunded: string; choice: string; created_at: string }[];
+  }[];
+}
+
+export interface SuggestRow {
+  username: string;
+  name: string;
+  avatar: string;
+  balance: string;
 }
 
 /** A knob on a settings desk, typed by the server so the box knows what it holds. */

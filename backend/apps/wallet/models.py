@@ -1,7 +1,8 @@
+from contextlib import contextmanager
 from decimal import Decimal
 
 from django.conf import settings
-from django.db import models, transaction
+from django.db import connection, models, transaction
 from django.db.models import F
 
 
@@ -26,6 +27,15 @@ class Transaction(models.Model):
     kind = models.CharField(max_length=6, choices=Kind.choices)
     amount = models.DecimalField(max_digits=12, decimal_places=2)
     note = models.CharField(max_length=200, blank=True)
+    # The seat that moved the money, separate from the words on the row so an
+    # audit never has to parse a sentence to learn a name. Empty on rows no staff
+    # seat caused. A departed staff member's row survives with the name gone.
+    actor = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True,
+                              on_delete=models.SET_NULL, related_name='ledger_rows')
+    # What the money was for, as a token a report can group on: the payer's own
+    # transaction reference on a deposit, `coin_request:<pk>`, `promotion:<pk>`,
+    # `manual` on a hand-written row.
+    ref = models.CharField(max_length=80, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -76,7 +86,29 @@ class CoinRequest(models.Model):
         ]
 
 
-def apply(wallet_id, kind, amount, note=''):
+class DeletedWalletRecord(models.Model):
+    """The money record of a deleted account, kept after the cascade takes the rest.
+
+    Deleting a member destroys the wallet and every row in it, so the whole money
+    history is copied here first: every movement, every coin request with its
+    approval history, every campaign with its refund decisions, staff names kept
+    as text. The archive holds no foreign keys, so nothing in it can keep the
+    account alive or be broken by its departure — it is the paper a dispute is
+    settled from after the person it belonged to is gone.
+    """
+
+    username = models.CharField(max_length=150, unique=True)
+    record = models.JSONField()
+    archived_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-archived_at']
+
+    def __str__(self):
+        return f'{self.username} ({self.archived_at:%Y-%m-%d})'
+
+
+def apply(wallet_id, kind, amount, note='', actor=None, ref=''):
     """Atomic balance change + ledger row. Raises ValueError on overdraft."""
     amount = Decimal(amount)
     if amount <= 0:
@@ -87,4 +119,22 @@ def apply(wallet_id, kind, amount, note=''):
         if wallet.balance + delta < 0:
             raise ValueError('Insufficient balance.')
         Wallet.objects.filter(pk=wallet.pk).update(balance=F('balance') + delta)
-        return Transaction.objects.create(wallet=wallet, kind=kind, amount=amount, note=note[:200])
+        return Transaction.objects.create(wallet=wallet, kind=kind, amount=amount,
+                                          note=note[:200], actor=actor, ref=str(ref or '')[:80])
+
+
+@contextmanager
+def purging_ledger():
+    """Allow the wrapped cascade to delete ledger rows, and nothing else.
+
+    The database trigger behind the append-only guarantee rejects every UPDATE,
+    and every DELETE the transaction did not explicitly ask for. Only the
+    account-deletion cascades may remove rows — the money record is copied to
+    the archive first — and SET LOCAL dies with the transaction it was set in,
+    so the permission can never outlive the delete it was granted to.
+    """
+    with transaction.atomic():
+        cursor = connection.cursor()
+        cursor.execute("SET LOCAL exposing.ledger_purge = 'on'")
+        cursor.close()
+        yield

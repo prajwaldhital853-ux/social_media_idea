@@ -139,7 +139,7 @@ def unspent(promo, now):
     return (budget * Decimal(str(left)) / Decimal(str(span))).quantize(Decimal('1'))
 
 
-def cancel_campaigns(kind, target_id, now):
+def cancel_campaigns(kind, target_id, now, actor=None):
     """Stop what is running on this content, through the same ledger it paid from."""
     stopped = []
     total = Decimal('0')
@@ -158,7 +158,8 @@ def cancel_campaigns(kind, target_id, now):
             if refund > 0:
                 wallet, _ = Wallet.objects.get_or_create(user=promo.owner)
                 apply(wallet.pk, CoinMove.Kind.CREDIT, refund,
-                      f'Refund: campaign {promo.pk} stopped when moderation removed {kind}:{target_id}')
+                      f'Refund: campaign {promo.pk} stopped when moderation removed {kind}:{target_id}',
+                      actor=actor, ref=f'promotion:{promo.pk}')
                 total += refund
             stopped.append({
                 'id': promo.pk, 'owner': promo.owner.username, 'package': promo.package,
@@ -400,7 +401,7 @@ def act(kind, target_id, actor, action, reason='', notice_text='', audience=Publ
         if kind == 'comment':
             Post.objects.filter(pk=row.post_id).update(comment_count=Greatest(F('comment_count') - 1, 0))
         out['reports_closed'] = close_reports(kind, row.pk, Report.Status.RESOLVED, now)
-        campaigns, refunded = cancel_campaigns(kind, row.pk, now)
+        campaigns, refunded = cancel_campaigns(kind, row.pk, now, actor=actor)
         out['campaigns'], out['refunded'] = campaigns, str(refunded)
         _say(kind, row, actor, suspension_notice(kind, row, actor, reason))
         owner_mail = (f'Your Exposing {kind} was suspended',
