@@ -20,7 +20,7 @@ from apps.accounts import passwords
 from apps.accounts.models import RefreshSession, User
 from apps.common.emails import queue_staff_created_email
 
-from . import rbac
+from . import people, rbac
 from .journal import record
 from .models import StaffAccount
 
@@ -382,6 +382,52 @@ def staff_revoke(request, username):
     RefreshSession.objects.filter(user=staff.user).update(revoked_at=timezone.now())
     record(caller.user, 'revoke_staff', username, 'access ended')
     return Response(_row(staff))
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+@rbac.staff_only('staff_grant')
+def staff_delete(request, username):
+    """Erase a staff account for good, seat and login both. Superadmin's own verb.
+
+    Revoking a seat leaves the person, their history and their member account
+    standing, and can be undone the same day. This leaves nothing: the account
+    cascade takes their posts, comments, wallet and messages with it, so the door is
+    held to the Client's own role and the write is handed to the same guarded
+    destruction the People page uses, which insists on a reason, the username typed
+    out, and a settled wallet.
+    """
+    caller = request.staff_account
+    if caller.effective_role != rbac.SUPERADMIN:
+        return rbac.denial(
+            'permission_required',
+            'Only a Superadmin deletes a staff account. Switch the seat off, or revoke its access, instead.',
+        )
+    staff, _caller, error = _target(request, username)
+    if error is not None:
+        return error
+    if staff is None:
+        return Response(_NO_SEAT, status=400)
+    user = staff.user
+    if user.pk == caller.user.pk:
+        return Response(
+            {'detail': 'Your own seat is not yours to erase. Appoint another Client seat first, '
+                       'then delete this one from there.'},
+            status=400,
+        )
+    if user_role(user, staff) == rbac.SUPERADMIN and _superadmins_left(staff.pk) == 0:
+        return Response(_LAST_CLIENT, status=400)
+    try:
+        out = people.delete(
+            user, caller.user,
+            confirm=request.data.get('confirm') or '',
+            reason=request.data.get('reason') or '',
+        )
+    except people.Refused as exc:
+        return Response({'detail': str(exc)}, status=400)
+    out['detail'] = (f'{out["detail"]} The seat went with the account, and no other staff row '
+                     'points at them now.')
+    return Response(out)
 
 
 @api_view(['POST'])

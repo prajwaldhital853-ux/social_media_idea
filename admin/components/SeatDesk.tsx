@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useState } from 'react';
 import { IC } from '@/lib/icons';
 import { useConfirm } from '@/components/Confirm';
 import { Catalogue, Seat } from '@/lib/types';
@@ -144,6 +145,10 @@ export function SeatBody({
           >
             {IC.logout}<span>Revoke access</span>
           </button>
+        )}
+
+        {isSuperadmin && !mine && (
+          <SeatErase username={seat.username} busy={busy} onMutate={onMutate} />
         )}
 
         {!seat.is_enabled && can('staff_grant') && reachable && (
@@ -331,6 +336,72 @@ export function KeyGrid({
           </div>
         );
       })}
+    </div>
+  );
+}
+
+/**
+ * The Client's own verb: end a colleague by destroying the account, not the seat.
+ *
+ * It sits behind both boxes the server insists on, a reason and the username typed
+ * out, because the button takes the posts, the wallet and the messages with the
+ * login, and the only thing left afterwards is the audit row written here.
+ */
+function SeatErase({
+  username, busy, onMutate,
+}: {
+  username: string;
+  busy: boolean;
+  onMutate: (path: string, body: Record<string, unknown>, done: string) => Promise<void>;
+}) {
+  const confirm = useConfirm();
+  const [reason, setReason] = useState('');
+  const [typed, setTyped] = useState('');
+  const ready = reason.trim().length > 0 && typed.trim() === username;
+
+  const run = async () => {
+    const sure = await confirm({
+      title: `Delete @${username} for good?`,
+      body: 'This is not a revocation. Their staff seat, their login and everything that account holds, posts, comments, listings, wallet and messages, are destroyed, and none of it comes back. Only the audit row survives, naming you, the username and the reason written here.',
+      confirmLabel: 'Delete the account',
+      tone: 'danger',
+    });
+    if (!sure) return;
+    await onMutate(`admin/staff/${username}/delete/`,
+      { reason: reason.trim(), confirm: typed.trim() },
+      `@${username} is deleted: seat, login and everything the account held.`);
+  };
+
+  return (
+    <div className="seat-erase">
+      <h4>Delete this seat for good</h4>
+      <p>
+        Superadmin only. Revoking keeps the person and their history; this destroys the
+        account behind the seat too, and nothing of it comes back.
+      </p>
+      <label className="field">
+        <span>Why the account is deleted <em className="fineprint">*</em></span>
+        <textarea
+          rows={2} maxLength={200} value={reason}
+          placeholder="Left the company and asked for their data to be removed."
+          onChange={event => setReason(event.target.value)}
+        />
+      </label>
+      <label className="field">
+        <span>Type the username to confirm</span>
+        <input
+          value={typed} placeholder={username} autoComplete="off" spellCheck={false}
+          onChange={event => setTyped(event.target.value)}
+        />
+      </label>
+      <button type="button" className="btn danger" disabled={busy || !ready} onClick={() => { void run(); }}>
+        {IC.trash}<span>{busy ? 'Working…' : 'Delete the account'}</span>
+      </button>
+      {!ready && (
+        <p className="fineprint">
+          {reason.trim() ? 'Now type the username exactly.' : 'A reason first, then the username.'}
+        </p>
+      )}
     </div>
   );
 }

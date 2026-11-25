@@ -29,6 +29,7 @@ urlpatterns = [
     path('admin/staff/create/', views_staff.staff_create),
     path('admin/staff/<str:username>/', views_staff.staff_update),
     path('admin/staff/<str:username>/revoke/', views_staff.staff_revoke),
+    path('admin/staff/<str:username>/delete/', views_staff.staff_delete),
     path('admin/staff/<str:username>/reset-two-factor/', views_staff.staff_reset_two_factor),
     path('admin/review/', views_review.review_queue),
     # Contract 6.3. `case` is a literal segment listed before the id routes, so
