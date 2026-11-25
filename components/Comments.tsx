@@ -51,7 +51,7 @@ export default function Comments({ postId, onClose, mediaIndex }: { postId: stri
   const [closing, setClosing] = useState(false);
   const dialog = useRef<HTMLDivElement>(null);
   const list = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const close = useRef(onClose);
   close.current = onClose;
@@ -154,6 +154,14 @@ export default function Comments({ postId, onClose, mediaIndex }: { postId: stri
   useBackClose(sheet, requestClose);
 
   useEffect(() => () => { if (closeTimer.current) clearTimeout(closeTimer.current); }, []);
+
+  // The box grows with the draft, so Enter opens a line instead of being lost.
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${Math.min(el.scrollHeight, 120)}px`;
+  }, [text]);
 
   useEffect(() => {
     if (!sheet) return;
@@ -476,20 +484,25 @@ export default function Comments({ postId, onClose, mediaIndex }: { postId: stri
           <div className="compose-row">
             <Avatar user={me} size={30} />
             <div className="compose-field">
-              <input
+              <textarea
                 ref={inputRef}
-                type="text"
                 name="comment"
+                rows={1}
                 autoComplete="off"
                 autoCapitalize="sentences"
                 autoCorrect="on"
-                inputMode="text"
-                enterKeyHint="send"
+                enterKeyHint="enter"
                 aria-label="Write a comment"
                 placeholder={replyingTo ? 'Write a reply…' : `Comment as ${me.name}`}
                 maxLength={1000}
                 value={text}
                 onChange={e => setText(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                    e.preventDefault();
+                    e.currentTarget.form?.requestSubmit();
+                  }
+                }}
               />
               <BlockedEcho text={text} words={blocked} fieldRef={inputRef} />
             </div>

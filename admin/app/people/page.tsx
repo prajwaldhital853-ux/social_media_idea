@@ -171,7 +171,7 @@ export default function PeoplePage() {
           </p>
         </section>
       ) : (
-        <div className="grid-wrap">
+        <div className="grid-wrap flow">
           <table className="grid">
             <thead>
               <tr>

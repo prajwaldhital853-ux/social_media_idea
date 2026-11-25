@@ -4,9 +4,10 @@ from django.db.models import F
 from django.utils import timezone
 from rest_framework import serializers, status
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import IsAdminUser, IsAuthenticated, IsAuthenticatedOrReadOnly
+from rest_framework.permissions import IsAuthenticated, IsAuthenticatedOrReadOnly
 from rest_framework.response import Response
 
+from apps.adminpanel import rbac
 from apps.common.api import person
 from apps.common.config import package_by_id
 from apps.common.pagination import KeysetPagination
@@ -152,7 +153,8 @@ def promotion_track(request, pk):
 
 
 @api_view(['GET'])
-@permission_classes([IsAdminUser])
+@permission_classes([IsAuthenticated])
+@rbac.staff_only('promotions_view')
 def promotion_queue(request):
     qs = Promotion.objects.select_related('owner__profile')
     if request.query_params.get('status'):

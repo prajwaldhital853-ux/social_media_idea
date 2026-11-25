@@ -8911,3 +8911,30 @@ html { overscroll-behavior-y: none; }
   border-radius: 3px;
   box-shadow: inset 0 -2px 0 rgba(239, 68, 68, 0.85);
 }
+
+/* The comment box grew into a draft pad: it starts one line tall and grows
+   with what is typed, Enter opens a line, Ctrl+Enter sends. */
+.compose-row textarea {
+  flex: 1;
+  min-width: 0;
+  display: block;
+  border: 0;
+  border-radius: 22px;
+  padding: 11px 14px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 16px;
+  line-height: 1.4;
+  resize: none;
+  max-height: 120px;
+  overflow-y: auto;
+  transition: box-shadow 0.15s ease;
+}
+
+.compose-row textarea:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--brand-ring);
+}
+
+.comment-bubble p { white-space: pre-wrap; overflow-wrap: anywhere; }
