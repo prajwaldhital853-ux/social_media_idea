@@ -722,6 +722,8 @@ export interface LedgerRow {
   kind: 'credit' | 'debit';
   amount: string;
   note: string;
+  staff?: string | null;
+  ref?: string;
   created_at: string;
   balance: string;
   currency: string;

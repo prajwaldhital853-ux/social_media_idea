@@ -327,6 +327,7 @@ def ledger_rows(user):
         return []
     return [{
         'id': move.pk, 'kind': move.kind, 'amount': str(move.amount), 'note': move.note,
+        'staff': move.actor.username if move.actor_id else None, 'ref': move.ref,
         'created_at': move.created_at,
     } for move in Transaction.objects.filter(wallet=wallet).order_by('-created_at')[:10]]
 

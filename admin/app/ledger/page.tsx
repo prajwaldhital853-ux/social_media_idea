@@ -166,11 +166,12 @@ export default function LedgerScreen() {
           <table className="grid review" data-list="ledger">
             <thead>
               <tr>
-                <th style={{ width: '20%' }}>Whose wallet</th>
-                <th style={{ width: '14%' }}>Movement</th>
-                <th style={{ width: '38%' }}>The note on the row</th>
-                <th style={{ width: '14%' }}>Written</th>
-                <th style={{ width: '14%' }}>Wallet now</th>
+                <th style={{ width: '19%' }}>Whose wallet</th>
+                <th style={{ width: '12%' }}>Movement</th>
+                <th style={{ width: '31%' }}>The note on the row</th>
+                <th style={{ width: '13%' }}>Staff / reference</th>
+                <th style={{ width: '12%' }}>Written</th>
+                <th style={{ width: '13%' }}>Wallet now</th>
               </tr>
             </thead>
             {rows.map(row => <Entry key={row.id} row={row}/>)}
@@ -208,6 +209,11 @@ function Entry({ row }: { row: LedgerRow }) {
         </td>
         <td data-label="The note on the row">
           <span className="entry-note" title={row.note}>{row.note || 'no note'}</span>
+        </td>
+        <td data-label="Staff / reference" className="dim">
+          {row.staff && <span className="entry-staff" title="The seat that moved the coins">@{row.staff}</span>}
+          {row.ref && <span className="entry-ref" title="What the money was for">{row.ref}</span>}
+          {!row.staff && !row.ref && <span>—</span>}
         </td>
         <td data-label="Written" className="dim" title={stamp(row.created_at)}>{ago(row.created_at)}</td>
         <td data-label="Wallet now" className="num strong" title={`The wallet’s own number as this screen reads it: ${row.currency}`}>

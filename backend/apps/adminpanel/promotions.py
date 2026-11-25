@@ -411,11 +411,13 @@ def decide(promo, actor, action, reason='', choice=''):
             coin_apply(wallet.pk, Transaction.Kind.DEBIT, taken,
                        f'Promotion {promo.pk}, {pack["name"] if pack else "custom budget"}'
                        f'{f" ({pack["days"]} days)" if pack and pack.get("days") else ""}, '
-                       f'approved by {actor.username}')
+                       f'approved by {actor.username}',
+                       actor=actor, ref=f'promotion:{promo.pk}')
         if refund > 0:
             wallet, _ = Wallet.objects.get_or_create(user=promo.owner)
             coin_apply(wallet.pk, Transaction.Kind.CREDIT, refund,
-                       f'Refund: campaign {promo.pk} {action} by {actor.username}')
+                       f'Refund: campaign {promo.pk} {action} by {actor.username}',
+                       actor=actor, ref=f'promotion:{promo.pk}')
         entry = PromoReview.objects.create(
             promotion=promo, actor=actor, action=_ACTION[action], reason=reason, coins_refunded=refund,
             choice=PromoReview.Choice.CREDIT if refund > 0

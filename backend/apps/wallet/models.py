@@ -26,6 +26,15 @@ class Transaction(models.Model):
     kind = models.CharField(max_length=6, choices=Kind.choices)
     amount = models.DecimalField(max_digits=12, decimal_places=2)
     note = models.CharField(max_length=200, blank=True)
+    # The seat that moved the money, separate from the words on the row so an
+    # audit never has to parse a sentence to learn a name. Empty on rows no staff
+    # seat caused. A departed staff member's row survives with the name gone.
+    actor = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True,
+                              on_delete=models.SET_NULL, related_name='ledger_rows')
+    # What the money was for, as a token a report can group on: the payer's own
+    # transaction reference on a deposit, `coin_request:<pk>`, `promotion:<pk>`,
+    # `manual` on a hand-written row.
+    ref = models.CharField(max_length=80, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -76,7 +85,7 @@ class CoinRequest(models.Model):
         ]
 
 
-def apply(wallet_id, kind, amount, note=''):
+def apply(wallet_id, kind, amount, note='', actor=None, ref=''):
     """Atomic balance change + ledger row. Raises ValueError on overdraft."""
     amount = Decimal(amount)
     if amount <= 0:
@@ -87,4 +96,5 @@ def apply(wallet_id, kind, amount, note=''):
         if wallet.balance + delta < 0:
             raise ValueError('Insufficient balance.')
         Wallet.objects.filter(pk=wallet.pk).update(balance=F('balance') + delta)
-        return Transaction.objects.create(wallet=wallet, kind=kind, amount=amount, note=note[:200])
+        return Transaction.objects.create(wallet=wallet, kind=kind, amount=amount,
+                                          note=note[:200], actor=actor, ref=str(ref or '')[:80])

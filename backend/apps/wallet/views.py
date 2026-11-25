@@ -164,7 +164,9 @@ def coin_request_review(request, pk, action):
             return Response({'detail': 'No pending request with that id.'}, status=404)
         if action == 'approve':
             wallet, _ = Wallet.objects.get_or_create(user=obj.user)
-            apply(wallet.pk, Transaction.Kind.CREDIT, obj.coins, f'Coin purchase {obj.pk} approved')
+            apply(wallet.pk, Transaction.Kind.CREDIT, obj.coins,
+                  f'Coin purchase {obj.pk} approved',
+                  actor=request.user, ref=obj.reference or f'coin_request:{obj.pk}')
             wallet.refresh_from_db()
             obj.status = CoinRequest.Status.APPROVED
         else:

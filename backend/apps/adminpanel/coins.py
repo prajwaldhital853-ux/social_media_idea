@@ -162,7 +162,9 @@ def decide(req, actor, action, reason=''):
         review = CoinReview(request=req, actor=actor, action=MONEY[action], reason=reason[:240])
         if action == 'approve':
             wallet, _ = Wallet.objects.get_or_create(user=req.user)
-            entry = apply(wallet.pk, Transaction.Kind.CREDIT, req.coins, f'Coin purchase {req.pk} approved')
+            entry = apply(wallet.pk, Transaction.Kind.CREDIT, req.coins,
+                          f'Coin purchase {req.pk} approved',
+                          actor=actor, ref=req.reference or f'coin_request:{req.pk}')
             wallet.refresh_from_db()
             req.status = CoinRequest.Status.APPROVED
             review.coins_credited = req.coins
@@ -301,6 +303,8 @@ def entry_row(entry):
         'kind': entry.kind,
         'amount': str(entry.amount),
         'note': entry.note,
+        'staff': entry.actor.username if entry.actor_id else None,
+        'ref': entry.ref,
         'created_at': entry.created_at.isoformat(),
         'balance': str(entry.wallet.balance),
         'currency': entry.wallet.currency,
@@ -325,7 +329,7 @@ def adjust(actor, username, direction, amount, reason):
         return 404, {'detail': f'No account called {username}.'}
     wallet, _ = Wallet.objects.get_or_create(user=user)
     try:
-        entry = apply(wallet.pk, direction, money, f'By {actor.username}: {reason}'[:200])
+        entry = apply(wallet.pk, direction, money, reason[:200], actor=actor, ref='manual')
     except ValueError as err:
         return 400, {'detail': str(err)}
     wallet.refresh_from_db()
