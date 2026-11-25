@@ -2819,3 +2819,25 @@ button.key:hover { border-color: #c3c9d1; color: var(--ink); background: #F7F8FA
 [data-theme='dark'] .skeleton {
   background: linear-gradient(90deg, #1A1E24 0%, #232830 40%, #1A1E24 80%);
 }
+
+/* Once the horizontal scroller left the tables, every column was allowed to
+   shrink alike and a name broke into a tower of three-letter lines. On a desk
+   the short values claim their own width again and only the wide columns
+   share what is left, which is how the rows were compact before. */
+@media (min-width: 1281px) {
+  .grid td, .grid tbody th { overflow-wrap: break-word; }
+  .grid .id { white-space: nowrap; overflow-wrap: normal; }
+  .grid td[data-label='Seat'],
+  .grid td[data-label='Signed up'],
+  .grid td[data-label='Access'] { white-space: nowrap; }
+}
+
+/* The page's own scrollbar sat on the right edge looking like part of the
+   table beside it; slim it down so the list reads as the only thing there. */
+html {
+  scrollbar-width: thin;
+  scrollbar-color: #C6CCD4 transparent;
+}
+html::-webkit-scrollbar { width: 8px; }
+html::-webkit-scrollbar-thumb { background: #C6CCD4; border-radius: 4px; }
+html::-webkit-scrollbar-track { background: transparent; }
