@@ -2145,6 +2145,31 @@ button.key:hover { border-color: #c3c9d1; color: var(--ink); background: #F7F8FA
 
 .adjust-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
 
+/* The account field offers the real usernames instead of asking the seat to
+   spell one from memory: a typo on a money row is a mistake nothing can edit. */
+.suggest-wrap { position: relative; }
+.suggest-pop {
+  position: absolute; top: 100%; left: 0; right: 0; z-index: 40; margin-top: 6px;
+  background: var(--paper); border: 1px solid var(--line); border-radius: 10px;
+  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.16); overflow: hidden;
+}
+.suggest-item {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 8px 12px; background: none; border: 0; text-align: left;
+  font: inherit; color: var(--ink); cursor: pointer;
+}
+.suggest-item + .suggest-item { border-top: 1px solid var(--line); }
+.suggest-item:hover, .suggest-item:focus-visible { background: #F1F4F7; outline: none; }
+.suggest-avatar {
+  flex: none; width: 28px; height: 28px; border-radius: 50%;
+  object-fit: cover; display: grid; place-items: center;
+  background: #E4E9EE; font-size: 13px; font-weight: 700; color: var(--muted);
+}
+.suggest-who { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.suggest-who b { font-size: 13px; }
+.suggest-who em { font-style: normal; font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.suggest-balance { flex: none; font-size: 12px; color: var(--muted); }
+
 .adjust-grid .field { margin: 0; }
 
 .moves { display: flex; gap: 6px; }

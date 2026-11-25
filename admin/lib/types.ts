@@ -743,6 +743,13 @@ export interface DeletedMoneyRecord {
   record: unknown;
 }
 
+export interface SuggestRow {
+  username: string;
+  name: string;
+  avatar: string;
+  balance: string;
+}
+
 /** A knob on a settings desk, typed by the server so the box knows what it holds. */
 export interface SettingLine {
   key: string;

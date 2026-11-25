@@ -10,7 +10,7 @@ import { num } from '@/lib/format';
 import { IC } from '@/lib/icons';
 import { ago, stamp } from '@/lib/time';
 import { useSession } from '@/lib/session';
-import { LedgerPage, LedgerRow } from '@/lib/types';
+import { LedgerPage, LedgerRow, SuggestRow } from '@/lib/types';
 
 /**
  * Contract 6.7, the ledger. Every wallet has a `balance` column, but this screen
@@ -270,7 +270,37 @@ function Adjust({ onWritten, noteGate }: {
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [matches, setMatches] = useState<SuggestRow[] | null>(null);
   const confirm = useConfirm();
+  const suggestSeq = useRef(0);
+
+  // A money row cannot be edited away, so the account is offered, not spelled:
+  // every keystroke asks the ledger door who is real, and the answer paints
+  // under the field until the seat picks one or clears the box.
+  useEffect(() => {
+    const query = username.trim();
+    if (!query) {
+      setMatches(null);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      const mine = suggestSeq.current + 1;
+      suggestSeq.current = mine;
+      try {
+        const out = await api<{ results: SuggestRow[] }>(
+          `admin/coins/ledger/suggest/?q=${encodeURIComponent(query)}`);
+        if (suggestSeq.current === mine) setMatches(out.results);
+      } catch {
+        if (suggestSeq.current === mine) setMatches(null);
+      }
+    }, 200);
+    return () => clearTimeout(timer);
+  }, [username]);
+
+  const pick = (row: SuggestRow) => {
+    setUsername(row.username);
+    setMatches(null);
+  };
 
   const move = async () => {
     const sure = await confirm({
@@ -308,12 +338,33 @@ function Adjust({ onWritten, noteGate }: {
       </div>
 
       <div className="adjust-grid">
-        <label className="field">
+        <label className="field suggest-wrap">
           <span>Account</span>
           <input
             value={username} onChange={event => setUsername(event.target.value)}
+            onBlur={() => setTimeout(() => setMatches(null), 150)}
             placeholder="username" autoComplete="off" name="username"
           />
+          {matches !== null && matches.length > 0 && (
+            <div className="suggest-pop" role="listbox" aria-label="Matching accounts">
+              {matches.map(row => (
+                <button
+                  key={row.username} type="button" role="option" aria-selected={row.username === username.trim()}
+                  className="suggest-item" onMouseDown={() => pick(row)}
+                  title={`@${row.username} holds ${row.balance} coins`}
+                >
+                  {row.avatar
+                    ? <img className="suggest-avatar" src={row.avatar} alt=""/>
+                    : <span className="suggest-avatar suggest-blank">{row.username.slice(0, 1).toUpperCase()}</span>}
+                  <span className="suggest-who">
+                    <b>@{row.username}</b>
+                    <em>{row.name}</em>
+                  </span>
+                  <span className="suggest-balance">{row.balance} coins</span>
+                </button>
+              ))}
+            </div>
+          )}
         </label>
         <div className="field">
           <span>Which way</span>

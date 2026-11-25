@@ -15,6 +15,7 @@ for the seat that asked.
 import secrets
 
 from django.conf import settings as django_settings
+from django.contrib.auth import get_user_model
 from django.db.models import Count, Q, Sum
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -199,6 +200,34 @@ def coin_ledger(request):
                    Transaction.objects.values('kind').annotate(n=Count('pk'))},
     })
     return response
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+@rbac.staff_only('coin_ledger')
+def ledger_suggest(request):
+    """The accounts a hand-written row could name, as the seat types the name.
+
+    The adjust form demands an exact username, and a typo on a money row is the
+    kind of mistake nobody can edit away, so the field offers the real accounts
+    instead of asking the seat to spell one from memory.
+    """
+    query = (request.query_params.get('q') or '').strip()
+    if not query:
+        return Response({'results': []})
+    rows = (get_user_model().objects
+            .filter(username__icontains=query)
+            .select_related('wallet', 'profile')
+            .order_by('username')[:6])
+    return Response({'results': [
+        {
+            'username': row.username,
+            'name': row.profile.display_name or row.get_full_name() or row.username,
+            'avatar': row.profile.avatar_url,
+            'balance': str(row.wallet.balance) if getattr(row, 'wallet', None) else '0',
+        }
+        for row in rows
+    ]})
 
 
 @api_view(['POST'])
