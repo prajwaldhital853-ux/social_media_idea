@@ -810,13 +810,20 @@ button.link:disabled:hover { color: var(--muted); text-decoration: none; }
 /* One record per row, one action per icon, and the header row
    says what the column holds rather than what it might mean. */
 
+/* The dense table is drawn for a wide desk. When the window is narrower than the
+   columns' own words the panel scrolls sideways rather than letting a header break
+   down one letter per line, and it is held to the height of the seat so both
+   scrollbars — and the header row — stay on screen while the rows move. */
 .grid-wrap {
   width: 100%;
   max-width: 100%;
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--paper);
-  overflow: visible;
+  overflow: auto;
+  max-height: calc(100dvh - var(--bar-h) - 24px);
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
 }
 
 .grid { width: 100%; min-width: 0; border-collapse: collapse; }
@@ -825,7 +832,7 @@ button.link:disabled:hover { color: var(--muted); text-decoration: none; }
 
 .grid thead th {
   position: sticky;
-  top: var(--bar-h);
+  top: 0;
   z-index: 2;
   padding: 8px 10px;
   text-align: left;
@@ -837,7 +844,7 @@ button.link:disabled:hover { color: var(--muted); text-decoration: none; }
   letter-spacing: 0.06em;
   text-transform: uppercase;
   white-space: normal;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 
 .grid td, .grid tbody th {
@@ -858,9 +865,9 @@ button.link:disabled:hover { color: var(--muted); text-decoration: none; }
 
 .grid .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .grid .dim { color: var(--muted); }
-.grid .id { color: var(--brand-d); font-weight: 650; white-space: normal; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.grid .id { color: var(--brand-d); font-weight: 650; white-space: normal; overflow-wrap: break-word; font-variant-numeric: tabular-nums; }
 .grid .strong { font-weight: 650; }
-.grid .wrap { white-space: normal; overflow-wrap: anywhere; max-width: 46ch; }
+.grid .wrap { white-space: normal; overflow-wrap: break-word; max-width: 46ch; }
 
 .grid-open {
   display: flex;
@@ -1015,8 +1022,12 @@ button.link:disabled:hover { color: var(--muted); text-decoration: none; }
   display: flex;
   flex-direction: column;
   gap: 9px;
-  max-height: calc(100vh - 28px);
-  max-height: calc(100dvh - 28px);
+  /* The seat is sticky, so its own height has to be paid for twice: once by the
+     bar it parks under and once by the gap it keeps below the fold. Measuring it
+     against the whole window instead leaves the last row — the Confirm button —
+     sitting below the screen with no scroll left in the card to reach it. */
+  max-height: calc(100vh - var(--bar-h) - 28px);
+  max-height: calc(100dvh - var(--bar-h) - 28px);
   overflow-y: auto;
   overscroll-behavior: contain;
 }
