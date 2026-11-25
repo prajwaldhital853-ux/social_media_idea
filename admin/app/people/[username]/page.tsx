@@ -578,6 +578,11 @@ function VerbButton({
         <span>{busy && !form ? 'Working…' : label}</span>
       </button>
 
+      {error && !form && (
+        // Reinstate fires straight from the row, so its refusal has no card to sit in.
+        <p className="card-error" role="status">{IC.alert}<span>{error}</span></p>
+      )}
+
       {form && (
         <div className="ask">
           <p className="note row">{IC.alert}<span>{spec.help}</span></p>
