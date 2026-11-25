@@ -12,6 +12,7 @@ import { API_ENABLED } from '@/lib/api';
 import { IC } from '@/lib/icons';
 import Avatar from './Avatar';
 import PromoteForm from './PromoteForm';
+import BlockedEcho from './BlockedEcho';
 
 function Composer({ original }: { original?: Post }) {
   const { me, t, closeComposer, addPost, updatePost, showToast, requestPromotion, feature } = useApp();
@@ -19,6 +20,7 @@ function Composer({ original }: { original?: Post }) {
   const [text, setText] = useState(original?.text || '');
   const [media, setMedia] = useState<Media[]>(original?.media || []);
   const [error, setError] = useState('');
+  const [blocked, setBlocked] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [sending, setSending] = useState<{ name: string; pct: number } | null>(null);
   const [promote, setPromote] = useState(false);
@@ -115,9 +117,12 @@ function Composer({ original }: { original?: Post }) {
       }
       if (promote && promoConfig && id) await requestPromotion('post', id, promoConfig);
       published.current = true;
+      setBlocked([]);
       showToast(original ? 'Post updated.' : stage === 'reel' ? 'Reel posted.' : 'Post published.');
       requestClose();
     } catch (err) {
+      const data = (err as { data?: { blocked?: string[] } })?.data;
+      if (data?.blocked?.length) setBlocked(data.blocked);
       setError(err instanceof Error ? err.message : 'This post could not be published. Try again.');
     } finally {
       setBusy(false);
@@ -148,7 +153,10 @@ function Composer({ original }: { original?: Post }) {
           </div> : <>
             <div className="cp-body">
               <div className="cp-author"><Avatar user={me} size={40} /><div><b>{me.name}</b><span className="cp-public">{IC.globe} Public</span></div></div>
-              <textarea ref={areaRef} className="cp-text" aria-label="Post caption" placeholder={stage === 'reel' ? 'Add a caption…' : 'What would you like to share?'} value={text} maxLength={500} onChange={e => setText(e.target.value)} />
+              <div className="field-echo-wrap">
+                <textarea ref={areaRef} className="cp-text" aria-label="Post caption" placeholder={stage === 'reel' ? 'Add a caption…' : 'What would you like to share?'} value={text} maxLength={500} onChange={e => setText(e.target.value)} />
+                <BlockedEcho text={text} words={blocked} fieldRef={areaRef} fieldClass="cp-text" />
+              </div>
               {media.length > 0 && <div className={`cp-media n${media.length}`}>
                 {media.map((item, i) => <div key={item.src || i} className="cp-thumb">
                   {item.type === 'video' ? <video src={item.src} controls playsInline preload="metadata" /> : <img src={item.src || item.gen} alt={`Attachment ${i + 1}`} />}

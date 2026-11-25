@@ -885,7 +885,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       merge({ posts: [mapPost(await api.patch<any>(`/api/posts/${id}/`, payload))] });
     } catch (err) {
       if (before) setDb(prev => ({ ...prev, posts: prev.posts.map(p => (p.id === id ? before : p)) }));
-      showToast(errText(err, 'That change could not be saved.'));
+      // The refusal belongs to the screen that owns the draft: a swallowed error
+      // read as success and closed the composer over a post that never saved.
+      throw err;
     }
   };
 

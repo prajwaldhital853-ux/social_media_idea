@@ -44,8 +44,8 @@ def terms_for(kind):
     return words() + (items() if kind == 'listing' else [])
 
 
-def scan(text):
-    """Which blocked words appear in this text. Substring, case-insensitive, no regex.
+def scan(text, terms=None):
+    """Which blocked terms appear in this text. Substring, case-insensitive, no regex.
 
     Deliberately not a word-boundary match: `buygunspowder` has to count, because
     that is exactly what a person writing around a filter types.
@@ -53,19 +53,29 @@ def scan(text):
     haystack = normalize(text)
     if not haystack:
         return []
-    return [term for term in words() if term and term in haystack]
+    return [term for term in (terms if terms is not None else words()) if term and term in haystack]
 
 
 def check(request, kind):
     """None when this write may be saved, otherwise the answer to hand back instead.
 
     The same shape the console's own gate uses, so a member-facing door reads it in
-    one line. The blocked sentence never reaches the database: its author gets the
-    words that stopped it in a `detail` their app can put on the screen it came from,
-    the audit log gets one row per attempt, and the bell gets one per word.
+    one line. Every text field a write carries is scanned — a post or comment says
+    `text`, a listing says `title` and `description`, and a listing is also read
+    against the prohibited-items list, because that list is the vocabulary the
+    marketplace is sold under. The blocked sentence never reaches the database: its
+    author gets the words that stopped it in a `detail` their app can put on the
+    screen it came from, and the same words as a `blocked` list so the composer can
+    paint them where they sit. The audit log gets one row per attempt, the bell one
+    per word.
     """
-    text = request.data.get('text') if isinstance(request.data, dict) else ''
-    hits = scan(text)
+    data = request.data if isinstance(request.data, dict) else {}
+    terms = terms_for(kind)
+    hits = []
+    for field in ('text', 'title', 'description'):
+        for hit in scan(data.get(field), terms):
+            if hit not in hits:
+                hits.append(hit)
     if not hits:
         return None
     from . import bell, journal
@@ -74,7 +84,7 @@ def check(request, kind):
     named = ', '.join(f'"{word}"' for word in hits[:3])
     if len(hits) > 3:
         named += f' and {len(hits) - 3} more'
-    journal.record(None, 'blocked_word', f'{kind} by @{who}', f'{named}: {_excerpt(text)}')
+    journal.record(None, 'blocked_word', f'{kind} by @{who}', f'{named}: {_excerpt(data.get("text") or data.get("title"))}')
     # The tray wakes once per word, because twenty tries at one filter are one
     # decision for the desk; the row above still carries every single attempt.
     if cache.add(f'blocked-word-bell:{kind}:{hits[0]}', 1, ALERT_EVERY):
@@ -84,6 +94,7 @@ def check(request, kind):
         )
     return Response({
         'detail': f'This contains wording the platform has blocked: {named}. Take it out and try again.',
+        'blocked': hits,
     }, status=400)
 
 
