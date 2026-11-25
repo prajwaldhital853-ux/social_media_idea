@@ -151,9 +151,15 @@ def decide(req, actor, action, reason=''):
                    if action == 'reject' else 'Write what more you need from them.')
         return 400, {'detail': missing}
 
-    review = CoinReview(request=req, actor=actor, action=MONEY[action], reason=reason[:240])
     entry = None
     with transaction.atomic():
+        # The row is locked and its status re-read before any money moves: two seats
+        # deciding the same request at the same moment must meet at the first one's
+        # verdict instead of both crediting the wallet.
+        req = CoinRequest.objects.select_for_update().select_related('user').get(pk=req.pk)
+        if req.status != CoinRequest.Status.PENDING:
+            return 409, {'detail': f'That request was already {req.status}. Nothing here changed it again.'}
+        review = CoinReview(request=req, actor=actor, action=MONEY[action], reason=reason[:240])
         if action == 'approve':
             wallet, _ = Wallet.objects.get_or_create(user=req.user)
             entry = apply(wallet.pk, Transaction.Kind.CREDIT, req.coins, f'Coin purchase {req.pk} approved')
