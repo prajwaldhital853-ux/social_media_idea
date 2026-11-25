@@ -451,14 +451,12 @@ def locked_out(user, now=None):
     return RefreshSession.objects.filter(user=user, revoked_at__isnull=True).update(revoked_at=now)
 
 
-def enforcement_email(user, subject, body):
+def enforcement_email(user, subject, body, *,
+                      footnote='If you believe this action was taken in error, contact the Exposing team using the details below.'):
     """The branded email a barred or warned account gets, with the Client's contact foot."""
     if not user.email:
         return None
-    queue_event_email(
-        user.email, subject, subject, body,
-        footnote='If you believe this action was taken in error, contact the Exposing team using the details below.',
-    )
+    queue_event_email(user.email, subject, subject, body, footnote=footnote)
     return {'to': user.email, 'subject': subject}
 
 
@@ -560,9 +558,15 @@ def reinstate(user, caller):
     notify(user, caller, 'warning', 'Your account suspension was lifted by staff.', 'user', user.pk)
     record(caller, 'reinstate_user', user.username, 'suspension lifted')
     doors = f'The suspension is lifted and {lifted} sign-in ban(s) with it. ' if lifted else 'The suspension is lifted. '
+    emailed = enforcement_email(user, 'Your Exposing account is back',
+                                'Your account suspension was lifted by staff. '
+                                'You can sign in again right now.', footnote='')
     return {
         'action': 'reinstate', 'username': user.username, 'suspension': None, 'bans_lifted': lifted,
-        'detail': doors + 'They can sign in again right now.',
+        'emailed': emailed,
+        'detail': doors + 'They can sign in again right now.'
+        + (f' An email went to {emailed["to"]}.' if emailed
+           else ' There is no email address on this account.'),
     }
 
 
@@ -582,13 +586,18 @@ def verify(user, caller, *, verified, reason=''):
     notify(user, caller, 'warning',
            f'Your profile is {"verified" if verified else "no longer verified"}.'
            + (f' {reason}' if reason else ''), 'user', user.pk)
+    tick = (f'Your Exposing profile is {"verified" if verified else "no longer verified"}.'
+            + (f' {reason}' if reason else ''))
+    emailed = enforcement_email(user, tick.rstrip('.'), tick, footnote='')
     record(caller, 'verify_user' if verified else 'unverify_user', user.username,
            reason or ('tick added' if verified else 'tick removed'))
     return {
         'action': 'verify', 'username': user.username, 'verified': verified,
-        'person': row(user),
+        'person': row(user), 'emailed': emailed,
         'detail': (f'@{user.username} is verified, the tick is on their profile.' if verified
-                   else f'The tick is off @{user.username}.'),
+                   else f'The tick is off @{user.username}.')
+        + (f' An email went to {emailed["to"]}.' if emailed
+           else ' There is no email address on this account.'),
     }
 
 
@@ -654,16 +663,22 @@ def clear_flags(user, caller, *, reason=''):
            'The reports and warnings on your account were reviewed and cleared.'
            + (f' {held} post(s) are still held for a separate decision.' if held
               else ' Nothing else is held against you.'), 'user', user.pk)
+    emailed = enforcement_email(user, 'An update on the reports against your account',
+                                'The reports and warnings on your account were reviewed and cleared.'
+                                + (f' {held} post(s) are still held for a separate decision.' if held
+                                   else ' Nothing else is held against you.'), footnote='')
     record(caller, 'clear_spam_flags', user.username,
            f'{closed} report(s) dismissed, {withdrawn} notice(s) withdrawn, lockout cleared. {reason}'[:240])
     return {
         'action': 'clear_flags', 'username': user.username, 'reports_closed': closed,
-        'notices_withdrawn': withdrawn, 'held_posts': held,
+        'notices_withdrawn': withdrawn, 'held_posts': held, 'emailed': emailed,
         'detail': (f'{closed} open report(s) closed, {withdrawn} warning notice(s) withdrawn '
                    'and the login lockout cleared. '
                    + (f'{held} post(s) of theirs are still out of the feed on an earlier '
                       'decision, release them from the Takedown shelf.' if held
-                      else 'Nothing of theirs is held.')),
+                      else 'Nothing of theirs is held.'))
+        + (f' An email went to {emailed["to"]}.' if emailed
+           else ' There is no email address on this account.'),
     }
 
 
@@ -700,10 +715,19 @@ def delete(user, caller, *, confirm, reason=''):
     record(caller, 'delete_user', username,
            f'{held["posts"]} posts, {held["comments"]} comments, {held["listings"]} listings '
            f'and {held["balance"]} coins went with the account. {reason}'[:240])
+    # The letter leaves before the row goes: the mailbox is the only place this
+    # member can still be reached, and the address is a string the thread does
+    # not need the account row for.
+    emailed = enforcement_email(user, 'Your Exposing account was deleted',
+                                f'Your Exposing account @{username} was deleted by the Exposing team. '
+                                f'Reason: {reason}. Your posts, comments, listings and wallet went with '
+                                'it, and this cannot be undone.')
     user.delete()
     return {
-        'action': 'delete', 'username': username, 'holdings': held,
+        'action': 'delete', 'username': username, 'holdings': held, 'emailed': emailed,
         'detail': (f'@{username} is deleted, with their {held["posts"]} post(s), '
                    f'{held["comments"]} comment(s) and {held["listings"]} listing(s). '
-                   'This cannot be undone; the audit row names who did it.'),
+                   'This cannot be undone; the audit row names who did it.')
+        + (f' An email went to {emailed["to"]}.' if emailed
+           else ' There is no email address on this account.'),
     }

@@ -446,6 +446,8 @@ def act(kind, target_id, actor, action, reason='', notice_text='', audience=Publ
             Post.objects.filter(pk=row.post_id).update(comment_count=F('comment_count') + 1)
         out['reports_closed'] = close_reports(kind, row.pk, Report.Status.DISMISSED, now)
         _say(kind, row, actor, f'Your {kind} was reviewed and is back in the feed.')
+        owner_mail = (f'Your Exposing {kind} is back in the feed',
+                      f'Your {kind} was reviewed and is back in the feed.', False)
         out['detail'] = (
             f'Back in the feed. {out["reports_closed"]} report(s) closed, so the next report '
             'cannot re-hide it on the old pile.'
@@ -461,6 +463,8 @@ def act(kind, target_id, actor, action, reason='', notice_text='', audience=Publ
         if kind == 'comment':
             Post.objects.filter(pk=row.post_id).update(comment_count=F('comment_count') + 1)
         _say(kind, row, actor, f'Your {kind} was restored by moderation.')
+        owner_mail = (f'Your Exposing {kind} was restored',
+                      f'Your {kind} was restored by moderation. It is back in the feed.', False)
         out['detail'] = 'Restored. The author is told it is back.'
 
     record(actor, AUDIT[action], f'{kind}:{row.pk}', reason or out['detail'])
