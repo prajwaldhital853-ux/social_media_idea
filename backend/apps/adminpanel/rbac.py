@@ -24,6 +24,8 @@ SUPERADMIN = StaffAccount.Role.SUPERADMIN
 ADMIN = StaffAccount.Role.ADMIN
 MODERATOR = StaffAccount.Role.MODERATOR
 
+ROLE_LABELS = {SUPERADMIN: 'Superadmin', ADMIN: 'Admin', MODERATOR: 'Moderator'}
+
 GROUPS = (
     ('dashboard', 'Dashboard'),
     ('moderation', 'Moderation'),

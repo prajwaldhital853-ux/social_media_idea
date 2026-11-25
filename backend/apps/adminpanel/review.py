@@ -16,6 +16,7 @@ is written to the same audit log the rest of the console uses.
 
 from decimal import Decimal
 
+from django.db import transaction
 from django.db.models import Count, F, Q
 from django.db.models.functions import Greatest
 from django.utils import timezone
@@ -142,20 +143,27 @@ def cancel_campaigns(kind, target_id, now):
     """Stop what is running on this content, through the same ledger it paid from."""
     stopped = []
     total = Decimal('0')
-    for promo in campaigns_on(kind, target_id):
-        refund = unspent(promo, now)
-        promo.status = Promotion.Status.ENDED
-        promo.ends_at = now
-        promo.save(update_fields=['status', 'ends_at'])
-        if refund > 0:
-            wallet, _ = Wallet.objects.get_or_create(user=promo.owner)
-            apply(wallet.pk, CoinMove.Kind.CREDIT, refund,
-                  f'Refund: campaign {promo.pk} stopped when moderation removed {kind}:{target_id}')
-            total += refund
-        stopped.append({
-            'id': promo.pk, 'owner': promo.owner.username, 'package': promo.package,
-            'budget': str(promo.budget), 'refunded': str(refund),
-        })
+    ids = list(campaigns_on(kind, target_id).values_list('pk', flat=True))
+    with transaction.atomic():
+        for promo in (Promotion.objects.select_for_update().select_related('owner')
+                      .filter(pk__in=ids).order_by('pk')):
+            if promo.status not in (Promotion.Status.ACTIVE, Promotion.Status.PAUSED):
+                # A seat decided this campaign while the takedown was being written:
+                # its money already moved through that decision, so nothing refunds twice.
+                continue
+            refund = unspent(promo, now)
+            promo.status = Promotion.Status.ENDED
+            promo.ends_at = now
+            promo.save(update_fields=['status', 'ends_at'])
+            if refund > 0:
+                wallet, _ = Wallet.objects.get_or_create(user=promo.owner)
+                apply(wallet.pk, CoinMove.Kind.CREDIT, refund,
+                      f'Refund: campaign {promo.pk} stopped when moderation removed {kind}:{target_id}')
+                total += refund
+            stopped.append({
+                'id': promo.pk, 'owner': promo.owner.username, 'package': promo.package,
+                'budget': str(promo.budget), 'refunded': str(refund),
+            })
     return stopped, total
 
 

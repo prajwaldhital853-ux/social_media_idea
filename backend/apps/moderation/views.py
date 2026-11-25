@@ -12,6 +12,7 @@ from rest_framework.response import Response
 
 from apps.accounts.models import User
 from apps.comments.models import Comment
+from apps.common.emails import queue_report_email
 from apps.common.pagination import KeysetPagination
 from apps.marketplace.models import Listing
 from apps.notifications.services import notify
@@ -56,6 +57,7 @@ def reports(request):
             )
         obj = serializer.save(reporter=request.user)
         _auto_hide_if_piled_on(obj)
+        queue_report_email(obj)
         return Response(ReportSerializer(obj).data, status=status.HTTP_201_CREATED)
     if not request.user.is_staff:
         return Response({'detail': 'Staff only.'}, status=403)

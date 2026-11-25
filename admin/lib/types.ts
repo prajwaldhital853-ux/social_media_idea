@@ -621,7 +621,9 @@ export interface PersonOutcome {
 /** One line of the first-load card, with the platform's own wording behind it. */
 export interface WelcomeLine {
   key: string;
-  field: 'message' | 'tagline' | 'email' | 'phone' | 'form';
+  // The last two are written on the same desk but never reach the card: they steer
+  // where the platform's own letters go.
+  field: 'message' | 'tagline' | 'email' | 'phone' | 'form' | 'report_inbox' | 'console_url';
   label: string;
   help: string;
   limit: number;

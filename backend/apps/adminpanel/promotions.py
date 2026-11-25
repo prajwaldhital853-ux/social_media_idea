@@ -345,58 +345,63 @@ def decide(promo, actor, action, reason='', choice=''):
     choice = str(choice or '').strip()
     if action not in _ACTION:
         return 400, {'detail': 'Approve, reject, pause, resume or stop.'}
-    if promo.status in CLOSING:
-        return 409, {'detail': 'That campaign is closed. Nothing here changes it again.'}
     if action in ('reject', 'stop') and not reason:
         return 400, {'detail': 'Say why the campaign is refused, the payer is told this sentence.'
                               if action == 'reject' else
                               'Say why this paid run is ending early. The sentence goes on the record.'}
     if action == 'stop' and choice not in ('credit', 'withhold'):
         return 400, {'detail': 'Choose whether the unrun part of the budget is refunded or withheld.'}
-    if action in ('approve', 'resume') and promo.ends_at and promo.ends_at <= timezone.now():
-        return 409, {'detail': 'Its run is over. Approving it now would promise reach that no longer exists.'}
-    if action == 'approve' and promo.status == Promotion.Status.DRAFT:
-        return 400, {'detail': 'A draft has not been ordered yet, there is nothing here to approve.'}
-    if action == 'approve' and target_of(promo) is None:
-        # An order can sit in the queue long enough for the post or listing it points
-        # at to be deleted or taken down. Charging the payer then would buy reach on
-        # nothing, so the desk has to refuse it instead.
-        return 409, {'detail': 'The content this campaign points at is gone, so there is nothing here to give '
-                               'reach to. Refuse the order, no coins were taken from the payer.'}
-    if action == 'pause' and promo.status != Promotion.Status.ACTIVE:
-        return 400, {'detail': 'Only a campaign that is running can be paused.'}
-    if action == 'resume' and promo.status != Promotion.Status.PAUSED:
-        return 400, {'detail': 'That campaign is not paused.'}
-
-    now = timezone.now()
-    budget = Decimal(str(promo.budget or 0))
-    pack = package_by_id(promo.package)
-    # Only an order still sitting in the queue is bought here. A campaign that already
-    # has a start date was paid for on the day it was first approved, and a running row
-    # that predates this rule is left as it was found.
-    ordering = action == 'approve' and promo.starts_at is None and promo.status == Promotion.Status.PENDING
-    held = action == 'stop' and choice == 'withhold'
-    refund = Decimal('0') if held or action not in ('reject', 'stop') else owed(promo, action, now)
-    status = _TO[action]
-    taken = Decimal('0')
-    starts_at, ends_at = promo.starts_at, promo.ends_at
-    if ordering:
-        taken = budget
-        starts_at = now
-        days = (pack or {}).get('days') or 0
-        if days:
-            ends_at = now + timedelta(days=days)
-        if taken > 0:
-            wallet, _ = Wallet.objects.get_or_create(user=promo.owner)
-            # The payer may have spent the balance down while the order waited. Taking
-            # the coins then would push them into the negative, so the desk is told to
-            # refuse the campaign instead of the ledger raising the alarm later.
-            if wallet.balance < taken:
-                return 409, {
-                    'detail': f'@{promo.owner.username} now has {_coins(wallet.balance)} coins and this '
-                              f'campaign costs {_coins(taken)}. Refuse it, or wait until they buy coins.'}
 
     with db_atomic.atomic():
+        # Every gate below reads the row while it is locked, so two seats deciding the
+        # same campaign at the same moment meet at the first verdict and the coins
+        # move exactly once.
+        promo = Promotion.objects.select_for_update().select_related('owner').get(pk=promo.pk)
+        if promo.status in CLOSING:
+            return 409, {'detail': 'That campaign is closed. Nothing here changes it again.'}
+        if action in ('approve', 'resume') and promo.ends_at and promo.ends_at <= timezone.now():
+            return 409, {'detail': 'Its run is over. Approving it now would promise reach that no longer exists.'}
+        if action == 'approve' and promo.status == Promotion.Status.DRAFT:
+            return 400, {'detail': 'A draft has not been ordered yet, there is nothing here to approve.'}
+        if action == 'approve' and target_of(promo) is None:
+            # An order can sit in the queue long enough for the post or listing it points
+            # at to be deleted or taken down. Charging the payer then would buy reach on
+            # nothing, so the desk has to refuse it instead.
+            return 409, {'detail': 'The content this campaign points at is gone, so there is nothing here to give '
+                                   'reach to. Refuse the order, no coins were taken from the payer.'}
+        if action == 'pause' and promo.status != Promotion.Status.ACTIVE:
+            return 400, {'detail': 'Only a campaign that is running can be paused.'}
+        if action == 'resume' and promo.status != Promotion.Status.PAUSED:
+            return 400, {'detail': 'That campaign is not paused.'}
+
+        now = timezone.now()
+        budget = Decimal(str(promo.budget or 0))
+        pack = package_by_id(promo.package)
+        # Only an order still sitting in the queue is bought here. A campaign that already
+        # has a start date was paid for on the day it was first approved, and a running row
+        # that predates this rule is left as it was found.
+        ordering = action == 'approve' and promo.starts_at is None and promo.status == Promotion.Status.PENDING
+        held = action == 'stop' and choice == 'withhold'
+        refund = Decimal('0') if held or action not in ('reject', 'stop') else owed(promo, action, now)
+        status = _TO[action]
+        taken = Decimal('0')
+        starts_at, ends_at = promo.starts_at, promo.ends_at
+        if ordering:
+            taken = budget
+            starts_at = now
+            days = (pack or {}).get('days') or 0
+            if days:
+                ends_at = now + timedelta(days=days)
+            if taken > 0:
+                wallet, _ = Wallet.objects.get_or_create(user=promo.owner)
+                # The payer may have spent the balance down while the order waited. Taking
+                # the coins then would push them into the negative, so the desk is told to
+                # refuse the campaign instead of the ledger raising the alarm later.
+                if wallet.balance < taken:
+                    return 409, {
+                        'detail': f'@{promo.owner.username} now has {_coins(wallet.balance)} coins and this '
+                                  f'campaign costs {_coins(taken)}. Refuse it, or wait until they buy coins.'}
+
         Promotion.objects.filter(pk=promo.pk).update(
             status=status, starts_at=starts_at,
             ends_at=now if status == Promotion.Status.ENDED else ends_at)

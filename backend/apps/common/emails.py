@@ -1,10 +1,12 @@
 """Queue the platform's branded transactional mail after the business write."""
 
 import logging
+import re
 from decimal import Decimal, InvalidOperation
 from urllib.parse import urljoin
 
 from django.conf import settings
+from django.utils import timezone
 
 from apps.common.mail import send_off_request
 from apps.common.tasks import safe_link, send_branded_email, send_welcome_email
@@ -101,6 +103,83 @@ def queue_welcome_email(user, *, name='', username='', verified=True):
     return _queue(
         send_welcome_email, user.email, 'Welcome to Exposing', name, username,
         _absolute('/login'), verified, support_context(),
+    )
+
+
+def queue_report_email(report):
+    """Tell the address the Client chose in the console that a complaint arrived.
+
+    The inbox is a setting rather than a constant because the person who reads
+    reports changes without a deploy. An empty or unparseable box says nothing:
+    then the console queue is the only place a report is meant to be seen, and a
+    settings screen must not be able to mail a stranger's complaint to a typo.
+    """
+    try:
+        from apps.adminpanel.settings_store import get
+
+        inbox = str(get('report_inbox') or '').strip()
+    except Exception:
+        logger.exception('Could not read the complaints inbox setting')
+        return None
+    if not re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]{2,}', inbox):
+        return None
+    reporter = report.reporter
+    return queue_event_email(
+        inbox,
+        'A complaint was filed on Exposing',
+        'Someone reported content',
+        f'@{reporter.username} reported the {report.target_type} below. It is open in the '
+        'console review queue, where the decision is written.',
+        details=(
+            ('Reported by', f'@{reporter.username}'),
+            ('Their email', reporter.email or ''),
+            ('Target', f'{report.target_type} #{report.target_id}'),
+            ('Reason', report.reason),
+            ('Their words', report.details),
+            ('Filed at', timezone.localtime(report.created_at).strftime('%d %b %Y at %H:%M')),
+        ),
+        footnote='This address is set under Console → First-load wording, and can be changed there at any time.',
+    )
+
+
+def queue_staff_created_email(user, *, password, role, permissions=(), by=''):
+    """Hand a new seat what it needs to walk in once: address, password, role, screens, link.
+
+    The password travels in the letter because the console cannot show it again
+    after the write closes: the row is flagged so the door refuses that password a
+    second time and makes the person choose their own, which makes this letter a
+    bridge rather than a place a secret is kept. The screens are spelled out by
+    their own names so nobody has to discover their access by finding a locked door.
+    """
+    from apps.adminpanel.rbac import LABELS, ROLE_LABELS
+
+    try:
+        from apps.adminpanel.settings_store import get
+
+        door = str(get('console_url') or '').strip().rstrip('/')
+    except Exception:
+        logger.exception('Could not read the console address setting')
+        door = ''
+    names = [LABELS.get(key, key) for key in permissions]
+    return queue_event_email(
+        user.email,
+        'Your Exposing staff seat is ready',
+        'You have access to the Exposing console',
+        f'{by or "The platform"} gave you a {ROLE_LABELS.get(role, role)} seat on the Exposing '
+        'admin console. Sign in with the address and temporary password below. The door makes you '
+        'choose your own password first, then set up an authenticator, before any screen opens.',
+        details=(
+            ('Sign in with', user.email or ''),
+            ('Your username', f'@{user.username}'),
+            ('Temporary password', password),
+            ('Your role', ROLE_LABELS.get(role, role)),
+            ('Screens you can open', ', '.join(names) if names else 'None yet'),
+        ),
+        cta_label='Open the staff sign-in',
+        cta_path=f'{door}/login' if door else '/login',
+        footnote='This password stops working the moment you replace it, and it is not sent out '
+                 'again. If this letter reached the wrong person, tell Exposing staff rather than '
+                 'signing in.',
     )
 
 

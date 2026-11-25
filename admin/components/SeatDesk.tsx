@@ -207,6 +207,95 @@ export function SeatBody({
   );
 }
 
+/** What each area of the console is for, said before the person ticks anything. */
+const GROUP_BLURBS: Record<string, string> = {
+  dashboard: 'Numbers about how the site is doing.',
+  moderation: 'Complaints, and the posts, comments and listings they point at.',
+  people: 'Find a member and act on their account.',
+  payments: 'Coin purchases, the ledger and what coins cost.',
+  promotions: 'Paid promotion requests and the settings behind them.',
+  safety: 'Spam rules, alerts, the record of what staff did, and exports.',
+  platform: 'Settings that change the site itself.',
+  staff: 'Other seats: who holds one and what it reaches.',
+};
+
+/** The screens the chosen role opens on its own, before anyone ticks a box. */
+export function roleKeys(catalogue: Catalogue | null, role: string): string[] {
+  return (catalogue?.permissions ?? []).filter(entry => (entry.roles as string[]).includes(role)).map(entry => entry.key);
+}
+
+/**
+ * The screens a seat opens, as a plain tick list.
+ *
+ * A grant form used to show every key as a chip that cycled through three hidden
+ * states, role default, extra grant, explicit denial, with the role's own set only
+ * in a tooltip. Nobody could read it at a glance, and getting it wrong took a
+ * screen away from a colleague. Here the answer to "can this person open it" is the
+ * box: the role only decides where the ticks start.
+ */
+export function ScreenPicker({
+  catalogue, role, checked, labelOf, onToggle, onSetAll,
+}: {
+  catalogue: Catalogue | null;
+  role: string;
+  checked: Record<string, boolean>;
+  labelOf: (key: string) => string;
+  onToggle: (key: string) => void;
+  onSetAll: (kind: 'all' | 'none' | 'role') => void;
+}) {
+  if (!catalogue) {
+    return <div className="skeleton-stack"><div className="skeleton"/><div className="skeleton skeleton-short"/></div>;
+  }
+  const keys = catalogue.permissions.map(entry => entry.key);
+  const open = keys.filter(key => checked[key]).length;
+  return (
+    <div className="picker">
+      <div className="picker-tools">
+        <p className="picker-count">
+          <b>{open}</b> of {keys.length} screens open
+        </p>
+        <div className="picker-jumps">
+          <button type="button" className="btn tiny" onClick={() => onSetAll('role')} title="Back to what this role gets by default">
+            {IC.refresh}<span>{ROLE_LABEL[role] || role} defaults</span>
+          </button>
+          <button type="button" className="btn tiny" onClick={() => onSetAll('none')} title="They open nothing but the console itself">
+            {IC.x}<span>None</span>
+          </button>
+          <button type="button" className="btn tiny" onClick={() => onSetAll('all')} title="Every screen in the console">
+            {IC.check}<span>All</span>
+          </button>
+        </div>
+      </div>
+      <div className="picker-body">
+        {catalogue.groups.map(group => {
+          const entries = catalogue.permissions.filter(entry => entry.group === group.id);
+          if (entries.length === 0) return null;
+          const picked = entries.filter(entry => checked[entry.key]).length;
+          return (
+            <div className="picker-group" key={group.id}>
+              <div className="picker-group-head">
+                <b>{group.label}</b>
+                <em>{GROUP_BLURBS[group.id] || ''}</em>
+                <span className={`picker-group-count${picked === 0 ? ' none' : ''}`}>{picked}/{entries.length}</span>
+              </div>
+              {entries.map(entry => (
+                <label className={`screen${checked[entry.key] ? ' on' : ''}`} key={entry.key}>
+                  <input
+                    type="checkbox" checked={!!checked[entry.key]}
+                    onChange={() => onToggle(entry.key)}
+                  />
+                  <span className="screen-name">{labelOf(entry.key)}</span>
+                  {(entry.roles as string[]).includes(role) && <em className="screen-tag">with this role</em>}
+                </label>
+              ))}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export function KeyGrid({
   catalogue, valueOf, labelOf, onChange,
 }: {

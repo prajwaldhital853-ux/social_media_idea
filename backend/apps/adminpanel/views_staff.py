@@ -18,6 +18,7 @@ from rest_framework.response import Response
 
 from apps.accounts import passwords
 from apps.accounts.models import RefreshSession, User
+from apps.common.emails import queue_staff_created_email
 
 from . import rbac
 from .journal import record
@@ -283,9 +284,19 @@ def staff_create(request):
                               'must_change_password', 'granted_keys', 'denied_keys'])
     record(caller.user, 'create_staff', user.username,
            f'role={role} password issued, must be replaced at first sign-in')
+    # The letter carries what this screen cannot keep: the write is done, so the
+    # password is never shown here again. A broker that is down must not turn a
+    # seat that exists into a failed request, so the queue is tried, not trusted.
+    queue_staff_created_email(
+        user, password=password, role=role,
+        permissions=rbac.permissions_for(staff),
+        by=caller.user.get_full_name() or f'@{caller.user.username}',
+    )
     out = _row(staff)
-    out['detail'] = (f'{user.username} holds a {role} seat. Give them this password once, the '
-                     'console will make them choose their own before it opens.')
+    out['detail'] = (f'{user.username} holds a {role} seat. Their sign-in address, this password, '
+                     f'the console link and the {len(rbac.permissions_for(staff))} screens the seat '
+                     'opens were posted to '
+                     f'{user.email}. The door makes them choose their own password first.')
     return Response(out, status=201)
 
 
