@@ -1,7 +1,7 @@
 """Contract 6.9: the five files a seat hands to an accountant, and the record of who took one.
 
-Two doors on one screen. The read answers "what would this file contain" — the row
-counts, the column names, the window a date pair would cut — because a CSV you cannot
+Two doors on one screen. The read answers "what would this file contain", the row
+counts, the column names, the window a date pair would cut, because a CSV you cannot
 inspect before downloading is a CSV you end up apologising for afterwards. The write
 builds it, and by default answers in JSON with the same numbers so the screen can
 print them; with `?raw=1` it answers as the file itself, which is what the browser
@@ -20,11 +20,11 @@ from rest_framework.response import Response
 
 from . import audit, exports, rbac
 
-BAD_DATE = 'Give the dates as 2026-11-01 — a whole table needs neither of them.'
+BAD_DATE = 'Give the dates as 2026-11-01, a whole table needs neither of them.'
 
 
 def _window(request):
-    """(since, until, the sentence to show instead) — typed in a body or a query string."""
+    """(since, until, the sentence to show instead), typed in a body or a query string."""
     posted = request.data if isinstance(getattr(request, 'data', None), dict) else {}
 
     def typed(name):

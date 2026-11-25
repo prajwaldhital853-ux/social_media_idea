@@ -1,8 +1,8 @@
 """Contract 6.9: the audit log screen, and the facets a Client asks it with.
 
 The log is append-only and belongs to the moderation app; this door only reads it.
-What it adds is the shape of the question — *who* did *what* *when*, and the reason
-that was typed with it — so a seat asked in March what changed in January can answer
+What it adds is the shape of the question, *who* did *what* *when*, and the reason
+that was typed with it, so a seat asked in March what changed in January can answer
 without a database client.
 
 The facets come back with every page on purpose. `families()` carries the families
@@ -31,7 +31,7 @@ def _moment(raw, end=False):
     """`2026-11-22` and a full timestamp both mean the same thing here.
 
     A date with no clock on it is read as the whole day, so the upper bound lands on
-    its last second — a range that quietly drops the day it names is a range nobody
+    its last second, a range that quietly drops the day it names is a range nobody
     can reconcile against anything. `parse_datetime` accepts a bare date and puts it
     at midnight, so the day-only shape is split off before it ever sees one.
     """

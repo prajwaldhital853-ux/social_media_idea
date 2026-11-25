@@ -1,6 +1,6 @@
 """Contract 6.9: the five files a seat downloads instead of copying a screen.
 
-Users, Reports, Coin Requests, Coin Ledger, Promotions — the tables the Client has
+Users, Reports, Coin Requests, Coin Ledger, Promotions, the tables the Client has
 to hand to an accountant, a lawyer or an auditor. Each is read straight out of the
 member site's own rows, in the order the queue shows them, with the staff decisions
 the console keeps beside them; nothing here is a second copy of the data that could
@@ -191,7 +191,7 @@ def day_boundaries(since='', until=''):
     """`2026-11-01` to a window that ends at the last second of `2026-11-22`.
 
     A date with no clock on it means a whole day to the person who typed it, so the
-    end of the range is a day's last second rather than its first — a file that
+    end of the range is a day's last second rather than its first, a file that
     quietly drops the twenty-second of November is a file nobody reconciles.
     """
     def parse(raw, end=False):
@@ -227,7 +227,7 @@ def name_for(dataset, since=None, until=None):
 
 
 def index(since=None, until=None):
-    """What each file would contain right now — the counts a seat checks before clicking."""
+    """What each file would contain right now, the counts a seat checks before clicking."""
     out = []
     for key, (label, blurb) in LABELS.items():
         rows = _model_for(key).objects
@@ -258,7 +258,7 @@ def build(actor, dataset, since=None, until=None):
 
     A seat cannot be asked to trust a download it cannot see the shape of, so the
     answer names the filename, counts the rows and says out loud when the window was
-    cut short — and the same call writes the audit entry that says who took it.
+    cut short, and the same call writes the audit entry that says who took it.
     """
     if dataset not in BUILDERS:
         return 404, {'detail': 'Choose one of: ' + ', '.join(NAMES) + '.'}
@@ -280,7 +280,7 @@ def build(actor, dataset, since=None, until=None):
               else f'from {since:%Y-%m-%d}' if since
               else f'to {until:%Y-%m-%d}' if until else 'every row the table holds')
     record(actor, 'export_csv', dataset,
-           f'{filename} — {count} rows, {window}.'
+           f'{filename}, {count} rows, {window}.'
            + (' Truncated at the cap.' if truncated else ''))
     return 200, {
         'filename': filename,
@@ -289,7 +289,7 @@ def build(actor, dataset, since=None, until=None):
         'columns': COLUMNS[dataset],
         'truncated': truncated,
         'detail': f'{filename}: {count:,} row(s) of {LABELS[dataset][0].lower()}, {window}.'
-                  + (' Cut at 50,000 rows — narrow the dates for the rest.' if truncated else ''),
+                  + (' Cut at 50,000 rows, narrow the dates for the rest.' if truncated else ''),
         'csv': text,
         'taken_at': stamp,
     }

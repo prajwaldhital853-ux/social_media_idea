@@ -1,6 +1,6 @@
 """Contract 6.9: reading the log of every action a staff member took, and why.
 
-The log itself belongs to the moderation app and has always been append-only — this
+The log itself belongs to the moderation app and has always been append-only, this
 console writes to it through `journal.record()` and reads it here, and nothing in
 either direction deletes or edits a row. What this module adds is the shape a
 person needs when the Client asks "who turned this off in March": the actions
@@ -52,7 +52,7 @@ def line(item):
     return {
         'id': item.pk,
         'actor': item.actor.username if item.actor else None,
-        # An entry with no actor was written by the platform itself — an auto-hide,
+        # An entry with no actor was written by the platform itself, an auto-hide,
         # a seeded import, a cron. Naming it `system` is the difference between a
         # gap in the log and a gap the seat can read.
         'by': item.actor.username if item.actor else 'the platform itself',
@@ -90,7 +90,7 @@ def queryset(actor='', family='', action='', q='', since=None, until=None):
 
 
 def actions(limit=200):
-    """Every verb the log has ever seen, most used first — the filter list."""
+    """Every verb the log has ever seen, most used first, the filter list."""
     return list(AuditLog.objects.values('action').annotate(n=Count('pk')).order_by('-n')[:limit])
 
 

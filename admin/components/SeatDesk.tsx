@@ -66,7 +66,7 @@ export function SeatBody({
         )}
         {mine && (
           <p className="note">
-            Your own role and screens are changed from another staff account — one bad
+            Your own role and screens are changed from another staff account, one bad
             click cannot shut the door you are standing in.
           </p>
         )}
@@ -137,7 +137,7 @@ export function SeatBody({
           <button
             type="button" className="btn danger outline" disabled={busy}
             onClick={() => void ask(`End @${seat.username}'s access to the console?`,
-              'Every open session is revoked immediately and the seat cannot be signed back in. Their member account, posts and wallet are not touched — this only shuts the console door.',
+              'Every open session is revoked immediately and the seat cannot be signed back in. Their member account, posts and wallet are not touched, this only shuts the console door.',
               'Revoke access',
               () => onMutate(`admin/staff/${seat.username}/revoke/`, {},
                 `Access ended for ${seat.username}.`))}

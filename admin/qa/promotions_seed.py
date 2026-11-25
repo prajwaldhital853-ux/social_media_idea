@@ -18,7 +18,7 @@ is 180 back, 800 over 16 with 12 left is 600, and the drift between seeding and
 clicking is microseconds.
 
 Like the coin seed, this file resets only its own accounts. It never deletes a
-ledger row — the wallet table refuses deletes — so the payers here go back to a
+ledger row, the wallet table refuses deletes, so the payers here go back to a
 balance of zero and the run is judged on the refund it can still see. The
 payers live on their own domain for the same reason the coin payers do: the
 directory section counts `example.test` accounts and a page holds ten.
@@ -101,7 +101,7 @@ def campaign(owner, target, kind, package, budget, ran, left, status, **extra):
     stamp = {'created_at': now - timedelta(days=ran)}
     if status not in (Promotion.Status.PENDING, Promotion.Status.DRAFT):
         # A row that is already running was paid for, and approval is what takes the
-        # coins — so it carries the start date the migration gives the old ones.
+        # coins, so it carries the start date the migration gives the old ones.
         stamp['starts_at'] = now - timedelta(days=ran)
     if left is not None:
         stamp['ends_at'] = now + timedelta(days=left)
@@ -111,7 +111,7 @@ def campaign(owner, target, kind, package, budget, ran, left, status, **extra):
 
 
 def decided(promo, actor, action, reason='', refunded='0', choice=''):
-    """A decision the last run of the site never made — the paper the desk reads."""
+    """A decision the last run of the site never made, the paper the desk reads."""
     entry = PromoReview.objects.create(
         promotion=promo, actor=actor, action=action, reason=reason,
         coins_refunded=Decimal(refunded), choice=choice,
@@ -148,7 +148,7 @@ def main():
     # judged from a zeroed purse rather than from whatever the last one left.
     Wallet.objects.filter(user__in=users.values()).update(balance=Decimal('0.00'))
 
-    one = caption(users[WAITING], f'{MARK} the reel we paid to push — a studio tour in Kathmandu')
+    one = caption(users[WAITING], f'{MARK} the reel we paid to push, a studio tour in Kathmandu')
     two = for_sale(users[LIVE], f'{MARK} a bicycle listed for coins')
     three = caption(users[PAUSED], f'{MARK} a campaign the platform paused')
     four = caption(users[ENDED], f'{MARK} a campaign that was stopped')
@@ -161,7 +161,7 @@ def main():
     waiting = campaign(users[WAITING], one, 'post', 'pk_growth', '300.00', 12, 18,
                        Promotion.Status.ACTIVE, category='Photography',
                        age_min=18, age_max=35, country='Nepal', cities=['Kathmandu'])
-    # 800 coins over 16 days with 12 left, so a stop refunds 600 — and the desk has
+    # 800 coins over 16 days with 12 left, so a stop refunds 600, and the desk has
     # to be told whether it will, because withholding is also an answer.
     live = campaign(users[LIVE], two, 'listing', 'pk_prime', '800.00', 4, 12,
                     Promotion.Status.ACTIVE, category='Vehicles', country='Nepal')
@@ -210,7 +210,7 @@ def main():
     print(f'{WAITING} holds a campaign nobody has signed off, with 2 open reports under it: #{waiting.pk}')
     print(f'{LIVE} is running and already approved: #{live.pk} | {PAUSED} is paused: #{paused.pk}')
     print(f'{ENDED} was stopped with the money withheld: #{ended.pk} | {STALE} ran out: past its end date')
-    print(f'{ORDER} ordered reach and has paid nothing: #{pending.pk} — 300 coins still in their wallet')
+    print(f'{ORDER} ordered reach and has paid nothing: #{pending.pk}, 300 coins still in their wallet')
     print('re-run any time: these eight accounts and their campaigns are reset to these states.')
 
 

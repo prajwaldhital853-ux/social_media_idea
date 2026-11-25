@@ -101,7 +101,7 @@ export default function PolicyPageView() {
             {IC.alert}
             <span>
               A post is pulled out of the feed automatically at <b>{data.auto_hide_at} different
-              reporters</b>. That number is a threshold, not a verdict — it is changed with the spam
+              reporters</b>. That number is a threshold, not a verdict, it is changed with the spam
               controls, and every one of these lists is written to the audit log.
             </span>
           </p>
@@ -143,7 +143,7 @@ function TermPanel({
     if (!text.trim()) return;
     const sure = await confirm({
       title: `Put “${text.trim()}” on the ${KIND_LABEL[kind]} list?`,
-      body: 'From the next save, anything carrying it is marked for a person to look at. It is a flag, not a takedown — nothing comes down by itself.',
+      body: 'From the next save, anything carrying it is marked for a person to look at. It is a flag, not a takedown, nothing comes down by itself.',
       confirmLabel: 'Add it',
       tone: 'amber',
     });
@@ -369,7 +369,7 @@ function CategoryTable({
       )}
 
       {rows.length === 0 ? (
-        <p className="empty-note">{IC.x}<span>No categories yet — sellers are typing free text into listings.</span></p>
+        <p className="empty-note">{IC.x}<span>No categories yet, sellers are typing free text into listings.</span></p>
       ) : (
         <div className="table-scroll">
           <table className="cats">
@@ -398,7 +398,7 @@ function CategoryTable({
                         />
                       ) : row.sort_order}
                     </td>
-                    <td data-label="Live listings">{row.listings === null ? '—' : num(row.listings)}</td>
+                    <td data-label="Live listings">{row.listings === null ? '-' : num(row.listings)}</td>
                     <td data-label="State">
                       {row.is_active ? <span className="pill good">On the shelf</span> : <span className="pill mute">Hidden</span>}
                     </td>

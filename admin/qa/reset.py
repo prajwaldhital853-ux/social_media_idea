@@ -40,7 +40,7 @@ WORDING = ('welcome_message', 'tagline', 'contact_phone')
 # And the numbers section 10 turns on the coin desk: a price it tests, a floor it
 # tests, a retention window it drives to zero to watch the sweep delete, and the
 # payment QR it uploads. Deleting the rows hands every one back to the contract's
-# own default — the desk has no "reset" button because a reset is a write.
+# own default, the desk has no "reset" button because a reset is a write.
 COIN_DESK = ('coin_price', 'coin_min_purchase', 'coin_proof_days', 'coin_qr_url')
 # And the reach dials section 11 turns: the ranking weights, the gate, the caps, the
 # one switch that stops paid reach, and the package shelf. Each is tested by moving it
@@ -51,12 +51,12 @@ REACH_DESK = ('promo_packages', 'promo_global_pause', 'algo_weight_like', 'algo_
               'promo_repeat_limit', 'promo_organic_gap')
 # The dials the 6.9 and 6.10 desks turn. Each module already names its own keys, so
 # a knob added to a desk later is rolled back without anybody remembering to copy it
-# here — which matters most for the pile threshold: leave it at 2 and the next run
+# here, which matters most for the pile threshold: leave it at 2 and the next run
 # reads a flagged list no other run ever saw.
 WATCH_DESK = tuple(sorted(set(spam.WRITABLE) | set(alerts.THRESHOLDS) | set(limits.WRITABLE)))
 # The log families the safety walkthrough must find unwritten when it first opens
 # `/audit`. "Nobody has ever exported a file" and "nobody exported one this month"
-# look identical in a gap list, and telling them apart is the screen's whole job — so
+# look identical in a gap list, and telling them apart is the screen's whole job, so
 # these two families go back to nothing between runs, and the list the run reads is a
 # fact about the platform rather than about the run before it. Every other verb stays
 # where it is: nothing in the console deletes a log row, and this script only removes
@@ -67,7 +67,7 @@ LOG_GAPS = ('alert_', 'export_csv')
 def main():
     owner = User.objects.filter(username=OWNER).first()
     if owner is None:
-        raise SystemExit(f'{OWNER} is missing — the seeded demo accounts are not in this database.')
+        raise SystemExit(f'{OWNER} is missing, the seeded demo accounts are not in this database.')
     StaffAccount.objects.filter(user=owner).delete()
 
     seat = User.objects.filter(username=SEAT).first()

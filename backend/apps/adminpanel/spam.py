@@ -1,4 +1,4 @@
-"""Contract 6.9 — the spam desk: what one person may do, and how content is pulled.
+"""Contract 6.9, the spam desk: what one person may do, and how content is pulled.
 
 Three kinds of answer live in one screen because a moderator thinks about them
 together. *Rates* are how often an account may act; *new-account rules* are what a
@@ -7,7 +7,7 @@ bad before the platform takes it out of the feed without waiting for a person.
 
 The first four rate numbers are the ones the site already refuses requests on today,
 written down here so a seat can see them in one place. The rest are published at
-`GET /api/spam/config/` for the site's own views to enforce — the door is what makes
+`GET /api/spam/config/` for the site's own views to enforce, the door is what makes
 "no code changes" true, and the desk prints what that door answers so nobody has to
 believe a save banner.
 
@@ -103,7 +103,7 @@ def write(actor, posted):
             # A switch off is written as `0`, not as a blank: a blank means
             # "nobody has touched this", which would put the shipped default back on
             # the screen that just switched it off. Only matters for a knob whose
-            # default is on — which is exactly what auto-hide is.
+            # default is on, which is exactly what auto-hide is.
             updates[key] = '1' if str(value).strip().lower() in ('1', 'true', 'yes', 'on') else '0'
             continue
         if str(value).strip() == '':
@@ -125,7 +125,7 @@ def write(actor, posted):
     if bad:
         return 400, {'errors': bad, 'detail': ' '.join(bad)}
     if not updates:
-        return 400, {'detail': 'Nothing to save — no rule has been changed.'}
+        return 400, {'detail': 'Nothing to save, no rule has been changed.'}
     settings_store.write(actor, updates)
     labels = [cached[key]['label'] for key in updates]
     record(actor, 'spam_settings', 'spam and auto-hide controls',
@@ -139,7 +139,7 @@ def write(actor, posted):
 
 
 def public_config():
-    """What the member site needs to honour the desk — no login, no seat."""
+    """What the member site needs to honour the desk, no login, no seat."""
     values = settings_store.values()
     limits = {key: values[key] for key, _label, keys in BLOCKS for key in keys if key != 'alert_report_pile'}
     return {

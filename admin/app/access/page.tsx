@@ -154,11 +154,11 @@ export default function AccessPage() {
                       </Link>
                     </td>
                     <td data-label="Name" className="strong">{seat.name}</td>
-                    <td data-label="Email" className="dim wrap">{seat.email || '—'}</td>
+                    <td data-label="Email" className="dim wrap">{seat.email || '-'}</td>
                     <td data-label="Role">{ROLE_LABEL[seat.role]}</td>
                     <td data-label="Screens" className="num">{seat.permissions.length}</td>
                     <td data-label="Last sign-in" className="dim">{ago(seat.last_admin_login_at)}</td>
-                    <td data-label="Codes" className="num">{seat.recovery_left || '—'}</td>
+                    <td data-label="Codes" className="num">{seat.recovery_left || '-'}</td>
                     <td data-label="Status">
                       <div className="seat-flags">
                         {seat.is_enabled
@@ -196,7 +196,7 @@ export default function AccessPage() {
 /**
  * Two ways to give somebody a seat.
  *
- * "New person" writes the account, the role and the first password in one go —
+ * "New person" writes the account, the role and the first password in one go ,
  * what used to take a colleague signing up as a member first and being promoted
  * afterwards, under a username a spare account had already taken. "Existing
  * account" stays for the colleague who already joins as a member.
@@ -240,7 +240,7 @@ function GrantForm({
     const sure = await confirm(mode === 'new'
       ? {
         title: `Open a new ${ROLE_LABEL[role]} seat for ${name.trim() || '@' + who}?`,
-        body: 'This creates the account itself, not just a seat on it: the username becomes theirs, the console writes their first password, and the door makes them replace it before they get in. Nobody — including you — can read that password back afterwards, so copy it before you close this screen.',
+        body: 'This creates the account itself, not just a seat on it: the username becomes theirs, the console writes their first password, and the door makes them replace it before they get in. Nobody, including you, can read that password back afterwards, so copy it before you close this screen.',
         confirmLabel: 'Create the seat',
         tone: 'danger',
       }
@@ -265,7 +265,7 @@ function GrantForm({
       });
       await onDone(out.detail
         || (mode === 'new'
-          ? `${who} holds a ${ROLE_LABEL[role]} seat. Give them the password you typed — the console will make them replace it.`
+          ? `${who} holds a ${ROLE_LABEL[role]} seat. Give them the password you typed, the console will make them replace it.`
           : `${who} now holds a ${ROLE_LABEL[role]} seat.`));
     } catch (err) {
       if (!noteGate(err)) onError(err);
@@ -285,7 +285,7 @@ function GrantForm({
       {mode === 'new' ? (
         <p className="note">
           No account needed first. The username is reserved here, the password below is the one they
-          sign in with the first time, and the console makes them choose their own before it opens —
+          sign in with the first time, and the console makes them choose their own before it opens ,
           so copy it out of this screen now, because it is never shown again.
         </p>
       ) : (

@@ -62,7 +62,7 @@ const STATE_LABEL: Record<string, string> = {
 /**
  * One account, opened as a page of its own. The directory row says how big the
  * problem is; this says what the person actually did, in the order a decision
- * needs it — what they are, what they posted, what is piled on it, and only then
+ * needs it, what they are, what they posted, what is piled on it, and only then
  * what the seat can sign.
  */
 export default function PersonRecordPage({ params }: { params: { username: string } }) {
@@ -180,14 +180,14 @@ export default function PersonRecordPage({ params }: { params: { username: strin
               <dl className="facts">
                 <div><dt>Name</dt><dd>{person.name}</dd></div>
                 <div><dt>Username</dt><dd>@{person.username}</dd></div>
-                <div><dt>Email</dt><dd>{person.email || '—'}</dd></div>
+                <div><dt>Email</dt><dd>{person.email || '-'}</dd></div>
                 <div><dt>Email verified</dt><dd>{person.email_verified ? 'Yes' : 'No'}</dd></div>
                 <div><dt>Signed up</dt><dd>{stamp(person.joined)} · {person.provider_label}</dd></div>
                 <div><dt>Seat</dt><dd>{person.role || 'Member'}</dd></div>
-                <div><dt>Location</dt><dd>{[person.city, person.country].filter(Boolean).join(', ') || '—'}</dd></div>
-                <div><dt>Private account</dt><dd>{person.is_private ? 'Yes — followers only' : 'No'}</dd></div>
+                <div><dt>Location</dt><dd>{[person.city, person.country].filter(Boolean).join(', ') || '-'}</dd></div>
+                <div><dt>Private account</dt><dd>{person.is_private ? 'Yes, followers only' : 'No'}</dd></div>
                 <div><dt>Warning emails</dt><dd>{person.notify_email ? 'On' : 'Off'}</dd></div>
-                <div><dt>Bio</dt><dd>{person.bio || '—'}</dd></div>
+                <div><dt>Bio</dt><dd>{person.bio || '-'}</dd></div>
               </dl>
             </Section>
 
@@ -199,7 +199,7 @@ export default function PersonRecordPage({ params }: { params: { username: strin
                     {IC.lock}
                     <span>
                       {person.suspension.permanent ? 'Suspended for good' : `Suspended to ${person.suspension.until.slice(0, 10)}`}
-                      {person.suspension.reason ? ` — ${person.suspension.reason}` : ''}
+                      {person.suspension.reason ? `, ${person.suspension.reason}` : ''}
                     </span>
                   </span>
                 ) : <span className="pill good">In good standing</span>}
@@ -223,7 +223,7 @@ export default function PersonRecordPage({ params }: { params: { username: strin
                   {feed.map(item => (
                     <li key={item.id} className="record-item">
                       <span>
-                        <span className="record-text">{item.text || '(no text — media only)'}</span>
+                        <span className="record-text">{item.text || '(no text, media only)'}</span>
                         <span className="record-meta">
                           {ago(item.created_at)} · {item.audience} · {item.likes} likes · {item.comments} comments
                         </span>
@@ -610,7 +610,7 @@ function VerbButton({
               {kind === 'permanent' && (
                 <p className="fineprint">
                   A permanent bar is the same column set far ahead, so only a reinstate lifts it.
-                  The account keeps everything it has — suspending is not deleting.
+                  The account keeps everything it has, suspending is not deleting.
                 </p>
               )}
             </div>
@@ -621,8 +621,8 @@ function VerbButton({
               <label className="field">
                 <span>Who can read this warning</span>
                 <select name="audience" value={audience} onChange={event => setAudience(event.target.value)}>
-                  <option value="private">Private — only this account</option>
-                  <option value="public">Public — everyone who opens their profile</option>
+                  <option value="private">Private, only this account</option>
+                  <option value="public">Public, everyone who opens their profile</option>
                 </select>
               </label>
               <label className="field">
@@ -648,7 +648,7 @@ function VerbButton({
 
           {verb !== 'warn' && (
             <label className="field">
-              <span>Reason {needsReason ? '— required, and kept on the record' : '(optional)'}</span>
+              <span>Reason {needsReason ? ', required, and kept on the record' : '(optional)'}</span>
               <textarea
                 rows={2} name="reason" value={reason} maxLength={500}
                 placeholder={verb === 'verify' && !person.verified
@@ -661,14 +661,14 @@ function VerbButton({
 
           {verb === 'warn' && (
             <label className="field">
-              <span>Reason (optional — written next to the warning)</span>
+              <span>Reason (optional, written next to the warning)</span>
               <textarea rows={1} name="reason" value={reason} maxLength={240} onChange={event => setReason(event.target.value)}/>
             </label>
           )}
 
           <div className="ask-actions">
             <button type="button" className={`btn ${spec.tone} tiny`} disabled={busy || !canSend} onClick={confirmAsk}>
-              {IC.go}<span>{busy ? 'Working…' : `Confirm — ${label}`}</span>
+              {IC.go}<span>{busy ? 'Working…' : `Confirm, ${label}`}</span>
             </button>
             <button type="button" className="btn ghost tiny" disabled={busy} onClick={() => setForm(false)}>
               <span>Cancel</span>

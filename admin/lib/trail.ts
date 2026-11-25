@@ -23,7 +23,7 @@ export function visit(stop: Stop) {
   if (last && last.href === stop.href) return;
   // Walking back to a screen already in the trail leaves everything you opened
   // after it behind, instead of lifting that one screen to the end. Lifting it
-  // collapsed a two-step route — list, then a row, then a row's own sub-page —
+  // collapsed a two-step route, list, then a row, then a row's own sub-page ,
   // to one stop, and the second step lost the page it came from.
   const seen = stops.findIndex(item => item.href === stop.href);
   if (seen >= 0) stops = stops.slice(0, seen);

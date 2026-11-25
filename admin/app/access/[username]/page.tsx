@@ -98,7 +98,7 @@ export default function SeatPage({ params }: { params: { username: string } }) {
 
   return (
     <ConsoleShell
-      title={seat ? `@${seat.username} — ${seat.name}` : `@${username}`}
+      title={seat ? `@${seat.username}, ${seat.name}` : `@${username}`}
       subtitle={seat
         ? `${ROLE_LABEL[seat.role] || seat.role} seat · ${seat.permissions.length} screens · last in ${ago(seat.last_admin_login_at)}`
         : 'What this seat is, which screens it reaches, and what can be signed onto it.'}
@@ -135,7 +135,7 @@ export default function SeatPage({ params }: { params: { username: string } }) {
           onCycle={key => setDraft({ ...draft, [key]: CYCLE[valueOf(key)] })}
           onSave={() => mutate(`admin/staff/${seat.username}/`,
             { granted_keys: draftKeys.granted, denied_keys: draftKeys.denied },
-            `Saved ${seat.username}'s screens. The change lands on their next click — no new code needed.`)}
+            `Saved ${seat.username}'s screens. The change lands on their next click, no new code needed.`)}
           onDiscard={() => setDraft({})}
           onMutate={mutate}
         />

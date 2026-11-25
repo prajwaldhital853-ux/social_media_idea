@@ -32,7 +32,7 @@ SHELF_MODELS = {'post': Post, 'comment': Comment, 'listing': Listing}
 
 # What a seat is allowed to say when it is looking for a thing. An id is not on
 # this list: nobody is handed the number at the end of an address bar, so a
-# moderator has the words of the post and the name of whoever wrote it — and a
+# moderator has the words of the post and the name of whoever wrote it, and a
 # name is worth searching even when it is spelled only partly right.
 WHO = ('{who}__username', '{who}__email', '{who}__first_name',
        '{who}__last_name', '{who}__profile__display_name')
@@ -53,7 +53,7 @@ def _accounts_named(query):
 
 
 def _named(query):
-    """The reports one word points at — the reporter's, or about the thing named.
+    """The reports one word points at, the reporter's, or about the thing named.
 
     The queue is a list of reports, so searching it for a person means first
     finding what that person wrote and then the reports sitting on it. A word
@@ -150,9 +150,13 @@ def review_queue(request):
         rows = rows.filter(_named(query))
 
     terms = policy.words()
+    listing_terms = terms + policy.items()
     paginator = KeysetPagination()
     page = paginator.paginate_queryset(rows, request)
-    response = paginator.get_paginated_response([_report_row(report, terms) for report in page])
+    response = paginator.get_paginated_response([
+        _report_row(report, listing_terms if report.target_type == 'listing' else terms)
+        for report in page
+    ])
     response.data['facets'] = _facets()
     return response
 
@@ -164,7 +168,7 @@ def review_case(request):
     """One target opened as a page: the thing, every report on it, everything done to it.
 
     The queue groups by target because a seat decides about a post, not about a
-    report. This is what that group looks like unfolded — the same rows the queue
+    report. This is what that group looks like unfolded, the same rows the queue
     builds, unpaginated, because a target has as many reports against it as people
     have bothered to file and no more. Both desks land here, so the takedown shelf
     and the report queue are two ways of reaching one page rather than two pages
@@ -183,7 +187,7 @@ def review_case(request):
     reports = Report.objects.filter(
         target_type=kind, target_id=str(pk),
     ).select_related('reporter', 'reporter__profile').order_by('-created_at')
-    terms = policy.words()
+    terms = policy.terms_for(kind)
     haystack = f"{(content or {}).get('text') or ''} {(content or {}).get('title') or ''}"
     decided = AuditLog.objects.filter(
         target=f'{kind}:{pk}', action__in=set(review.AUDIT.values()) | {'attach_notice', 'withdraw_notice'},
@@ -257,7 +261,7 @@ def content_shelf(request):
     """What is off the feed right now, with the sentence that took it down.
 
     The queue only ever shows reported things. This is the other half of the
-    contract — the post removed last month that nobody has reported since, which
+    contract, the post removed last month that nobody has reported since, which
     is the one a person asks to have restored.
     """
     kind = (request.query_params.get('type') or 'post').strip()
@@ -296,7 +300,7 @@ def content_shelf(request):
     paginator = KeysetPagination()
     page = paginator.paginate_queryset(rows, request)
 
-    terms = policy.words()
+    terms = policy.terms_for(kind)
     targets = [f'{kind}:{row.pk}' for row in page]
     decisions = {}
     for entry in AuditLog.objects.filter(
@@ -587,7 +591,7 @@ def notice_create(request):
         return Response({'detail': 'A notice is read over the content it is about, not under it. '
                                    'Keep it to 240 characters.'}, status=400)
     if not reason:
-        return Response({'detail': 'Say why the notice is going up — that is the reason the audit row keeps.'},
+        return Response({'detail': 'Say why the notice is going up, that is the reason the audit row keeps.'},
                         status=400)
     # Checked here rather than inside the write so that a bad answer is a form
     # error, not a missing page: the sentence is the thing that went wrong.
@@ -605,8 +609,8 @@ def notice_create(request):
         notice = review.attach(kind, str(pk), request.user, reason, text, audience, email=True)
     except ValueError as err:
         return Response({'detail': str(err)}, status=404)
-    record(request.user, 'attach_notice', f'{kind}:{pk}', f'{reason} — {text[:120]}')
-    reach = ('only ' + notice['about'] + ' reads it — they are also told in their bell'
+    record(request.user, 'attach_notice', f'{kind}:{pk}', f'{reason}, {text[:120]}')
+    reach = ('only ' + notice['about'] + ' reads it, they are also told in their bell'
              if audience == PublicNotice.Audience.PRIVATE
              else 'anyone reading it now reads this sentence first')
     mailed = notice.get('emailed')

@@ -153,7 +153,7 @@ class AdminSetting(models.Model):
 
     A table rather than one JSON blob because each section owns its own keys: two
     screens writing settings never overwrite each other's, and a value can be
-    audited back to the person who set it. Text on purpose — Postgres would want
+    audited back to the person who set it. Text on purpose, Postgres would want
     a column per type otherwise, and `settings_store` casts against the default
     it knows, so a row that cannot parse falls back rather than 500-ing a screen.
     """
@@ -174,7 +174,7 @@ class AdminAlert(models.Model):
     """Something the platform wants a person to look at, and what became of it.
 
     Rows are raised by `alerts.scan()` from live state and deduped on `key`, so a
-    report pile that keeps growing updates one alert instead of filling the feed —
+    report pile that keeps growing updates one alert instead of filling the feed ,
     `occurrences` is where that repeats. A resolved row is kept, never deleted:
     the contract asks for the full alert history, and "did anyone see it" is a
     question asked weeks later.
@@ -283,7 +283,7 @@ class PublicNotice(models.Model):
 
     Kept as its own row rather than a notification: a private warning disappears
     into the bell, while this is a statement that stays attached to the content
-    or the account it is about, and can be withdrawn — which is its own audited
+    or the account it is about, and can be withdrawn, which is its own audited
     decision.
     """
 
@@ -329,8 +329,8 @@ class CoinReview(models.Model):
     """What the console did about a coin purchase, and why.
 
     `wallet.CoinRequest` is the member site's table and holds only the payer's half
-    of the story, so the staff half — the sentence a rejection was made with, how
-    many coins were actually credited, which seat signed it — is kept here. One row
+    of the story, so the staff half, the sentence a rejection was made with, how
+    many coins were actually credited, which seat signed it, is kept here. One row
     per action rather than a column per verdict, because a request can be asked for
     more proof twice before anyone approves it, and overwriting the first ask would
     lose the date the person was told.
@@ -362,7 +362,7 @@ class PromoReview(models.Model):
     """What the console decided about one paid campaign, and what it cost.
 
     `promotions.Promotion` is the member site's table and only holds the payer's
-    half of the story — the budget, the targeting, the counters. The staff half is
+    half of the story, the budget, the targeting, the counters. The staff half is
     kept here: the sentence a rejection was made with, how many coins actually went
     back, whether the Admin chose to refund or to withhold on a stop, and which seat
     signed it. One row per action, because a campaign gets paused and resumed several
@@ -402,7 +402,7 @@ class AdminPulse(models.Model):
     """One thing that happens outside these tables, and the last time it said so.
 
     A backup, a video transcoder, an uptime probe and an error collector cannot be
-    read out of Postgres, so they report in here —
+    read out of Postgres, so they report in here ,
     `python manage.py adminpulse backup --state=ok`. `alerts.scan()` then tells the
     three silences apart, because they mean three different things: never heard of
     (nobody wired this up yet), heard of and gone quiet (the job stopped), and heard
@@ -437,8 +437,8 @@ class StaffNotice(models.Model):
     """One event, told to one seat.
 
     Not the same animal as `AdminAlert`: an alert is a condition that stays true
-    until it stops being true, and it dedupes on `key`. This is a happening — a
-    report arrived, a payment proof landed — and it is only worth keeping while
+    until it stops being true, and it dedupes on `key`. This is a happening, a
+    report arrived, a payment proof landed, and it is only worth keeping while
     somebody has not seen it yet, so `bell.KEEP` deletes what a seat walks past.
     """
 

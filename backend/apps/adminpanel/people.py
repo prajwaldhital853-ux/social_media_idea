@@ -1,7 +1,7 @@
 """Contract 6.4: what the console does to an account, and what it has to say about it.
 
-The site already stores the whole enforcement picture on the user row — a
-`suspended_until`, a `suspend_reason`, a login lockout — and the main app's own
+The site already stores the whole enforcement picture on the user row, a
+`suspended_until`, a `suspend_reason`, a login lockout, and the main app's own
 authentication refuses a suspended account on every request. So this module adds
 the four things a paid console needs and the site does not have:
 
@@ -65,7 +65,7 @@ def threshold():
     """How many distinct reporters pull a post out of the feed on their own.
 
     Contract 6.9 makes this a knob on the spam desk rather than a deploy, so the
-    desk's answer is what every screen in the console counts with — the server's
+    desk's answer is what every screen in the console counts with, the server's
     own starting value still stands until somebody turns it.
     """
     return spam.report_threshold()
@@ -134,7 +134,7 @@ def _piled_targets():
 
 
 def flagged_ids():
-    """Accounts a pile is sitting on right now — theirs or their content's."""
+    """Accounts a pile is sitting on right now, theirs or their content's."""
     ids = set()
     for item in (Report.objects.filter(target_type='user', status__in=OPEN_STATES)
                  .values('target_id')
@@ -154,7 +154,7 @@ def flagged_ids():
 
 
 def _pile_for(user_ids):
-    """Open reports and distinct reporters per account — on it, and on what it owns.
+    """Open reports and distinct reporters per account, on it, and on what it owns.
 
     Three grouped queries for a whole page, because a directory row that counts
     its own pile with one query per report is a screen that stops answering at
@@ -230,7 +230,7 @@ def _balance_of(user):
 
 
 def _counts(user):
-    """Live posts and accepted followers — annotated when paging, read when not."""
+    """Live posts and accepted followers, annotated when paging, read when not."""
     posts = getattr(user, 'posts_count', None)
     if posts is None:
         posts = Post.objects.filter(author=user, status=Post.Status.LIVE).count()
@@ -442,7 +442,7 @@ def locked_out(user, now=None):
     """Every refresh token they hold, dead at once.
 
     The short access cookie cannot be pulled out of a browser, but the main app's
-    authentication already refuses a suspended account on every request — so the
+    authentication already refuses a suspended account on every request, so the
     session they are holding stops at their next click and cannot be renewed.
     That is the whole of "logs the user out immediately", and the screen says
     exactly that rather than more.
@@ -465,7 +465,7 @@ def enforcement_email(user, subject, body):
 def client_accounts():
     """Every account that is the Client: a superuser, or a seat whose role says so.
 
-    Both count, because the roster row is created lazily — a superuser with no
+    Both count, because the roster row is created lazily, a superuser with no
     `StaffAccount` yet is still the person who can undo every other decision, so
     a guard that only looked at the seat table would happily lock the last one
     out from an account the console signs in with.
@@ -554,7 +554,7 @@ def reinstate(user, caller):
     user.suspended_until = None
     user.suspend_reason = ''
     user.save(update_fields=['suspended_until', 'suspend_reason'])
-    # The seat is back; so are the doors. Only the bans this suspension raised —
+    # The seat is back; so are the doors. Only the bans this suspension raised ,
     # a cooloff someone else caused on the same connection stays where it is.
     lifted = safety.lift(user.email, reasons=['admin'])
     notify(user, caller, 'warning', 'Your account suspension was lifted by staff.', 'user', user.pk)
@@ -587,7 +587,7 @@ def verify(user, caller, *, verified, reason=''):
     return {
         'action': 'verify', 'username': user.username, 'verified': verified,
         'person': row(user),
-        'detail': (f'@{user.username} is verified — the tick is on their profile.' if verified
+        'detail': (f'@{user.username} is verified, the tick is on their profile.' if verified
                    else f'The tick is off @{user.username}.'),
     }
 
@@ -605,7 +605,7 @@ def warn(user, caller, *, text, reason='', audience=PublicNotice.Audience.PRIVAT
     opted_out = profile is not None and not profile.notify_email
     emailed = None if opted_out else enforcement_email(user, 'A note from the Exposing team', text)
     record(caller, 'warn_user', user.username,
-           (f'{text} — {reason}' if reason else text)[:240])
+           (f'{text}, {reason}' if reason else text)[:240])
     return {
         'action': 'warn', 'username': user.username, 'emailed': emailed, 'opted_out': opted_out,
         'notice': notice,
@@ -620,8 +620,8 @@ def warn(user, caller, *, text, reason='', audience=PublicNotice.Audience.PRIVAT
 def clear_flags(user, caller, *, reason=''):
     """The pile is gone: reports closed, warnings withdrawn, lockout cleared.
 
-    Content a moderator took down deliberately stays down — that is a decision,
-    not a flag — and the answer says so, because an admin who expected the feed
+    Content a moderator took down deliberately stays down, that is a decision,
+    not a flag, and the answer says so, because an admin who expected the feed
     to fill back up has to know the difference.
     """
     reason = str(reason or '').strip()
@@ -662,7 +662,7 @@ def clear_flags(user, caller, *, reason=''):
         'detail': (f'{closed} open report(s) closed, {withdrawn} warning notice(s) withdrawn '
                    'and the login lockout cleared. '
                    + (f'{held} post(s) of theirs are still out of the feed on an earlier '
-                      'decision — release them from the Takedown shelf.' if held
+                      'decision, release them from the Takedown shelf.' if held
                       else 'Nothing of theirs is held.')),
     }
 
@@ -673,7 +673,7 @@ def delete(user, caller, *, confirm, reason=''):
     The cascade is the point of the guards: posts, comments, listings, follows,
     messages and the wallet with its ledger go with the account and none of it
     comes back. So the balance has to be zero, no campaign may still be running
-    and no payment proof may be waiting — each settled from the screen that owns
+    and no payment proof may be waiting, each settled from the screen that owns
     it, which is what the refusal names.
     """
     reason = str(reason or '').strip()
@@ -696,7 +696,7 @@ def delete(user, caller, *, confirm, reason=''):
     username = user.username
     # The audit row outlives the account: its `actor` is nullable and its
     # `target` is text, so this sentence is all anyone can read afterwards about
-    # what was destroyed here — which is why it is written before the delete.
+    # what was destroyed here, which is why it is written before the delete.
     record(caller, 'delete_user', username,
            f'{held["posts"]} posts, {held["comments"]} comments, {held["listings"]} listings '
            f'and {held["balance"]} coins went with the account. {reason}'[:240])

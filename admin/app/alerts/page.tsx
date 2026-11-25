@@ -15,7 +15,7 @@ import { shipped } from '@/lib/nav';
 import { AlertDesk, AlertPulse, AlertRow, SettingLine } from '@/lib/types';
 
 /**
- * Contract 6.9 — the alert history and the dials behind it.
+ * Contract 6.9, the alert history and the dials behind it.
  *
  * Two halves, because the contract asks two different questions. The list is what
  * the platform concluded on its own, when, and how many times since; the dials are
@@ -24,7 +24,7 @@ import { AlertDesk, AlertPulse, AlertRow, SettingLine } from '@/lib/types';
  * reports on yet, listed as wires rather than as numbers, because a silent backup
  * job and a healthy one look identical from an empty row.
  *
- * Nothing here fires on a page load — the dashboard already runs the checks — so
+ * Nothing here fires on a page load, the dashboard already runs the checks, so
  * "Run the checks" is a button a person presses, and what it raised is written to
  * the audit log with their name on it.
  */
@@ -160,7 +160,7 @@ export default function AlertsScreen() {
   return (
     <ConsoleShell
       title="Automated alerts"
-      subtitle="Every condition the platform raised on its own — spam waves, report spikes, queues ageing, payment proofs waiting, storage and login attacks, processing backlogs and unusual Coin activity — the thresholds that decide when they fire, and the wires nothing reports on yet."
+      subtitle="Every condition the platform raised on its own, spam waves, report spikes, queues ageing, payment proofs waiting, storage and login attacks, processing backlogs and unusual Coin activity, the thresholds that decide when they fire, and the wires nothing reports on yet."
       actions={(
         <>
           <button
@@ -195,7 +195,7 @@ export default function AlertsScreen() {
             <span className="dot"/>
             <span>
               {desk.counts.unwired} row{desk.counts.unwired === 1 ? '' : 's'} {unwired === 1 ? 'is' : 'are'} a wire
-              that nothing has reported on yet — counted apart, because four unconnected sensors are not
+              that nothing has reported on yet, counted apart, because four unconnected sensors are not
               four fires
             </span>
           </p>
@@ -218,7 +218,7 @@ export default function AlertsScreen() {
               <option value="">Every condition</option>
               {desk.kinds.map(item => (
                 <option key={item.kind} value={item.kind}>
-                  {item.label} — {item.n} ({item.active} live)
+                  {item.label}, {item.n} ({item.active} live)
                 </option>
               ))}
             </select>
@@ -237,7 +237,7 @@ export default function AlertsScreen() {
                 {IC.check}
                 <span>
                   Nothing matches this filter. The checks run with the dashboard, and the button above
-                  runs them again right now — an alert appears the moment a queue ages past its limit.
+                  runs them again right now, an alert appears the moment a queue ages past its limit.
                 </span>
               </p>
             ) : (
@@ -272,7 +272,7 @@ export default function AlertsScreen() {
                   <h2>When something becomes an alert</h2>
                   <p>
                     Every dial is read by the check named beside it. Raising one closes whatever the
-                    platform no longer believes on the next run — that is written down, not made to
+                    platform no longer believes on the next run, that is written down, not made to
                     disappear.
                   </p>
                 </div>
@@ -289,8 +289,8 @@ export default function AlertsScreen() {
                     />
                     <em className="desk-who">
                       {item.set
-                        ? <>turned by <b>{item.by}</b> {ago(item.at || '')} — {item.help}</>
-                        : <>never moved from the platform’s own answer — {item.help}</>}
+                        ? <>turned by <b>{item.by}</b> {ago(item.at || '')}, {item.help}</>
+                        : <>never moved from the platform’s own answer, {item.help}</>}
                     </em>
                   </label>
                 ))}
@@ -318,7 +318,7 @@ export default function AlertsScreen() {
                   <h2>What nothing reports on yet</h2>
                   <p>
                     Site down, backup failure, app errors and the processing queue are conditions this
-                    console can be told about — but only from outside. Until something stamps in, the row
+                    console can be told about, but only from outside. Until something stamps in, the row
                     says so in words instead of leaving an empty space that looks like a quiet day.
                   </p>
                 </div>
@@ -349,8 +349,8 @@ export default function AlertsScreen() {
                 {IC.disk}
                 <span>
                   A stamp is one command away: <span className="cmd">python manage.py adminpulse &lt;key&gt;
-                  --state=ok --detail="what it saw"</span>. Whatever runs it — cron, a CI job, the backup
-                  script — the console only needs to hear from it before its own clock runs out.
+                  --state=ok --detail="what it saw"</span>. Whatever runs it, cron, a CI job, the backup
+                  script, the console only needs to hear from it before its own clock runs out.
                 </span>
               </p>
             </section>
@@ -422,8 +422,8 @@ function Wire({ pulse, seat }: { pulse: AlertPulse; seat: ReturnType<typeof useS
         <b className="term-text">{pulse.label}</b>
         <em className="term-note">
           {pulse.wired
-            ? <>last heard from <b>{ago(pulse.stamped_at)}</b> — {pulse.state}, {pulse.detail || 'nothing added'} ({pulse.stamps} stamp{pulse.stamps === 1 ? '' : 's'})</>
-            : <>never reported in — {pulse.silent}</>}
+            ? <>last heard from <b>{ago(pulse.stamped_at)}</b>, {pulse.state}, {pulse.detail || 'nothing added'} ({pulse.stamps} stamp{pulse.stamps === 1 ? '' : 's'})</>
+            : <>never reported in, {pulse.silent}</>}
         </em>
         <span className="term-meta">
           {pulse.wired ? '' : `would fire if ${quiet}`}

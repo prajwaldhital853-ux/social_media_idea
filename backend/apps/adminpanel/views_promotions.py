@@ -1,7 +1,7 @@
 """Contract 6.8 endpoints: the promotion queue, the packages and the reach dials.
 
 Three keys, because the three powers are not the same risk. `promotions_view` reads
-who paid for reach and what their campaign points at. `promotions_review` decides —
+who paid for reach and what their campaign points at. `promotions_review` decides ,
 and a refusal moves real coins back into somebody's wallet, which is the one thing
 in this console that cannot be taken back by reloading. `promotion_packages` and
 `promotion_algorithm` change what the *next* payer is sold and how the feed spends
@@ -44,7 +44,7 @@ def _base():
 
 def _waiting():
     """The rows a seat has to look at: orders nothing has charged yet, plus a running
-    campaign nobody signed off — the ones the old rule let straight into the feed."""
+    campaign nobody signed off, the ones the old rule let straight into the feed."""
     return (Q(status=Promotion.Status.PENDING)
             | (Q(status=Promotion.Status.ACTIVE) & ~Q(pk__in=_signed_ids())))
 
@@ -78,7 +78,7 @@ def promotion_config(request):
     """What the member site needs to honour the dials: weights, caps, pause, packages.
 
     Open on purpose. A feed cannot rank posts against a threshold it is not allowed
-    to read, and nothing in here is a person's data — it is the shape of the ranking.
+    to read, and nothing in here is a person's data, it is the shape of the ranking.
     """
     return Response(promotions.public_config())
 
@@ -157,7 +157,7 @@ def promotion_detail(request, pk):
 @permission_classes([IsAuthenticated])
 @rbac.staff_only('promotions_review')
 def promotion_decide(request, pk, action):
-    """Approve, refuse, pause, resume or stop — the only verbs that move coins."""
+    """Approve, refuse, pause, resume or stop, the only verbs that move coins."""
     promo = _base().filter(pk=pk).first()
     if promo is None:
         return Response({'detail': 'No campaign with that id.'}, status=404)

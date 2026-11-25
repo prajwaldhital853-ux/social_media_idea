@@ -8,7 +8,7 @@ import { ContentKind, PersonPage, ShelfPage } from '@/lib/types';
 
 /**
  * Nobody is handed the number at the end of an address bar, so a desk that needs
- * a target asks for a word instead — a name, an email, a phrase out of the post —
+ * a target asks for a word instead, a name, an email, a phrase out of the post ,
  * and lists the things that carry it. Picking one of those is the whole point:
  * the seat chooses what it meant rather than guessing at an id.
  *

@@ -4,7 +4,7 @@ A campaign is different from a report or a payment slip because a decision here
 moves coins that have already been taken. So these tests count the ledger rows
 around every verb, not only the status column: approving must write nothing,
 refusing must hand back exactly the part of the run the payer never got, and a
-stop must be able to *withhold* that money when the reason is a broken rule —
+stop must be able to *withhold* that money when the reason is a broken rule ,
 which is the one place in this console where the platform keeps somebody's coins
 after ending what they bought.
 
@@ -466,7 +466,7 @@ class AlgorithmTests(PromoTestCase):
         """
         out = self.desk.post(ALGORITHM_URL, {'coin_price': '1', 'user_actions': '1'}, format='json')
         self.assertEqual(out.status_code, 400)
-        self.assertEqual(out.data['detail'], 'Nothing to save — no dial has been turned.')
+        self.assertEqual(out.data['detail'], 'Nothing to save, no dial has been turned.')
         self.assertEqual(AdminSetting.objects.filter(key='coin_price').count(), 0)
 
     def test_the_packages_cannot_be_edited_from_the_algorithm_desk_either(self):

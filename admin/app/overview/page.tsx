@@ -3,19 +3,43 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import ConsoleShell from '@/components/ConsoleShell';
+import { ActivityChart, ChartSeries, MixRing, RingSlice } from '@/components/Charts';
 import { api } from '@/lib/api';
 import { bytes as humanBytes, money, num, percent, waiting } from '@/lib/format';
 import { IC } from '@/lib/icons';
 import { shipped } from '@/lib/nav';
-import { ago, stamp } from '@/lib/time';
+import { stamp } from '@/lib/time';
 import { useSession } from '@/lib/session';
-import { AlertRow, CampaignRow, Overview, PromotionAnalytics, SeriesPoint, Threshold, Tile } from '@/lib/types';
+import { CampaignRow, Overview, PromotionAnalytics, SeriesPoint, Threshold, Tile } from '@/lib/types';
 
 const REFRESH_EVERY = 60000;
 /** Rows either dashboard panel shows before it asks for another page. */
 const PAGE = 7;
-const SEVERITY_LABEL: Record<string, string> = { info: 'Note', warning: 'Needs a look', critical: 'Urgent' };
 const TARGET_LABEL: Record<string, string> = { post: 'posts', comment: 'comments', user: 'people', listing: 'listings' };
+
+/** One hue per tile, shared by that tile's sparkline and by whatever chart the
+ *  same number appears in, a tile and its chart drawn in two colours reads as
+ *  two different measures. */
+const TILE_COLOR: Record<string, string> = {
+  new_users: 'var(--brand)',
+  posts: '#3C4450',
+  comments: 'var(--amber-ink)',
+  listings: 'var(--green-ink)',
+  open_reports: 'var(--brand)',
+  coin_requests: 'var(--amber-ink)',
+  promotions: '#3C4450',
+  storage: 'var(--green-ink)',
+  coins_moved: 'var(--ink)',
+};
+const KIND_COLOR: Record<string, string> = {
+  post: 'var(--brand)',
+  comment: '#3C4450',
+  listing: 'var(--amber-ink)',
+  user: 'var(--green-ink)',
+};
+/** Only the tiles that count things happening per day share one axis. Coins are
+ *  a value, not a volume, so they keep their own tile rather than a fifth line. */
+const ACTIVITY_IDS = ['new_users', 'posts', 'comments', 'listings'];
 
 export default function OverviewPage() {
   const { noteGate } = useSession();
@@ -76,19 +100,32 @@ export default function OverviewPage() {
         <>
           <HealthStrip health={data.health}/>
 
+          <section className="panel activity wide">
+            <header className="panel-head">
+              <div>
+                <h2>What happened each day</h2>
+                <p>New people, posts, comments and listings, counted a day at a time on one
+                  axis. The figure under each name is what that count did over the window.</p>
+              </div>
+              <span className="panel-count">{data.windows.series_days} days counted back</span>
+            </header>
+            <ActivityChart series={activity(data.tiles)}
+                           hint="Each line is one count a day."/>
+          </section>
+
           <div className="tile-grid">
             {data.tiles.map(tile => (
               <TileCard key={tile.id} tile={tile} threshold={data.thresholds[`alert_storage_gb`]}/>
             ))}
           </div>
 
-          <AlertFeed key={data.generated_at} alerts={data.alerts}/>
+          <MakeUp tiles={data.tiles}/>
 
           <section className="panel performance">
             <header className="panel-head">
               <div>
                 <h2>Promotion performance</h2>
-                <p>What each campaign achieved inside the window it ran — not its lifetime total.</p>
+                <p>What each campaign achieved inside the window it ran, not its lifetime total.</p>
               </div>
               {campaigns && <span className="panel-count">{campaigns.total} campaigns</span>}
             </header>
@@ -124,7 +161,7 @@ const HEALTH_HEADLINE: Record<string, string> = {
   ok: 'All systems answering',
   slow: 'The database is answering slowly',
   degraded: 'Some safeguards are partial',
-  off: 'Safeguards switched off — this is not a live box',
+  off: 'Safeguards switched off, this is not a live box',
   unknown: 'Part of the platform cannot be measured',
   down: 'Something is not answering',
 };
@@ -132,8 +169,9 @@ const HEALTH_HEADLINE: Record<string, string> = {
 function TileCard({ tile, threshold }: { tile: Tile; threshold?: Threshold }) {
   const { session } = useSession();
   const link = shipped(tile.href, session?.permissions || [], session?.role) ? tile.href : null;
+  const color = TILE_COLOR[tile.id] || 'var(--brand)';
   return (
-    <article className={`tile tile-${tile.kind}`} data-tile={tile.id}>
+    <article className={`tile tile-${tile.kind}`} data-tile={tile.id} style={{ ['--tile' as string]: color }}>
       <header className="tile-head">
         <span className="tile-label">{tile.label}</span>
         <span className="tile-icon">{TILE_ICON[tile.id] || IC.chart}</span>
@@ -181,33 +219,49 @@ function RateBody({ tile }: { tile: Tile }) {
   return (
     <>
       <b className="tile-number">{num(tile.today)}</b>
-      <span className="tile-unit">since midnight</span>
+      <span className="tile-unit">since midnight <Trend points={tile.series}/></span>
       <Spark points={tile.series || []}/>
       <Split items={[['7 days', num(tile.week)], ['30 days', num(tile.month)], ['All time', num(tile.total)]]}/>
     </>
   );
 }
 
+/** This stretch of days against the one before it, in the tile's own hue. A day
+ *  count that has moved is the one thing a snapshot cannot say on its own. */
+function Trend({ points }: { points?: SeriesPoint[] }) {
+  const series = points || [];
+  if (series.length < 14) return null;
+  const half = Math.floor(series.length / 2);
+  const sum = (from: number, to: number) => series.slice(from, to).reduce((total, point) => total + point.n, 0);
+  const now = sum(half, series.length);
+  const before = sum(0, half);
+  if (!before) {
+    return now ? <em className="trend is-new">new</em> : <em className="trend is-flat">steady</em>;
+  }
+  const change = Math.round(((now - before) / before) * 100);
+  if (!change) return <em className="trend is-flat">steady</em>;
+  const up = change > 0;
+  return (
+    <em className={`trend ${up ? 'is-up' : 'is-down'}`}
+        title={`${num(before)} in the first ${half} days, ${num(now)} in the last ${series.length - half}`}>
+      <svg viewBox="0 0 8 8" aria-hidden="true">
+        {up ? <path d="M4 1l3.2 6H0.8z"/> : <path d="M4 7L0.8 1h6.4z"/>}
+      </svg>
+      {up ? '+' : '−'}{Math.abs(change)}%
+    </em>
+  );
+}
+
 function QueueBody({ tile }: { tile: Tile }) {
-  const targets = Object.entries(tile.by_target || {});
-  const reasons = (tile.by_reason || []).slice(0, 2);
   return (
     <>
       <b className={`tile-number ${tile.value ? 'is-debt' : ''}`}>{num(tile.value)}</b>
       <span className="tile-unit">waiting on a decision</span>
-      {targets.length > 0 && (
-        <ul className="chips">
-          {targets.map(([kind, count]) => (
-            <li key={kind} className="chip">{count} {TARGET_LABEL[kind] || kind}</li>
-          ))}
-        </ul>
-      )}
       <Split items={[
         ['Opened today', num(tile.new_today)],
         ['Closed this week', num(tile.closed_week)],
         ['Oldest', tile.value ? waiting(tile.oldest_minutes) : 'nothing waiting'],
       ]}/>
-      {reasons.length > 0 && <p className="tile-note">Most named: {reasons.map(entry => `${entry.reason} (${entry.n})`).join(', ')}</p>}
     </>
   );
 }
@@ -246,7 +300,7 @@ function PromoBody({ tile }: { tile: Tile }) {
       <p className="tile-foot">
         <span>Views <b>{num(views)}</b></span>
         <span>Opens <b>{num(opens)}</b></span>
-        <span>Open rate <b>{views ? percent(Math.round(opens * 1000 / views) / 10) : '—'}</b></span>
+        <span>Open rate <b>{views ? percent(Math.round(opens * 1000 / views) / 10) : '-'}</b></span>
       </p>
     </>
   );
@@ -257,7 +311,7 @@ function StorageBody({ tile, threshold }: { tile: Tile; threshold?: Threshold })
   const peak = Math.max(1, ...kinds.map(([, count]) => count));
   return (
     <>
-      <b className="tile-number">{tile.state === 'unknown' ? '—' : humanBytes(tile.bytes)}</b>
+      <b className="tile-number">{tile.state === 'unknown' ? '-' : humanBytes(tile.bytes)}</b>
       <span className="tile-unit">{tile.state === 'unknown' ? 'no disk on this server' : `${num(tile.files)} uploaded files`}</span>
       {kinds.length > 0 && (
         <ul className="bars">
@@ -282,10 +336,106 @@ function LedgerBody({ tile }: { tile: Tile }) {
   return (
     <>
       <b className="tile-number">{num(tile.spent_today)}</b>
-      <span className="tile-unit">coins spent since midnight</span>
+      <span className="tile-unit">spent since midnight <Trend points={tile.series}/></span>
       <Spark points={tile.series || []}/>
       <Split items={[['7 days', num(tile.spent_week)], ['30 days', num(tile.spent_month)], ['Bought in 30 d', num(tile.credited_month)]]}/>
     </>
+  );
+}
+
+/** The tiles that share a unit, things that happened per day, become lines. */
+function activity(tiles: Tile[]): ChartSeries[] {
+  return ACTIVITY_IDS
+    .map(id => tiles.find(tile => tile.id === id))
+    .filter((tile): tile is Tile => Boolean(tile?.series?.length))
+    .map(tile => ({
+      id: tile.id,
+      label: tile.label,
+      color: TILE_COLOR[tile.id] || 'var(--brand)',
+      points: tile.series || [],
+    }));
+}
+
+/** The two questions a pile of numbers cannot answer: what is the pile made of,
+ *  and why was it raised. Both read off the same counts the report tile shows. */
+function MakeUp({ tiles }: { tiles: Tile[] }) {
+  const queue = tiles.find(tile => tile.id === 'open_reports');
+  const promo = tiles.find(tile => tile.id === 'promotions');
+  const targets: RingSlice[] = Object.entries(queue?.by_target || {})
+    .map(([kind, value]) => ({
+      id: kind,
+      label: TARGET_LABEL[kind] || kind,
+      value: value || 0,
+      color: KIND_COLOR[kind] || '#79818D',
+    }));
+  const states: RingSlice[] = [
+    { id: 'active', label: 'Running', value: promo?.active || 0, color: 'var(--green-ink)' },
+    { id: 'pending', label: 'Awaiting review', value: promo?.awaiting_review || 0, color: 'var(--brand)' },
+    { id: 'paused', label: 'Paused', value: promo?.paused || 0, color: '#79818D' },
+  ];
+  const reasons = (queue?.by_reason || []).slice(0, 5);
+
+  if (!targets.length && !reasons.length && !states.some(entry => entry.value)) return null;
+
+  return (
+    <div className="make-up">
+      <section className="panel">
+        <header className="panel-head">
+          <div>
+            <h2>What the pile is on</h2>
+            <p>Every open report, split by the kind of thing it names.</p>
+          </div>
+          <span className="panel-count">{num(queue?.value)} open</span>
+        </header>
+        {targets.length
+          ? <MixRing slices={targets} caption="open reports"/>
+          : <p className="empty-note">{IC.check} Nothing is reported right now.</p>}
+      </section>
+
+      <section className="panel">
+        <header className="panel-head">
+          <div>
+            <h2>Why it was reported</h2>
+            <p>The five reasons named most often, and the share of the open pile each
+              one carries. Only the five are listed, so the shares do not add to one hundred.</p>
+          </div>
+        </header>
+        {reasons.length
+          ? <Reasons rows={reasons} total={queue?.value || 0}/>
+          : <p className="empty-note">{IC.check} No reasons to rank, the queue is empty.</p>}
+      </section>
+
+      <section className="panel">
+        <header className="panel-head">
+          <div>
+            <h2>Where the promotions stand</h2>
+            <p>Only the orders someone on shift can still act on: ended and refused
+              campaigns are left out of the ring.</p>
+          </div>
+        </header>
+        {states.some(entry => entry.value)
+          ? <MixRing slices={states} caption="to act on"/>
+          : <p className="empty-note">{IC.chart} Nothing is waiting or running.</p>}
+      </section>
+    </div>
+  );
+}
+
+function Reasons({ rows, total }: { rows: { reason: string; n: number }[]; total: number }) {
+  const peak = Math.max(1, ...rows.map(entry => entry.n));
+  return (
+    <ul className="reasons">
+      {rows.map((entry, index) => (
+        <li key={entry.reason} style={{ animationDelay: `${index * 60}ms` }}>
+          <span className="reason-name">{entry.reason}</span>
+          <span className="reason-track">
+            <i style={{ width: `${(entry.n / peak) * 100}%` }}/>
+          </span>
+          <b>{num(entry.n)}</b>
+          <em>{total ? Math.round((entry.n / total) * 100) : 0}%</em>
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -307,89 +457,6 @@ function Spark({ points }: { points: SeriesPoint[] }) {
       {line && <polyline className="spark-line" points={line}/>}
       <circle className="spark-end" cx={width} cy={height - (last / peak) * (height - 3) - 1.5} r="1.8"/>
     </svg>
-  );
-}
-
-function AlertFeed({ alerts }: { alerts: Overview['alerts'] }) {
-  const { noteGate } = useSession();
-  const [rows, setRows] = useState(alerts.recent);
-  const [busy, setBusy] = useState(false);
-  const [failed, setFailed] = useState('');
-  const more = rows.length < alerts.total;
-  const { counts } = alerts;
-
-  const loadMore = async () => {
-    setBusy(true);
-    setFailed('');
-    try {
-      const page = await api<{ rows: AlertRow[] }>(`admin/analytics/alerts/?limit=${PAGE}&offset=${rows.length}`);
-      setRows(current => [...current, ...page.rows]);
-    } catch (err) {
-      if (!noteGate(err)) setFailed((err as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <section className="panel alerts">
-      <header className="panel-head">
-        <div>
-          <h2>Alerts</h2>
-          <p>Raised by the platform itself, from the queues and limits on this screen.</p>
-        </div>
-        <span className="panel-count" data-alert-counts>
-          {counts.attention} need a look · {counts.unwired} condition{counts.unwired === 1 ? '' : 's'} nothing
-          reports on yet · {counts.open} open, {counts.acked} acknowledged, {counts.resolved} resolved
-        </span>
-      </header>
-
-      {!rows.length ? (
-        <p className="empty-note">{IC.check} Nothing is asking for attention. Alerts appear the moment a queue ages past its limit.</p>
-      ) : (
-        <>
-          <ul className={`alert-list${rows.length > PAGE ? ' capped' : ''}`}>
-            {rows.map(row => <AlertItem key={row.key} row={row}/>)}
-          </ul>
-          {alerts.total > PAGE && (
-            <div className="panel-more" data-alert-more>
-              <span>{rows.length} of {alerts.total} shown{more ? '' : ' — that is all of them'}</span>
-              {more && (
-                <button type="button" className="btn ghost tiny" disabled={busy} onClick={loadMore}>
-                  <span>{busy ? 'Reading…' : 'Load more'}</span>
-                </button>
-              )}
-            </div>
-          )}
-          {failed && <p className="card-error" role="status">{IC.alert}<span>{failed}</span></p>}
-        </>
-      )}
-    </section>
-  );
-}
-
-function AlertItem({ row }: { row: AlertRow }) {
-  const { session } = useSession();
-  const target = row.status === 'open' && row.href
-    && shipped(row.href, session?.permissions || [], session?.role) ? row.href : null;
-  return (
-    <li className={`alert alert-${row.severity} alert-${row.status}`}>
-      <span className="alert-dot" title={SEVERITY_LABEL[row.severity] || row.severity}/>
-      <div className="alert-body">
-        <b>{row.title}</b>
-        <p>{row.detail}</p>
-        <span className="alert-meta">
-          <span className={`pill ${row.status}`}>{row.status}</span>
-          {row.occurrences > 1 && <span>seen {row.occurrences}× since {ago(row.first_seen)}</span>}
-          <span>{ago(row.last_seen)}</span>
-          {row.acked_by && <span>acknowledged by @{row.acked_by}</span>}
-          {row.resolved_at && <span>cleared {ago(row.resolved_at)}</span>}
-        </span>
-      </div>
-      {target
-        ? <Link className="btn ghost alert-go" href={target}>Open{IC.go}</Link>
-        : row.href && <span className="alert-here">{(row.href.split('?')[0] || '').slice(1).replace(/-/g, ' ')}</span>}
-    </li>
   );
 }
 
@@ -428,6 +495,9 @@ function Campaigns({ campaigns }: { campaigns: PromotionAnalytics | null }) {
   // actually on the screen rather than from the first page alone.
   const sum = (id: string) => rows.reduce((total, row) => total + (row.metrics[id] || 0), 0);
   const more = rows.length < campaigns.total;
+  // The bar is scaled to the best rate on the screen, not to 100%: no campaign
+  // opens at anything like a third, and a row of quarter-filled tracks says nothing.
+  const topRate = Math.max(1, ...rows.map(row => row.click_rate || 0));
 
   return (
     <>
@@ -457,11 +527,20 @@ function Campaigns({ campaigns }: { campaigns: PromotionAnalytics | null }) {
                   <td key={metric.id} data-metric={metric.id} data-label={metric.label}
                       className={campaigns.unmeasured[metric.id] ? 'is-dim' : ''}>
                     {campaigns.unmeasured[metric.id]
-                      ? <span title={campaigns.unmeasured[metric.id]}>—</span>
+                      ? <span title={campaigns.unmeasured[metric.id]}>,</span>
                       : num(row.metrics[metric.id])}
                   </td>
                 ))}
-                <td data-label="Open rate">{percent(row.click_rate)}</td>
+                <td data-label="Open rate" className="rate-cell">
+                  {row.click_rate === null
+                    ? ','
+                    : (
+                      <span className="rate">
+                        <span className="rate-track"><i style={{ width: `${Math.min(100, (row.click_rate / topRate) * 100)}%` }}/></span>
+                        <b>{percent(row.click_rate)}</b>
+                      </span>
+                    )}
+                </td>
               </tr>
             ))}
           </tbody>
@@ -470,17 +549,17 @@ function Campaigns({ campaigns }: { campaigns: PromotionAnalytics | null }) {
               <th scope="row">These {rows.length} together</th>
               {columns.map(metric => (
                 <td key={metric.id} data-label={metric.label} className={campaigns.unmeasured[metric.id] ? 'is-dim' : ''}>
-                  {campaigns.unmeasured[metric.id] ? '—' : num(sum(metric.id))}
+                  {campaigns.unmeasured[metric.id] ? '-' : num(sum(metric.id))}
                 </td>
               ))}
-              <td data-label="Open rate">—</td>
+              <td data-label="Open rate">,</td>
             </tr>
           </tfoot>
         </table>
       </div>
       {campaigns.total > PAGE && (
         <div className="panel-more" data-campaign-more>
-          <span>{rows.length} of {campaigns.total} campaigns shown{more ? '' : ' — that is all of them'}</span>
+          <span>{rows.length} of {campaigns.total} campaigns shown{more ? '' : ', that is all of them'}</span>
           {more && (
             <button type="button" className="btn ghost tiny" disabled={busy} onClick={loadMore}>
               <span>{busy ? 'Scoring…' : 'Load more'}</span>

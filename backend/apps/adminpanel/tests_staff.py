@@ -158,7 +158,7 @@ class SeatGrantTests(RbacTestCase):
 
     def test_a_seat_handed_back_reaches_the_sign_in_door_again(self):
         # Switching a seat off clears is_staff, so switching it back on has to put
-        # it back — otherwise the roster says "can sign in again" over a shut door.
+        # it back, otherwise the roster says "can sign in again" over a shut door.
         StaffAccount.objects.create(user=self.admin, role=StaffAccount.Role.ADMIN)
         StaffAccount.objects.create(user=self.mod, role=StaffAccount.Role.MODERATOR)
         admin = self.session('desk_admin')

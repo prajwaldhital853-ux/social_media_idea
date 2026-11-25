@@ -1,4 +1,4 @@
-/** Minutes, hours, days — the way a duty roster reads them, not ISO spans. */
+/** Minutes, hours, days, the way a duty roster reads them, not ISO spans. */
 export function ago(value: string | number | null | undefined): string {
   if (!value) return 'never';
   const at = typeof value === 'number' ? value * 1000 : Date.parse(value);
@@ -15,8 +15,8 @@ export function ago(value: string | number | null | undefined): string {
 }
 
 export function stamp(value: string | number | null | undefined): string {
-  if (!value) return '—';
+  if (!value) return '-';
   const at = typeof value === 'number' ? value * 1000 : Date.parse(value);
-  if (Number.isNaN(at)) return '—';
+  if (Number.isNaN(at)) return '-';
   return new Date(at).toLocaleString();
 }

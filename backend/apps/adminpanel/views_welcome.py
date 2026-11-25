@@ -1,7 +1,7 @@
 """Contract 6.6: the wording a visitor reads the first time the site loads.
 
 The Client has seven days from the Agreement Date to supply it, which means the
-platform cannot ship an empty box — it carries its own wording, and a line emptied
+platform cannot ship an empty box, it carries its own wording, and a line emptied
 on purpose falls back to that rather than showing a card with nothing on it.
 
 Two doors, deliberately different. This desk is the only place the wording
@@ -90,7 +90,7 @@ def welcome_desk(request):
     # unwritten, and saving it again would be an edit that changed nothing.
     moved = [BY_KEY[key][3] for key in updates if stored.get(key, '') != updates[key]]
     if not moved:
-        return Response({'detail': 'Nothing to save — the card already says exactly this.'}, status=400)
+        return Response({'detail': 'Nothing to save, the card already says exactly this.'}, status=400)
 
     settings_store.write(request.user, updates)
     record(request.user, 'welcome_text', 'first-load wording',

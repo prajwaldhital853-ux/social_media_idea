@@ -1,7 +1,7 @@
 """The two lists a moderator decides against: what may not be said, and what may not be sold.
 
 Enforcing these at write time belongs to the site's own post and listing views,
-which this console does not edit. What lives here is the vocabulary itself — read
+which this console does not edit. What lives here is the vocabulary itself, read
 by the review queue, which marks the reported text with whatever on this list it
 contains, so the decision is made against the platform's stated rules rather than
 against whatever the moderator happens to remember.
@@ -22,6 +22,17 @@ def words():
 
 def items():
     return list(PolicyTerm.objects.filter(kind=PolicyTerm.Kind.ITEM, is_active=True).values_list('text', flat=True))
+
+
+def terms_for(kind):
+    """What a decision about this kind of thing is read against.
+
+    A listing is judged against the prohibited items too: that list is the
+    vocabulary the marketplace desk is written in, and nothing else on the
+    platform reads it, so an item added in the console would otherwise sit
+    there unquoted.
+    """
+    return words() + (items() if kind == 'listing' else [])
 
 
 def scan(text):

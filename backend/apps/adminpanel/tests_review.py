@@ -1,4 +1,4 @@
-"""Contract 6.3: what a decision does — to the pile, the content, the money and the person.
+"""Contract 6.3: what a decision does, to the pile, the content, the money and the person.
 
 A review queue is only as good as the rules under it, so these tests read it the
 way a moderator does (one target, six reporters, one campaign running on it) and
@@ -63,7 +63,7 @@ class ReviewTestCase(RbacTestCase):
         )
 
     def pile_on(self, target, kind='post', reasons=('spam', 'spam', 'harassment'), status=OPEN):
-        """The same target reported by several people — the pile one decision clears."""
+        """The same target reported by several people, the pile one decision clears."""
         return [self.reported(target, kind, reason=reason, status=status) for reason in reasons]
 
     def campaign(self, owner, target, kind='post', budget='900.00', ran=10, left=20,

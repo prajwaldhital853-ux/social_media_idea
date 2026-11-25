@@ -3,8 +3,8 @@
 Two keys and one rule. `users` opens the list and a single account; `user_actions`
 is the pen for suspending, reinstating, verifying, clearing flags and deleting;
 `warnings` is the pen for a private note. A seat that can read everybody and sign
-nobody is a normal hire — that is what a night moderator with read access looks
-like — so the verbs are answered per screen, not assumed from the roster row.
+nobody is a normal hire, that is what a night moderator with read access looks
+like, so the verbs are answered per screen, not assumed from the roster row.
 
 The account itself is the site's own: suspension is `suspended_until`, the tick is
 `profile.verified`, the pile is the same reports the queue counts. `people.py`
@@ -161,7 +161,7 @@ def person_warn(request, username):
 @permission_classes([IsAuthenticated])
 @rbac.staff_only('user_actions')
 def person_clear_flags(request, username):
-    """The pile closed and the lockout cleared — a decision nobody has to re-report."""
+    """The pile closed and the lockout cleared, a decision nobody has to re-report."""
     user, error = _account(username)
     if error is not None:
         return error

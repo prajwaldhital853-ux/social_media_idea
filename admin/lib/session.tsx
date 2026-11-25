@@ -14,7 +14,7 @@ interface SessionValue {
   challenge: SignInChallenge | null;
   /** True when a screen hit the door mid-work and the seat has to sign in again. */
   lapsed: boolean;
-  /** Recovery codes handed out at first enrolment — shown once, then gone. */
+  /** Recovery codes handed out at first enrolment, shown once, then gone. */
   newCodes: string[] | null;
   error: string | null;
   busy: boolean;

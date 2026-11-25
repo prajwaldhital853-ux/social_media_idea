@@ -5,7 +5,7 @@ to break them: a coin approval that can be clicked twice, a payment receipt that
 leaks into the list every seat reads, and a receipt that stays on the server after
 the purchase is settled. So these tests read the queue response for what it does
 *not* contain, run the sweep against the clock, and assert the ledger as a list of
-rows that only ever grows — there is no code path in the console that edits one.
+rows that only ever grows, there is no code path in the console that edits one.
 """
 
 import shutil
@@ -321,7 +321,7 @@ class RetentionTests(CoinTestCase):
         """Zero is the Admin's word for "delete it as soon as this is settled".
 
         A `get(...) or 30` reads that deliberate zero as an empty box and quietly
-        keeps a stranger's bank slip for another month — this is the one setting in
+        keeps a stranger's bank slip for another month, this is the one setting in
         the section that deletes other people's private documents, so it is tested.
         """
         request = self.request_for(status=CoinRequest.Status.APPROVED)

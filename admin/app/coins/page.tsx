@@ -13,7 +13,7 @@ import { useSession } from '@/lib/session';
 import { CoinAsk, CoinPage } from '@/lib/types';
 
 /**
- * Contract 6.7 — the coin desk. Somebody has already sent real rupees and is
+ * Contract 6.7, the coin desk. Somebody has already sent real rupees and is
  * waiting on a person here, so the screen leads with what is held up and by how
  * long, and every verb that moves money names the amount it moves.
  */
@@ -106,7 +106,7 @@ export default function CoinsPage() {
   return (
     <ConsoleShell
       title="Coin requests"
-      subtitle="Money that has already reached the platform's account and is waiting for a person to credit the coins — with the payment proof beside the request, never beside the list."
+      subtitle="Money that has already reached the platform's account and is waiting for a person to credit the coins, with the payment proof beside the request, never beside the list."
       actions={(
         <button type="button" className={`btn ghost${busy ? ' spinning' : ''}`} onClick={() => load()} title="Reload the queue">
           {IC.refresh}<span>Refresh</span>

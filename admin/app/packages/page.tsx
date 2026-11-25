@@ -11,7 +11,7 @@ import { useSession } from '@/lib/session';
 import { PackageDesk, PromoPackage } from '@/lib/types';
 
 /**
- * Contract 6.8 — the package shelf. What a payer is offered when they buy reach is
+ * Contract 6.8, the package shelf. What a payer is offered when they buy reach is
  * three numbers per package: the Coin price, how many days it runs, and how far it
  * promises to go. They used to be a Python list, so repricing was a deploy; here
  * they are one row in the settings table and the shelf re-quotes the next payer the
@@ -60,7 +60,7 @@ export default function PackagesScreen() {
 
   const shelf = desk?.packages || [];
   // The row count and the ids are what a bought campaign is matched by, so a shelf
-  // is dirty when any number on it moved — not when somebody typed and undid it.
+  // is dirty when any number on it moved, not when somebody typed and undid it.
   const dirty = !!desk && JSON.stringify(draft) !== JSON.stringify(desk.packages.map(toDraft));
 
   const edit = (index: number, field: keyof Draft, value: string) => {
@@ -118,7 +118,7 @@ export default function PackagesScreen() {
   return (
     <ConsoleShell
       title="Promotion packages"
-      subtitle="The three numbers a payer chooses between — the Coin price, how many days the campaign runs, how far it promises to go — and who has already bought each one."
+      subtitle="The three numbers a payer chooses between, the Coin price, how many days the campaign runs, how far it promises to go, and who has already bought each one."
       actions={(
         <button
           type="button" className={`btn ghost${busy ? ' spinning' : ''}`}
@@ -134,7 +134,7 @@ export default function PackagesScreen() {
         <section className="panel" data-pkg-errors>
           <p className="line">
             {IC.alert}
-            <span><b>{errors.length} problem{errors.length === 1 ? '' : 's'} with this shelf.</b> Nothing was written — the catalog a payer sees is still the one below.</span>
+            <span><b>{errors.length} problem{errors.length === 1 ? '' : 's'} with this shelf.</b> Nothing was written, the catalog a payer sees is still the one below.</span>
           </p>
           <ul className="pk-problems">
             {errors.map(line => <li key={line}>{line}</li>)}
@@ -153,7 +153,7 @@ export default function PackagesScreen() {
               <div>
                 <h2>The shelf a payer chooses from</h2>
                 <p>
-                  Save and the next person buying reach is quoted these numbers — no deploy, and the
+                  Save and the next person buying reach is quoted these numbers, no deploy, and the
                   campaigns already running keep the price they paid. An empty box reads as zero, and a
                   package priced or timed at zero is refused on the way in.
                 </p>
@@ -214,7 +214,7 @@ export default function PackagesScreen() {
                       <em className="desk-who">
                         {paid
                           ? <>quoted today as <b>{paid.reach}</b></>
-                          : 'a new package — the site has never sold it'}
+                          : 'a new package, the site has never sold it'}
                       </em>
                     </label>
 
@@ -263,7 +263,7 @@ export default function PackagesScreen() {
               <div>
                 <h2>What the site is selling right now</h2>
                 <p>
-                  Read from <b>GET /api/promotions/config/</b> — the same answer the campaign-buying
+                  Read from <b>GET /api/promotions/config/</b>, the same answer the campaign-buying
                   screen gets, with nobody signed in. {desk.is_edited
                     ? 'This shelf has been rewritten from the console.'
                     : 'Nobody has rewritten it, so these are the three the site shipped with.'}
@@ -298,7 +298,7 @@ export default function PackagesScreen() {
               {IC.alert}
               <span>
                 Dropping a package does not delete anybody&rsquo;s campaign. A row that still carries that
-                id keeps running and keeps the price it paid — the desk just shows the id it cannot match,
+                id keeps running and keeps the price it paid, the desk just shows the id it cannot match,
                 so nobody can be sold something off a shelf that no longer exists.
               </span>
             </p>

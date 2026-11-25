@@ -9,8 +9,8 @@ The other seeds hand their screens rows to list. This one hands its screens a
   three has not either; and a report whose target was deleted still counts, even
   though there is nothing left to rule on. Four states, four different sentences,
   and a seat has to be able to tell them apart without opening the database.
-- the four outside reporters each get a different answer — one healthy, one gone
-  quiet, one counting trouble, one nobody ever wired in — because "the backup did
+- the four outside reporters each get a different answer, one healthy, one gone
+  quiet, one counting trouble, one nobody ever wired in, because "the backup did
   not run", "the backup job has stopped talking" and "nothing watches the backups"
   are three separate things to be told, and a seed that stamped all four the same
   way would let the alerts desk pass while saying nothing true.
@@ -88,7 +88,7 @@ def filed(target, kind, reason, reporter, when):
     """An open report, stamped backwards, with this file's own label on it."""
     row = Report.objects.create(
         reporter=reporter, target_type=kind, target_id=str(target), reason=reason,
-        details=f'{MARK} — filed against the {kind} by the safety watch seed',
+        details=f'{MARK}, filed against the {kind} by the safety watch seed',
     )
     Report.objects.filter(pk=row.pk).update(created_at=when)
     return row
@@ -114,18 +114,18 @@ def main():
 
     pulled = Post.objects.create(
         author=host, status=Post.Status.HIDDEN, audience=Post.Audience.FOLLOWERS,
-        text='console QA sample — four people reported this post and the counter already hid it',
+        text='console QA sample, four people reported this post and the counter already hid it',
     )
     stall = Post.objects.create(
         author=host, status=Post.Status.LIVE, audience=Post.Audience.FOLLOWERS,
-        text='console QA sample — two people reported this one, which is under the pile',
+        text='console QA sample, two people reported this one, which is under the pile',
     )
     chatter = Comment.objects.create(
         post=stall, author=host,
-        text='console QA sample — three people reported this comment, and nothing hid it',
+        text='console QA sample, three people reported this comment, and nothing hid it',
     )
     for_sale = Listing.objects.create(
-        seller=host, title='console QA sample — a listing three people reported',
+        seller=host, title='console QA sample, a listing three people reported',
         price=Decimal('18500.00'),
     )
 
@@ -141,10 +141,10 @@ def main():
         filed(GONE_POST, 'post', 'spam', who, now - AGE)
 
     # The line the platform drew itself, so the audit screen has a row with no
-    # person behind it — the one case that reads as a gap unless it is named.
+    # person behind it, the one case that reads as a gap unless it is named.
     AuditLog.objects.create(
         actor=None, action='auto_hide_post', target=f'post:{pulled.pk}',
-        detail=f'{MARK} — 4 open reports took this post out of the feed on their own',
+        detail=f'{MARK}, 4 open reports took this post out of the feed on their own',
     )
 
     for text, note, active in LINKS:
@@ -169,7 +169,7 @@ def main():
         detail='the collector is up and shipping counts',
         counts={'per_hour': 47}, stamped_at=now - timedelta(minutes=6), stamps=12,
     )
-    # `jobs` is left out entirely — the transcoder has never reported to this
+    # `jobs` is left out entirely, the transcoder has never reported to this
     # console, and the desk has to say that rather than invent a number for it.
 
     raised = alerts.scan()

@@ -1,7 +1,7 @@
 """The staff roster: who may open the console, at which role, with which keys.
 
-Granting access makes a person `is_staff` in the main app — that is the flag every
-existing admin endpoint already checks — and revoking it both switches the flag off
+Granting access makes a person `is_staff` in the main app, that is the flag every
+existing admin endpoint already checks, and revoking it both switches the flag off
 and revokes their refresh sessions, so the session in the browser dies at the next
 call instead of lingering until the token expires.
 """
@@ -91,7 +91,7 @@ def _target(request, username):
     """(staff_row, caller, error_response) with the 6.1 role rules already applied.
 
     A Superadmin is the Client and moves only their own kind. An Admin reaches
-    Moderator seats — including making and ending them — and nothing above. A
+    Moderator seats, including making and ending them, and nothing above. A
     Moderator reaches nobody.
     """
     caller = request.staff_account
@@ -100,7 +100,7 @@ def _target(request, username):
     # the seat is then told a person called "create" does not exist.
     if username.lower() in RESERVED:
         return None, caller, Response(
-            {'detail': 'This API does not have that staff door yet — restart it or deploy the '
+            {'detail': 'This API does not have that staff door yet, restart it or deploy the '
                        'current build, then try again.'},
             status=409,
         )
@@ -120,7 +120,7 @@ def _target(request, username):
 def _editing_self(staff, caller):
     """Role and permission edits are made from another seat, never your own.
 
-    One wrong click here would otherwise end the session making the change — and
+    One wrong click here would otherwise end the session making the change, and
     with it, any way back in. Switching a seat off is deliberately not covered:
     handing the console to a colleague is a real move, and `_superadmins_left`
     keeps the last Client seat standing.
@@ -222,7 +222,7 @@ def staff_create(request):
     The Client used to have to sign up as a person first and be promoted
     afterwards, which meant a username taken by a spare account and a password
     the new colleague chose themselves. Here the seat names the person, picks
-    their screens and writes the first password — and the flag on the row makes
+    their screens and writes the first password, and the flag on the row makes
     that password unusable past the door, because a credential read out over the
     phone or pasted into a chat is not a secret anybody should keep using.
     """
@@ -243,7 +243,7 @@ def staff_create(request):
     if User.objects.filter(username__iexact=username).exists():
         return Response({'detail': f'The username {username} is already taken on the platform.'}, status=409)
     # The address is not a nicety. Staff sign in with it and nothing else, and it
-    # is the only way back for a seat that has lost its password — a seat without
+    # is the only way back for a seat that has lost its password, a seat without
     # one can only be repaired by somebody else's hand.
     if not email:
         return Response({'detail': 'A seat needs an email address: it is what signs the person in '
@@ -284,7 +284,7 @@ def staff_create(request):
     record(caller.user, 'create_staff', user.username,
            f'role={role} password issued, must be replaced at first sign-in')
     out = _row(staff)
-    out['detail'] = (f'{user.username} holds a {role} seat. Give them this password once — the '
+    out['detail'] = (f'{user.username} holds a {role} seat. Give them this password once, the '
                      'console will make them choose their own before it opens.')
     return Response(out, status=201)
 

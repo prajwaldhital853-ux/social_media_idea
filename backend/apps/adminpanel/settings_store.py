@@ -26,7 +26,7 @@ DEFAULTS = {
                            'Raises an alert when moderation hides this much content in 24 hours.', 'safety'),
     # Contract 6.9: the rest of the alert list. Every one of these is a sentence the
     # platform can prove from a table it already writes, or from a reporter that
-    # stamps itself in `AdminPulse` — which is why "no uptime probe for N minutes"
+    # stamps itself in `AdminPulse`, which is why "no uptime probe for N minutes"
     # and "nothing has ever reported a backup" are two different alerts, not one.
     'alert_web_stale_minutes': (10, 'int', 'No answer from the public site for (minutes)',
                                 'Raises an alert when the uptime probe stops reporting. Site down.', 'safety'),
@@ -60,7 +60,7 @@ DEFAULTS = {
     # today, written down so a seat can see them in one place; the rest are the
     # limits and restrictions the contract asks for, published at
     # `GET /api/spam/config/` for the site to enforce. `alert_report_pile`, above,
-    # is the auto-hide number — one row, because two knobs that both mean "how many
+    # is the auto-hide number, one row, because two knobs that both mean "how many
     # reports pull a post" would drift apart within a month.
     'spam_signup_per_hour': (3, 'int', 'Sign-ups one address may start in an hour',
                              'What the site already holds: a fourth sign-up from one address is refused.', 'safety'),
@@ -91,7 +91,7 @@ DEFAULTS = {
                         'Matches the link list below against what a post points at.', 'safety'),
     # Contract 6.7: the coin desk. A person pays in rupees and the platform decides
     # what a Coin costs, what the smallest purchase is, and which bank account the
-    # money goes to — so all three are rows, not constants, and a price change does
+    # money goes to, so all three are rows, not constants, and a price change does
     # not need a deploy. The proof retention is a number too because deleting other
     # people's payment screenshots on a schedule is a promise the contract makes.
     'coin_price': (Decimal('10'), 'dec', 'Price of 1 Coin (NPR)',
@@ -109,8 +109,8 @@ DEFAULTS = {
     'coin_proof_days': (30, 'int', 'Keep a payment proof for (days)',
                         'Payment screenshots are deleted this many days after the request is decided.',
                         'payments'),
-    # Contract 6.8: what reaches whom. The site's feed used to hard-code these —
-    # three coins for a like, five for a save, two promotions a page — so a
+    # Contract 6.8: what reaches whom. The site's feed used to hard-code these ,
+    # three coins for a like, five for a save, two promotions a page, so a
     # promotion that felt too aggressive was a pull request. Now they are rows, and
     # `GET /api/promotions/config/` hands the same numbers to the feed every time it
     # asks what to show.
@@ -143,7 +143,7 @@ DEFAULTS = {
     'promo_packages': ('', 'str', 'Promotion packages (JSON)',
                        'What a campaign costs, how long it runs and how far it reaches.', 'promo'),
     # Contract 6.10: the size of one post. These were the member app's own hard
-    # numbers — 2,000 characters, four photos, one 60-second video — which made the
+    # numbers, 2,000 characters, four photos, one 60-second video, which made the
     # sentence "the Admin can change the post limits" a deploy. They are rows now,
     # published at `GET /api/limits/config/` for the composer and the upload guard
     # to read; `limits.py` also says out loud when a typed number passes what the
@@ -172,7 +172,7 @@ DEFAULTS = {
     # Contract 6.6: the wording a visitor reads the first time the site loads. The
     # Client has seven days to supply it, so the platform ships with its own line
     # rather than an empty box, and a box cleared on purpose falls back to it.
-    'welcome_message': ('Welcome to Exposing — show what you are making, and see what everyone '
+    'welcome_message': ('Welcome to Exposing, show what you are making, and see what everyone '
                         'else is making.', 'str', 'Welcome message',
                         'The sentence on the card a visitor sees first.', 'platform'),
     'tagline': ('Expose the work.', 'str', 'Tagline',
@@ -245,12 +245,12 @@ def lines(keys=None, group=None):
 
 
 def lines_group(group):
-    """Every knob in one group — the shape the safety and coin desks were written against."""
+    """Every knob in one group, the shape the safety and coin desks were written against."""
     return lines(group=group)
 
 
 def _cached_rows():
-    """(every knob at its typed value, the rows that override them) — read once per desk."""
+    """(every knob at its typed value, the rows that override them), read once per desk."""
     current = cached()
     return current, {row.key: row for row in AdminSetting.objects.filter(key__in=current)}
 

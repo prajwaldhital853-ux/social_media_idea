@@ -3,7 +3,7 @@
 The main site's `/api/auth/login/` is deliberately not reused and not modified. A
 staff member browsing the platform as a person goes through that door; this door
 only opens once an authenticator code has been proved, and the proof rides in a
-cookie the browser discards when the tab closes — so the seat ends when the person
+cookie the browser discards when the tab closes, so the seat ends when the person
 at it says so, not when a clock runs out.
 """
 
@@ -53,7 +53,7 @@ logger = logging.getLogger(__name__)
 
 
 def _address(value):
-    """The one way this file reads an email off the wire — the same way signup does."""
+    """The one way this file reads an email off the wire, the same way signup does."""
     return (value or '').strip().lower()
 
 
@@ -130,7 +130,7 @@ def _grant(request, staff, kind, amr):
         'permissions': keys,
         'permission_keys': detailed,
         # None, not a countdown: this window is closed by the person at the desk,
-        # by the tab, or by the machine — never by a clock they cannot see running.
+        # by the tab, or by the machine, never by a clock they cannot see running.
         'admin_expires_at': None,
         'amr': list(amr),
         'recovery_codes': codes,
@@ -152,7 +152,7 @@ def admin_login(request):
     """Password check only. Nothing is handed out here without the second factor.
 
     The address and a password, nothing else. A username is short, public and
-    changeable, and this is the one door on the platform that opens every desk —
+    changeable, and this is the one door on the platform that opens every desk ,
     so it is closed to a string somebody could read off a profile or guess.
     """
     identifier = _address(request.data.get('email') or request.data.get('username'))
@@ -232,7 +232,7 @@ def admin_set_password(request):
 
     Reaching this view already proves the first password: the setup cookie is only
     minted after a match. What it does not prove is that the person typing now is
-    the person the seat was made for — which is exactly why the answer is a new
+    the person the seat was made for, which is exactly why the answer is a new
     secret and not the one that was read out to them.
     """
     user = _principal(request)
@@ -348,7 +348,7 @@ def admin_session(request):
         'role': staff.effective_role,
         'permissions': keys,
         # Labels for the keys this seat already holds, so "what can I open" needs
-        # no catalogue read — that endpoint is a staff_view screen on purpose.
+        # no catalogue read, that endpoint is a staff_view screen on purpose.
         'permission_keys': detailed,
         'enrolled': staff.is_enrolled,
         'recovery_left': len(staff.recovery_codes),
@@ -404,8 +404,8 @@ def _seat(user):
 def admin_forgot(request):
     """Step one at the console door: an address, then a code to that mailbox.
 
-    A seat is not recovered through the member site's forgot-password page — that
-    door opens one profile, this one opens every desk — so the code is written
+    A seat is not recovered through the member site's forgot-password page, that
+    door opens one profile, this one opens every desk, so the code is written
     with its own purpose and can only ever be spent here.
     """
     email = _address(request.data.get('email'))
@@ -468,7 +468,7 @@ def admin_recovery(request):
     """Step two: the code, the new password, and every session this account held closed.
 
     The second factor survives this on purpose. A mailbox that has been taken over
-    buys a password, and a password alone still cannot open the console — the
+    buys a password, and a password alone still cannot open the console, the
     authenticator code is what proves the phone is in the hand of the seat.
     """
     challenge = request.data.get('challenge')

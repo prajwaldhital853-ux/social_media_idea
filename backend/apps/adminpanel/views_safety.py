@@ -1,8 +1,8 @@
 """Contract 6.9: the spam desk, and the two lists the pile produces.
 
 Three doors, because three different questions are asked here. The desk changes a
-rule that applies to everybody at once — how often one person may act, what a
-day-old account may not do, how many reporters pull a post out of the feed — which
+rule that applies to everybody at once, how often one person may act, what a
+day-old account may not do, how many reporters pull a post out of the feed, which
 is why a Moderator does not hold `spam_settings` by default. The open door publishes
 those same rules for the member site to honour, and the desk prints what it answers
 so a seat never has to believe a save banner.
@@ -50,7 +50,7 @@ def spam_config(request):
 
     A rate limit a view cannot read before it refuses a request is a number written
     in a screen and nothing else, so the desk publishes it here the moment it is
-    saved — the same door the reach controls are published behind.
+    saved, the same door the reach controls are published behind.
     """
     return Response(spam.public_config())
 
@@ -96,7 +96,7 @@ def _rows(piled, reasons):
         key = (item['target_type'], item['target_id'])
         obj = found.get(key)
         if obj is None:
-            # The reporter is still counting, but the row they pointed at is gone —
+            # The reporter is still counting, but the row they pointed at is gone ,
             # a deleted post keeps its reports. It stays on the list because the
             # pile is what it is; the screen just has no owner or state to show.
             rows.append({
@@ -129,7 +129,7 @@ def _rows(piled, reasons):
 @permission_classes([IsAuthenticated])
 @rbac.staff_only('reports')
 def flagged(request):
-    """Flagged content and flagged accounts — the two lists the pile produces."""
+    """Flagged content and flagged accounts, the two lists the pile produces."""
     limit = spam.report_threshold()
     page = 0
     try:

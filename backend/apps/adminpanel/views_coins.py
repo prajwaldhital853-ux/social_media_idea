@@ -36,7 +36,7 @@ QR_MAX_BYTES = 2 * 1024 * 1024
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def coin_pricing_public(request):
-    """What a Coin costs and where the rupees go — a visitor needs this before buying."""
+    """What a Coin costs and where the rupees go, a visitor needs this before buying."""
     return Response(coins.pricing())
 
 

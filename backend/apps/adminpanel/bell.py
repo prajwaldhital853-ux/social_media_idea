@@ -8,7 +8,7 @@ out, so revoking a key hides the pile it pointed at without deleting anyone's tr
 And it is 20 rows deep per seat, no more: a bell that remembers everything is a bell
 nobody opens, and the desks behind it hold the real history.
 
-The events are the ones a seat cannot learn about any other way — a report filed
+The events are the ones a seat cannot learn about any other way, a report filed
 while nobody was watching, a payment proof waiting on a decision. Everything else is
 a number on a dashboard and stays there.
 """
@@ -86,7 +86,7 @@ def _demo(user):
     """A profile from the seed, not a person the console should be woken for.
 
     `seeded` is stamped on a later save than the insert, so the address the seed
-    writes is checked too — otherwise reseed a demo and the bell fills with it.
+    writes is checked too, otherwise reseed a demo and the bell fills with it.
     """
     return user is None or user.seeded or (user.email or '').endswith('@demo.test')
 
@@ -107,7 +107,7 @@ def on_coin_request(instance, created, **kwargs):
         return
     announce(
         'coin_request',
-        f'@{instance.user.username} asked for {instance.coins} coins — proof needs a decision',
+        f'@{instance.user.username} asked for {instance.coins} coins, proof needs a decision',
         '/coins?status=pending',
         'coins_view',
     )
@@ -134,7 +134,7 @@ def on_coin_update(instance, created, update_fields, **kwargs):
     """New proof on a request that was already waiting: the desk has something new to open.
 
     The row is not created again, so `created` is False and only `update_fields`
-    says what changed — the same field the console reads to show "answered".
+    says what changed, the same field the console reads to show "answered".
     """
     if created or 'resubmitted_at' not in (update_fields or []) or _demo(instance.user):
         return

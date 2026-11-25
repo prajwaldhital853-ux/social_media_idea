@@ -21,7 +21,7 @@ class User(AbstractUser):
     # delete only these rows, which is what makes it survivable as a deploy step.
     seeded = models.BooleanField(default=False)
 
-    class Meta:
+    class Meta(AbstractUser.Meta):
         # Every way in looks an address up with `email__iexact`, which Postgres
         # answers as `UPPER(email::text) = UPPER(...)`. A plain index on the column
         # cannot serve that expression, so each sign-in read the whole table; these

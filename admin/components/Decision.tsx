@@ -101,7 +101,7 @@ export default function DecisionBar({
     const spec = VERBS[verb];
     // The click that decides is never the click that sends.
     const sure = await confirm({
-      title: `${spec.label}${target ? ` — ${target}` : ''}?`,
+      title: `${spec.label}${target ? `, ${target}` : ''}?`,
       body: verb === 'withdraw' && standing > 1
         ? `${standing} warning notice(s) standing here come down. Each one stays on the record, marked withdrawn, with your name beside it.`
         : spec.help,
@@ -129,7 +129,7 @@ export default function DecisionBar({
   };
 
   if (shown.length === 0) {
-    return <p className="note">There is nothing to decide on this target — it is no longer here.</p>;
+    return <p className="note">There is nothing to decide on this target, it is no longer here.</p>;
   }
 
   const active = open ? VERBS[open] : null;
@@ -166,7 +166,7 @@ export default function DecisionBar({
           <p className="note row">{IC.alert}<span>{active.help}</span></p>
           {active.reason && (
             <label className="field">
-              <span>Reason {active.reason === 'must' ? '— the author is shown this' : '(optional)'}</span>
+              <span>Reason {active.reason === 'must' ? ', the author is shown this' : '(optional)'}</span>
               <textarea
                 rows={2} name="reason" value={reason} maxLength={500} autoFocus={active.reason === 'must'}
                 placeholder={active.notice ? 'Why it came down (private to the author)' : 'What about it breaks the rules'}
@@ -177,7 +177,7 @@ export default function DecisionBar({
           {active.notice && (
             <>
               <label className="field">
-                <span>Warning sentence {active.notice === 'must' ? '' : '(optional — leave blank for no notice)'}</span>
+                <span>Warning sentence {active.notice === 'must' ? '' : '(optional, leave blank for no notice)'}</span>
                 <textarea
                   rows={2} name="notice" value={notice} maxLength={240} autoFocus={active.notice === 'must'}
                   placeholder="e.g. This listing advertises something the marketplace does not allow."
@@ -187,8 +187,8 @@ export default function DecisionBar({
               <label className="field">
                 <span>Who can read this warning</span>
                 <select name="audience" value={audience} onChange={event => setAudience(event.target.value)}>
-                  <option value="public">Public — everyone who opens this content</option>
-                  <option value="private">Private — only the account it is about</option>
+                  <option value="public">Public, everyone who opens this content</option>
+                  <option value="private">Private, only the account it is about</option>
                 </select>
               </label>
             </>
@@ -198,7 +198,7 @@ export default function DecisionBar({
               type="button" className={`btn ${active.tone} tiny`} disabled={busy}
               onClick={() => submit(open!, reason, notice)}
             >
-              {IC.go}<span>{busy ? 'Deciding…' : `Confirm — ${active.label}`}</span>
+              {IC.go}<span>{busy ? 'Deciding…' : `Confirm, ${active.label}`}</span>
             </button>
             <button type="button" className="btn ghost tiny" disabled={busy} onClick={() => setOpen(null)}>
               <span>Cancel</span>
@@ -226,7 +226,7 @@ export function Verdict({ out }: { out: Outcome }) {
     <div className="verdict">
       <p className="verdict-line">
         {IC.check}
-        <span><b>{out.target}</b> — {out.detail}</span>
+        <span><b>{out.target}</b>, {out.detail}</span>
       </p>
       {out.campaigns.length > 0 && (
         <ul className="verdict-money">

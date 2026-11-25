@@ -1,7 +1,7 @@
 """The staff bell: one unread-count door and one door that clears notices.
 
 Two doors, no more, because the tray is small and the console polls it. `bell_desk`
-answers for any seat at all — which notices a seat is told about is decided by the
+answers for any seat at all, which notices a seat is told about is decided by the
 permission each row was written against, so the door does not need a key of its own.
 Marking read is a write, and the only thing it writes is `read_at`: it never deletes,
 because "did anyone see this" is a question a seat asks about themselves, not about

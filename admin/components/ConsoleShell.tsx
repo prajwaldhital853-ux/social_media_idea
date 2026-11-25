@@ -22,6 +22,17 @@ function ago(minutes: number): string {
   return `${Math.floor(hours / 24)}d ago`;
 }
 
+/** The tray mixes six kinds of arrival; the two words in front of each line say
+ *  which queue it came from, the same way the drawer names the desk it opens. */
+const KIND_LABEL: Record<string, string> = {
+  alert: 'Alert',
+  report: 'Report',
+  coin_request: 'Coins',
+  coin_proof: 'Proof',
+  signup: 'Joined',
+  promotion: 'Campaign',
+};
+
 /**
  * The list a nested page belongs to, for the seat that opened it in a fresh tab
  * or reloaded it and has no history to walk back into. A user's page is still
@@ -69,7 +80,7 @@ export default function ConsoleShell({
     if (status === 'out') router.replace('/login');
   }, [status, router]);
 
-  // The drawer row this screen sits under — a user's page is still the directory.
+  // The drawer row this screen sits under, a user's page is still the directory.
   const here = drawerFor(pathname);
 
   useEffect(() => {
@@ -259,6 +270,7 @@ export default function ConsoleShell({
                         <li key={item.id}>
                           <button type="button" className={`bell-item kind-${item.kind}`}
                                   onClick={() => openTray(item.href, item.id)}>
+                            <span className="bell-item-kind">{KIND_LABEL[item.kind] || item.kind}</span>
                             <span className="bell-item-text">{item.text}</span>
                             <span className="bell-item-ago">{ago(item.age_minutes)}</span>
                           </button>
@@ -330,7 +342,7 @@ function CodePrompt({ verify, signOut, busy, error, onDone }: {
         <p>
           {recovery
             ? 'One of your ten codes. Each works once, and a spent code is gone.'
-            : 'This seat was locked or its proof was dropped while the screen was open. Nothing you typed is lost — enter the code your authenticator shows.'}
+            : 'This seat was locked or its proof was dropped while the screen was open. Nothing you typed is lost, enter the code your authenticator shows.'}
         </p>
         <input
           autoFocus inputMode={recovery ? 'text' : 'numeric'} autoComplete="one-time-code"

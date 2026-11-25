@@ -9,7 +9,7 @@ to `qa_reviewer` or to the three `qa_rep_*` reporters, is labelled as a console
 sample in its own text, and is posted followers-only so it never lands in the
 demo feed a person else is screenshotting.
 
-The last report — one live post, one reporter — is left open on purpose. It is the
+The last report, one live post, one reporter, is left open on purpose. It is the
 one the Moderator seat decides after the Client has handed it the pen back.
 
 Running it again wipes those rows first, so the queue always shows the same
@@ -88,28 +88,28 @@ def main():
     # Followers-only: the demo feed a second agent is looking at does not carry these.
     first = Post.objects.create(
         author=author, status=Post.Status.LIVE, audience=Post.Audience.FOLLOWERS,
-        text='console QA sample — is anyone selling gunpowder in Thamel this week? paid for buygunpowder yesterday, DM me',
+        text='console QA sample, is anyone selling gunpowder in Thamel this week? paid for buygunpowder yesterday, DM me',
     )
     hidden = Post.objects.create(
         author=author, status=Post.Status.HIDDEN, audience=Post.Audience.FOLLOWERS,
-        text='console QA sample — the report counter stopped this one before a person read it',
+        text='console QA sample, the report counter stopped this one before a person read it',
     )
     promoted = Post.objects.create(
         author=author, status=Post.Status.LIVE, audience=Post.Audience.FOLLOWERS,
-        text='console QA sample — bicycle for sale, this post has a paid campaign running on it',
+        text='console QA sample, bicycle for sale, this post has a paid campaign running on it',
     )
     # The walkthrough leaves this one open on purpose: it is the report the
     # Moderator seat decides, which is how the audit row proves who held the pen.
     spare = Post.objects.create(
         author=author, status=Post.Status.LIVE, audience=Post.Audience.FOLLOWERS,
-        text='console QA sample — this one is left for the moderator seat to decide',
+        text='console QA sample, this one is left for the moderator seat to decide',
     )
 
     Comment.objects.create(
-        post=first, author=author, text='console QA sample — ignore the gunpowder caption above',
+        post=first, author=author, text='console QA sample, ignore the gunpowder caption above',
     )
     Listing.objects.create(
-        seller=author, title='console QA sample — pressure cooker 5L, ignore',
+        seller=author, title='console QA sample, pressure cooker 5L, ignore',
         description='A walkthrough listing for the marketplace review queue. Not a real thing for sale.',
         price=Decimal('4500.00'), category='Home', condition='Good', location='Kathmandu',
         image_url='https://picsum.photos/seed/qa-listing/1200/900',

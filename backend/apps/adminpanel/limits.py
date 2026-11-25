@@ -1,4 +1,4 @@
-"""Contract 6.10 — the size one post is allowed to be, as a setting instead of a constant.
+"""Contract 6.10, the size one post is allowed to be, as a setting instead of a constant.
 
 The contract's defaults are 2,000 characters, four photos of 5 MB each and one video
 up to 60 seconds and 150 MB. Until now those numbers lived in the composer and in
@@ -111,7 +111,7 @@ def write(actor, posted):
     if bad:
         return 400, {'errors': bad, 'detail': ' '.join(bad)}
     if not updates:
-        return 400, {'detail': 'Nothing to save — no limit has been changed.'}
+        return 400, {'detail': 'Nothing to save, no limit has been changed.'}
     settings_store.write(actor, updates)
     labels = [cached[key]['label'] for key in updates]
     record(actor, 'post_limits', 'post limits',
@@ -119,7 +119,7 @@ def write(actor, posted):
     return 200, {
         'detail': 'Saved ' + ', '.join(label.lower() for label in labels)
                   + '. They are published at GET /api/limits/config/ for the composer and the upload '
-                  'endpoint to read — until that code reads them, the site keeps the numbers it ships with.',
+                  'endpoint to read, until that code reads them, the site keeps the numbers it ships with.',
         'changed': list(updates),
         'warnings': notes,
         'config': public_config(),
@@ -127,7 +127,7 @@ def write(actor, posted):
 
 
 def public_config():
-    """What the site needs to hold a person to — no login, no seat, no person's data."""
+    """What the site needs to hold a person to, no login, no seat, no person's data."""
     values = settings_store.values()
     return {
         'text': {'characters': values['limit_text_chars']},

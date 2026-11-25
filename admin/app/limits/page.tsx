@@ -12,7 +12,7 @@ import { useSession } from '@/lib/session';
 import { LimitsConfig, LimitsDesk, SettingLine } from '@/lib/types';
 
 /**
- * Contract 6.10 — the size of one post, as a setting instead of a constant.
+ * Contract 6.10, the size of one post, as a setting instead of a constant.
  *
  * The defaults the clause names are 2,000 characters, four photos of 5 MB each and
  * one video up to 60 seconds and 150 MB. Until this screen existed those numbers
@@ -59,14 +59,14 @@ export default function LimitsScreen() {
   const touched = lines.filter(item => valueOf(item) !== baseOf(item));
   const dirty = touched.length > 0;
   // The clause names its own numbers as the shipped defaults, so a row that differs
-  // from its default is a rule this platform has already moved away from — which is
+  // from its default is a rule this platform has already moved away from, which is
   // the first thing anybody auditing "the admin must be able to change these" asks.
   const drifted = lines.filter(item => String(item.value) !== String(item.default));
 
   const save = async () => {
     const sure = await confirm({
       title: `Save ${touched.length} post limit(s)?`,
-      body: 'From the next request, that is how many posts, comments or messages an account of each kind is allowed. Anyone already at the new number is stopped immediately — they are not told in advance.',
+      body: 'From the next request, that is how many posts, comments or messages an account of each kind is allowed. Anyone already at the new number is stopped immediately, they are not told in advance.',
       confirmLabel: 'Save and enforce',
       tone: 'amber',
     });
@@ -95,7 +95,7 @@ export default function LimitsScreen() {
   return (
     <ConsoleShell
       title="Post limits"
-      subtitle="Characters in one post, how many photos and how big each may be, how long a video may run and how large it may be — six numbers that used to be constants in the site’s code, and are now rows a seat can move."
+      subtitle="Characters in one post, how many photos and how big each may be, how long a video may run and how large it may be, six numbers that used to be constants in the site’s code, and are now rows a seat can move."
       actions={(
         <button
           type="button" className={`btn ghost${busy ? ' spinning' : ''}`}
@@ -118,7 +118,7 @@ export default function LimitsScreen() {
               <div>
                 <h2>The six numbers</h2>
                 <p>
-                  Each box says what it is measured in, and the range this desk will accept — a limit of
+                  Each box says what it is measured in, and the range this desk will accept, a limit of
                   zero photos is not a stricter rule, it is a composer nobody can post with.
                 </p>
               </div>
@@ -140,8 +140,8 @@ export default function LimitsScreen() {
                       />
                       <em className="desk-who">
                         {item.set
-                          ? <>written by <b>{item.by}</b> {ago(item.at || '')} — {item.help}</>
-                          : <>the number the clause names, still untouched — {item.help}</>}
+                          ? <>written by <b>{item.by}</b> {ago(item.at || '')}, {item.help}</>
+                          : <>the number the clause names, still untouched, {item.help}</>}
                         {' '}Accepts {item.range[0]} to {item.range[1]}.
                       </em>
                     </label>
@@ -190,7 +190,7 @@ export default function LimitsScreen() {
               <div>
                 <h2>What a composer is told</h2>
                 <p>
-                  This is the answer <b>GET /api/limits/config/</b> gives with nobody signed in — the
+                  This is the answer <b>GET /api/limits/config/</b> gives with nobody signed in, the
                   numbers a person attaching a file is held to the next time the site reads them.
                 </p>
               </div>
@@ -263,7 +263,7 @@ export default function LimitsScreen() {
             <p className="panel-foot">
               {IC.disk}
               <span>
-                The ceiling is a single site-wide one — {desk.server.upload_mb} MB per file, whatever the
+                The ceiling is a single site-wide one, {desk.server.upload_mb} MB per file, whatever the
                 file turns out to be ({desk.server.kinds.slice(0, 4).join(', ')}…). Raising a number above
                 it changes what a person is allowed to attach and does not change what the endpoint accepts.
               </span>
