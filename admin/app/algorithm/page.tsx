@@ -11,7 +11,7 @@ import { useSession } from '@/lib/session';
 import { AlgorithmDesk, ReachConfig, SettingLine } from '@/lib/types';
 
 /**
- * Contract 6.8 — the reach dials. How a campaign is ranked into a feed, how often
+ * Contract 6.8, the reach dials. How a campaign is ranked into a feed, how often
  * one payer may appear, how many ordinary posts go between two paid cards, and the
  * one switch that stops paid reach platform-wide. Every one of them was a constant
  * in the site's code, which meant the only way to make the feed less pushy was a
@@ -67,7 +67,7 @@ export default function AlgorithmScreen() {
     const rank = (item: SettingLine) => (item.key === 'promo_global_pause' ? 99 : ORDER.indexOf(item.key));
     return rank(a) - rank(b);
   });
-  /** What the desk holds for a knob right now — the box, or the switch's on/off. */
+  /** What the desk holds for a knob right now, the box, or the switch's on/off. */
   const baseOf = (item: SettingLine) => (item.type === 'bool' ? (item.value ? '1' : '') : String(item.value ?? ''));
   const valueOf = (item: SettingLine) => draft[item.key] ?? baseOf(item);
   // Only the dials that moved are posted, so the audit row names the two the seat
@@ -82,7 +82,7 @@ export default function AlgorithmScreen() {
     if (!desk) return;
     const sure = await confirm({
       title: `Rewrite what the feed is built from (${touched.length} line(s))?`,
-      body: 'The next feed any member opens is ranked with these numbers. If Global pause is on, nothing is ranked at all until it is put back — these dials change what everyone sees, with no warning to them.',
+      body: 'The next feed any member opens is ranked with these numbers. If Global pause is on, nothing is ranked at all until it is put back, these dials change what everyone sees, with no warning to them.',
       confirmLabel: 'Save the dials',
       tone: 'amber',
     });
@@ -112,7 +112,7 @@ export default function AlgorithmScreen() {
   return (
     <ConsoleShell
       title="Promotion reach controls"
-      subtitle="What a campaign scores on, the score that is worth showing, how often one payer may appear in a feed, how much ordinary content goes between two paid cards — and the switch that stops paid reach entirely."
+      subtitle="What a campaign scores on, the score that is worth showing, how often one payer may appear in a feed, how much ordinary content goes between two paid cards, and the switch that stops paid reach entirely."
       actions={(
         <button
           type="button" className={`btn ghost${busy ? ' spinning' : ''}`}
@@ -166,8 +166,8 @@ export default function AlgorithmScreen() {
                         </div>
                         <em className="desk-who">
                           {item.set
-                            ? <>turned by <b>{item.by}</b> {ago(item.at || '')} — {item.help}</>
-                            : <>never moved from the platform’s own answer — {item.help}</>}
+                            ? <>turned by <b>{item.by}</b> {ago(item.at || '')}, {item.help}</>
+                            : <>never moved from the platform’s own answer, {item.help}</>}
                         </em>
                       </div>
                     ) : (
@@ -180,8 +180,8 @@ export default function AlgorithmScreen() {
                         />
                         <em className="desk-who">
                           {item.set
-                            ? <>written by <b>{item.by}</b> {ago(item.at || '')} — {item.help}</>
-                            : <>the number the site was built with, still untouched — {item.help}</>}
+                            ? <>written by <b>{item.by}</b> {ago(item.at || '')}, {item.help}</>
+                            : <>the number the site was built with, still untouched, {item.help}</>}
                         </em>
                       </label>
                     )))}
@@ -196,7 +196,7 @@ export default function AlgorithmScreen() {
                 <span>
                   <b>Paid reach is stopped platform-wide.</b> Campaigns keep their status and their
                   reservation, and none of them is being shown. This is the switch for a spam wave or a
-                  billing mistake — it is not a pause button for one payer.
+                  billing mistake, it is not a pause button for one payer.
                 </span>
               </p>
             )}
@@ -222,7 +222,7 @@ export default function AlgorithmScreen() {
               <div>
                 <h2>What the feed is told</h2>
                 <p>
-                  This is the answer <b>GET /api/promotions/config/</b> gives with nobody signed in — the
+                  This is the answer <b>GET /api/promotions/config/</b> gives with nobody signed in, the
                   numbers a feed page is ranked with the next time anybody opens the site.
                 </p>
               </div>
@@ -272,7 +272,7 @@ export default function AlgorithmScreen() {
                   <li className="term" data-live="pause">
                     <div className="term-body">
                       <b className="term-text">Every promotion paused</b>
-                      <em className="term-note">{quote.global_pause ? 'yes — nothing paid is being shown' : 'no'}</em>
+                      <em className="term-note">{quote.global_pause ? 'yes, nothing paid is being shown' : 'no'}</em>
                     </div>
                   </li>
                 </ul>
@@ -297,7 +297,7 @@ export default function AlgorithmScreen() {
               {IC.disk}
               <span>
                 {desk.shipped
-                  ? 'The shelf is still the three the site shipped with — the packages desk has never been saved.'
+                  ? 'The shelf is still the three the site shipped with, the packages desk has never been saved.'
                   : 'The shelf has been rewritten from the packages desk, so a campaign bought today is priced from there.'}
               </span>
             </p>

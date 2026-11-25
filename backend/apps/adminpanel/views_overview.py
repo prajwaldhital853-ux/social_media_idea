@@ -1,7 +1,7 @@
 """The dashboard reads: one call for the numbers on the fold, one for campaign results.
 
 Kept as two endpoints because campaign performance costs a handful of queries per
-promotion — the tiles would otherwise wait on a table the person can scroll past,
+promotion, the tiles would otherwise wait on a table the person can scroll past,
 and the second call fills in under the first paint.
 """
 

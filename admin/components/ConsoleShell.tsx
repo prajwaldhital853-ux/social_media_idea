@@ -69,7 +69,7 @@ export default function ConsoleShell({
     if (status === 'out') router.replace('/login');
   }, [status, router]);
 
-  // The drawer row this screen sits under — a user's page is still the directory.
+  // The drawer row this screen sits under, a user's page is still the directory.
   const here = drawerFor(pathname);
 
   useEffect(() => {
@@ -330,7 +330,7 @@ function CodePrompt({ verify, signOut, busy, error, onDone }: {
         <p>
           {recovery
             ? 'One of your ten codes. Each works once, and a spent code is gone.'
-            : 'This seat was locked or its proof was dropped while the screen was open. Nothing you typed is lost — enter the code your authenticator shows.'}
+            : 'This seat was locked or its proof was dropped while the screen was open. Nothing you typed is lost, enter the code your authenticator shows.'}
         </p>
         <input
           autoFocus inputMode={recovery ? 'text' : 'numeric'} autoComplete="one-time-code"

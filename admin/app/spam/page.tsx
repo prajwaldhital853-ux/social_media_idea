@@ -12,7 +12,7 @@ import { useSession } from '@/lib/session';
 import { SettingLine, SpamConfig, SpamDesk } from '@/lib/types';
 
 /**
- * Contract 6.9 — the spam desk. How often one person may act, what an account a day
+ * Contract 6.9, the spam desk. How often one person may act, what an account a day
  * old is not allowed to do yet, which links a post may not carry, and how many
  * people have to say a post is bad before the platform takes it out of the feed
  * without waiting for a person.
@@ -20,7 +20,7 @@ import { SettingLine, SpamConfig, SpamDesk } from '@/lib/types';
  * The four numbers the site already refuses requests on are marked as such, and the
  * rest are published at `GET /api/spam/config/` for the site to honour. The answer
  * that door gives is printed beside the boxes, because a limit nobody reads is a
- * number in a screen — and a save banner that promises enforcement is how a seat
+ * number in a screen, and a save banner that promises enforcement is how a seat
  * ends up believing a rule that no view ever checks.
  */
 
@@ -99,7 +99,7 @@ export default function SpamScreen() {
   return (
     <ConsoleShell
       title="Spam and auto-hide rules"
-      subtitle="How often one account may act, what a new account may not do yet, which links a post may not carry, and how many reporters pull a post out of the feed before anybody reads it — every one of them a rule you can turn without a deploy."
+      subtitle="How often one account may act, what a new account may not do yet, which links a post may not carry, and how many reporters pull a post out of the feed before anybody reads it, every one of them a rule you can turn without a deploy."
       actions={(
         <button
           type="button" className={`btn ghost${busy ? ' spinning' : ''}`}
@@ -123,7 +123,7 @@ export default function SpamScreen() {
                 <h2>The rules</h2>
                 <p>
                   A ceiling of zero switches the rule off rather than blocking everything, so the boxes
-                  say what they mean. Nothing here hides or removes a post by itself — it decides when the
+                  say what they mean. Nothing here hides or removes a post by itself, it decides when the
                   platform does it without waiting.
                 </p>
               </div>
@@ -150,8 +150,8 @@ export default function SpamScreen() {
                       </div>
                       <em className="desk-who">
                         {item.set
-                          ? <>turned by <b>{item.by}</b> {ago(item.at || '')} — {item.help}</>
-                          : <>never moved from the platform’s own answer — {item.help}</>}
+                          ? <>turned by <b>{item.by}</b> {ago(item.at || '')}, {item.help}</>
+                          : <>never moved from the platform’s own answer, {item.help}</>}
                       </em>
                     </div>
                   ) : (
@@ -165,9 +165,9 @@ export default function SpamScreen() {
                       />
                       <em className="desk-who">
                         {item.set
-                          ? <>written by <b>{item.by}</b> {ago(item.at || '')} — {item.help}</>
-                          : <>the number the site was built with, still untouched — {item.help}</>}
-                        {item.enforced && <b className="desk-live"> — {ENFORCED_NOTE}</b>}
+                          ? <>written by <b>{item.by}</b> {ago(item.at || '')}, {item.help}</>
+                          : <>the number the site was built with, still untouched, {item.help}</>}
+                        {item.enforced && <b className="desk-live">, {ENFORCED_NOTE}</b>}
                       </em>
                     </label>
                   )))}
@@ -179,7 +179,7 @@ export default function SpamScreen() {
               <p className="note row" data-autohide-off>
                 {IC.alert}
                 <span>
-                  <b>Auto-hide is off.</b> Nothing is pulled out of the feed on report counts any more —
+                  <b>Auto-hide is off.</b> Nothing is pulled out of the feed on report counts any more ,
                   every report waits for a person in the review queue, and a pile of {desk.threshold}{' '}
                   reporters on one post sits there unread until somebody opens it.
                 </span>
@@ -207,7 +207,7 @@ export default function SpamScreen() {
               <div>
                 <h2>What the site is told</h2>
                 <p>
-                  This is the answer <b>GET /api/spam/config/</b> gives with nobody signed in — the rules a
+                  This is the answer <b>GET /api/spam/config/</b> gives with nobody signed in, the rules a
                   member’s request is measured against the next time the site reads them.
                 </p>
               </div>
@@ -221,7 +221,7 @@ export default function SpamScreen() {
                     <em className="term-note">
                       {quote.auto_hide.enabled
                         ? <>on <b>{quote.auto_hide.reports}</b> distinct reporters</>
-                        : 'off — every report waits for a person'}
+                        : 'off, every report waits for a person'}
                     </em>
                   </div>
                 </li>
@@ -240,8 +240,8 @@ export default function SpamScreen() {
                     <b className="term-text">Blocked links are refused</b>
                     <em className="term-note">
                       {quote.link_block
-                        ? <>yes — {quote.blocked_links.length} domain{quote.blocked_links.length === 1 ? '' : 's'} on the list</>
-                        : 'no — the list is kept but a post is not stopped by it'}
+                        ? <>yes, {quote.blocked_links.length} domain{quote.blocked_links.length === 1 ? '' : 's'} on the list</>
+                        : 'no, the list is kept but a post is not stopped by it'}
                     </em>
                   </div>
                 </li>
@@ -293,7 +293,7 @@ export default function SpamScreen() {
               {IC.rule}
               <span>
                 A link, a word and a prohibited item are all one table, so this list is written from{' '}
-                <Link href="/policy">Platform rules</Link> — one place to decide what is not allowed, one
+                <Link href="/policy">Platform rules</Link>, one place to decide what is not allowed, one
                 audit verb to record it.
               </span>
             </p>
@@ -303,7 +303,7 @@ export default function SpamScreen() {
               <span>
                 {desk.enforced.length} of these numbers are {ENFORCED_NOTE}. The rest are published at{' '}
                 <b>GET /api/spam/config/</b> and are only enforced once the site’s own views read that
-                door — saving them here changes what the platform promises, not yet what it refuses.
+                door, saving them here changes what the platform promises, not yet what it refuses.
               </span>
             </p>
           </section>

@@ -1,10 +1,10 @@
-"""Contract 6.9: the alert desk — what has ever fired, what would stop it, what watches nothing.
+"""Contract 6.9: the alert desk, what has ever fired, what would stop it, what watches nothing.
 
 Four doors, and the split between them is the split a seat works in. The list is
 read-only and answers the question "what is true right now and what was true last
 month"; the scan is the one button that writes, because a screen showing a problem
 the checks no longer believe is worse than no screen; the thresholds are the dials
-that decide when something becomes a problem; and `pulses` is the honest half —
+that decide when something becomes a problem; and `pulses` is the honest half ,
 four conditions the contract names that nothing outside this codebase reports on
 yet, listed as wires rather than as numbers.
 

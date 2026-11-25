@@ -1,8 +1,8 @@
 """Role-based access control for the admin console (contract 6.1).
 
 Three roles, one catalogue. A Superadmin is the Client and holds every key. An
-Admin holds every screen the contract lists for staff — settings, users, the
-staff roster, Coin Requests, Coin and Promotion settings — but may only change
+Admin holds every screen the contract lists for staff, settings, users, the
+staff roster, Coin Requests, Coin and Promotion settings, but may only change
 roster rows at Moderator level, so an Admin can never promote a peer or evict
 the Client. A Moderator holds reports, content, listings, warning notices and
 user actions; the Coin and payment keys exist for them only when a Superadmin or

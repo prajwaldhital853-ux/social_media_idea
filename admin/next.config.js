@@ -4,7 +4,7 @@
 // trick: a first-party proxy, so the auth cookies stay on this origin.
 //
 // EXPOSING_API_ORIGIN is set per environment. Locally, point it at whichever API
-// process carries the adminpanel routes — the console needs 8003 if the shared
+// process carries the adminpanel routes, the console needs 8003 if the shared
 // 8001 has not been restarted since those endpoints landed.
 const API_ORIGIN = process.env.EXPOSING_API_ORIGIN || 'http://127.0.0.1:8001';
 

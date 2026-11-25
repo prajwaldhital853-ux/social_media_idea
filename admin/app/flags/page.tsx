@@ -12,7 +12,7 @@ import { useSession } from '@/lib/session';
 import { FlaggedPage, FlagRow } from '@/lib/types';
 
 /**
- * Contract 6.9 — the flagged pile. Not "what has been filed" (that is the review
+ * Contract 6.9, the flagged pile. Not "what has been filed" (that is the review
  * queue) but "what has already been pulled, by how many people, and from whom", plus
  * the accounts sitting under a pile of their own.
  *
@@ -111,7 +111,7 @@ export default function FlagsScreen() {
             <b>{num(page.accounts_total)}</b> account{page.accounts_total === 1 ? '' : 's'} flagged
             <span className="dot"/>
             <span>
-              a pile of <b>{page.threshold}</b> distinct reporters is what pulls content out on its own —{' '}
+              a pile of <b>{page.threshold}</b> distinct reporters is what pulls content out on its own ,{' '}
               <Link href="/spam">change it on the spam desk</Link>
             </span>
           </p>
@@ -122,7 +122,7 @@ export default function FlagsScreen() {
                 <h2>Content the pile reached</h2>
                 <p>
                   Ordered by how many people said it, newest complaint first. The decision that clears a
-                  row is made in the review queue, not here — this screen is the pile, and the queue is
+                  row is made in the review queue, not here, this screen is the pile, and the queue is
                   the verdict.
                 </p>
               </div>

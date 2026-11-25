@@ -3,7 +3,7 @@ decide who is shown them.
 
 Three powers, kept apart because they cost different things. Reading the queue is
 one. Approving, refusing, pausing, stopping and refunding is another, and it moves
-real coins back through `wallet.apply()` — the same door every other credit uses —
+real coins back through `wallet.apply()`, the same door every other credit uses ,
 never a hand-written balance. The third is the reach itself: what a package promises,
 how a campaign is ranked into a feed, how often one payer may appear, and a switch
 that stops the platform selling reach without ending anybody's campaign.
@@ -11,7 +11,7 @@ that stops the platform selling reach without ending anybody's campaign.
 The site asks for the money when a campaign is approved, not when it is ordered, so
 `pending` is a real queue: coins still in the payer's wallet, no run started, nothing
 in the feed. Approving is what takes the coins and starts the clock, so `starts_at` is
-the line between "charged" and "only promised" — every refund below is measured
+the line between "charged" and "only promised", every refund below is measured
 against it, and a campaign that never started cannot owe money back. A campaign
 already running with no review row is *waiting* for a seat to look at it, which is
 what the rows this desk inherited from the old rule are.
@@ -199,13 +199,13 @@ def _review_row(item):
 
 
 def reviews(promotion_pk):
-    """Every decision on one campaign, oldest first — the paper a dispute is settled from."""
+    """Every decision on one campaign, oldest first, the paper a dispute is settled from."""
     return [_review_row(item) for item in
             PromoReview.objects.filter(promotion_id=promotion_pk).order_by('created_at', 'id')]
 
 
 def sign_off(promo, last=None):
-    """What a seat last said about this campaign — or that nobody has said anything."""
+    """What a seat last said about this campaign, or that nobody has said anything."""
     last = last if last is not None else latest(promo.pk)
     if last is None:
         waiting = promo.status in (Promotion.Status.PENDING, Promotion.Status.ACTIVE)
@@ -226,7 +226,7 @@ def target_of(promo):
 def owed(promo, action, now=None):
     """The coins this decision would hand back, before anybody clicks it.
 
-    Nothing is owed on a campaign that was never charged — `starts_at` is empty on
+    Nothing is owed on a campaign that was never charged, `starts_at` is empty on
     one still waiting for approval, and paying it out would hand the payer coins
     they never gave up. A refused campaign that did run gives back what it never
     spent, pro-rated against its end date. A stopped one gives back only the part
@@ -328,7 +328,7 @@ def _said(action, promo, refund, taken=Decimal('0')):
     if action == 'resume':
         return f'Campaign {promo.pk} is running again, on the end date it already had.'
     return (f'Campaign {promo.pk} stopped. {_coins(refund)} coins of the unrun part went back.'
-            if refund else f'Campaign {promo.pk} stopped and nothing was refunded — the reason is on the row.')
+            if refund else f'Campaign {promo.pk} stopped and nothing was refunded, the reason is on the row.')
 
 
 def decide(promo, actor, action, reason='', choice=''):
@@ -336,7 +336,7 @@ def decide(promo, actor, action, reason='', choice=''):
 
     Approving an order is the moment the money moves: the coins leave the payer's wallet,
     `starts_at` is stamped, and the package's days begin to count from today. A refusal
-    before that moment costs the payer nothing and pays nothing back — they never gave
+    before that moment costs the payer nothing and pays nothing back, they never gave
     the coins up. A refusal or a stop after it is measured against what the campaign
     never got, and the seat has to choose out loud whether a stop refunds or keeps that
     part, because the run was approved and paid for.
@@ -348,7 +348,7 @@ def decide(promo, actor, action, reason='', choice=''):
     if promo.status in CLOSING:
         return 409, {'detail': 'That campaign is closed. Nothing here changes it again.'}
     if action in ('reject', 'stop') and not reason:
-        return 400, {'detail': 'Say why the campaign is refused — the payer is told this sentence.'
+        return 400, {'detail': 'Say why the campaign is refused, the payer is told this sentence.'
                               if action == 'reject' else
                               'Say why this paid run is ending early. The sentence goes on the record.'}
     if action == 'stop' and choice not in ('credit', 'withhold'):
@@ -356,13 +356,13 @@ def decide(promo, actor, action, reason='', choice=''):
     if action in ('approve', 'resume') and promo.ends_at and promo.ends_at <= timezone.now():
         return 409, {'detail': 'Its run is over. Approving it now would promise reach that no longer exists.'}
     if action == 'approve' and promo.status == Promotion.Status.DRAFT:
-        return 400, {'detail': 'A draft has not been ordered yet — there is nothing here to approve.'}
+        return 400, {'detail': 'A draft has not been ordered yet, there is nothing here to approve.'}
     if action == 'approve' and target_of(promo) is None:
         # An order can sit in the queue long enough for the post or listing it points
         # at to be deleted or taken down. Charging the payer then would buy reach on
         # nothing, so the desk has to refuse it instead.
         return 409, {'detail': 'The content this campaign points at is gone, so there is nothing here to give '
-                               'reach to. Refuse the order — no coins were taken from the payer.'}
+                               'reach to. Refuse the order, no coins were taken from the payer.'}
     if action == 'pause' and promo.status != Promotion.Status.ACTIVE:
         return 400, {'detail': 'Only a campaign that is running can be paused.'}
     if action == 'resume' and promo.status != Promotion.Status.PAUSED:
@@ -404,7 +404,7 @@ def decide(promo, actor, action, reason='', choice=''):
         if taken > 0:
             wallet, _ = Wallet.objects.get_or_create(user=promo.owner)
             coin_apply(wallet.pk, Transaction.Kind.DEBIT, taken,
-                       f'Promotion {promo.pk} — {pack["name"] if pack else "custom budget"}'
+                       f'Promotion {promo.pk}, {pack["name"] if pack else "custom budget"}'
                        f'{f" ({pack["days"]} days)" if pack and pack.get("days") else ""}, '
                        f'approved by {actor.username}')
         if refund > 0:
@@ -433,8 +433,8 @@ def decide(promo, actor, action, reason='', choice=''):
     money = (f'{_coins(taken)} coins taken on approval' if taken
              else f'{_coins(refund)} coins refunded' if refund else 'no coins moved')
     record(actor, f'promo_{action}', f'promotion:{promo.pk}',
-           f'{promo.target_type}:{promo.target_id} — budget {_coins(budget)} — {money}'
-           + (f' — {reason}' if reason else ''))
+           f'{promo.target_type}:{promo.target_id}, budget {_coins(budget)}, {money}'
+           + (f', {reason}' if reason else ''))
     letter = _letter(promo, action, reason, refund, taken)
     if letter:
         queue_event_email(promo.owner.email, **letter)
@@ -484,7 +484,7 @@ def _letter(promo, action, reason, refund, taken=Decimal('0')):
                 ('Promoted content', promo.target_type.title()),
                 ('Runs until', promo.ends_at.strftime('%d %b %Y') if promo.ends_at else 'until you end it'),
             ],
-            'footnote': 'The approval is when the payment happened — ordering only reserved the campaign.',
+            'footnote': 'The approval is when the payment happened, ordering only reserved the campaign.',
             'cta_label': common['cta_label'],
             'cta_path': common['cta_path'],
         }
@@ -567,7 +567,7 @@ def write_algorithm(actor, posted):
     if bad:
         return 400, {'errors': bad, 'detail': ' '.join(bad)}
     if not updates:
-        return 400, {'detail': 'Nothing to save — no dial has been turned.'}
+        return 400, {'detail': 'Nothing to save, no dial has been turned.'}
     settings_store.write(actor, updates)
     labels = [cached[key]['label'] for key in updates]
     record(actor, 'promotion_algorithm', 'promotion reach controls',
@@ -580,7 +580,7 @@ def write_algorithm(actor, posted):
 
 
 def public_config():
-    """What the member site needs to honour these dials — no login, no seat."""
+    """What the member site needs to honour these dials, no login, no seat."""
     tuned = algorithm()
     return {
         'weights': tuned['weights'],

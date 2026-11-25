@@ -2,8 +2,8 @@
 
 A backup job, an uptime probe, an error collector and a transcoder all live outside
 this codebase. The console cannot invent their numbers, so this command is the wire:
-whatever runs them calls it after the fact — from cron, from a deploy step, from a
-monitor — and the alerts desk reads the last thing it was told.
+whatever runs them calls it after the fact, from cron, from a deploy step, from a
+monitor, and the alerts desk reads the last thing it was told.
 
 Three answers the desk can tell apart, and they mean three different things:
 never stamped (nobody wired this up), stamped and gone quiet (the job stopped),
@@ -103,6 +103,6 @@ class Command(BaseCommand):
             )
         return '\n'.join(
             f'{row.key:<8} {row.state:<5} {row.stamped_at:%Y-%m-%d %H:%M} UTC  '
-            f'#{row.stamps}  {row.label} — {row.detail or "no sentence"}'
+            f'#{row.stamps}  {row.label}, {row.detail or "no sentence"}'
             for row in rows
         )

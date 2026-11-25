@@ -11,7 +11,7 @@ urlpatterns = [
     path('admin/session/password/', views_session.admin_set_password),
     path('admin/session/logout/', views_session.admin_logout),
     # Contract: a seat recovers its own password here, from the address on the
-    # seat. They are named before `logout` is not required — the literal segments
+    # seat. They are named before `logout` is not required, the literal segments
     # sit beside the id routes on purpose, since none of these is a username.
     path('admin/session/forgot/', views_session.admin_forgot),
     path('admin/session/forgot/resend/', views_session.admin_forgot_resend),
@@ -19,7 +19,7 @@ urlpatterns = [
     path('admin/overview/', views_overview.admin_overview),
     path('admin/analytics/promotions/', views_overview.admin_promotion_analytics),
     path('admin/analytics/alerts/', views_overview.admin_alert_feed),
-    # Contract 6.11: the bell. Readable by any seat — which rows a seat is shown is
+    # Contract 6.11: the bell. Readable by any seat, which rows a seat is shown is
     # decided per notice, by the permission the event was announced against.
     path('admin/bell/', views_bell.bell_desk),
     path('admin/bell/read/', views_bell.bell_read),

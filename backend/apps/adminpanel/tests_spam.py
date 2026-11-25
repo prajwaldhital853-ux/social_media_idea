@@ -3,7 +3,7 @@
 The desk is where the platform's own refusals stop being numbers in a settings file.
 So the tests are about three things a Client would actually check: that a typed limit
 changes what the open door answers, that the pile a seat sets is the pile every screen
-counts with, and that a rule nobody can reach is not a rule — a Moderator without
+counts with, and that a rule nobody can reach is not a rule, a Moderator without
 `spam_settings` is refused the desk in the same sentence the permission catalogue
 uses, while the door the member site reads stays open because it holds no person's
 data.
@@ -158,7 +158,7 @@ class BlockedLinkTests(RbacTestCase):
         self.desk.post(f'{TERMS_URL}{added.data["id"]}/', {'is_active': False}, format='json')
         self.assertNotIn('spam.example', APIClient().get(CONFIG_URL).data['blocked_links'])
         self.assertEqual(len(self.desk.get(DESK_URL).data['links']), 1,
-                         'the desk still lists it, dimmed — a seat has to see what was switched off')
+                         'the desk still lists it, dimmed, a seat has to see what was switched off')
 
 
 class PublicConfigTests(RbacTestCase):

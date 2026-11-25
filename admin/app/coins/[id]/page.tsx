@@ -80,7 +80,7 @@ export default function CoinRequestPage({ params }: { params: { id: string } }) 
           ? 'Reject this payment request?'
           : 'Ask this person for a better receipt?',
       body: which === 'approve'
-        ? 'Real rupees have already reached the account, so the coins go into their wallet now. There is no undo here — a mistake is corrected with a new ledger row.'
+        ? 'Real rupees have already reached the account, so the coins go into their wallet now. There is no undo here, a mistake is corrected with a new ledger row.'
         : which === 'reject'
           ? 'The request is refused and they are sent your reason. Nothing is credited.'
           : 'The request stays open and they are told what else you need.',
@@ -156,7 +156,7 @@ export default function CoinRequestPage({ params }: { params: { id: string } }) 
                 <li><span>Coins asked for</span><b>{row.coins}</b></li>
                 <li><span>Rupees</span><b>{row.amount}</b></li>
                 <li><span>Method</span><b>{row.method}</b></li>
-                <li><span>Bank reference</span><b title={stamp(row.created_at)}>{row.reference || '—'}</b></li>
+                <li><span>Bank reference</span><b title={stamp(row.created_at)}>{row.reference || '-'}</b></li>
                 <li><span>Uploaded</span><b>{ago(row.created_at)}</b></li>
                 <li><span>Standing</span><b><span className={`pill ${standing.tone}`}>{standing.label}</span></b></li>
                 {!!row.resubmitted_at && (
@@ -194,7 +194,7 @@ export default function CoinRequestPage({ params }: { params: { id: string } }) 
               {!!row.resubmitted_at && (
                 <p className="fineprint" data-resent-note>
                   This is the receipt they sent after being asked for more proof, {ago(row.resubmitted_at)}.
-                  The one they first uploaded was replaced — the request itself never became a second one.
+                  The one they first uploaded was replaced, the request itself never became a second one.
                 </p>
               )}
             </Section>
@@ -220,7 +220,7 @@ export default function CoinRequestPage({ params }: { params: { id: string } }) 
               <div className="verdict">
                 <p className="verdict-line">
                   {IC.check}
-                  <span><b>{row.review?.label || row.status_label}</b> — {row.review?.reason || 'no sentence was written'}</span>
+                  <span><b>{row.review?.label || row.status_label}</b>, {row.review?.reason || 'no sentence was written'}</span>
                 </p>
                 {row.review?.coins_credited ? (
                   <p className="verdict-note">
@@ -231,7 +231,7 @@ export default function CoinRequestPage({ params }: { params: { id: string } }) 
                 <p className="note">
                   {IC.alert}
                   <span>Nothing here can be undone. If the money was credited by mistake, write a
-                    correction in the ledger — it will be a new row, not an edit.</span>
+                    correction in the ledger, it will be a new row, not an edit.</span>
                 </p>
               </div>
             ) : !review ? (
@@ -262,7 +262,7 @@ export default function CoinRequestPage({ params }: { params: { id: string } }) 
             {verb && row.status === 'pending' && review && (
               <div className="ask">
                 <label className="field">
-                  <span>{verb === 'reject' ? 'Why the money is not being credited — they are sent this' : 'What more you need from them'}</span>
+                  <span>{verb === 'reject' ? 'Why the money is not being credited, they are sent this' : 'What more you need from them'}</span>
                   <textarea
                     rows={2} name="reason" maxLength={240} value={reason} autoFocus
                     placeholder={verb === 'reject'
@@ -276,7 +276,7 @@ export default function CoinRequestPage({ params }: { params: { id: string } }) 
                     type="button" className="btn primary tiny" disabled={working || !reason.trim()}
                     onClick={() => submit(verb)}
                   >
-                    {IC.go}<span>{working ? 'Working…' : `Confirm — ${verb === 'reject' ? 'Reject' : 'Ask for more proof'}`}</span>
+                    {IC.go}<span>{working ? 'Working…' : `Confirm, ${verb === 'reject' ? 'Reject' : 'Ask for more proof'}`}</span>
                   </button>
                   <button type="button" className="btn ghost tiny" disabled={working}
                     onClick={() => { setVerb(null); setReason(''); }}>

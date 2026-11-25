@@ -18,7 +18,7 @@ type Recovery = {
 /**
  * Two doors, one screen: the password proves you know something, the
  * authenticator code proves you hold something. Nothing between them hands out a
- * session — the console's own cookie only ever appears after the code is proved.
+ * session, the console's own cookie only ever appears after the code is proved.
  * A seat handed out a temporary password has to trade it for its own before the
  * code is even asked for.
  */
@@ -49,7 +49,7 @@ export default function LoginPage() {
   const [resendAt, setResendAt] = useState<number | null>(null);
   const [expiresAt, setExpiresAt] = useState<number | null>(null);
 
-  // Only while something is actually counting down — an idle sign-in screen has
+  // Only while something is actually counting down, an idle sign-in screen has
   // nothing to re-render every second.
   useEffect(() => {
     if (lockUntil === null && resendAt === null && expiresAt === null) return;
@@ -58,7 +58,7 @@ export default function LoginPage() {
     return () => clearInterval(id);
   }, [lockUntil, resendAt, expiresAt]);
 
-  // An open session normally means "go to the console" — except right after a
+  // An open session normally means "go to the console", except right after a
   // first enrolment, when the recovery codes have to be written down first.
   useEffect(() => {
     if (status === 'in' && !newCodes) router.replace('/');
@@ -293,8 +293,8 @@ export default function LoginPage() {
               <h2>Choose your own password</h2>
               <p>
                 {challenge?.username
-                  ? <>You signed in as <b>{challenge.username}</b> with the temporary password a Superadmin gave you. That one stops working now — this seat needs a password only you know.</>
-                  : <>That was the temporary password a Superadmin gave you. It stops working now — this seat needs a password only you know.</>}
+                  ? <>You signed in as <b>{challenge.username}</b> with the temporary password a Superadmin gave you. That one stops working now, this seat needs a password only you know.</>
+                  : <>That was the temporary password a Superadmin gave you. It stops working now, this seat needs a password only you know.</>}
               </p>
             </header>
             <label className="field">
@@ -323,7 +323,7 @@ export default function LoginPage() {
             <p className="fineprint">
               At least ten characters with a letter and a number in it. It cannot be the temporary
               one, your own name, your username, a common password, or any password this seat has
-              already stood on. The next step is the authenticator code — nothing is signed in until
+              already stood on. The next step is the authenticator code, nothing is signed in until
               that is proved.
             </p>
           </form>
@@ -335,7 +335,7 @@ export default function LoginPage() {
               <h2>Set up your authenticator</h2>
               <p>
                 Scan this with Google Authenticator, 1Password or Authy. The code it produces is
-                what proves the phone is in your hand — {enrolment.digits} digits, changing every{' '}
+                what proves the phone is in your hand, {enrolment.digits} digits, changing every{' '}
                 {enrolment.period} seconds.
               </p>
             </header>
@@ -409,7 +409,7 @@ export default function LoginPage() {
             </button>
             <div className="back-row">
               <button type="button" className="link" onClick={() => setUseRecovery(!useRecovery)}>
-                {useRecovery ? 'Use the app code' : 'Lost my phone — use a recovery code'}
+                {useRecovery ? 'Use the app code' : 'Lost my phone, use a recovery code'}
               </button>
               <button type="button" className="link" onClick={() => { setRestart(true); setCode(''); }}>
                 Different account
@@ -423,7 +423,7 @@ export default function LoginPage() {
             <header className="step-head">
               <h2>Forgot your password</h2>
               <p>
-                A six-digit code goes to the email address on your seat. It opens this door only —
+                A six-digit code goes to the email address on your seat. It opens this door only ,
                 your authenticator setup is not touched, so a stranger who reads your mail still
                 cannot sign in.
               </p>
@@ -457,7 +457,7 @@ export default function LoginPage() {
               <p>
                 {sent?.detail || 'A code is on its way.'}
                 {expiresAt !== null && !gone && <> It stops working in {countdown(expiresAt - now)}.</>}
-                {gone && <> It has stopped working — ask for a new one.</>}
+                {gone && <> It has stopped working, ask for a new one.</>}
               </p>
             </header>
             <label className="field">
@@ -532,7 +532,7 @@ export default function LoginPage() {
               </button>
             </div>
             <p className="fineprint">
-              {session?.user.username} · {session?.role} — the seat is live now. Codes stay
+              {session?.user.username} · {session?.role}, the seat is live now. Codes stay
               here until you close this screen.
             </p>
           </div>

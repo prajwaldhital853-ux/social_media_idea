@@ -224,7 +224,7 @@ function Case({ bucket }: { bucket: QueueRow[] }) {
   const reporters = new Set(bucket.map(row => row.reporter?.username).filter(Boolean)).size;
   const line = rep.content
     ? [rep.content.author ? `@${rep.content.author.username}` : '', rep.content.title || rep.content.text || '']
-      .filter(Boolean).join(' — ')
+      .filter(Boolean).join(', ')
     : 'deleted';
   const href = `/review/${rep.target_type}/${rep.target_id}`;
 

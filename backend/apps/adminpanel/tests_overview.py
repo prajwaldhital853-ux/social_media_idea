@@ -1,7 +1,7 @@
 """Contract 6.2: what the dashboard counts, what it warns about, and what it admits it cannot measure.
 
-The arithmetic is tested against `stats` directly — a window boundary is a
-statement about data, not about HTTP — and the endpoints are tested for shape,
+The arithmetic is tested against `stats` directly, a window boundary is a
+statement about data, not about HTTP, and the endpoints are tested for shape,
 for the permission that opens them and for the alert wiring a client actually
 clicks.
 """
@@ -557,7 +557,7 @@ class OverviewEndpointTests(RbacTestCase):
         data = self.client_owner_dashboard()
         self.assertEqual(data['alerts']['counts']['attention'], 1)
         self.assertEqual(data['alerts']['counts']['unwired'], 4,
-                         'four reporters nobody has wired in yet — a checklist, not four fires')
+                         'four reporters nobody has wired in yet, a checklist, not four fires')
         self.assertIn('3 open reports', data['alerts']['recent'][0]['title'])
 
     def test_the_campaign_table_is_a_second_call_so_the_fold_paints_first(self):

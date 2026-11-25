@@ -91,7 +91,7 @@ export default function WelcomePage() {
   return (
     <ConsoleShell
       title="First-load wording"
-      subtitle="The sentence, the tagline and the contact details a visitor reads the first time the site loads — before they have an account, so this is the only place they get written."
+      subtitle="The sentence, the tagline and the contact details a visitor reads the first time the site loads, before they have an account, so this is the only place they get written."
       actions={(
         <button type="button" className={`btn ghost${busy ? ' spinning' : ''}`} onClick={() => load()} title="Reload the wording">
           {IC.refresh}<span>Refresh</span>
@@ -140,8 +140,8 @@ export default function WelcomePage() {
                 )}
                 <em className="welcome-who">
                   {item.set
-                    ? <>written by <b>{item.by}</b> {ago(item.at || '')} — {item.help}</>
-                    : <>the platform’s own line, still unwritten — {item.help}</>}
+                    ? <>written by <b>{item.by}</b> {ago(item.at || '')}, {item.help}</>
+                    : <>the platform’s own line, still unwritten, {item.help}</>}
                 </em>
               </label>
             ))}
@@ -166,7 +166,7 @@ export default function WelcomePage() {
               <div>
                 <h2>The card as it is read</h2>
                 <p>
-                  This is what <b>GET /api/welcome/</b> hands the website, with nobody signed in —
+                  This is what <b>GET /api/welcome/</b> hands the website, with nobody signed in ,
                   the card appears on the first load and then never again.
                 </p>
               </div>

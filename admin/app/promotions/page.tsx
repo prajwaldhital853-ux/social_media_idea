@@ -13,14 +13,14 @@ import { useSession } from '@/lib/session';
 import { PromoPage, PromoRow, ReachConfig } from '@/lib/types';
 
 /**
- * Contract 6.8 — the promotion desk. Somebody has asked for reach on their own post
+ * Contract 6.8, the promotion desk. Somebody has asked for reach on their own post
  * or listing, and this screen decides whether the platform sells it to them: the
  * content itself on the row, the reports sitting under it, and the number of coins
  * each verb hands back printed before the click.
  *
  * Nothing here is a status column someone guessed at. "Waiting" means either an order
  * no seat has charged yet or a run that predates the queue, and the two are told apart
- * by `charged` — the coins leave the payer's wallet when this desk approves, not when
+ * by `charged`, the coins leave the payer's wallet when this desk approves, not when
  * the campaign was written down.
  */
 
@@ -202,7 +202,7 @@ export default function PromotionsScreen() {
           {IC.mega}
           <span>
             A payer chooses from {quote.packages.map(pack => `${pack.name} (${pack.coins} coins / ${pack.days} d)`).join(', ')}
-            {' '}— {quote.packages_edited
+            {' '}, {quote.packages_edited
               ? <>this list is the one <b>this desk</b> wrote, not the one the site shipped with</>
               : 'this list is still the three the site shipped with'}
             .
@@ -282,7 +282,7 @@ function Campaign({ row }: { row: PromoRow }) {
         </td>
         <td data-label="Package bought">
           <span className="promo-pack" data-package={row.package?.id || ''}>
-            {row.package ? `${row.package.days ?? '—'} d` : 'no package'}
+            {row.package ? `${row.package.days ?? '-'} d` : 'no package'}
           </span>
           <p className="promo-reach">{row.package?.reach || row.delivery}</p>
         </td>

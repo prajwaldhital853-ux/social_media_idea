@@ -1,7 +1,7 @@
 """Contract 6.9: "every staff and admin action, with who did it, when, and why".
 
 The log itself is older than this console and append-only, so what these tests hold
-together is the *reading* of it — the part that decides whether a seat can actually
+together is the *reading* of it, the part that decides whether a seat can actually
 answer a question asked months later.
 
 Three things would make an audit screen quietly useless, and each gets a test. A verb
@@ -61,7 +61,7 @@ class FamilyTests(RbacTestCase):
         found.update({'unverify_user', 'auto_hide_post'})
         unfiled = sorted(name for name in found if audit.family_of(name) == 'other')
         self.assertEqual(unfiled, [], f'{unfiled} would be counted nowhere on the audit screen')
-        self.assertIn('coin_adjust', found, 'the reader found no verbs at all — fix it, not this list')
+        self.assertIn('coin_adjust', found, 'the reader found no verbs at all, fix it, not this list')
 
     def test_the_families_the_contract_names_are_the_ones_the_screen_lists(self):
         for family in audit.CONTRACT_FAMILIES:

@@ -171,8 +171,8 @@ def _promotions(cutoffs):
 def _coins_moved(cutoffs):
     """Coins on the append-only ledger: credit is bought in, debit is spent.
 
-    The ledger column is a Decimal, so the sums ask for the money path — Postgres
-    will not type an untyped `0` against a numeric column — and are then read
+    The ledger column is a Decimal, so the sums ask for the money path, Postgres
+    will not type an untyped `0` against a numeric column, and are then read
     back as whole coins, which is all a dashboard tile can show.
     """
     debit = Transaction.objects.filter(kind=Transaction.Kind.DEBIT)
@@ -198,7 +198,7 @@ def storage_used(refresh=False):
     """Bytes under MEDIA_ROOT, cached: a directory walk is the one number here
     that is not a query, and this screen re-reads it every time it is opened.
 
-    A deployed API may have no disk at all, which is reported as `unknown` — the
+    A deployed API may have no disk at all, which is reported as `unknown`, the
     difference between "nothing stored" and "cannot tell" is the whole point.
     """
     if not refresh:
@@ -317,7 +317,7 @@ def health(cutoffs, media=None):
         'id': 'ratelimits', 'label': 'Rate limiting',
         'state': 'ok' if limits_on else 'off',
         'detail': 'On for sign-in, posting and search.' if limits_on else
-                  'EXPOSING_RATE_LIMITS is off — this is a test box, not a live one.',
+                  'EXPOSING_RATE_LIMITS is off, this is a test box, not a live one.',
     })
 
     checks.append({
@@ -361,7 +361,7 @@ UNMEASURED = {
 def _window_of(promo, now):
     # The window is the part the payer paid for. That begins when approval took the
     # coins, not when the order was written down, and an order nobody has approved has
-    # no window at all — counting a week of organic likes into it would sell the desk
+    # no window at all, counting a week of organic likes into it would sell the desk
     # reach the campaign never bought.
     if promo.starts_at is None and promo.status in (Promotion.Status.DRAFT, Promotion.Status.PENDING):
         return now, now

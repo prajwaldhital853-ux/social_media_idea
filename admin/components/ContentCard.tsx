@@ -75,8 +75,8 @@ function who(author: ContentPreview['author']) {
 }
 
 /**
- * The thing itself. Every screen that decides content — the report queue and the
- * takedown shelf — paints this from the same server payload, so a moderator sees
+ * The thing itself. Every screen that decides content, the report queue and the
+ * takedown shelf, paints this from the same server payload, so a moderator sees
  * exactly what a person posted no matter which door they came through.
  */
 export default function ContentCard({ content, matched = [] }: {
@@ -121,7 +121,7 @@ export default function ContentCard({ content, matched = [] }: {
               <dt>Suspension</dt>
               <dd>{content.suspended_until ? `until ${new Date(content.suspended_until).toLocaleString()}` : 'none'}</dd>
             </div>
-            {content.is_staff && <div><dt>Console seat</dt><dd>Yes — decide from Staff and access</dd></div>}
+            {content.is_staff && <div><dt>Console seat</dt><dd>Yes, decide from Staff and access</dd></div>}
           </dl>
         ) : (
           <>

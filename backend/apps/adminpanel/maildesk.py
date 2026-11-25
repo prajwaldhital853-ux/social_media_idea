@@ -3,7 +3,7 @@
 Mail is the part of the platform no screen can show: a letter the provider refuses
 dies on its own thread with one line in the service log, which is how a deployment
 runs for weeks believing its members are being emailed while none of them are. This
-reads the settings, names the sender, and posts one real letter when asked — so the
+reads the settings, names the sender, and posts one real letter when asked, so the
 answer to "is mail working?" is a click instead of a guess.
 """
 
@@ -73,5 +73,5 @@ def test_send(to):
         'sent': True,
         'mail': status(),
         'detail': f'It went to {to}. If it is not in that inbox within a minute, check the spam '
-                  'folder and then the sender domain in the provider — the platform handed it over.',
+                  'folder and then the sender domain in the provider, the platform handed it over.',
     }

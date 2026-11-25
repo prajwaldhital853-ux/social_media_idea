@@ -245,7 +245,7 @@ export default function ReviewCasePage({ params }: { params: { kind: string; id:
                         <span>
                           <span className="record-text">
                             <b>{VERB_LABEL[entry.action] || entry.action}</b>
-                            {' — '}{entry.detail || 'no reason was written'}
+                            {', '}{entry.detail || 'no reason was written'}
                           </span>
                           <span className="record-meta">
                             {entry.actor ? `@${entry.actor}` : 'system'} · {ago(entry.at)} · {stamp(entry.at)}

@@ -203,8 +203,8 @@ export default function PeoplePage() {
 }
 
 /**
- * A row is a summary, not a drawer. Everything underneath it — the pile, the
- * warnings, the wallet, the act-on buttons — lives on the account's own page,
+ * A row is a summary, not a drawer. Everything underneath it, the pile, the
+ * warnings, the wallet, the act-on buttons, lives on the account's own page,
  * so the directory never grows eleven columns tall mid-scroll.
  */
 function PersonRowView({ row, verbs, mine }: { row: PersonRow; verbs: PersonVerbs; mine: boolean }) {
@@ -233,7 +233,7 @@ function PersonRowView({ row, verbs, mine }: { row: PersonRow; verbs: PersonVerb
             {row.verified && <span className="verified" title="Verified by staff">✓</span>}
           </span>
         </td>
-        <td data-label="Email" className="dim wrap">{row.email || '—'}</td>
+        <td data-label="Email" className="dim wrap">{row.email || '-'}</td>
         <td data-label="Seat">{ROLE_LABEL[row.role] || row.role}</td>
         <td data-label="Signed up" className="dim">joined {ago(row.joined)}</td>
         <td data-label="Posts" className="num">{num(row.posts)}</td>
@@ -274,7 +274,7 @@ function PersonRowView({ row, verbs, mine }: { row: PersonRow; verbs: PersonVerb
                 key={item.verb}
                 to={`/people/${row.username}?act=${item.act}`}
                 icon={item.icon}
-                label={`${item.label} — opens the account with this ask written`}
+                label={`${item.label}, opens the account with this ask written`}
                 tone={item.verb === 'delete' ? 'dead' : undefined}
                 disabled={mine || !(item.verb === 'warn' ? verbs.warn : verbs.actions)}
               />

@@ -39,7 +39,7 @@ const DESK_KINDS: { id: ContentKind; label: string }[] = [
 /**
  * The hand-written notice. A decision in the queue still writes one as a side
  * effect, but contract 6.5 says a notice is only ever added or removed through
- * this desk — so the desk needs its own way of saying it, for the claim that
+ * this desk, so the desk needs its own way of saying it, for the claim that
  * nobody reported.
  *
  * It asks for a word, never a number: a seat has the sentence and whoever wrote
@@ -68,9 +68,9 @@ function AttachDesk({ busy, onDone }: {
     const sure = await confirm({
       title: privateNote ? 'Put this notice where only they read it?' : 'Put this notice up?',
       body: privateNote
-        ? `Your sentence will stand above ${picked.who} — ${picked.label} for that person alone, `
+        ? `Your sentence will stand above ${picked.who}, ${picked.label} for that person alone, `
           + 'and they are told in their own bell. Nobody else on the platform sees it. It stays until a seat withdraws it.'
-        : `Everyone who reaches ${picked.who} — ${picked.label} — will read your sentence above it, `
+        : `Everyone who reaches ${picked.who}, ${picked.label}, will read your sentence above it, `
           + 'and it goes on the record under your name. It stays there until a seat withdraws it.',
       confirmLabel: 'Put it up',
       tone: 'amber',
@@ -186,7 +186,7 @@ function AttachDesk({ busy, onDone }: {
           <span>Why it is going up <em>{reason.length}/120</em></span>
           <input
             name="reason" value={reason} maxLength={120} autoComplete="off" aria-label="Why the notice goes up"
-            placeholder="misinformation — the health claim has no source"
+            placeholder="misinformation, the health claim has no source"
             onChange={event => setReason(event.target.value)}
           />
         </label>
@@ -204,7 +204,7 @@ function AttachDesk({ busy, onDone }: {
 
         <p className="note">
           A notice about {kind === 'user' ? 'an account' : `a ${kind}`} also needs
-          <b> {PEN[kind]}</b> on the seat — the desk searches with the same pen, so
+          <b> {PEN[kind]}</b> on the seat, the desk searches with the same pen, so
           a list that comes back saying it cannot search is telling you which key is missing.
         </p>
       </div>
@@ -322,7 +322,7 @@ export default function NoticesPage() {
   return (
     <ConsoleShell
       title="Public warning notices"
-      subtitle="What the community has been told about a piece of content or an account — the sentence, who wrote it, and whether it is still standing."
+      subtitle="What the community has been told about a piece of content or an account, the sentence, who wrote it, and whether it is still standing."
       actions={(
         <>
           <button type="button" className="btn ghost" onClick={() => setHelpOpen(true)}>

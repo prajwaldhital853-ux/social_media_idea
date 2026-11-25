@@ -50,11 +50,11 @@ function owed(row: PromoRow, verb: 'reject' | 'stop') {
   const coins = Number(verb === 'reject' ? row.refund_reject : row.refund_stop);
   if (!coins) {
     return verb === 'reject'
-      ? 'Refusing hands back nothing — this campaign had no unspent run to give.'
+      ? 'Refusing hands back nothing, this campaign had no unspent run to give.'
       : 'Stopping hands back nothing: this run had no end date, so nothing was unearned.';
   }
   return verb === 'reject'
-    ? `Refusing hands back ${num(coins)} coins — the part of the run they never got.`
+    ? `Refusing hands back ${num(coins)} coins, the part of the run they never got.`
     : `Stopping hands back ${num(coins)} coins, or withholds them if the reason is a broken rule.`;
 }
 
@@ -140,7 +140,7 @@ export default function CampaignPage({ params }: { params: { id: string } }) {
 
   return (
     <ConsoleShell
-      title={row ? `Campaign #${row.id} — @${row.owner}` : `Campaign #${params.id}`}
+      title={row ? `Campaign #${row.id}, @${row.owner}` : `Campaign #${params.id}`}
       subtitle={row
         ? `${row.package?.name || 'bought as a budget'} · ${row.coins} coins${row.charged ? '' : ' still in the payer’s wallet'} · ${standing!.label}`
         : 'What the coins bought, who is meant to see it, and what the seat can sign.'}
@@ -195,7 +195,7 @@ export default function CampaignPage({ params }: { params: { id: string } }) {
                 <li><span>Ordered</span><b>{stamp(row.created_at)}</b></li>
                 <li><span>Coins taken</span>
                   <b data-charged={row.charged ? 'yes' : 'no'}>
-                    {row.charged ? stamp(row.starts_at || row.created_at) : 'not yet — waiting on a seat'}
+                    {row.charged ? stamp(row.starts_at || row.created_at) : 'not yet, waiting on a seat'}
                   </b>
                 </li>
                 <li><span>Ends</span>
@@ -218,7 +218,7 @@ export default function CampaignPage({ params }: { params: { id: string } }) {
                       <b>{detail.campaign.pile.open}</b> open report(s) from{' '}
                       <b>{detail.campaign.pile.reporters}</b> people
                       {detail.campaign.pile.reasons.length
-                        ? <> — {detail.campaign.pile.reasons.map(item => `${item.reason} ×${item.n}`).join(', ')}</>
+                        ? <>, {detail.campaign.pile.reasons.map(item => `${item.reason} ×${item.n}`).join(', ')}</>
                         : null}
                     </span>
                   </p>
@@ -261,13 +261,13 @@ export default function CampaignPage({ params }: { params: { id: string } }) {
             {row.status === 'draft' ? (
               <p className="note row" data-unpaid>
                 {IC.alert}
-                <span>A draft has not been paid for — there are no coins here to approve or hand back.</span>
+                <span>A draft has not been paid for, there are no coins here to approve or hand back.</span>
               </p>
             ) : row.status === 'ended' || row.status === 'rejected' ? (
               <div className="verdict" data-record>
                 <p className="verdict-line">
                   {IC.check}
-                  <span><b>{row.review?.label || row.status_label}</b> — {row.review?.reason || 'no sentence was written'}</span>
+                  <span><b>{row.review?.label || row.status_label}</b>, {row.review?.reason || 'no sentence was written'}</span>
                 </p>
                 {Number(row.review?.coins_refunded || 0) > 0 && (
                   <p className="verdict-note">
@@ -297,7 +297,7 @@ export default function CampaignPage({ params }: { params: { id: string } }) {
                   <p className="note row" data-over>
                     {IC.alert}
                     <span>Its paid run finished {Math.abs(Math.round((row.left_hours || 0) / 24))} day(s) ago, so this
-                      desk offers no Approve — signing it off would promise reach that no longer exists.</span>
+                      desk offers no Approve, signing it off would promise reach that no longer exists.</span>
                   </p>
                 )}
                 {verbs.map(item => {
@@ -332,8 +332,8 @@ export default function CampaignPage({ params }: { params: { id: string } }) {
                 <p className="note row">{IC.coin}<span>{owed(row, verb)}</span></p>
                 <label className="field">
                   <span>{verb === 'reject'
-                    ? 'Why the reach is refused — the payer is sent this'
-                    : 'Why this paid run ends early — the payer is sent this'}</span>
+                    ? 'Why the reach is refused, the payer is sent this'
+                    : 'Why this paid run ends early, the payer is sent this'}</span>
                   <textarea
                     rows={2} name="reason" maxLength={240} value={reason} autoFocus
                     placeholder={verb === 'reject'
@@ -361,7 +361,7 @@ export default function CampaignPage({ params }: { params: { id: string } }) {
                 )}
                 <div className="ask-actions">
                   <button type="button" className="btn primary tiny" disabled={!armed} onClick={() => submit(verb)}>
-                    {IC.go}<span>{working ? 'Working…' : `Confirm — ${verb === 'reject' ? 'Reject' : 'Stop'}`}</span>
+                    {IC.go}<span>{working ? 'Working…' : `Confirm, ${verb === 'reject' ? 'Reject' : 'Stop'}`}</span>
                   </button>
                   <button
                     type="button" className="btn ghost tiny" disabled={working}

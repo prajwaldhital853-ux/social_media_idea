@@ -5,7 +5,7 @@ makes, so these tests read the output the way an outsider would.
 
 Three things make a CSV untrustworthy and each is pinned down here. A column list
 that changed without anybody noticing, because a spreadsheet reconciled against the
-wrong headers is worse than none — so the headers are asserted by name and the body
+wrong headers is worse than none, so the headers are asserted by name and the body
 is parsed back and compared with the row the database holds. A file that quietly
 stopped short, so the cap is tested with the cap itself pulled down to three rows and
 the answer has to say so. And a file somebody took without a trace: every build writes
@@ -14,7 +14,7 @@ only reason an export of everyone's email address is a staff action and not an
 accident.
 
 The doors split the same way the screen does: the read answers "what would this
-contain", the write hands the file over — as JSON to print, or as the download itself.
+contain", the write hands the file over, as JSON to print, or as the download itself.
 """
 
 import csv

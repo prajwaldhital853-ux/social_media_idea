@@ -6,7 +6,7 @@ console a client pays for needs three more things, and they are all here:
 
 * a reason that is recorded, shown to the author, and readable afterwards;
 * one decision that clears the whole pile on a target instead of ten clicks;
-* the money side — a campaign whose content moderation removed stops, and the
+* the money side, a campaign whose content moderation removed stops, and the
   days it never got to run are handed back through the ledger it came from.
 
 Nothing in the main apps is edited to make that happen: the content rows move on
@@ -59,7 +59,7 @@ def actions_for(kind, state):
     """Which of the five verbs this target is actually standing in.
 
     A row that offers "release" for a live post is a button that can only fail,
-    so the current state decides the verbs — and `act()` still checks them again,
+    so the current state decides the verbs, and `act()` still checks them again,
     because the screen the moderator is looking at may be a minute old.
     """
     if kind == 'user':
@@ -123,7 +123,7 @@ def unspent(promo, now):
 
     A campaign with no end date was bought as an open run, so nothing about
     stopping it early is unearned; it refunds nothing and says so. The run is
-    measured from `starts_at`, the day the coins were actually taken — the order
+    measured from `starts_at`, the day the coins were actually taken, the order
     date can sit days before it while a seat reads the queue, and counting those
     days as spent would refund less than the payer ever bought.
     """
@@ -327,7 +327,7 @@ def email_owner(kind, row, subject, body, *, warning=False):
     """Send the content owner the same branded notice that account enforcement uses.
 
     `warning` marks a letter the member asked not to receive: a sentence over live
-    content is optional, so their setting decides it. A takedown is not — they
+    content is optional, so their setting decides it. A takedown is not, they
     cannot sign in to find out why, so the mailbox is the only notice they get.
     """
     owner = owner_for(kind, row)
@@ -382,11 +382,11 @@ def act(kind, target_id, actor, action, reason='', notice_text='', audience=Publ
 
     elif action == 'remove':
         if kind == 'user':
-            raise ValueError('An account is not taken down from this screen — suspend it from People.')
+            raise ValueError('An account is not taken down from this screen, suspend it from People.')
         if not reason:
             raise ValueError('Say why it is coming down. The author is shown this sentence.')
         if row.status == REMOVED_STATE[kind]:
-            raise ValueError(f'That {kind} is already taken down — restore it, or leave it down.')
+            raise ValueError(f'That {kind} is already taken down, restore it, or leave it down.')
         row.status = REMOVED_STATE[kind]
         row.save(update_fields=['status'])
         if kind == 'comment':
@@ -427,7 +427,7 @@ def act(kind, target_id, actor, action, reason='', notice_text='', audience=Publ
 
     elif action == 'release':
         if kind == 'user':
-            raise ValueError('An account is not released — it is suspended or it is not.')
+            raise ValueError('An account is not released, it is suspended or it is not.')
         if kind not in HIDDEN_STATE:
             raise ValueError('A listing is never held pending review: it is up, or it is taken down.')
         if row.status != HIDDEN_STATE[kind]:

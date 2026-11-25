@@ -31,5 +31,5 @@ export function waiting(minutes: number | null | undefined): string {
 }
 
 export function percent(value: number | null | undefined): string {
-  return value === null || value === undefined ? '—' : `${value}%`;
+  return value === null || value === undefined ? '-' : `${value}%`;
 }

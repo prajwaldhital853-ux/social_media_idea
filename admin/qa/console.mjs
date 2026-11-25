@@ -4,7 +4,7 @@
  *
  * Nothing here mocks the second factor: the page is asked to enrol, the secret it
  * prints is read back out of the DOM, and a live TOTP code is computed from it and
- * typed in — so the QR screen, the server's verifier and the cookies it hands out
+ * typed in, so the QR screen, the server's verifier and the cookies it hands out
  * are all proved against each other, proxy, CSRF and SameSite included.
  *
  * Two browser contexts, not two tabs: the console's cookies live on the origin, so
@@ -36,7 +36,7 @@ const TILES = 'new_users,posts,comments,listings,open_reports,coin_requests,prom
 const results = [];
 const ok = (name, pass, detail = '') => {
   results.push({ name, pass: !!pass, detail });
-  console.log(`${pass ? 'PASS' : 'FAIL'}  ${name}${detail ? `  — ${detail}` : ''}`);
+  console.log(`${pass ? 'PASS' : 'FAIL'}  ${name}${detail ? `, ${detail}` : ''}`);
 };
 
 const B32 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
@@ -57,7 +57,7 @@ function fromBase32(text) {
   return Buffer.from(bytes);
 }
 
-/** RFC 6238, six digits, thirty seconds — the same recipe the server runs. */
+/** RFC 6238, six digits, thirty seconds, the same recipe the server runs. */
 function totp(secret, at = Date.now()) {
   const step = Math.floor(at / 1000 / 30);
   const counter = Buffer.alloc(8);
@@ -88,7 +88,7 @@ const shot = async (page, name) => retryWrite(() => page.screenshot({ path: path
  * Every screen ships as server-rendered HTML and is hydrated a beat later, and a
  * list repaints after each write. The node a read or a type just found can be
  * replaced under it mid-call, which surfaces as a detached-node error rather
- * than a wrong answer — so try the same call again against the fresh tree.
+ * than a wrong answer, so try the same call again against the fresh tree.
  */
 async function again(run) {
   for (let attempt = 0; attempt < 4; attempt += 1) {
@@ -124,7 +124,7 @@ async function clickText(page, selector, needle) {
  * A click can land on whatever is painted on top of the field, and a box typed into
  * before React has hydrated silently reverts to its saved value. Both leave the old
  * number in the field with a green save banner above it, which is a walkthrough that
- * believes itself — so the field is focused from inside, cleared, typed, and read
+ * believes itself, so the field is focused from inside, cleared, typed, and read
  * back, and anything that still refuses to hold is said out loud at the end.
  */
 const typeStubs = [];
@@ -159,7 +159,7 @@ async function expectBanner(page, needle) {
 /**
  * Red banner. A refused write answers with the server's own sentence and the page
  * paints it as `.banner-bad`, so a check that expects a 400 has to wait for that
- * one — waiting for the green banner instead times out forty seconds later.
+ * one, waiting for the green banner instead times out forty seconds later.
  */
 async function expectBad(page, needle) {
   await page.waitForFunction(want => [...document.querySelectorAll('.banner-bad')]
@@ -193,7 +193,7 @@ const lineText = (page, selector) => again(() => page.$eval(selector, node => (n
 /**
  * A row a delete just removed. The green banner answers before the refetch that
  * rebuilds the list lands, so counting rows the instant it appears still shows
- * the deleted one — wait for the node itself to leave the page.
+ * the deleted one, wait for the node itself to leave the page.
  */
 async function waitGone(page, selector) {
   await page.waitForFunction(sel => !document.querySelector(sel), { timeout: 40000 }, selector);
@@ -316,7 +316,7 @@ async function signIn(page, username, label, known = null) {
     fs.writeFileSync(SECRETS, JSON.stringify(secrets, null, 2));
     await page.type('input[autocomplete="one-time-code"]', totp(secret));
   } else {
-    if (!known) throw new Error(`${username} is enrolled but no secret is known — run admin/qa/reset.py`);
+    if (!known) throw new Error(`${username} is enrolled but no secret is known, run admin/qa/reset.py`);
     await page.type('input[autocomplete="one-time-code"]', totp(known));
   }
   await page.click('button[type="submit"]');
@@ -542,7 +542,7 @@ try {
 
   // ── 5. the dashboard (6.2) ─────────────────────────────────────────────────
   // Both API answers the paint is made of are captured off the network, so every
-  // comparison below is between one screen and the one call that filled it — a
+  // comparison below is between one screen and the one call that filled it, a
   // second fetch would race the other agents writing to this same database.
   const tilesLoad = owner.waitForResponse(res => /\/api\/admin\/overview\//.test(res.url()), { timeout: 40000 });
   const promoLoad = owner.waitForResponse(res => /\/api\/admin\/analytics\/promotions\//.test(res.url()), { timeout: 40000 });
@@ -576,7 +576,7 @@ try {
     .map(node => Number(node.textContent.match(/\d+/)[0]))
     .reduce((sum, count) => sum + count, 0));
   ok('the report card adds up: its kind chips sum to the number it says is waiting',
-    split === queue.value && split > 0, `${queue.value} open — ${(await text(owner, '.tile[data-tile="open_reports"] .chips')).replace(/\s+/g, ' ')}`);
+    split === queue.value && split > 0, `${queue.value} open, ${(await text(owner, '.tile[data-tile="open_reports"] .chips')).replace(/\s+/g, ' ')}`);
   const coins = dash.tiles.find(tile => tile.id === 'coins_moved');
   const purse = dash.tiles.find(tile => tile.id === 'coin_requests');
   ok('coins sold, coins spent and the proofs held up are all on the screen',
@@ -593,7 +593,7 @@ try {
   const headline = await text(owner, '.health-summary b');
   ok('system health answers each part separately, in words',
     healthIds.length >= 5 && stated && (await many(owner, '.health-item em')).length === healthIds.length,
-    `“${headline}” — ${healthIds.join(', ')}`);
+    `“${headline}”, ${healthIds.join(', ')}`);
 
   const screenOf = href => (href.split('?')[0] || '/').replace(/\/$/, '') || '/';
   const raised = dash.alerts.recent.filter(row => row.href);
@@ -610,7 +610,7 @@ try {
     .then(res => res.status, () => 0))), targets);
   ok('every link the dashboard hands out opens a real screen',
     targets.length > 0 && linkCodes.every(code => code === 200),
-    `${targets.length} links: ${[...new Set(linkCodes)].join(', ')} — ${dead.screens.length} screens on this seat`);
+    `${targets.length} links: ${[...new Set(linkCodes)].join(', ')}, ${dead.screens.length} screens on this seat`);
   // A Client holds every screen, so on this seat "the screen has not been built" is
   // never the reason a row has no button: only a condition somebody already dealt
   // with is allowed to name its screen instead of linking to it.
@@ -661,7 +661,7 @@ try {
 
   // The same alerts on a seat that holds four of the seven screens they point at.
   // `shipped()` decides button-or-label per seat, so the drawer is the only honest
-  // list of what this person may open — and a button that walks a Moderator to a
+  // list of what this person may open, and a button that walks a Moderator to a
   // door answering 403 is worse than the plain word it is replaced with.
   const modSeat = (await statusOf(mod, '/api/admin/session/')).body;
   const modScreens = await mod.$$eval('.side-nav a', nodes => nodes.map(node => node.getAttribute('href')));
@@ -712,8 +712,8 @@ try {
 
   // ── 7. content and marketplace review (contract 6.3) ───────────────────────
   /*
-   * Every step below works on rows the walkthrough owns — `qa_reviewer`'s sample
-   * content and the three `qa_rep_*` reporters made by admin/qa/review_seed.py —
+   * Every step below works on rows the walkthrough owns, `qa_reviewer`'s sample
+   * content and the three `qa_rep_*` reporters made by admin/qa/review_seed.py ,
    * and reaches them through a search for `qa_rep`, because this same database
    * carries the demo site's own posts, listings and reports. Aggregate counts are
    * therefore only ever compared with the call that painted the screen.
@@ -816,7 +816,7 @@ try {
   const wordSaved = await expectBanner(owner, 'blocked list');
   // The banner lands before the list has re-fetched, so reading the rows straight
   // away sometimes catches the screen a frame too early. Waiting for a row to
-  // appear — not for a particular word — keeps a broken normalisation a FAIL.
+  // appear, not for a particular word, keeps a broken normalisation a FAIL.
   await owner.waitForSelector('.panel[data-list="word"] .term-text', { timeout: 40000 })
     .catch(() => undefined);
   const words = await many(owner, '.panel[data-list="word"] .term-text');
@@ -849,7 +849,7 @@ try {
   await waitGone(owner, '.panel[data-list="item"] .term[data-term="firearms"]');
   const itemsLeft = await many(owner, '.panel[data-list="item"] .term-text');
   ok('taking one off the list asks first and then really removes it',
-    termGone.includes('firearms') && !itemsLeft.includes('firearms'), `${termGone} — ${itemsLeft.length} left`);
+    termGone.includes('firearms') && !itemsLeft.includes('firearms'), `${termGone}, ${itemsLeft.length} left`);
 
   await clearAndType(owner, '.panel[data-list="categories"] input[name="name"]', 'Bicycles QA');
   await clickText(owner, '.panel[data-list="categories"] .term-add button', 'Add category');
@@ -900,7 +900,7 @@ try {
 
   ok('the reported text is marked where the banned word sits, even inside a longer word',
     three.hits.length === 2 && three.hits.every(hit => hit === 'gunpowder')
-      && three.flag.includes('on the blocked list'), `${three.flag} — ${three.hits.join(' + ')}`);
+      && three.flag.includes('on the blocked list'), `${three.flag}, ${three.hits.join(' + ')}`);
 
   await clickText(owner, `.case[data-case="${three.target}"] .case-who button`, 'reporters');
   const tellRows = await many(owner, `.case[data-case="${three.target}"] .reporters li`);
@@ -915,7 +915,7 @@ try {
   const needSentence = await see(owner, `.case[data-case="${three.target}"] .card-error`);
   ok('a public notice verb with nothing written comes back 400 and says what is missing',
     notice400.status() === 400 && needSentence.includes('Write the sentence the community is shown')
-      && (await waitCases(owner, 7)).length === 7, `HTTP ${notice400.status()} — ${needSentence}`);
+      && (await waitCases(owner, 7)).length === 7, `HTTP ${notice400.status()}, ${needSentence}`);
 
   await clearAndType(owner, `.case[data-case="${three.target}"] textarea[name="notice"]`, NOTICE_A);
   const warnedOut = owner.waitForResponse(res => /\/decide\/$/.test(res.url()), { timeout: 40000 });
@@ -926,7 +926,7 @@ try {
   ok('one notice decision speaks for all three reports and the case leaves the queue',
     warned.includes('3 report(s) closed as resolved') && warnBody.reports_closed === 3
       && warnBody.notice.text === NOTICE_A && !afterWarn.some(row => row.target === three.target),
-    `${warned} — 6 things left`);
+    `${warned}, 6 things left`);
 
   const soldState = three.state;
   await tap(owner, `.case[data-case="${sell.target}"] .verbs button[data-verb="remove"]`);
@@ -936,9 +936,9 @@ try {
   await tap(owner, `.case[data-case="${sell.target}"] .ask-actions button`);
   const reason400 = await noReason;
   const needReason = await see(owner, `.case[data-case="${sell.target}"] .card-error`);
-  ok('a takedown with no reason is refused — the author has to be told why it came down',
+  ok('a takedown with no reason is refused, the author has to be told why it came down',
     askFields.join(',') === 'reason,notice' && reason400.status() === 400
-      && needReason.includes('Say why it is coming down'), `fields ${askFields.join(' + ')} — ${needReason}`);
+      && needReason.includes('Say why it is coming down'), `fields ${askFields.join(' + ')}, ${needReason}`);
 
   await clearAndType(owner, `.case[data-case="${sell.target}"] textarea[name="reason"]`, REASON_L);
   await clearAndType(owner, `.case[data-case="${sell.target}"] textarea[name="notice"]`, NOTICE_L);
@@ -947,7 +947,7 @@ try {
   const afterListing = await waitCases(owner, 5);
   ok('a marketplace takedown needs its own reason, and a public sentence when asked for one',
     tookListing.includes('1 report(s) closed + a public notice')
-      && !afterListing.some(row => row.target === sell.target), `${tookListing} — 5 things left`);
+      && !afterListing.some(row => row.target === sell.target), `${tookListing}, 5 things left`);
 
   const spokenRow = found(afterListing, row => row.target === spoken.target, 'the comment row');
   const parentLine = spokenRow.parent;
@@ -955,14 +955,14 @@ try {
   const leftUp = await expectBanner(owner, 'Left up. 1 open report');
   ok('a comment is decided on its own, in the middle of the post it sits on',
     parentLine.includes('on a post by @qa_reviewer') && leftUp.includes('closed as dismissed'),
-    `${parentLine.slice(0, 70)}… — ${leftUp}`);
+    `${parentLine.slice(0, 70)}…, ${leftUp}`);
 
   const acctRow = found(await waitCases(owner, 4), row => row.target === acct.target, 'the account row');
   await tap(owner, `.case[data-case="${acct.target}"] .verbs button[data-verb="dismiss"]`);
   const acctLeft = await waitCases(owner, 3);
   ok('an account row offers no takedown verb, because accounts are suspended from People',
     acctRow.verbs.join(',') === 'dismiss,warn' && acctLeft.length === 3
-      && acctLeft.every(row => row.kind === 'post'), `verbs ${acctRow.verbs.join('/')} — 3 left: posts only`);
+      && acctLeft.every(row => row.kind === 'post'), `verbs ${acctRow.verbs.join('/')}, 3 left: posts only`);
 
   ok('the auto-hidden post is waiting with the release verb and the pile that hid it',
     autohid.verbs.includes('release') && autohid.open === '2' && soldState === 'In the feed'
@@ -1008,7 +1008,7 @@ try {
   const agreed = shelfFigures.every(figure => Object.keys(shelfWords)
     .some(raw => shelfWords[raw] === figure.label && shelf.counts[raw] === figure.count));
   ok('the shelf totals are the ones its own call counted, in the words each state uses',
-    agreed && rows0.length === 4, `${shelfFigures.map(f => `${f.count} ${f.label}`).join(', ')} — ${rows0.length} of ours`);
+    agreed && rows0.length === 4, `${shelfFigures.map(f => `${f.count} ${f.label}`).join(', ')}, ${rows0.length} of ours`);
   await shot(owner, 'review-3-shelf');
 
   const paidRow = found(rows0, row => row.chips.some(chip => chip.includes('campaign running')),
@@ -1024,7 +1024,7 @@ try {
   ok('a takedown that stops a paid campaign names the coins, the account and the reason on file',
     refunded.includes('1 campaign(s) cancelled, 600 coins refunded') && stopBody.refunded === '600'
       && /600 refunded to @qa_reviewer/.test(moneyLine) && stopRecord.includes(REASON_D),
-    `${refunded} — ${moneyLine}`);
+    `${refunded}, ${moneyLine}`);
 
   const autoRow = found(await shelfRows(owner, `type=post&state=all&q=${AUTHOR}`),
     row => row.state === 'Hidden pending review', 'the hidden post still sitting on the shelf');
@@ -1034,7 +1034,7 @@ try {
   const afterQueue = await statusOf(owner, `/api/admin/review/?q=${SAMPLE}`);
   ok('releasing content the report counter hid puts it back and clears the pile behind it',
     freed.includes('2 report(s) closed') && freedState === 'In the feed'
-      && afterQueue.body.results.length === 1, `${freed} — pill now reads “${freedState}”, 1 report left in the queue`);
+      && afterQueue.body.results.length === 1, `${freed}, pill now reads “${freedState}”, 1 report left in the queue`);
 
   const backRow = found(await shelfRows(owner, `type=post&state=all&q=${AUTHOR}`),
     row => row.target === paidRow.target, 'the campaign row after the release');
@@ -1092,7 +1092,7 @@ try {
   ok('withdrawing a notice is a state, not a deletion: the row stays, marked withdrawn',
     withdrawn.is_live === false && withdrew.includes('@qa_reviewer')
       && deskCount.startsWith('1 standing of 2') && !(await owner.$(`.notice[data-target="${sell.target}"] .notice-act`)),
-    `${withdrew} — ${deskCount}`);
+    `${withdrew}, ${deskCount}`);
 
   await chip(owner, 'post', 'target=post');
   await reload(owner, 'target=post');
@@ -1135,7 +1135,7 @@ try {
   const disabledVerbs = await mod.$$eval('.cases .case .verbs button', nodes => nodes.map(node => node.disabled));
   ok('the seat that lost the pen still reads the report, but cannot sign it',
     modRead.status === 200 && modRows[0].target === spare.target && lockNote.includes('Post and comment review')
-      && disabledVerbs.every(Boolean), `${lockNote.replace(/\s+/g, ' ').slice(0, 90)} — ${modRead.status}`);
+      && disabledVerbs.every(Boolean), `${lockNote.replace(/\s+/g, ' ').slice(0, 90)}, ${modRead.status}`);
   const refused = await postOf(mod, `/api/admin/review/${modRead.body.results[0].id}/decide/`,
     { action: 'dismiss', reason: '', notice: '' });
   ok('and the endpoint refuses the same verb naming the missing key, not a blank page',
@@ -1167,7 +1167,7 @@ try {
   const seatLeft = await expectBanner(mod, 'Left up. 1 open report');
   const emptyDesk = await see(mod, '.panel.empty h2');
   ok('the moderator who was handed the pen clears the last report on the queue',
-    seatLeft.includes('closed as dismissed') && emptyDesk === 'Nothing here', `${seatLeft} — the desk is ${emptyDesk}`);
+    seatLeft.includes('closed as dismissed') && emptyDesk === 'Nothing here', `${seatLeft}, the desk is ${emptyDesk}`);
 
   await owner.bringToFront();
   await owner.goto(`${BASE}/content`, { waitUntil: 'domcontentloaded' });
@@ -1184,7 +1184,7 @@ try {
   // ── 8. user management and enforcement (contract 6.4) ──────────────────────
   /*
    * The six accounts below are made by admin/qa/people_seed.py and belong to this
-   * walkthrough alone, so every claim is about an account the run just changed —
+   * walkthrough alone, so every claim is about an account the run just changed ,
    * never about how many suspended or verified accounts the demo database happens
    * to be holding at the time.
    */
@@ -1226,7 +1226,7 @@ try {
       await sleep(300);
     }
     throw new Error(`the directory never settled on ${params || 'the first page'}`
-      + ` — screen ${dom.join(',')} / server ${want.join(',')}`);
+      + `, screen ${dom.join(',')} / server ${want.join(',')}`);
   }
   const pillsOf = (page, username) => page.$$eval('.person', (nodes, name) => {
     const read = node => (node.children.length
@@ -1398,7 +1398,7 @@ try {
   await clearAndType(owner, REASON, CLEAR_WHY);
   const cleared = await answered(owner, CONFIRM, 'Confirm', `admin/people/${FLAGGED}/clear-flags/`);
   const clearBanner = await expectBanner(owner, 'open report(s) closed');
-  ok('one click closes the whole pile — on the account and on its content — and the lockout too',
+  ok('one click closes the whole pile, on the account and on its content, and the lockout too',
     cleared.status === 200 && cleared.body.reports_closed === pile.flags.on_account + pile.flags.on_content
       && /login lockout cleared/.test(clearBanner), clearBanner);
   ok('and it admits what it did not do: a takedown somebody decided stays decided',
@@ -1690,7 +1690,7 @@ try {
 
   /**
    * The line under each box names the seat that wrote it inside a <b>, so it is
-   * text and element glued together — `until` reads element children only, which
+   * text and element glued together, `until` reads element children only, which
    * would hand back the username and never the words being waited for.
    */
   const whoSays = async (field, needle) => {
@@ -1702,7 +1702,7 @@ try {
     return text(owner, sel);
   };
 
-  // 9.1 — the desk writes a notice with no report behind it.
+  // 9.1, the desk writes a notice with no report behind it.
   await owner.bringToFront();
   await owner.goto(`${BASE}/notices`, { waitUntil: 'domcontentloaded' });
   await owner.waitForSelector(DESK, { timeout: 40000 });
@@ -1718,7 +1718,7 @@ try {
 
   await pickTarget(AUTHOR, spare.target);
   await clearAndType(owner, NOTICE_BOX, NOTICE_TEXT);
-  ok('and a sentence alone is still not enough — the reason is what the log keeps',
+  ok('and a sentence alone is still not enough, the reason is what the log keeps',
     await heldBack(owner, PUT_UP), 'reason blank');
 
   await clearAndType(owner, NOTICE_WHY_BOX, NOTICE_WHY);
@@ -1736,7 +1736,7 @@ try {
     await text(owner, `${noticeAt(spare.target)} .pill`));
   await shot(owner, 'notices-1-hand-written');
 
-  // 9.2 — the open door, with nobody signed in.
+  // 9.2, the open door, with nobody signed in.
   const stranger = await freshPage();
   await stranger.goto(`${BASE}/login`, { waitUntil: 'domcontentloaded' });
   const openRead = await statusOf(stranger, `/api/notices/${kindOf(spare.target)}/${idOf(spare.target)}/`);
@@ -1745,7 +1745,7 @@ try {
       && openRead.body.notices[0].text === NOTICE_TEXT,
     `${openRead.status} · ${(openRead.body.notices || []).length} notice(s)`);
 
-  // 9.3 — taking it down is the desk too, and it is not a deletion.
+  // 9.3, taking it down is the desk too, and it is not a deletion.
   const taken = await answered(owner, `${noticeAt(spare.target)} .notice-act button`,
     'Withdraw notice', 'withdraw/');
   const withdrawnBanner = await expectBanner(owner, 'is withdrawn');
@@ -1765,7 +1765,7 @@ try {
     await lineText(owner, '.toolbar-count'));
   await shot(owner, 'notices-2-withdrawn');
 
-  // 9.4 — the guards: the same sentence twice, and a seat with no pen.
+  // 9.4, the guards: the same sentence twice, and a seat with no pen.
   await pickTarget(AUTHOR, spare.target);
   await clearAndType(owner, NOTICE_BOX, NOTICE_TEXT);
   await clearAndType(owner, NOTICE_WHY_BOX, NOTICE_WHY);
@@ -1838,7 +1838,7 @@ try {
     !backAgain.denied_keys.includes('content') && backAgain.permissions.includes('content'),
     `denied ${backAgain.denied_keys.join(', ') || 'none'}`);
 
-  // 9.5 — the wording a visitor reads before they have an account.
+  // 9.5, the wording a visitor reads before they have an account.
   await owner.bringToFront();
   await owner.goto(`${BASE}/welcome`, { waitUntil: 'domcontentloaded' });
   await owner.waitForSelector(EDITOR, { timeout: 40000 });
@@ -1889,7 +1889,7 @@ try {
   ok('the door that changes the wording is not the open one',
     closedDesk.status === 401 || closedDesk.status === 403, `${closedDesk.status}`);
 
-  // 9.6 — undo, the fallback, and writing the same words twice.
+  // 9.6, undo, the fallback, and writing the same words twice.
   await clearAndType(owner, `${lineBox('tagline')} input`, 'console QA sample - a line nobody will keep');
   await clickText(owner, `${EDITOR} .ask-actions button:nth-child(2)`, 'Undo');
   ok('undoing the typing hands the boxes back to what is stored',
@@ -1961,7 +1961,7 @@ try {
     return id;
   };
 
-  // 10.1 — what the queue holds, and what it refuses to hold.
+  // 10.1, what the queue holds, and what it refuses to hold.
   await owner.goto(`${BASE}/coins`, { waitUntil: 'domcontentloaded' });
   await owner.waitForSelector('.coin', { timeout: 40000 });
   const coinQueue = (await statusOf(owner, '/api/admin/coins/?status=pending')).body;
@@ -1988,7 +1988,7 @@ try {
     `${coldQueue.status} / ${openPricing.status} · ${openPricing.body.coin_price} NPR per Coin`);
   await shot(owner, 'coins-1-queue');
 
-  // 10.2 — the receipt, behind a link that dies.
+  // 10.2, the receipt, behind a link that dies.
   await clearAndType(owner, '.search input', PAYER_ONE);
   const one = await openCoin(PAYER_ONE);
   await tap(owner, `${COIN_BOX(one)} [data-proof-open]`);
@@ -2029,7 +2029,7 @@ try {
   ok('and its receipt door answers 404 rather than handing out an empty file',
     noLink.status === 404, `${noLink.status}`);
 
-  // 10.3 — the three verbs, and the sentence each one costs.
+  // 10.3, the three verbs, and the sentence each one costs.
   await tap(owner, coinVerb(ask3, 'proof'));
   ok('asking for better proof is refused until the sentence is written',
     await heldBack(owner, COIN_YES(ask3)), 'Confirm sits disabled on an empty box');
@@ -2094,7 +2094,7 @@ try {
     `${settled.review.label} by ${settled.review.by}`);
   await shot(owner, 'coins-3-decided');
 
-  // 10.4 — the ledger, which only ever grows.
+  // 10.4, the ledger, which only ever grows.
   await owner.goto(`${BASE}/ledger`, { waitUntil: 'domcontentloaded' });
   await owner.waitForSelector('tbody.entry', { timeout: 40000 });
   const ledger = (await statusOf(owner, '/api/admin/coins/ledger/')).body;
@@ -2103,7 +2103,7 @@ try {
     `${ledger.totals.entries} rows · ${ledger.totals.credited} in · ${ledger.totals.debited} out`);
   await clearAndType(owner, '.search input', PAYER_ONE);
   // A search box settles a beat after the last keystroke, so waiting only for
-  // "some rows" would count the whole ledger before the filter had landed — and
+  // "some rows" would count the whole ledger before the filter had landed, and
   // every row-count claim below is measured against this one wallet's history.
   await owner.waitForFunction(name => {
     const rows = [...document.querySelectorAll('tbody.entry')];
@@ -2158,7 +2158,7 @@ try {
     entries === rowsBefore + 1, `${rowsBefore} rows → ${entries} for ${PAYER_ONE}`);
   await shot(owner, 'ledger-1-history');
 
-  // 10.5 — the pricing desk: the numbers, the QR and the clock on a stranger's slip.
+  // 10.5, the pricing desk: the numbers, the QR and the clock on a stranger's slip.
   await owner.goto(`${BASE}/pricing`, { waitUntil: 'domcontentloaded' });
   await owner.waitForSelector('[data-knob="coin_price"]', { timeout: 40000 });
   const knobs = await owner.$$eval('[data-knob]', nodes => nodes.map(node => node.dataset.knob));
@@ -2201,7 +2201,7 @@ try {
   await owner.goto(`${BASE}/coins`, { waitUntil: 'domcontentloaded' });
   await owner.waitForSelector('.coin', { timeout: 40000 });
   // The banner counts the sweep this page load's own queue call just did, so the
-  // line has to be read before anything else asks the queue — a second fetch would
+  // line has to be read before anything else asks the queue, a second fetch would
   // find nothing left to delete and the count would be the run's, not the screen's.
   const sweptLine = await owner.$('[data-swept]');
   const sweptText = sweptLine ? (await text(owner, '[data-swept]')) : 'nothing reported';
@@ -2218,10 +2218,10 @@ try {
   await answered(owner, '[data-desk-save]', 'Save the desk', 'admin/coins/desk/');
   await shot(owner, 'pricing-1-desk');
 
-  // 10.6 — the money doors are their own screens, not a side effect of being staff.
+  // 10.6, the money doors are their own screens, not a side effect of being staff.
   // Section 3 handed this seat the coin queue as an explicit grant, so the honest
   // thing to prove is not that a Moderator can never see money but that the grant
-  // was the only reason it could — and a Client taking it back takes the screen back.
+  // was the only reason it could, and a Client taking it back takes the screen back.
   await owner.bringToFront();
   await owner.goto(`${BASE}/access`, { waitUntil: 'domcontentloaded' });
   await owner.waitForSelector('.search input', { timeout: 40000 });
@@ -2256,7 +2256,7 @@ try {
 
   // ── 11. paid reach: the campaigns, the shelf they were bought from, the dials ──
   // 6.8 is judged on money, so every refund here is read out of the wallet's own
-  // ledger and out of the open door the member site actually reads — not from the
+  // ledger and out of the open door the member site actually reads, not from the
   // sentence the decision endpoint returned about itself. A desk that prints
   // "180 coins went back" while writing no row is exactly the failure this
   // section exists to catch, and a shelf that saves without the feed being told
@@ -2273,7 +2273,7 @@ try {
 
   /** The queue repaints after every decision, so a campaign is found by its payer.
    *  Its payer, specifically: an open row prints the people who reported the thing
-   *  underneath it, and a match on the row's whole text answers to a reporter — the
+   *  underneath it, and a match on the row's whole text answers to a reporter, the
    *  stale rows of the pile just left are still on the page for a moment, and one of
    *  them was the payer of the campaign two claims ago. */
   const findPromo = async who => {
@@ -2326,7 +2326,7 @@ try {
     Object.values(pid).every(Boolean),
     Object.entries(pid).map(([key, id]) => `${key}=#${id || 'missing'}`).join(' '));
 
-  // 11.1 — the queue, and what a seat is asked to look at before it signs anything.
+  // 11.1, the queue, and what a seat is asked to look at before it signs anything.
   await owner.goto(`${BASE}/promotions`, { waitUntil: 'domcontentloaded' });
   await owner.waitForSelector('.promo', { timeout: 40000 });
   const reachNav = await text(owner, '.side-nav');
@@ -2335,7 +2335,7 @@ try {
       && reachNav.includes('Campaign packages') && reachNav.includes('Reach controls'),
     reachNav.replace(/\s+/g, ' ').slice(0, 120));
   const waitingDesk = (await statusOf(owner, '/api/admin/promotions/')).body;
-  ok('the desk opens on money the site already took and nobody has looked at — not on a status column',
+  ok('the desk opens on money the site already took and nobody has looked at, not on a status column',
     waitingDesk.state === 'waiting' && waitingDesk.results.length > 0
       && waitingDesk.results.every(row => row.status === 'active' && row.sign_off === 'waiting'),
     `${waitingDesk.results.length} on screen · ${waitingDesk.counts.waiting} waiting · `
@@ -2369,13 +2369,13 @@ try {
     pileLine.includes('2 open report(s) from 2 people') && pileLine.includes('misleading'),
     pileLine.replace(/\s+/g, ' ').slice(0, 150));
   const reportLines = await many(owner, `${PROMO_BOX(dirtyRow)} li[data-report]`);
-  ok('and each one arrives as a quotable row — who said it, what they said, when',
+  ok('and each one arrives as a quotable row, who said it, what they said, when',
     reportLines.length === 3 && reportLines.some(line => line.includes('the same footage another account posted first'))
       && reportLines.some(line => line.includes('dismissed')),
     `${reportLines.length} rows: ${reportLines.map(line => line.slice(0, 40)).join(' / ')}`);
   await shot(owner, 'reach-1-campaign-open');
 
-  // 11.2 — approve moves nothing, because the site took the coins when it was bought.
+  // 11.2, approve moves nothing, because the site took the coins when it was bought.
   const cleanBefore = await walletRows(REACH.clean);
   await reachPile('waiting');
   const cleanRow = await openPromo(REACH.clean);
@@ -2396,7 +2396,7 @@ try {
       && (await findPromo(REACH.clean)) === cleanRow,
     `signed off by @${nowLive.body.campaign.review.by}`);
 
-  // 11.3 — refuse: the money has to be worth writing a sentence for.
+  // 11.3, refuse: the money has to be worth writing a sentence for.
   await reachPile('waiting');
   const refuseRow = await openPromo(REACH.refuse);
   await tap(owner, promoVerb(refuseRow, 'reject'));
@@ -2419,7 +2419,7 @@ try {
   const refundRow = refundRows.find(row => row.note.includes(`campaign ${refuseRow}`));
   // Asserted on the row rather than on the length of the list: "one more row than
   // before" is satisfied by any row that happens to arrive, while the claim is that
-  // THIS refund was written — a credit, the sum the run never got, named after the
+  // THIS refund was written, a credit, the sum the run never got, named after the
   // campaign it answers and the seat who signed it, and newest on the payer's ledger.
   ok('the refund is a real ledger row through the wallet, and the note says which campaign it answers',
     !!refundRow && refundRows[0] === refundRow && refundRow.kind === 'credit'
@@ -2428,7 +2428,7 @@ try {
       + (refundRows[0] ? `${refundRows[0].kind} ${refundRows[0].amount} · ${refundRows[0].note}` : 'no row written'));
   await shot(owner, 'reach-2-refund-paper');
 
-  // 11.4 — pause holds the reservation; a stop has to say what happens to the money.
+  // 11.4, pause holds the reservation; a stop has to say what happens to the money.
   await reachPile('live');
   const runRow = await openPromo(REACH.live);
   const halted = await answered(owner, promoVerb(runRow, 'pause'), 'Pause', 'admin/promotions/');
@@ -2454,7 +2454,7 @@ try {
     `${paidBack.status} · ${paidBack.body.refunded} back · ${JSON.stringify(
       paidBack.body.reviews[paidBack.body.reviews.length - 1].choice)}`);
 
-  // 11.5 — withhold is the other honest answer, and it is a different amount.
+  // 11.5, withhold is the other honest answer, and it is a different amount.
   await reachPile('paused');
   const heldRow = await openPromo(REACH.paused);
   const backOn = await answered(owner, promoVerb(heldRow, 'resume'), 'Resume', 'admin/promotions/');
@@ -2477,14 +2477,14 @@ try {
     `${withheld.status} · ${withheld.body.refunded} back · `
     + `${keptBefore.length} → ${(await walletRows(REACH.paused)).length} ledger rows`);
 
-  // 11.6 — the three answers that must not be allowed, and the record that must not move.
+  // 11.6, the three answers that must not be allowed, and the record that must not move.
   await reachPile('waiting');
   const lateRow = await openPromo(REACH.stale);
   const lateVerbs = await owner.$$eval(`${PROMO_BOX(lateRow)} [data-verb]`, nodes => nodes.map(n => n.dataset.verb));
   const lateNote = await lineText(owner, `${PROMO_BOX(lateRow)} [data-over]`);
   ok('a run that finished before anybody looked is not offered an Approve, and says why on the row',
     !lateVerbs.includes('approve') && lateVerbs.length > 0 && /no longer exists/.test(lateNote),
-    `${lateVerbs.join(', ') || 'no verbs'} — ${lateNote.replace(/\s+/g, ' ').slice(0, 90)}`);
+    `${lateVerbs.join(', ') || 'no verbs'}, ${lateNote.replace(/\s+/g, ' ').slice(0, 90)}`);
   const tooLate = await postOf(owner, `/api/admin/promotions/${lateRow}/approve/`, {});
   ok('and the door refuses the same approval even to something typing around the screen',
     tooLate.status === 409 && /run is over/.test(tooLate.body.detail),
@@ -2521,7 +2521,7 @@ try {
     promoPaper.map(line => line.slice(0, 60)).join(' / '));
   await shot(owner, 'reach-3-paper-trail');
 
-  // 11.7 — the shelf: what a package is, and what the site is told when it changes.
+  // 11.7, the shelf: what a package is, and what the site is told when it changes.
   await owner.goto(`${BASE}/packages`, { waitUntil: 'domcontentloaded' });
   await owner.waitForSelector('[data-pkg-row]', { timeout: 40000 });
   const shelfDesk = (await statusOf(owner, '/api/admin/promotions/packages/')).body;
@@ -2572,7 +2572,7 @@ try {
   await unseated.goto(`${BASE}/login`, { waitUntil: 'domcontentloaded' });
   await shot(owner, 'reach-4-shelf');
 
-  // 11.8 — the dials: weights, gates, caps and the one big switch.
+  // 11.8, the dials: weights, gates, caps and the one big switch.
   await owner.goto(`${BASE}/algorithm`, { waitUntil: 'domcontentloaded' });
   await owner.waitForSelector('[data-knob="algo_weight_like"]', { timeout: 40000 });
   const knobBlocks = await owner.$$eval('[data-block]', nodes => nodes.map(n => n.dataset.block));
@@ -2641,7 +2641,7 @@ try {
     doorOff.global_pause === false, `global_pause ${doorOff.global_pause}`);
   await shot(owner, 'reach-5-dials');
 
-  // 11.9 — reading paid reach and deciding it are two different keys.
+  // 11.9, reading paid reach and deciding it are two different keys.
   const blindQueue = await statusOf(mod, '/api/admin/promotions/');
   ok('a Moderator is not handed the paid campaign queue, and the door names the screen to ask for',
     blindQueue.status === 403 && blindQueue.body.permission === 'promotions_view',
@@ -2680,7 +2680,7 @@ try {
   ok('the screen a read-only seat is given says so on the page instead of offering dead buttons',
     noVerbs === 0 && readOnlyNote.includes('Approve, pause, stop, refund')
       && !readOnlyNote.includes('undefined'),
-    `${noVerbs} verbs offered — ${readOnlyNote.replace(/\s+/g, ' ').slice(0, 110)}`);
+    `${noVerbs} verbs offered, ${readOnlyNote.replace(/\s+/g, ' ').slice(0, 110)}`);
   await shot(mod, 'reach-6-read-only');
 
   await owner.goto(`${BASE}/access`, { waitUntil: 'domcontentloaded' });
@@ -2705,7 +2705,7 @@ try {
   // The fixture for this section is `admin/qa/watch_seed.py`: four reporters on one
   // hidden post, two on a live one, three each on a comment and a listing, three on a
   // post that no longer exists, and four outside reporters each given a different
-  // answer — one healthy, one gone quiet, one counting trouble, one never wired in.
+  // answer, one healthy, one gone quiet, one counting trouble, one never wired in.
 
   /**
    * A file, asked for the way the screen asks for it.
@@ -2856,11 +2856,11 @@ try {
   const tightPile = await postOf(owner, '/api/admin/spam/', { alert_report_pile: 1 });
   ok('a pile of one is refused out loud, because one complaint has never been a consensus',
     tightPile.status === 400 && tightPile.body.detail.includes('Two people is the smallest pile'),
-    `${tightPile.status} — ${String(tightPile.body.detail).slice(0, 90)}`);
+    `${tightPile.status}, ${String(tightPile.body.detail).slice(0, 90)}`);
   const stillDesk = await postOf(owner, '/api/admin/spam/', {});
   ok('saving a desk nobody moved is refused rather than written to the log as a change',
     stillDesk.status === 400 && stillDesk.body.detail.includes('no rule has been changed'),
-    `${stillDesk.status} — ${String(stillDesk.body.detail).slice(0, 80)}`);
+    `${stillDesk.status}, ${String(stillDesk.body.detail).slice(0, 80)}`);
 
   await clearAndType(owner, '[data-knob="alert_report_pile"] input', '');
   await tap(owner, '[data-spam-save]');
@@ -2873,11 +2873,11 @@ try {
   await tap(owner, '[data-knob="spam_autohide"] .moves button:nth-of-type(2)');
   await tap(owner, '[data-spam-save]');
   await expectBanner(owner, 'Saved');
-  const autoQuiet = await until(owner, '[data-live="auto_hide"]', 'off — every report waits');
+  const autoQuiet = await until(owner, '[data-live="auto_hide"]', 'off, every report waits');
   const warnSaid = await lineText(owner, '[data-autohide-off]');
   const spamDoor = await statusOf(unseated, '/api/spam/config/');
   ok('switching auto-hide off is said three ways: the desk warns, the screen repeats, the open door agrees',
-    warnSaid.includes('Auto-hide is off') && autoQuiet.includes('off — every report waits for a person')
+    warnSaid.includes('Auto-hide is off') && autoQuiet.includes('off, every report waits for a person')
       && spamDoor.body.auto_hide.enabled === false,
     `the door answers enabled ${spamDoor.body.auto_hide.enabled}`);
   await tap(owner, '[data-knob="spam_autohide"] .moves button:nth-of-type(1)');
@@ -2902,7 +2902,7 @@ try {
     wireCommand.includes('python manage.py adminpulse') && wireCommand.includes('--state=ok'),
     wireCommand.replace(/\s+/g, ' ').slice(0, 130));
   const backupWire = wireRows.find(row => row.key === 'backup');
-  ok('heard from, then gone quiet, is told apart from never heard of — the backup wire says when it last spoke',
+  ok('heard from, then gone quiet, is told apart from never heard of, the backup wire says when it last spoke',
     !!backupWire && backupWire.wired === '1' && backupWire.said.includes('last heard from')
       && backupWire.said.includes('nightly dump'),
     backupWire ? backupWire.said.slice(0, 120) : 'no backup wire');
@@ -2938,7 +2938,7 @@ try {
   await answered(owner, '[data-scan]', 'Run the checks', '/api/admin/alerts/scan/');
   const liveBack = (await statusOf(owner, '/api/admin/alerts/?status=open')).body;
   const errorsAgain = liveBack.rows.find(row => row.key === 'errors:backlog');
-  ok('put the dial back and the condition returns by itself — resolving is not the same as fixing',
+  ok('put the dial back and the condition returns by itself, resolving is not the same as fixing',
     !!errorsAgain && errorsAgain.status === 'open' && errorsAgain.occurrences > 1,
     errorsAgain ? `back as ${errorsAgain.status} after ${errorsAgain.occurrences} times true` : 'it did not come back');
 
@@ -3002,11 +3002,11 @@ try {
   const outOfRange = await postOf(owner, '/api/admin/limits/', { limit_photo_count: 99 });
   ok('a number that would break the composer is refused with the range it broke, not accepted as a stricter rule',
     outOfRange.status === 400 && outOfRange.body.detail.includes('between 1 and 20'),
-    `${outOfRange.status} — ${String(outOfRange.body.detail).slice(0, 90)}`);
+    `${outOfRange.status}, ${String(outOfRange.body.detail).slice(0, 90)}`);
   const notANumber = await postOf(owner, '/api/admin/limits/', { limit_text_chars: 'two thousand' });
   ok('and a limit typed in words is refused in words, so no screen downstream has to render an `abc`',
     notANumber.status === 400 && notANumber.body.detail.includes('whole number'),
-    `${notANumber.status} — ${String(notANumber.body.detail).slice(0, 90)}`);
+    `${notANumber.status}, ${String(notANumber.body.detail).slice(0, 90)}`);
 
   await clearAndType(owner, '[data-knob="limit_photo_count"] input', '4');
   await clearAndType(owner, '[data-knob="limit_video_mb"] input', '150');
@@ -3037,7 +3037,7 @@ try {
   await clearAndType(owner, '.toolbar .dates input:nth-of-type(1)', '');
   await clearAndType(owner, '.toolbar .dates input:nth-of-type(2)', '');
   // Blanking the two dates re-counts the five files, and a re-count deliberately
-  // greys out every Download while it runs — `busy` is one flag for reads and builds
+  // greys out every Download while it runs, `busy` is one flag for reads and builds
   // alike. So the click waits for the button to be clickable again, not for the line
   // above the table: that line had already been the whole table once, so it never
   // goes back to its spinner and a wait on it passes a second before the click would
@@ -3069,7 +3069,7 @@ try {
   const unknownFile = await rawFile(owner, '/api/admin/exports/names/?raw=1');
   ok('and there is no sixth file to ask for: a dataset that is not one of the five is named back as a list',
     unknownFile.status === 404 && unknownFile.said.includes('Choose one of'),
-    `${unknownFile.status} — ${unknownFile.said.slice(0, 90)}`);
+    `${unknownFile.status}, ${unknownFile.said.slice(0, 90)}`);
   await shot(owner, 'safety-6-exports');
 
   await owner.goto(`${BASE}/audit`, { waitUntil: 'domcontentloaded' });
@@ -3096,7 +3096,7 @@ try {
   ok('a file handed over a month from now is findable by its own filename, because the name is on the row',
     (fileInLog.body.results || []).length > 0 && !!fileRow && fileRow.action === 'export_csv'
       && fileRow.actor === 'sita' && String(fileRow.detail).includes('.csv'),
-    fileRow ? `${fileRow.actor} ${fileRow.action} — ${String(fileRow.detail).slice(0, 90)}` : 'the search found nothing');
+    fileRow ? `${fileRow.actor} ${fileRow.action}, ${String(fileRow.detail).slice(0, 90)}` : 'the search found nothing');
 
   await chip(owner, 'alerts', '/api/admin/audit/');
   await until(owner, '[data-list="audit"] .entry', 'alert');

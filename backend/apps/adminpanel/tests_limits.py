@@ -1,4 +1,4 @@
-"""Contract 6.10 — 2,000 characters, four photos of 5 MB, one video of 60 s and 150 MB.
+"""Contract 6.10, 2,000 characters, four photos of 5 MB, one video of 60 s and 150 MB.
 
 The clause is a list of numbers and one requirement: an Admin changes them without a
 code change. So the tests check the numbers themselves are the contract's, that a
@@ -6,7 +6,7 @@ typed number reaches an open door a browser can read without a seat, and that a 
 that takes `0` or `four` is refused in the words a person typed it with.
 
 The part worth more tests than the rest is the honesty about what the platform refuses
-today. The upload endpoint has one ceiling — 150 MB per file — and the composer's four
+today. The upload endpoint has one ceiling, 150 MB per file, and the composer's four
 photos and sixty seconds have only ever lived in the React component. A desk that saved
 "20 photos" and said nothing would leave a seat believing the site now takes twenty.
 So the desk prints the server's real limit next to the six dials, and saving a number

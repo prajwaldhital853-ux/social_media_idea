@@ -19,7 +19,7 @@ export interface NavGroup {
 /**
  * One list drives the sidebar and the door checks, so a screen cannot appear in
  * navigation that its own endpoint would refuse. Each contract section adds its
- * entries here as it ships — nothing is listed before it works.
+ * entries here as it ships, nothing is listed before it works.
  */
 export const NAV: NavGroup[] = [
   {
@@ -107,7 +107,7 @@ export function navFor(permissions: string[], role: string): NavGroup[] {
 
 /**
  * Screens a seat arrives at from inside a row rather than from the drawer. They
- * stay out of the sidebar — it is a list of desks, not a list of every page —
+ * stay out of the sidebar, it is a list of desks, not a list of every page ,
  * but they still need the two words above them and the door that opens them.
  */
 const OFF_DRAWER = [
@@ -139,7 +139,7 @@ export function requires(pathname: string): string | null {
 
 /**
  * Which drawer row a screen belongs to. A user's page is still inside the directory,
- * so the drawer keeps that row lit — and whatever is waiting in that queue stays
+ * so the drawer keeps that row lit, and whatever is waiting in that queue stays
  * counted against the same row.
  */
 export function drawerFor(pathname: string): string {
@@ -156,8 +156,8 @@ export function drawerFor(pathname: string): string {
  * Whether this seat may open a route an alert points at. The dashboard links an
  * alert to the screen that clears it, and two different things make a screen
  * unreachable: it may not have shipped yet, or it may have shipped and be a door
- * this seat was never given. Both read the same way to the person looking — a name
- * instead of a link — because a link that lands on a 404 or on "not on your seat"
+ * this seat was never given. Both read the same way to the person looking, a name
+ * instead of a link, because a link that lands on a 404 or on "not on your seat"
  * sends a moderator to knock on a door instead of telling them who holds the key.
  */
 export function shipped(href: string, permissions: string[] = [], role = ''): boolean {

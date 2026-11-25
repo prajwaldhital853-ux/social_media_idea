@@ -9,7 +9,7 @@ interface Ask {
   /** The words on the button that goes ahead. */
   confirmLabel?: string;
   tone?: 'primary' | 'danger' | 'amber';
-  /** For a control that already moved — a select, a toggle — this puts it back. */
+  /** For a control that already moved, a select, a toggle, this puts it back. */
   onNo?: () => void;
 }
 
@@ -20,7 +20,7 @@ const ConfirmContext = createContext<Asker>(async () => true);
 /**
  * Nothing in this console takes effect on the click that asks for it. A seat
  * signs a warning, a bar or a refund onto a real account, and the person on the
- * other side never sees the button — so the last click always gets a sentence
+ * other side never sees the button, so the last click always gets a sentence
  * describing what it does, and a chance to stop.
  */
 export function ConfirmProvider({ children }: { children: ReactNode }) {

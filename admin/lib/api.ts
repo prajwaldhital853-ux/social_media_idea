@@ -16,7 +16,7 @@ export class ApiError extends Error {
 /**
  * The double-submit token the API's security middleware expects on writes.
  *
- * `exposing_csrf` is deliberately readable — it is not a credential, only a
+ * `exposing_csrf` is deliberately readable, it is not a credential, only a
  * proof that this page and the cookie came from the same origin. Sending it on
  * every write, whether or not a session exists yet, is what lets a staff member
  * who is already browsing the site sign in to the console without a 403.
@@ -45,7 +45,7 @@ export async function api<T>(
 }
 
 /**
- * Multipart writes — the payment QR is an image, and a JSON body cannot carry one.
+ * Multipart writes, the payment QR is an image, and a JSON body cannot carry one.
  * The browser sets the content type itself, so only the CSRF proof is added.
  */
 export async function upload<T>(path: string, form: FormData): Promise<T> {
@@ -133,7 +133,7 @@ async function send<T>(path: string, init: RequestInit): Promise<T> {
   if (!response.ok) {
     const detail = String(data.detail || `The request failed (${response.status}).`);
     // A 500 says nothing anybody can act on, but the API stamps the same id into
-    // its own log line — quoting it turns a screenshot into one search.
+    // its own log line, quoting it turns a screenshot into one search.
     const rid = String(data.request_id || '');
     throw new ApiError(
       response.status >= 500 && rid ? `${detail} (id ${rid})` : detail,

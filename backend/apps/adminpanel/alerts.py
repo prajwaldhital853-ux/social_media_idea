@@ -3,12 +3,12 @@
 `scan()` reads live state and upserts one row per condition, keyed so a problem
 that lasts an hour stays one alert with `occurrences` climbing instead of pushing
 sixty copies into the feed. Anything that cannot be seen from the tables the site
-writes is not an alert here — a warning nobody can act on is noise, and the
+writes is not an alert here, a warning nobody can act on is noise, and the
 thresholds live in `settings_store` so 6.9 can move them without a deploy.
 
 The ten conditions the contract names split three ways. Most are counted straight
-out of the site's own tables — a report spike, a signup wave, a coin rush, locked
-accounts, an ageing queue. Two are measured from the running server — the database
+out of the site's own tables, a report spike, a signup wave, a coin rush, locked
+accounts, an ageing queue. Two are measured from the running server, the database
 and the volume the uploads sit on. The rest come from outside this codebase
 altogether, and those report in through `AdminPulse`: an uptime probe, a backup job,
 an error collector, a transcoder. A pulse that has never been heard of is its own
@@ -56,7 +56,7 @@ PULSES = {
                   'the database holds right now.',
     },
     'errors': {
-        # Silence from an error collector is not an alert — a day with no bugs is
+        # Silence from an error collector is not an alert, a day with no bugs is
         # exactly as quiet as a deploy that stopped shipping them. The number it
         # carries is the signal, so this pulse is read, not timed.
         'label': 'App errors',
@@ -272,7 +272,7 @@ def _storage(media, limit_gb, now):
 def _server(now):
     """The two limits a box runs out of that no table records: the volume and the database.
 
-    Both are measured live and both answer `None` when the server will not say — a
+    Both are measured live and both answer `None` when the server will not say, a
     container without a quota, a database engine this helper does not know. An
     unknown is not a zero, and an alert on an unknown is a warning nobody can act on.
     """
@@ -330,7 +330,7 @@ def _db_size_mb():
 
 def _health(cutoffs, media, now):
     """A part of the platform that is not answering at all, from the same checks
-    the dashboard's health strip runs. `slow` and `degraded` are not alerts —
+    the dashboard's health strip runs. `slow` and `degraded` are not alerts ,
     nobody can fix a slow database by clicking something here.
     """
     checks = stats.health(cutoffs, media=media)['checks']
@@ -399,7 +399,7 @@ def _login_attack(limit, now):
     """Member accounts locked out of sign-in at the same moment.
 
     The staff version of this is `staff_lockouts`; a member lockout is a different
-    trouble — it is somebody's account, and a fleet trying passwords across many
+    trouble, it is somebody's account, and a fleet trying passwords across many
     accounts shows up as many locks at once rather than five guesses on one.
     """
     locked = User.objects.filter(locked_until__gt=now)
@@ -558,7 +558,7 @@ def line(item):
 
 # What a warning list leads with: a trouble that is still true, and the worst of
 # those first. Both `status` and `severity` are text, so the order a seat reads them
-# in has to be said here — by the alphabet `acked` sorts ahead of `open` and `info`
+# in has to be said here, by the alphabet `acked` sorts ahead of `open` and `info`
 # ahead of `critical`, which is the opposite of a queue.
 OPEN_FIRST = Case(
     When(status=AdminAlert.Status.OPEN, then=Value(0)),
@@ -614,7 +614,7 @@ def history(status='', kind='', severity='', limit=100):
 
 
 def kinds():
-    """What has ever fired, by condition — the filter list for the history screen."""
+    """What has ever fired, by condition, the filter list for the history screen."""
     return [
         {'kind': item['kind'], 'n': item['n'],
          'active': item['active'], 'resolved': item['resolved']}
@@ -641,7 +641,7 @@ def pulses():
 
     A screen that only lists alerts shows a wire nobody connected as nothing at all.
     Listing the wire itself is what makes "the backup job has never reported here"
-    something a seat can act on — with the exact command that would start it.
+    something a seat can act on, with the exact command that would start it.
     """
     out = []
     for key, spec in PULSES.items():
@@ -671,7 +671,7 @@ def scan_now(actor, media=None):
     """Re-run every check because a person clicked, and put that on the record.
 
     The scan writes rows, so a seat who pressed the button is the reason the
-    history changed — which is the kind of thing an audit log is for, even when the
+    history changed, which is the kind of thing an audit log is for, even when the
     only thing it proves is that nobody ignored a warning on purpose.
     """
     raised = scan(media=media)
@@ -747,7 +747,7 @@ def write_thresholds(actor, posted):
     if bad:
         return 400, {'errors': bad, 'detail': ' '.join(bad)}
     if not updates:
-        return 400, {'detail': 'Nothing to save — no threshold has been moved.'}
+        return 400, {'detail': 'Nothing to save, no threshold has been moved.'}
     settings_store.write(actor, updates)
     labels = [cached[key]['label'] for key in updates]
     record(actor, 'alert_thresholds', 'alert thresholds',
@@ -755,7 +755,7 @@ def write_thresholds(actor, posted):
     return 200, {
         'detail': 'Saved ' + ', '.join(label.lower() for label in labels)
                   + '. The next scan reads them, and a dial moved high enough closes whatever '
-                  'it no longer believes — that is on the record, not a disappearance.',
+                  'it no longer believes, that is on the record, not a disappearance.',
         'changed': list(updates),
     }
 

@@ -1,4 +1,4 @@
-"""RFC 6238 TOTP — the algorithm Google Authenticator, Authy and 1Password speak.
+"""RFC 6238 TOTP, the algorithm Google Authenticator, Authy and 1Password speak.
 
 Handed the two-factor requirement for staff logins without adding a package to a
 requirements.txt that three other agents are editing. RFC 6238 is HMAC-SHA1 over a
@@ -23,7 +23,7 @@ _ALPHA = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567'
 
 
 def new_secret():
-    """160-bit base32 secret, unpadded — the same shape pyotp hands out."""
+    """160-bit base32 secret, unpadded, the same shape pyotp hands out."""
     return base64.b32encode(secrets.token_bytes(20)).decode().rstrip('=')
 
 
@@ -64,7 +64,7 @@ def verify(secret, code, at=None, digits=DIGITS, period=PERIOD, window=WINDOW):
     step = seconds // period
     for offset in range(-window, window + 1):
         # HOTP's counter is an unsigned 64-bit integer, so the step before the
-        # epoch does not exist — only a test clock at 00:00:00 can reach it.
+        # epoch does not exist, only a test clock at 00:00:00 can reach it.
         if step + offset < 0:
             continue
         # Authenticator apps show 6; the RFC vectors are 8. Accept either width so

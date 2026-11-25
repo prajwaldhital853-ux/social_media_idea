@@ -88,7 +88,7 @@ export default function OverviewPage() {
             <header className="panel-head">
               <div>
                 <h2>Promotion performance</h2>
-                <p>What each campaign achieved inside the window it ran — not its lifetime total.</p>
+                <p>What each campaign achieved inside the window it ran, not its lifetime total.</p>
               </div>
               {campaigns && <span className="panel-count">{campaigns.total} campaigns</span>}
             </header>
@@ -124,7 +124,7 @@ const HEALTH_HEADLINE: Record<string, string> = {
   ok: 'All systems answering',
   slow: 'The database is answering slowly',
   degraded: 'Some safeguards are partial',
-  off: 'Safeguards switched off — this is not a live box',
+  off: 'Safeguards switched off, this is not a live box',
   unknown: 'Part of the platform cannot be measured',
   down: 'Something is not answering',
 };
@@ -246,7 +246,7 @@ function PromoBody({ tile }: { tile: Tile }) {
       <p className="tile-foot">
         <span>Views <b>{num(views)}</b></span>
         <span>Opens <b>{num(opens)}</b></span>
-        <span>Open rate <b>{views ? percent(Math.round(opens * 1000 / views) / 10) : '—'}</b></span>
+        <span>Open rate <b>{views ? percent(Math.round(opens * 1000 / views) / 10) : '-'}</b></span>
       </p>
     </>
   );
@@ -257,7 +257,7 @@ function StorageBody({ tile, threshold }: { tile: Tile; threshold?: Threshold })
   const peak = Math.max(1, ...kinds.map(([, count]) => count));
   return (
     <>
-      <b className="tile-number">{tile.state === 'unknown' ? '—' : humanBytes(tile.bytes)}</b>
+      <b className="tile-number">{tile.state === 'unknown' ? '-' : humanBytes(tile.bytes)}</b>
       <span className="tile-unit">{tile.state === 'unknown' ? 'no disk on this server' : `${num(tile.files)} uploaded files`}</span>
       {kinds.length > 0 && (
         <ul className="bars">
@@ -353,7 +353,7 @@ function AlertFeed({ alerts }: { alerts: Overview['alerts'] }) {
           </ul>
           {alerts.total > PAGE && (
             <div className="panel-more" data-alert-more>
-              <span>{rows.length} of {alerts.total} shown{more ? '' : ' — that is all of them'}</span>
+              <span>{rows.length} of {alerts.total} shown{more ? '' : ', that is all of them'}</span>
               {more && (
                 <button type="button" className="btn ghost tiny" disabled={busy} onClick={loadMore}>
                   <span>{busy ? 'Reading…' : 'Load more'}</span>
@@ -457,7 +457,7 @@ function Campaigns({ campaigns }: { campaigns: PromotionAnalytics | null }) {
                   <td key={metric.id} data-metric={metric.id} data-label={metric.label}
                       className={campaigns.unmeasured[metric.id] ? 'is-dim' : ''}>
                     {campaigns.unmeasured[metric.id]
-                      ? <span title={campaigns.unmeasured[metric.id]}>—</span>
+                      ? <span title={campaigns.unmeasured[metric.id]}>,</span>
                       : num(row.metrics[metric.id])}
                   </td>
                 ))}
@@ -470,17 +470,17 @@ function Campaigns({ campaigns }: { campaigns: PromotionAnalytics | null }) {
               <th scope="row">These {rows.length} together</th>
               {columns.map(metric => (
                 <td key={metric.id} data-label={metric.label} className={campaigns.unmeasured[metric.id] ? 'is-dim' : ''}>
-                  {campaigns.unmeasured[metric.id] ? '—' : num(sum(metric.id))}
+                  {campaigns.unmeasured[metric.id] ? '-' : num(sum(metric.id))}
                 </td>
               ))}
-              <td data-label="Open rate">—</td>
+              <td data-label="Open rate">,</td>
             </tr>
           </tfoot>
         </table>
       </div>
       {campaigns.total > PAGE && (
         <div className="panel-more" data-campaign-more>
-          <span>{rows.length} of {campaigns.total} campaigns shown{more ? '' : ' — that is all of them'}</span>
+          <span>{rows.length} of {campaigns.total} campaigns shown{more ? '' : ', that is all of them'}</span>
           {more && (
             <button type="button" className="btn ghost tiny" disabled={busy} onClick={loadMore}>
               <span>{busy ? 'Scoring…' : 'Load more'}</span>

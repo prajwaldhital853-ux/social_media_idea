@@ -1,7 +1,7 @@
 """Contract 6.6: the wording on the first-load card, and who is allowed to change it.
 
 Two things the tests have to hold at once: the card is readable by somebody who
-does not have an account, and it is only ever written from the desk — so the open
+does not have an account, and it is only ever written from the desk, so the open
 door is checked for what it leaks as well as for what it shows, and the desk is
 checked for the fallback that lets a blank box still be a sentence.
 """

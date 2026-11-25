@@ -11,11 +11,11 @@ import { useSession } from '@/lib/session';
 import { AuditLine, ExportFile, ExportIndex } from '@/lib/types';
 
 /**
- * Contract 6.9 — the five files a seat hands to an accountant.
+ * Contract 6.9, the five files a seat hands to an accountant.
  *
  * Users, Reports, Coin Requests, Coin Ledger, Promotions. The screen answers two
- * questions in that order: *what would this file contain* — the row count under the
- * window, the column names, the cap — and then *give it to me*. A CSV you cannot
+ * questions in that order: *what would this file contain*, the row count under the
+ * window, the column names, the cap, and then *give it to me*. A CSV you cannot
  * inspect before downloading is a CSV you end up apologising for.
  *
  * Every build writes its own audit row, so the bottom of the screen is the record of
@@ -75,7 +75,7 @@ export default function ExportsScreen() {
       setSaved(all => ({ ...all, [file.id]: out }));
       setBanner({
         kind: 'ok',
-        text: `${out.filename} — ${num(out.rows)} row(s). The build is in the audit log with your name on it.`,
+        text: `${out.filename}, ${num(out.rows)} row(s). The build is in the audit log with your name on it.`,
       });
       await load();
     } catch (err) {
@@ -90,7 +90,7 @@ export default function ExportsScreen() {
   return (
     <ConsoleShell
       title="CSV exports"
-      subtitle="Members, reports, coin requests, the coin ledger and paid campaigns — the five tables an accountant, a lawyer or an auditor asks for, built from the same rows the screens read, and logged as a staff action the moment one is taken."
+      subtitle="Members, reports, coin requests, the coin ledger and paid campaigns, the five tables an accountant, a lawyer or an auditor asks for, built from the same rows the screens read, and logged as a staff action the moment one is taken."
       actions={(
         <button type="button" className={`btn ghost${busy === 'read' ? ' spinning' : ''}`} onClick={() => load()} title="Count the rows again">
           {IC.refresh}<span>Re-count</span>
@@ -127,7 +127,7 @@ export default function ExportsScreen() {
             <span>
               {index.window.since || index.window.until
                 ? <>Window: <b>{index.window.since || 'the beginning'}</b> to <b>{index.window.until || 'right now'}</b></>
-                : 'No window typed — every file would hold every row the table has'}
+                : 'No window typed, every file would hold every row the table has'}
             </span>
             <span className="dot"/>
             <span>a file is cut at <b>{num(index.cap)}</b> rows and says so rather than handing over half a table</span>
@@ -240,8 +240,8 @@ function Entry({ file, busy, saved, onDownload }: {
                 <h3>Who is asked to trust it</h3>
                 {saved ? (
                   <p className="coin-by" data-saved={file.id}>
-                    <b>{saved.filename}</b> — {num(saved.rows)} rows, {num(Math.round(saved.bytes / 1024))} KB
-                    {saved.truncated ? ' — cut at the cap, narrow the dates for the rest' : ''}
+                    <b>{saved.filename}</b>, {num(saved.rows)} rows, {num(Math.round(saved.bytes / 1024))} KB
+                    {saved.truncated ? ', cut at the cap, narrow the dates for the rest' : ''}
                     <em className="coin-way">{saved.head}</em>
                   </p>
                 ) : (

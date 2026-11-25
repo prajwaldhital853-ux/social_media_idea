@@ -13,7 +13,7 @@ import { useSession } from '@/lib/session';
 import { LedgerPage, LedgerRow } from '@/lib/types';
 
 /**
- * Contract 6.7 — the ledger. Every wallet has a `balance` column, but this screen
+ * Contract 6.7, the ledger. Every wallet has a `balance` column, but this screen
  * reads the rows behind it, because a balance is an opinion and a ledger is a
  * record. Nothing here edits or removes a row: the only thing a seat can do is add
  * one, and an added row has to say why in words that stay with it forever.
@@ -89,7 +89,7 @@ export default function LedgerScreen() {
   return (
     <ConsoleShell
       title="Coin ledger"
-      subtitle="Every movement of coins that ever happened, in the wallet’s own append-only table — with one door that adds a row and no door that changes one."
+      subtitle="Every movement of coins that ever happened, in the wallet’s own append-only table, with one door that adds a row and no door that changes one."
       actions={(
         <>
           <button
@@ -145,7 +145,7 @@ export default function LedgerScreen() {
           <span className="dot"/>
           <b>{num(Number(page.totals.debited))}</b> out
           <span className="dot"/>
-          <span>{num(page.totals.entries)} rows written since the table began — none of them editable</span>
+          <span>{num(page.totals.entries)} rows written since the table began, none of them editable</span>
         </p>
       )}
 
@@ -264,7 +264,7 @@ function Adjust({ onWritten, noteGate }: {
           <h2>A row written by hand</h2>
           <p>
             For the payment the bank confirms after the request was closed, the duplicate that has
-            to come back out, the goodwill credit. This does not change a balance — it adds a row,
+            to come back out, the goodwill credit. This does not change a balance, it adds a row,
             and the wallet’s number is the sum of the rows.
           </p>
         </div>
@@ -303,7 +303,7 @@ function Adjust({ onWritten, noteGate }: {
       </div>
 
       <label className="field">
-        <span>Why — it is printed on the row and stays there forever</span>
+        <span>Why, it is printed on the row and stays there forever</span>
         <textarea
           rows={2} name="reason" maxLength={180} value={reason} autoFocus
           placeholder="e.g. the bank confirmed a second payment for request #41"

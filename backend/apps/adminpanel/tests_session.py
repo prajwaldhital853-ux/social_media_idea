@@ -31,7 +31,7 @@ def carry(client, response):
     """Keep what the response set: the test client hands back cookies, not state.
 
     The double-submit header is refreshed here too, because the admin login and
-    verify routes are not in `apps.common.security.CSRF_EXEMPT_PATHS` — that file
+    verify routes are not in `apps.common.security.CSRF_EXEMPT_PATHS`, that file
     belongs to the main site, and once a jar holds `exposing_access` the middleware
     expects the header on every write. The dashboard sends it the same way.
     """
@@ -73,7 +73,7 @@ class TotpVectorTests(TestCase):
     SECRET = 'GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ'  # base32 of b'12345678901234567890'
 
     def test_rfc6238_vectors(self):
-        # Appendix B of RFC 6238, HMAC-SHA1 column — checked against the published
+        # Appendix B of RFC 6238, HMAC-SHA1 column, checked against the published
         # table rather than whatever this implementation happens to return.
         for seconds, expected in [(59, '94287082'), (1111111109, '07081804'),
                                   (1234567890, '89005924'), (2000000000, '69279037'),
@@ -237,7 +237,7 @@ class AdminSignInTests(TestCase):
     def test_the_second_factor_does_not_lock_staff_out_of_the_main_site(self):
         # Clause 4.4 restricts the admin area. Staff are still members, and the
         # platform's own suites sign in as the demo staff account through /api/auth/.
-        # That door takes an email and nothing else — a handle is public, so the
+        # That door takes an email and nothing else, a handle is public, so the
         # console's own sign-in is the only place a username still opens a session.
         self.owner.profile.two_step = False
         self.owner.profile.save(update_fields=['two_step'])

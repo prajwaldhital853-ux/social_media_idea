@@ -50,7 +50,7 @@ def decrypt_secret(token):
         return _fernet().decrypt(token.encode()).decode()
     except InvalidToken:
         # A rotated SECRET_KEY leaves stored secrets unreadable. Say so through the
-        # normal path — re-enrolment — instead of 500-ing every admin request.
+        # normal path, re-enrolment, instead of 500-ing every admin request.
         return ''
 
 

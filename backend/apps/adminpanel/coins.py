@@ -1,4 +1,4 @@
-"""Contract 6.7: rupees in, coins out — the desk a person at the platform's bank
+"""Contract 6.7: rupees in, coins out, the desk a person at the platform's bank
 counter is judged at.
 
 Three things are deliberately kept apart here. The *pricing* is what a visitor is
@@ -8,7 +8,7 @@ private: it is not handed to the console as a URL in the list but as a short-liv
 signed link, so a proof does not sit readable in a browser history, a server log
 or anyone who saved the page. The *ledger* is the wallet's own append-only history;
 a manual adjustment writes a new row and never edits an old one, which is why the
-reason is mandatory — the row says what happened, and only the reason says why.
+reason is mandatory, the row says what happened, and only the reason says why.
 
 Nothing in here re-implements the wallet. `wallet.apply()` is the only writer of a
 balance, so a coin approval moves money exactly the way a promotion purchase does.
@@ -55,7 +55,7 @@ TEXT_KEYS = ('coin_bank_name', 'coin_bank_account', 'coin_bank_holder', 'coin_qr
 
 
 def pricing():
-    """What a coin costs and where the rupees go — the open answer, no login needed."""
+    """What a coin costs and where the rupees go, the open answer, no login needed."""
     values = settings_store.values()
     return {
         'coin_price': _rupees(values['coin_price']),
@@ -82,7 +82,7 @@ def latest(request_pk):
 
 
 def row(req, review):
-    """One queue row: the payer, the money, and a link to the proof — never the proof.
+    """One queue row: the payer, the money, and a link to the proof, never the proof.
 
     The caller reads the last decision: the queue takes one grouped query for the
     whole page, so a row must not be able to ask for its own.
@@ -123,7 +123,7 @@ def row(req, review):
 
 
 def asks(request_pk):
-    """Every proof request on one purchase, oldest first — the paper behind a delay."""
+    """Every proof request on one purchase, oldest first, the paper behind a delay."""
     return [
         {
             'action': item.action, 'reason': item.reason,
@@ -147,7 +147,7 @@ def decide(req, actor, action, reason=''):
     if req.status != CoinRequest.Status.PENDING:
         return 409, {'detail': f'That request was already {req.status}. Nothing here changed it again.'}
     if action != 'approve' and not reason:
-        missing = ('Say why the money is not being credited — the person is told this sentence.'
+        missing = ('Say why the money is not being credited, the person is told this sentence.'
                    if action == 'reject' else 'Write what more you need from them.')
         return 400, {'detail': missing}
 
@@ -178,7 +178,7 @@ def decide(req, actor, action, reason=''):
     notify(req.user, actor, 'coins', say[:240],
            'coin_proof' if action == 'proof' else 'wallet', req.pk)
     record(actor, f'coins_{action}', f'coin_request:{req.pk}',
-           f'{req.coins} coins / NPR {req.amount} — ' + (reason or 'approved, wallet credited'))
+           f'{req.coins} coins / NPR {req.amount}, ' + (reason or 'approved, wallet credited'))
     if action in ('approve', 'reject', 'proof'):
         queue_coin_decision_email(
             req.user, action=action, coins=req.coins, amount=req.amount,
@@ -284,7 +284,7 @@ def entry_row(entry):
 
     Deliberately not a running balance: the row's own figures are the record, and a
     column that subtracted its way back through the table would print a negative
-    balance for any wallet whose number was set outside `apply()` — which is what
+    balance for any wallet whose number was set outside `apply()`, which is what
     every seeded demo account is. The screen says “Wallet now” because that is
     exactly what the number is.
     """
@@ -328,7 +328,7 @@ def adjust(actor, username, direction, amount, reason):
     # wallet's present balance is the one worth printing beside it.
     entry.wallet = wallet
     record(actor, 'coin_adjust', f'user:{username}',
-           f'{direction} {money} coins — {reason}')
+           f'{direction} {money} coins, {reason}')
     word = 'Credited' if direction == Transaction.Kind.CREDIT else 'Debited'
     return 200, {
         'detail': f'{word} {entry.amount} coins to @{username}. That is a new ledger row, not an edit: '
@@ -388,7 +388,7 @@ def write_pricing(actor, posted):
     stored = {row.key: (row.value or '') for row in AdminSetting.objects.filter(key__in=PRICING_KEYS)}
     moved = [key for key in updates if stored.get(key, '') != updates[key]]
     if not moved:
-        return 400, {'detail': 'Nothing to save — the desk already says exactly this.'}, []
+        return 400, {'detail': 'Nothing to save, the desk already says exactly this.'}, []
     settings_store.write(actor, {key: updates[key] for key in moved})
     labels = [cached[key]['label'] for key in moved]
     record(actor, 'coin_settings', 'coin pricing', 'Changed ' + ', '.join(labels) + '.')

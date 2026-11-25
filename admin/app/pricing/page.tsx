@@ -11,10 +11,10 @@ import { useSession } from '@/lib/session';
 import { CoinDesk, SettingLine } from '@/lib/types';
 
 /**
- * Contract 6.7 — the pricing desk. What a Coin costs, the smallest purchase, the
+ * Contract 6.7, the pricing desk. What a Coin costs, the smallest purchase, the
  * bank account the rupees go to, the QR a payer scans, and how long a stranger's
  * payment screenshot is kept. All of it is a row in the database, so a price
- * change is a click here and not a deploy — which is also why the screen shows the
+ * change is a click here and not a deploy, which is also why the screen shows the
  * open door's answer beside the boxes, so what you saved is what a payer is told.
  */
 
@@ -107,7 +107,7 @@ export default function PricingScreen() {
   return (
     <ConsoleShell
       title="Coin pricing"
-      subtitle="What a Coin costs, the floor under a purchase, where the rupees land, and how long a payment screenshot is kept — every one of them a number or a sentence, none of them in the code."
+      subtitle="What a Coin costs, the floor under a purchase, where the rupees land, and how long a payment screenshot is kept, every one of them a number or a sentence, none of them in the code."
       actions={(
         <button type="button" className={`btn ghost${busy ? ' spinning' : ''}`} onClick={() => { load(); setDraft({}); pick(null); }} title="Reload the desk">
           {IC.refresh}<span>Refresh</span>
@@ -128,7 +128,7 @@ export default function PricingScreen() {
                 <h2>The numbers and the bank</h2>
                 <p>
                   A price of zero is refused, because that is not a price. Everything written here is
-                  read by the site on the next quote — no restart, no deploy — and each save names the
+                  read by the site on the next quote, no restart, no deploy, and each save names the
                   seat that turned the knob.
                 </p>
               </div>
@@ -146,8 +146,8 @@ export default function PricingScreen() {
                   />
                   <em className="desk-who">
                     {item.set
-                      ? <>written by <b>{item.by}</b> {ago(item.at || '')} — {item.help}</>
-                      : <>the contract’s own number, still untouched — {item.help}</>}
+                      ? <>written by <b>{item.by}</b> {ago(item.at || '')}, {item.help}</>
+                      : <>the contract’s own number, still untouched, {item.help}</>}
                   </em>
                 </label>
               ))}
@@ -174,7 +174,7 @@ export default function PricingScreen() {
               <div>
                 <h2>What a payer is told</h2>
                 <p>
-                  This is the answer <b>GET /api/coins/pricing/</b> gives with nobody signed in — the
+                  This is the answer <b>GET /api/coins/pricing/</b> gives with nobody signed in, the
                   card a person reads before they send money to the account below it.
                 </p>
               </div>
@@ -215,7 +215,7 @@ export default function PricingScreen() {
                 </p>
               </div>
             ) : (
-              <p className="empty-note">{IC.x}<span>No payment QR yet — payers are shown the account number to type.</span></p>
+              <p className="empty-note">{IC.x}<span>No payment QR yet, payers are shown the account number to type.</span></p>
             )}
 
             <div className="qr-pick">
@@ -236,7 +236,7 @@ export default function PricingScreen() {
               <span>
                 A QR is an account number drawn as a picture, so whoever can swap it can redirect the
                 platform’s income. The swap is written to the audit log, and anyone who was already
-                shown the old picture keeps it — a bank change is worth telling people about.
+                shown the old picture keeps it, a bank change is worth telling people about.
               </span>
             </p>
 
@@ -245,7 +245,7 @@ export default function PricingScreen() {
               <span>
                 {desk.counts.held} purchase{desk.counts.held === 1 ? '' : 's'} are waiting on a person in
                 the queue right now. Payment screenshots are deleted <b>{desk.pricing.proof_days}</b> days
-                after a request is decided — and a request nobody ever decided goes on the same clock
+                after a request is decided, and a request nobody ever decided goes on the same clock
                 from the day it was uploaded.
               </span>
             </p>

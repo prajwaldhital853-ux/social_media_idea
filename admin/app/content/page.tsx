@@ -50,7 +50,7 @@ export default function ContentPage() {
   const { can, status, noteGate } = useSession();
   /*
    * Which kind the shelf opens on is decided by the seat, and the seat is only
-   * known once the session answers — so nothing is fetched before then, and a
+   * known once the session answers, so nothing is fetched before then, and a
    * seat that reviews listings is not walked to a posts list it cannot read.
    */
   const [picked, setPicked] = useState<ContentKind | null>(null);
@@ -230,7 +230,7 @@ export default function ContentPage() {
 /**
  * One shelf row. It says how the thing stands and who moved it; the thing itself,
  * the reports behind it and the five verbs live on the page the row opens, which
- * is the same page a report queue row opens — a seat should not have to remember
+ * is the same page a report queue row opens, a seat should not have to remember
  * which desk it came from to decide about one post.
  *
  * The warning is the one verb short enough to sign here: a seat who has found the
@@ -251,7 +251,7 @@ function ShelfCase({ row, onWarn }: { row: ShelfRow; onWarn: (text: string, bad?
   ].filter(Boolean) as string[];
   const line = row.content
     ? [row.content.author ? `@${row.content.author.username}` : '', row.content.title || row.content.text || '']
-      .filter(Boolean).join(' — ')
+      .filter(Boolean).join(', ')
     : '';
   const href = `/review/${row.target.replace(':', '/')}`;
   const [kind, , targetId] = row.target.split(':');
@@ -263,7 +263,7 @@ function ShelfCase({ row, onWarn }: { row: ShelfRow; onWarn: (text: string, bad?
     const sure = await confirm({
       title: privateNote ? `Put a notice only they can read on ${row.target}?` : `Put a public warning on ${row.target}?`,
       body: privateNote
-        ? 'The content stays up and the sentence shows above it to the person who wrote it — and to '
+        ? 'The content stays up and the sentence shows above it to the person who wrote it, and to '
           + 'nobody else. They are told in their own bell, and the audit row keeps your name with it.'
         : 'The content stays up and everyone who reaches it reads your sentence above it. '
           + 'The author also gets a private warning, and the audit row keeps your name with it.',
@@ -304,7 +304,7 @@ function ShelfCase({ row, onWarn }: { row: ShelfRow; onWarn: (text: string, bad?
         <td data-label="Standing">{statePill(row.content.state, row.content.kind)}</td>
         <td data-label="Why it is here"><div className="case-why">
           {chips.length === 0
-            ? <span className="dim">—</span>
+            ? <span className="dim">,</span>
             : chips.map(entry => <span key={entry} className="chip">{entry}</span>)}
         </div></td>
         <td data-label="Decided" className="dim">
@@ -352,7 +352,7 @@ function ShelfCase({ row, onWarn }: { row: ShelfRow; onWarn: (text: string, bad?
                 </label>
               </div>
               <label className="field grow">
-                <span>Why — kept on the record with your name (optional)</span>
+                <span>Why, kept on the record with your name (optional)</span>
                 <input
                   value={reason} maxLength={120} placeholder="What about it broke the rules"
                   onChange={event => setReason(event.target.value)}

@@ -1,7 +1,7 @@
 """The two lists a moderator decides against: what may not be said, and what may not be sold.
 
 Enforcing these at write time belongs to the site's own post and listing views,
-which this console does not edit. What lives here is the vocabulary itself — read
+which this console does not edit. What lives here is the vocabulary itself, read
 by the review queue, which marks the reported text with whatever on this list it
 contains, so the decision is made against the platform's stated rules rather than
 against whatever the moderator happens to remember.

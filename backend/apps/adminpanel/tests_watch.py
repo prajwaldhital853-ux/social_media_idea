@@ -2,12 +2,12 @@
 
 The desk is the part of the console that has to be believed rather than trusted, so
 the tests are about three things a Client would check out loud. That every condition
-the contract names is actually measured from a table the platform writes — a
+the contract names is actually measured from a table the platform writes, a
 threshold with no check behind it is a knob that does nothing. That a trouble lasting
 an hour stays *one* alert with `occurrences` climbing, and disappears the moment it
 stops being true, because a feed full of duplicates and stale rows is a feed people
-stop reading. And that the four conditions nothing here can see — uptime, backups,
-app errors, the transcoder — say so plainly, with the command that would start
+stop reading. And that the four conditions nothing here can see, uptime, backups,
+app errors, the transcoder, say so plainly, with the command that would start
 reporting, instead of showing a green row that means nobody is watching.
 
 The `adminpulse` command is tested with it because the wire and the reading of the
@@ -182,7 +182,7 @@ class ScanTests(AlertTestCase):
         self.assertEqual(row.context['reasons'][0]['reason'], 'spam')
 
     def test_a_coin_hour_is_a_problem_in_both_directions(self):
-        """Many small requests, or few enormous ones — the same alert, a different sentence."""
+        """Many small requests, or few enormous ones, the same alert, a different sentence."""
         self.dial('alert_coin_coins_hour', 100)
         for coins in (60, 70):
             request = CoinRequest.objects.create(user=self.author, coins=coins, amount=coins * 10,
@@ -386,7 +386,7 @@ class ThresholdDoorTests(AlertTestCase):
 
         alerts.scan(media=MEDIA_DISK)
         self.assertEqual(AdminAlert.objects.get(kind='report_pile').status, AdminAlert.Status.RESOLVED,
-                         'a dial moved high enough closes what it no longer believes — on the record')
+                         'a dial moved high enough closes what it no longer believes, on the record')
 
     def test_returning_a_dial_to_blank_puts_the_shipped_default_back(self):
         self.desk.post(THRESHOLDS_URL, {'alert_report_pile': '7'}, format='json')

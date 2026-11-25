@@ -1,4 +1,4 @@
-/* Exposing admin console — its own stylesheet, its own deploy.
+/* Exposing admin console, its own stylesheet, its own deploy.
    The palette matches the platform (brand #B63740, ink #101114) so a staff
    member moving between the site and the console is not re-learning a UI. */
 
@@ -442,7 +442,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, .btn:focus-vi
 }
 
 /* One flat panel, logo at the top, one useful sentence at the bottom, and
-   nothing in between — the sign-in form is the thing a staff member reads. */
+   nothing in between, the sign-in form is the thing a staff member reads. */
 .login-brand {
   display: flex;
   flex-direction: column;
@@ -749,7 +749,7 @@ button.link:disabled:hover { color: var(--muted); text-decoration: none; }
 .banner-bad { color: #8a090b; background: var(--red-tint); border-color: rgba(228, 1, 4, 0.22); }
 
 /* An action that worked is announced once, quietly, in the same small dark pill
-   the platform uses — it must not push the list down or stay on the screen. */
+   the platform uses, it must not push the list down or stay on the screen. */
 .toast {
   position: fixed;
   left: 50%;
@@ -963,7 +963,7 @@ button.link:disabled:hover { color: var(--muted); text-decoration: none; }
    The desk you sign from is as tall as it needs to be and never scrolls on its
    own. It used to be a sticky box capped at the viewport with its own two
    scrollbars: the Delete button hid behind a drag, and one long `<option>`
-   ("Public — everyone who opens their profile") is wider than the 320px column,
+   ("Public, everyone who opens their profile") is wider than the 320px column,
    so a second bar appeared under every reason box. */
 .record {
   display: grid;
@@ -1213,7 +1213,7 @@ button.key:hover { border-color: #c3c9d1; color: var(--ink); background: #F7F8FA
 /* Both dashboard panels show seven rows with the page and cap the trail there:
    a long history scrolls inside its own panel instead of pushing the next
    section off the screen. The heights are seven rows of each panel's own line
-   rhythm, so they drift a little when a detail wraps — the scroll is the point,
+   rhythm, so they drift a little when a detail wraps, the scroll is the point,
    not an exact number of rows. */
 .alert-list.capped {
   max-height: 600px;
@@ -1252,7 +1252,7 @@ button.key:hover { border-color: #c3c9d1; color: var(--ink); background: #F7F8FA
 
 .table-scroll { overflow: visible; }
 
-/* Seven campaign rows, then the table scrolls with its header held — the rows
+/* Seven campaign rows, then the table scrolls with its header held, the rows
    differ in height, so the cap is in rem of the table's own line box. */
 .table-scroll.capped {
   max-height: 512px;
@@ -1358,7 +1358,7 @@ button.key:hover { border-color: #c3c9d1; color: var(--ink); background: #F7F8FA
 
 .btn.amber:hover:not(:disabled) { background: #ffc06b; border-color: #f0912b; }
 
-/* a reported thing, or a thing on the shelf — the same card either way */
+/* a reported thing, or a thing on the shelf, the same card either way */
 
 .cwrap {
   border: 1px solid var(--line);
@@ -2000,7 +2000,7 @@ button.key:hover { border-color: #c3c9d1; color: var(--ink); background: #F7F8FA
 /* ── the reach desk (6.8) ────────────────────────────────── */
 
 /* A campaign is bought money, so the row leads with the coins and the run, and
-   the sentence about who signed it off is the quiet last column — a seat reads
+   the sentence about who signed it off is the quiet last column, a seat reads
    "whose decision is this waiting on" before it reads anything else. */
 
 .promo-reach {
@@ -2041,7 +2041,7 @@ button.key:hover { border-color: #c3c9d1; color: var(--ink); background: #F7F8FA
 /* The shelf is edited as rows, not as a form: a package is a name, a price, a
    promise and a count of who already bought it, and all four move together.
    Every track is allowed to reach zero, because a track whose minimum is wider
-   than the column it sits in does not wrap — it paints its inputs across the
+   than the column it sits in does not wrap, it paints its inputs across the
    panel next door, and a click meant for Days lands on somebody else's box. */
 
 .pk-rows { display: flex; flex-direction: column; gap: 10px; }
@@ -2154,7 +2154,7 @@ button.key:hover { border-color: #c3c9d1; color: var(--ink); background: #F7F8FA
 
 .dates input { width: 116px; padding: 5px 8px; font-size: 12.2px; }
 
-/* A command a seat has to type somewhere else — kept monospaced and copyable. */
+/* A command a seat has to type somewhere else, kept monospaced and copyable. */
 .cmd {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 11.4px;
@@ -2216,7 +2216,7 @@ button.key:hover { border-color: #c3c9d1; color: var(--ink); background: #F7F8FA
 }
 
 /* A phone is where a moderator actually answers a flag, so the widest parts of
-   the sign-in flow — the QR, the ten codes, the two escape links — stack. */
+   the sign-in flow, the QR, the ten codes, the two escape links, stack. */
 @media (max-width: 560px) {
   .login-card { padding: 20px 16px; border-radius: 14px; }
   .step-head h2 { font-size: 17px; }
@@ -2476,7 +2476,7 @@ button.key:hover { border-color: #c3c9d1; color: var(--ink); background: #F7F8FA
 /* ── dark seat ──────────────────────────────────────────── */
 /* The same desk at night: grey-black surfaces, the brand red lifted so it still
    reads on black, and the payment QR and the proof photographs deliberately left on
-   white — those are somebody's screenshot, and dimming them makes them unreadable. */
+   white, those are somebody's screenshot, and dimming them makes them unreadable. */
 
 [data-theme='dark'] {
   --ink: #ECEEF1;

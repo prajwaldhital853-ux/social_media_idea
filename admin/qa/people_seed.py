@@ -10,7 +10,7 @@ nothing owed so the deletion goes through.
 Every row is a `qa_` account created here, is followers-only where it has content,
 and is labelled as a console sample in its own text, so the demo database a second
 agent is looking at keeps its shape. Running it again resets those six accounts to
-their starting state — including recreating the one the last run deleted — and
+their starting state, including recreating the one the last run deleted, and
 touches nothing else.
 
     backend/.venv/Scripts/python.exe admin/qa/people_seed.py
@@ -106,7 +106,7 @@ def main():
     # The pile is the one the report counter itself would call a flag: three
     # distinct reporters on one live post. Only reports carrying this file's own
     # label go first, so a re-run rebuilds exactly what it made and leaves the 6.3
-    # walkthrough's reports — and every real report — standing.
+    # walkthrough's reports, and every real report, standing.
     owned = User.objects.filter(username__in=OWNED)
     Report.objects.filter(details__startswith=MARK).delete()
     # A public notice points at content by id, so the one the last run wrote on a
@@ -116,26 +116,26 @@ def main():
     Post.objects.filter(author__in=owned).delete()
     piled = Post.objects.create(
         author=flagged, status=Post.Status.LIVE, audience=Post.Audience.FOLLOWERS,
-        text='console QA sample — three people reported this post and the counter flagged the account',
+        text='console QA sample, three people reported this post and the counter flagged the account',
     )
     for username, reason in zip(FLAGGERS, ('spam', 'spam', 'harassment')):
         Report.objects.create(
             reporter=User.objects.get(username=username), target_type='post',
             target_id=str(piled.pk), reason=reason,
-            details=f'{MARK} — filed by the user-directory walkthrough',
+            details=f'{MARK}, filed by the user-directory walkthrough',
         )
     Report.objects.create(
         reporter=User.objects.get(username=FLAGGERS[0]), target_type='user',
-        target_id=str(flagged.pk), reason='spam', details=f'{MARK} — on the account itself',
+        target_id=str(flagged.pk), reason='spam', details=f'{MARK}, on the account itself',
     )
     # The account the run deletes has to have something of its own to lose, so the
     # sentence the screen says about a deletion names real numbers rather than zeros.
     leaving = Post.objects.create(
         author=goner, status=Post.Status.LIVE, audience=Post.Audience.FOLLOWERS,
-        text='console QA sample — this post goes with the account that is deleted by the run',
+        text='console QA sample, this post goes with the account that is deleted by the run',
     )
     Comment.objects.create(post=leaving, author=goner,
-                           text='console QA sample — and so does this comment of theirs')
+                           text='console QA sample, and so does this comment of theirs')
     # A lockout the "clear spam flags" verb is expected to undo, and the one account
     # that turned warning emails off, so the muted path is walkable too. The window
     # is hours wide, not minutes: the walkthrough reaches this step after six others.

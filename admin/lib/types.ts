@@ -27,7 +27,7 @@ export interface Session {
   user: { id: number; username: string; name: string; email: string };
   role: Role;
   permissions: string[];
-  /** Same keys, labelled — the server only sends the ones this seat holds. */
+  /** Same keys, labelled, the server only sends the ones this seat holds. */
   permission_keys?: PermissionEntry[];
   enrolled: boolean;
   recovery_left: number;
@@ -89,7 +89,7 @@ export interface SeriesPoint {
   n: number;
 }
 
-/** One tile, whose shape follows its `kind` — the card that reads it owns the fields. */
+/** One tile, whose shape follows its `kind`, the card that reads it owns the fields. */
 export interface Tile {
   id: string;
   kind: 'rate' | 'queue' | 'coins' | 'promotions' | 'storage' | 'ledger';
@@ -221,7 +221,7 @@ export type ContentKind = 'post' | 'comment' | 'listing' | 'user';
 /** The five verbs a decision can take. Which ones a target offers depends on its state. */
 export type Decision = 'dismiss' | 'remove' | 'warn' | 'release' | 'restore';
 
-/** The buttons the Decide aside can show. `withdraw` is not a server verb —
+/** The buttons the Decide aside can show. `withdraw` is not a server verb ,
  * the screen answers it at the notices door instead. */
 export type AsideVerb = 'remove' | 'warn' | 'withdraw' | 'release' | 'restore';
 
@@ -329,7 +329,7 @@ export interface NoticeRow {
   withdrawn_at: string | null;
 }
 
-/** What the server did in answer to one verb — the sentence the screen shows back. */
+/** What the server did in answer to one verb, the sentence the screen shows back. */
 export interface Outcome {
   /** "withdraw" is the screen's own verb, answered at the notices door. */
   action: Decision | 'withdraw';
@@ -493,7 +493,7 @@ export interface PersonPage extends Page<PersonRow> {
   can: PersonVerbs;
 }
 
-/** What is still running on an account — the list a deletion has to clear first. */
+/** What is still running on an account, the list a deletion has to clear first. */
 export interface Holdings {
   campaigns: number;
   pending_requests: number;
@@ -658,7 +658,7 @@ export interface WelcomeDesk {
   detail?: string;
 }
 
-/** Contract 6.7 — what a Coin costs, where the rupees go, and how long a proof lives. */
+/** Contract 6.7, what a Coin costs, where the rupees go, and how long a proof lives. */
 export interface CoinPricing {
   coin_price: string | number;
   min_purchase: number;
@@ -712,7 +712,7 @@ export interface ProofLink {
   expires_in: number;
 }
 
-/** One row of the wallet's own history — this console can add to it and nothing else. */
+/** One row of the wallet's own history, this console can add to it and nothing else. */
 export interface LedgerRow {
   id: number;
   username: string;
@@ -796,7 +796,7 @@ export interface PromoRow {
   impressions: number;
   clicks: number;
   /** What the package promised, what the ledger has handed out, and how many
-   *  separate people that reached — `people` is only answered on one campaign. */
+   *  separate people that reached, `people` is only answered on one campaign. */
   reach_bought: number;
   delivered: number;
   people: number | null;

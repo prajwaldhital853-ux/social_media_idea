@@ -6,7 +6,7 @@ that can be credited, one that has been waiting past the threshold and has alrea
 been asked for better proof, one with no screenshot at all, and one that was
 decided days ago so the row names the seat that decided it.
 
-The receipts are drawn here rather than committed — a PNG of a bank slip is the
+The receipts are drawn here rather than committed, a PNG of a bank slip is the
 only proof the desk has to open, and the desk only ever opens it through a
 two-minute link. Re-running resets exactly these four accounts' requests and
 leaves every other purchase standing.
@@ -14,7 +14,7 @@ leaves every other purchase standing.
 Two things this file cannot do, both on purpose. It never deletes a ledger row:
 the wallet table refuses deletes in the database itself, so the sample movements
 are written once and the run is judged on a growing table, which is what the
-product promises — which is also why the walkthrough's own payer starts each run
+product promises, which is also why the walkthrough's own payer starts each run
 at a balance of zero rather than at whatever the last run left. And it never writes
 a payment screenshot outside `media/`, the folder the retention sweep deletes from.
 
@@ -81,7 +81,7 @@ def receipt_png(width=340, height=210, seed=1):
     """A bank slip drawn as pixels: paper, a header bar and lines of fake ink.
 
     The desk is judged on opening a real picture through a real short-lived link,
-    so the sample has to be a file a browser can decode — not a text blob with a
+    so the sample has to be a file a browser can decode, not a text blob with a
     `.png` on the end.
     """
     rows = bytearray()
@@ -118,7 +118,7 @@ def qr_png(size=180, modules=21):
     """A payment QR drawn as pixels, for the desk’s upload step to hand over.
 
     The walkthrough uploads a real file and reads the picture back out of the
-    pricing door, so the sample has to be decodable — and it lives in the gitignored
+    pricing door, so the sample has to be decodable, and it lives in the gitignored
     shots folder the suite already writes into, not in the repository.
     """
     step = size / modules
@@ -186,7 +186,7 @@ def main():
     # claims is written after it lands. The desk sorts and times by that column.
     asked = CoinReview.objects.create(
         request=two, actor=actor, action=CoinReview.Action.PROOF,
-        reason='the right-hand edge of the slip is cut off — send the whole page',
+        reason='the right-hand edge of the slip is cut off, send the whole page',
     )
     CoinReview.objects.filter(pk=asked.pk).update(created_at=now - timedelta(hours=20))
     settled = CoinReview.objects.create(request=four, actor=actor, action=CoinReview.Action.APPROVE,
@@ -208,7 +208,7 @@ def main():
 
     # The desk credits `one` and then hand-writes a row for it, so the ledger
     # numbers on screen only repeat if the wallet starts at nothing. Rows an earlier
-    # run wrote cannot be taken back — the table refuses deletes — so the reset lands
+    # run wrote cannot be taken back, the table refuses deletes, so the reset lands
     # on the balance, which is exactly why that column is called "Wallet now".
     Wallet.objects.filter(user__in=[users[ONE], users[TWO], users[THREE]]).update(balance=Decimal('0.00'))
 
