@@ -3,6 +3,10 @@
    member moving between the site and the console is not re-learning a UI. */
 
 :root {
+  /* Which way the browser draws the things it draws itself: the scrollbars, the
+     native pickers, the form widgets. The console decides its own theme, so this
+     never follows the operating system. */
+  color-scheme: light;
   --ink: #101114;
   --muted: #6B7280;
   --line: #DDE1E6;
@@ -2640,6 +2644,9 @@ button.key:hover { border-color: #c3c9d1; color: var(--ink); background: #F7F8FA
    white, those are somebody's screenshot, and dimming them makes them unreadable. */
 
 [data-theme='dark'] {
+  /* The scrollers are the browser's own drawing, not ours: without this the rail
+     and every capped list keep a white Windows scrollbar down a black desk. */
+  color-scheme: dark;
   --ink: #ECEEF1;
   --muted: #98A1AC;
   --line: #2A2E35;
