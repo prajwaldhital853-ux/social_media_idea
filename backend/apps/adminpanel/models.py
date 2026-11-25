@@ -203,6 +203,9 @@ class AdminAlert(models.Model):
     first_seen = models.DateTimeField(auto_now_add=True)
     last_seen = models.DateTimeField(auto_now_add=True)
     resolved_at = models.DateTimeField(null=True, blank=True)
+    # Null means nobody has ever been rung about this row, which is what tells a
+    # re-stamp from news. `alerts._ring` writes it the moment the bell is told.
+    rung_at = models.DateTimeField(null=True, blank=True)
     acked_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
         related_name='alerts_acked',

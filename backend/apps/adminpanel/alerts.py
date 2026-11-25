@@ -101,7 +101,9 @@ def _raise(key, kind, title, detail, href, severity=AdminAlert.Severity.WARNING,
     """Open the alert, or re-stamp the one already open.
 
     A row that a person resolved and that happens again reopens: the alternative
-    is a second row for the same trouble, which reads as two problems.
+    is a second row for the same trouble, which reads as two problems. Either way
+    the row goes to the staff bell, which stays quiet about it afterwards until the
+    condition is false and true again.
     """
     now = timezone.now()
     row = AdminAlert.objects.filter(key=key).first()
@@ -123,24 +125,29 @@ def _raise(key, kind, title, detail, href, severity=AdminAlert.Severity.WARNING,
     if reopened:
         row.status = AdminAlert.Status.OPEN
         row.resolved_at = None
+        row.rung_at = None
     row.save(update_fields=[
         'occurrences', 'last_seen', 'title', 'detail', 'href', 'severity', 'context', 'status', 'resolved_at',
     ])
-    if reopened:
-        _ring(row)
+    _ring(row)
     return row
 
 
 def _ring(item):
-    """A condition nobody has been told about yet goes into the staff bell.
+    """Tell the staff bell about a condition it has not been told about yet.
 
     A re-stamp stays quiet: an alert that has been true all afternoon is already on
-    the screen, and a bell that rings once a minute for it gets muted by lunch.
+    the screen, and a bell that rings once a minute for it gets muted by lunch. But
+    quiet is decided by whether this row was ever rung, not by how loud it is , a
+    wire nobody connected is INFO, and it is still the one thing on a fresh install
+    a client has to be told about before launch.
     """
     from . import bell
-    if item.severity == AdminAlert.Severity.INFO:
+    if item.rung_at is not None:
         return
-    bell.announce('alert', item.title, item.href or '/alerts', 'alerts')
+    bell.announce('alert', item.title, item.href or ALERT_DESK, 'alerts')
+    item.rung_at = timezone.now()
+    item.save(update_fields=['rung_at'])
 
 
 def _close(keys):
