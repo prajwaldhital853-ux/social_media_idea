@@ -277,13 +277,17 @@ export default function Comments({ postId, onClose, mediaIndex }: { postId: stri
 
     return (
       <div key={comment.id} data-comment={comment.id} className={`comments-row ${isReply ? 'reply' : ''}`}>
-        <Avatar user={author} size={isReply ? 26 : 30} />
+        <Link href={`/u/${author.username}`} className="comment-author-avatar" onClick={e => e.stopPropagation()}>
+          <Avatar user={author} size={isReply ? 26 : 30} />
+        </Link>
         <div className="comments-content">
           <div className="comment-card">
             <NoticeBanner notices={comment.notices}/>
             <div className="comment-bubble">
               <div>
-                <b>{author.name}</b>
+                <Link href={`/u/${author.username}`} className="comment-author" onClick={e => e.stopPropagation()}>
+                  <b>{author.name}</b>
+                </Link>
                 {author.verified && <VerifiedBadge size={13} />}
                 {isAuthor && (
                   <span className="comment-author-badge">
@@ -303,7 +307,7 @@ export default function Comments({ postId, onClose, mediaIndex }: { postId: stri
           </div>
           <div className="comment-meta">
             <time>{ago(comment.ts, db.lang)}</time>
-            <ReactionButton targetType="comment" targetId={comment.id} small kinds={postKinds.length ? postKinds : undefined} />
+            <ReactionButton targetType="comment" targetId={comment.id} small />
             <button type="button" className="comment-action-btn" onPointerDown={e => e.preventDefault()} onClick={() => handleReply(comment, author.name, isReply)}>
               Reply
             </button>
@@ -384,24 +388,22 @@ export default function Comments({ postId, onClose, mediaIndex }: { postId: stri
       {sheet && <div className="comments-grip" />}
       <div className="comments-heading">
         <div className="comments-reactions-row">
-          {postKinds.length > 0 && (
-            <span className="comment-reactions-display">
-              {postKinds.map(kind => (
-                <button
-                  key={kind}
-                  type="button"
-                  className={`comment-reaction-icon ${myPostReaction === kind ? 'on' : ''}`}
-                  title={t(kind)}
-                  aria-label={t(kind)}
-                  aria-pressed={myPostReaction === kind}
-                  onPointerDown={e => e.preventDefault()}
-                  onClick={() => react(targetType, targetId, kind)}
-                >
-                  <ReactionIcon kind={kind} />
-                </button>
-              ))}
-            </span>
-          )}
+          <span className="comment-reactions-display">
+            {quickKinds.map(kind => (
+              <button
+                key={kind}
+                type="button"
+                className={`comment-reaction-icon ${myPostReaction === kind ? 'on' : ''}`}
+                title={t(kind)}
+                aria-label={t(kind)}
+                aria-pressed={myPostReaction === kind}
+                onPointerDown={e => e.preventDefault()}
+                onClick={() => react(targetType, targetId, kind)}
+              >
+                <ReactionIcon kind={kind} />
+              </button>
+            ))}
+          </span>
           <span className="reactions-count">{reactionsShown > 0 ? reactionsShown : ''}</span>
         </div>
         {sheet && <button type="button" className="icon-btn" aria-label="Close comments" onClick={requestClose}>{IC.x}</button>}
