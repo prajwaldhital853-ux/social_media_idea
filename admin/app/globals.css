@@ -960,8 +960,11 @@ button.link:disabled:hover { color: var(--muted); text-decoration: none; }
 .suspend-kind .field { margin: 0; }
 
 /* ── one account, opened as a page ───────────────────────
-   The record scrolls and the desk you sign from does not: the aside is sticky,
-   so the reason box stays under the cursor while you read what they posted. */
+   The desk you sign from is as tall as it needs to be and never scrolls on its
+   own. It used to be a sticky box capped at the viewport with its own two
+   scrollbars: the Delete button hid behind a drag, and one long `<option>`
+   ("Public — everyone who opens their profile") is wider than the 320px column,
+   so a second bar appeared under every reason box. */
 .record {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 320px;
@@ -972,8 +975,6 @@ button.link:disabled:hover { color: var(--muted); text-decoration: none; }
 .record-main { min-width: 0; }
 
 .record-acts {
-  position: sticky;
-  top: 14px;
   padding: 14px 15px 16px;
   border: 1px solid var(--line);
   border-radius: var(--radius);
@@ -981,9 +982,13 @@ button.link:disabled:hover { color: var(--muted); text-decoration: none; }
   display: flex;
   flex-direction: column;
   gap: 9px;
-  max-height: calc(100vh - 28px);
-  overflow-y: auto;
 }
+
+/* A select sizes itself to its longest option, so it has to be told to fit. */
+.record-acts .field { min-width: 0; }
+.record-acts select, .record-acts textarea { width: 100%; min-width: 0; max-width: 100%; }
+.record-acts input { max-width: 100%; }
+.record-acts .ask-actions { flex-wrap: wrap; }
 
 .record-acts h3 { font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); margin: 0; }
 .record-acts .verbs { flex-direction: column; align-items: stretch; }
@@ -2191,7 +2196,6 @@ button.key:hover { border-color: #c3c9d1; color: var(--ink); background: #F7F8FA
   .seat-body { grid-template-columns: 1fr; }
   .console-head { flex-direction: column; align-items: flex-start; }
   .record { grid-template-columns: 1fr; }
-  .record-acts { position: static; max-height: none; }
   .record-main { order: 2; }
 }
 

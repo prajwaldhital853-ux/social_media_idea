@@ -40,6 +40,20 @@ def reports(request):
     if request.method == 'POST':
         serializer = ReportSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        # One report per thing per day, per person. Re-sending the same one does
+        # not move it up the queue — the auto-hide counter counts distinct
+        # reporters, not rows — so it only buries the pile in duplicates.
+        if Report.objects.filter(
+            reporter=request.user,
+            target_type=serializer.validated_data['target_type'],
+            target_id=serializer.validated_data['target_id'],
+            created_at__gte=timezone.now() - timedelta(days=1),
+        ).exists():
+            return Response(
+                {'detail': 'You already reported this today. Each post, comment or account can '
+                           'be reported once every 24 hours — our team has it.'},
+                status=429,
+            )
         obj = serializer.save(reporter=request.user)
         _auto_hide_if_piled_on(obj)
         return Response(ReportSerializer(obj).data, status=status.HTTP_201_CREATED)
