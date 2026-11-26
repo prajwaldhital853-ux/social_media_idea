@@ -991,6 +991,56 @@ button.link:disabled:hover { color: var(--muted); text-decoration: none; }
 .person-side .verbs { flex-direction: column; align-items: stretch; }
 .person-side .ask { grid-column: auto; }
 
+/* ── the directory fits its desk ─────────────────────────
+   Eleven columns used to size themselves to their content, so one wide email
+   or a strip of four action icons pushed the whole table past the screen and
+   the reader chased rows with a sideways scrollbar. Fixed layout gives every
+   column a share of the desk instead: the table is always exactly as wide as
+   the screen, and long values wrap inside their own share. */
+.grid.people { table-layout: fixed; }
+
+.grid.people thead th:nth-child(1) { width: 13%; }  /* Username */
+.grid.people thead th:nth-child(2) { width: 10%; }  /* Name */
+.grid.people thead th:nth-child(3) { width: 14.5%; } /* Email, two lines */
+.grid.people thead th:nth-child(4) { width: 8%; }   /* Seat */
+.grid.people thead th:nth-child(5) { width: 8%; }   /* Signed up */
+.grid.people thead th:nth-child(6) { width: 4.5%; } /* Posts */
+.grid.people thead th:nth-child(7) { width: 6%; }   /* Followers */
+.grid.people thead th:nth-child(8) { width: 8%; }   /* Coins */
+.grid.people thead th:nth-child(9) { width: 15.5%; } /* Standing */
+.grid.people thead th:nth-child(10) { width: 6.5%; } /* Access */
+.grid.people thead th:nth-child(11) { width: 6%; }  /* Actions */
+
+/* A share this narrow must be allowed to break, or a long username walks over
+   the name beside it — the nowrap that served the auto-width table is wrong
+   once the column can no longer grow, and the id is a flex child, so only
+   min-width: 0 lets the break happen at all. */
+.grid.people .id { white-space: normal; overflow-wrap: anywhere; }
+.grid.people .person-id .id { min-width: 0; }
+.grid.people .person-flags .pill,
+.grid.people .person-flags .pile { white-space: normal; }
+.grid.people td.num { white-space: normal; overflow-wrap: anywhere; }
+
+/* The email arrives as name and domain; stacked, the domain line keeps the
+   column narrow without hiding either half. */
+.mail-cut { display: flex; flex-direction: column; min-width: 0; line-height: 1.35; }
+.mail-cut b { font-weight: 550; overflow-wrap: anywhere; }
+.mail-cut small { font-size: 11px; opacity: 0.75; overflow-wrap: anywhere; }
+
+/* Four verbs, two by two, read down the columns: eye then pencil on the left,
+   lock then delete on the right — a block one icon-pair wide instead of a
+   strip that owned the row's whole right edge. */
+.grid-acts.pair { display: grid; grid-template-columns: repeat(2, 26px); justify-content: end; gap: 3px 5px; }
+.grid-acts.pair .iact { width: 26px; height: 26px; }
+
+/* A phone keeps the columns a row can still say at its width; the seat, the
+   join date and the viewer's own access live on the account's page. */
+@media (max-width: 700px) {
+  .grid.people thead th:nth-child(4), .grid.people tbody td:nth-child(4),
+  .grid.people thead th:nth-child(5), .grid.people tbody td:nth-child(5),
+  .grid.people thead th:nth-child(10), .grid.people tbody td:nth-child(10) { display: none; }
+}
+
 /* The Client's own verb, kept visually apart from the reversible ones above it. */
 .seat-erase {
   display: flex; flex-direction: column; gap: 8px;

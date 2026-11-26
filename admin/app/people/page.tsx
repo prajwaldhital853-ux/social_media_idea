@@ -172,7 +172,7 @@ export default function PeoplePage() {
         </section>
       ) : (
         <div className="grid-wrap flow">
-          <table className="grid">
+          <table className="grid people">
             <thead>
               <tr>
                 <th>Username</th>
@@ -210,13 +210,19 @@ export default function PeoplePage() {
 function PersonRowView({ row, verbs, mine }: { row: PersonRow; verbs: PersonVerbs; mine: boolean }) {
   const holding = row.flags.on_account + row.flags.on_content;
   const barred = !!row.suspension;
+  // Column order below the eye is the pair block's reading order: lock first so
+  // the two-by-two lands eye/pencil on the left and lock/delete on the right.
   const offered: { verb: string; icon: keyof typeof IC; label: string; act: string }[] = [
-    { verb: 'warn', icon: 'pen', label: 'Private warning', act: 'warn' },
     barred
       ? { verb: 'reinstate', icon: 'check', label: 'Reinstate', act: 'reinstate' }
       : { verb: 'suspend', icon: 'lock', label: 'Suspend', act: 'suspend' },
+    { verb: 'warn', icon: 'pen', label: 'Private warning', act: 'warn' },
     { verb: 'delete', icon: 'trash', label: 'Delete account', act: 'delete' },
   ];
+  // Name and domain each take a line, so the column stops asking for half the desk.
+  const at = row.email.indexOf('@');
+  const mailLocal = at > 0 ? row.email.slice(0, at) : row.email;
+  const mailDomain = at > 0 ? row.email.slice(at + 1) : '';
 
   return (
     <tbody className="person" data-person={row.username}>
@@ -233,7 +239,11 @@ function PersonRowView({ row, verbs, mine }: { row: PersonRow; verbs: PersonVerb
             {row.verified && <span className="verified" title="Verified by staff">✓</span>}
           </span>
         </td>
-        <td data-label="Email" className="dim wrap">{row.email || '-'}</td>
+        <td data-label="Email" className="dim">
+          {at > 0
+            ? <span className="mail-cut"><b>{mailLocal}</b><small>@{mailDomain}</small></span>
+            : row.email || '-'}
+        </td>
         <td data-label="Seat">{ROLE_LABEL[row.role] || row.role}</td>
         <td data-label="Signed up" className="dim">joined {ago(row.joined)}</td>
         <td data-label="Posts" className="num">{num(row.posts)}</td>
@@ -267,7 +277,7 @@ function PersonRowView({ row, verbs, mine }: { row: PersonRow; verbs: PersonVerb
           </span>
         </td>
         <td data-label="Actions">
-          <div className="grid-acts">
+          <div className="grid-acts pair">
             <ActLink to={`/people/${row.username}`} icon="eye" label="Open this account"/>
             {offered.map(item => (
               <ActLink
