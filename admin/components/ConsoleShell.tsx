@@ -31,6 +31,7 @@ const KIND_LABEL: Record<string, string> = {
   coin_proof: 'Proof',
   signup: 'Joined',
   promotion: 'Campaign',
+  autohide: 'Auto-hide',
 };
 
 /**

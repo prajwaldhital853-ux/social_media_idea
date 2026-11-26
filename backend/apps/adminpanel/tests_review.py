@@ -394,16 +394,25 @@ class DecideTests(ReviewTestCase):
         self.assertIn('hidden pending review', held.data['detail'])
         self.assertEqual(Notification.objects.count(), 1, 'the refused release sent nothing')
 
-    def test_a_listing_is_never_held_pending_review(self):
+    def test_a_held_listing_is_released_like_any_held_thing(self):
+        """Auto-hide now holds a listing the way it holds a post, and release is its way back."""
         listing = self.listing_of()
+        listing.status = Listing.Status.HIDDEN
+        listing.save(update_fields=['status'])
         report = self.reported(listing, kind='listing')
 
-        out = self.session('night_mod').post(
-            f'{QUEUE_URL}{report.pk}/decide/', {'action': 'release'}, format='json')
-        self.assertEqual(out.status_code, 400)
-        self.assertIn('it is up, or it is taken down', out.data['detail'])
+        desk = self.session('night_mod')
+        held = desk.post(f'{QUEUE_URL}{report.pk}/decide/', {'action': 'release'}, format='json')
+        self.assertEqual(held.status_code, 200, held.data)
         listing.refresh_from_db()
         self.assertEqual(listing.status, Listing.Status.ACTIVE)
+        self.assertIn('back in the feed', Notification.objects.get(recipient=self.member).text)
+
+        live = self.listing_of()
+        live_report = self.reported(live, kind='listing')
+        refused = desk.post(f'{QUEUE_URL}{live_report.pk}/decide/', {'action': 'release'}, format='json')
+        self.assertEqual(refused.status_code, 400)
+        self.assertIn('hidden pending review', refused.data['detail'])
 
     def test_only_the_five_verbs_and_only_a_report_that_exists(self):
         report = self.reported(self.post_of())

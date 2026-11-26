@@ -139,6 +139,20 @@ def post_limits():
         }
 
 
+def report_threshold():
+    """The pile size the spam desk publishes, not the number the server booted with.
+
+    A desk that moved and a boot value that did not would leave the site hiding
+    content at a number nobody chose; this is the same read every other consumer
+    makes, with the shipped value standing when no settings table exists.
+    """
+    try:
+        from apps.adminpanel import spam
+        return spam.report_threshold()
+    except Exception:  # noqa: BLE001 - no settings table yet means the shipped number stands
+        return int(getattr(settings, 'EXPOSING_REPORT_THRESHOLD', 3))
+
+
 def client_config():
     terms = coin_terms()
     return {
@@ -150,7 +164,7 @@ def client_config():
         'coinPrice': terms['coin_price'],
         'minPurchase': terms['min_purchase'],
         'limits': post_limits(),
-        'threshold': int(getattr(settings, 'EXPOSING_REPORT_THRESHOLD', 3)),
+        'threshold': report_threshold(),
         'rateLimits': bool(getattr(settings, 'EXPOSING_RATE_LIMITS', True)),
         'googleClientId': getattr(settings, 'GOOGLE_CLIENT_ID', ''),
         'wording': wording(),

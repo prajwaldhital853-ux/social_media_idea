@@ -8,7 +8,6 @@ down. The verbs themselves live in `review.py`, which is also where one decision
 clears the whole pile and cancels whatever campaign was running on the content.
 """
 
-from django.conf import settings as django_settings
 from django.db.models import Count, Q
 from django.db.models.functions import Lower
 from django.utils import timezone
@@ -24,7 +23,7 @@ from apps.marketplace.models import Listing
 from apps.moderation.models import AuditLog, Report
 from apps.posts.models import Post
 
-from . import policy, rbac, review
+from . import policy, rbac, review, spam
 from .journal import record
 from .models import PolicyCategory, PolicyTerm, PublicNotice
 
@@ -119,9 +118,9 @@ def _facets():
         'dismissed': Report.objects.filter(status=Report.Status.DISMISSED).count(),
         'all': Report.objects.count(),
         'by_target': {kind: opened.filter(target_type=kind).count() for kind in review.KINDS},
-        # The number of distinct reporters that pulled a post out of the feed on
-        # its own, so the queue can say "hidden at 3" instead of guessing.
-        'auto_hide_at': getattr(django_settings, 'EXPOSING_REPORT_THRESHOLD', 3),
+        # The number of distinct reporters that pull a piece of content out of the
+        # feed on its own, so the queue can say "hidden at 1" instead of guessing.
+        'auto_hide_at': spam.report_threshold(),
     }
 
 

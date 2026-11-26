@@ -108,7 +108,8 @@ class ScanTests(AlertTestCase):
         row = AdminAlert.objects.get(kind='report_pile')
         self.assertEqual(row.href, '/reports?target=post&status=open')
         self.assertIn(str(self.post.pk), row.detail)
-        self.assertEqual(row.context['post_id'], str(self.post.pk))
+        self.assertEqual(row.context['target_id'], str(self.post.pk))
+        self.assertEqual(row.context['kind'], 'post')
 
     def test_a_condition_that_stops_being_true_leaves_the_feed(self):
         self.reporters(3)

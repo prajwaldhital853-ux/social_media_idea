@@ -70,36 +70,61 @@ def reports(request):
     return paginator.get_paginated_response(ReportSerializer(rows, many=True).data)
 
 
+# What auto-hide holds, per kind: the model, whose row it is, the state it is
+# seen in, and the state it waits in until a person rules on it.
+PILED = {
+    Report.Target.POST: (Post, 'author', Post.Status.LIVE, Post.Status.HIDDEN),
+    Report.Target.COMMENT: (Comment, 'author', Comment.Status.LIVE, Comment.Status.HIDDEN),
+    Report.Target.LISTING: (Listing, 'seller', Listing.Status.ACTIVE, Listing.Status.HIDDEN),
+}
+
+
 def _auto_hide_if_piled_on(report):
-    """Enough distinct reporters on one post and it leaves the feed pending review.
+    """Enough distinct reporters on one thing and it leaves the feed pending review.
 
     Both halves of that rule live on the console's spam desk: `spam_autohide` says
     whether a pile may pull anything at all, and `report_threshold()` is the size of
     the pile. With the switch off the report still reaches the review queue and the
-    email, it just waits for a person instead of a number.
+    email, it just waits for a person instead of a number. The author is told in
+    their bell and by email; the seats get a bell row and an alert pointing at the
+    case, where release puts the thing back if the pile was wrong.
     """
-    if report.target_type != Report.Target.POST or not report.target_id.isdigit():
+    if report.target_type not in PILED or not report.target_id.isdigit():
         return
-    from apps.adminpanel import spam
+    from apps.adminpanel import alerts, review, spam
 
     if not spam.autohide():
         return
     threshold = spam.report_threshold()
     distinct = Report.objects.filter(
-        target_type=Report.Target.POST, target_id=report.target_id, status=Report.Status.OPEN,
+        target_type=report.target_type, target_id=report.target_id, status=Report.Status.OPEN,
     ).values('reporter').distinct().count()
     if distinct < threshold:
         return
-    post = Post.objects.filter(pk=int(report.target_id), status=Post.Status.LIVE).first()
-    if not post:
+    model, owner_field, live, hidden = PILED[report.target_type]
+    row = model.objects.filter(pk=int(report.target_id), status=live).first()
+    if not row:
         return
-    post.status = Post.Status.HIDDEN
-    post.save(update_fields=['status'])
-    notify(post.author, None, 'warning',
-           f'Your post, posted {timezone.localtime(post.created_at):%d %b %Y at %H:%M}, '
-           f'was suspended due to: {distinct} people reported it ({report.reason}).',
-           'post', post.pk)
-    audit(None, 'auto_hide_post', f'post:{post.pk}', f'{distinct} open reports')
+    row.status = hidden
+    row.save(update_fields=['status'])
+    if report.target_type == Report.Target.COMMENT:
+        Post.objects.filter(pk=row.post_id).update(comment_count=Greatest(F('comment_count') - 1, 0))
+    kind = report.target_type
+    posted = '' if kind == Report.Target.LISTING else \
+        f', posted {timezone.localtime(row.created_at):%d %b %Y at %H:%M},'
+    pile = f'{distinct} {"person" if distinct == 1 else "people"}'
+    notify(getattr(row, owner_field), None, 'warning',
+           f'Your {kind}{posted} was taken down automatically: {pile} '
+           f'reported it ({report.reason}). Our team will review it.',
+           kind, row.pk)
+    review.email_owner(
+        kind, row, f'Your Exposing {kind} was taken down automatically',
+        f'Your {kind}{posted} was taken down automatically: {pile} reported it '
+        f'({report.reason}). It is hidden while our team looks at it, and if it turns out '
+        'to be fine it will be put back where it was.',
+    )
+    audit(None, f'auto_hide_{kind}', f'{kind}:{row.pk}', f'{distinct} open reports')
+    alerts.note_autohide(kind, row.pk, report.reason, distinct)
 
 
 def _remove_target(report, actor):
@@ -115,9 +140,12 @@ def _remove_target(report, actor):
     elif kind == 'comment' and tid.isdigit():
         content = Comment.objects.filter(pk=int(tid)).first()
         if content and content.status != Comment.Status.REMOVED:
+            was_live = content.status == Comment.Status.LIVE
             content.status = Comment.Status.REMOVED
             content.save(update_fields=['status'])
-            Post.objects.filter(pk=content.post_id).update(comment_count=Greatest(F('comment_count') - 1, 0))
+            # A held comment already paid the counter when it was hidden.
+            if was_live:
+                Post.objects.filter(pk=content.post_id).update(comment_count=Greatest(F('comment_count') - 1, 0))
             owner = content.author
     elif kind == 'listing' and tid.isdigit():
         content = Listing.objects.filter(pk=int(tid)).first()

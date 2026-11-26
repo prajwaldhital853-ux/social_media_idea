@@ -157,24 +157,58 @@ def _close(keys):
     ).update(status=AdminAlert.Status.RESOLVED, resolved_at=timezone.now())
 
 
+# The content kinds a report pile can pull, and the seat key that decides about each.
+PILE_KINDS = ('post', 'comment', 'listing')
+
+
+def note_autohide(kind, target_id, reason, reporters):
+    """One piece of content just left the feed on report counts alone: say so now.
+
+    The alert row is one keyed condition that re-stamps itself, so a wave stays one
+    line with `occurrences` climbing; the bell row is per event, because each hide
+    is a different thing a seat may want to look at, and the case link opens the
+    content with the release verb already standing there.
+    """
+    hides = AuditLog.objects.filter(
+        action__startswith='auto_hide_', created_at__gte=timezone.now() - timedelta(days=1),
+    ).count()
+    row = _raise(
+        'autohide_event', 'autohide_event',
+        f'The system hid a {kind} on its own',
+        f'{kind}:{target_id} came off the feed on {reporters} open report(s) ({reason}). '
+        f'{hides} auto-hides in 24 h; release it from its case if it is fine.',
+        f'/review/{kind}/{target_id}',
+        context={'kind': kind, 'id': target_id, 'reporters': reporters, 'hides_24h': hides},
+    )
+    from . import bell
+    bell.announce(
+        'autohide',
+        f'The system hid {kind}:{target_id} on its own ({reason})',
+        f'/review/{kind}/{target_id}',
+        'listings' if kind == 'listing' else 'content',
+    )
+    return row
+
+
 def _report_piles(limit, now):
-    """One post, many distinct reporters: the pile that pulled it out of the feed."""
+    """One thing, many distinct reporters: the pile that pulled it out of the feed."""
     rows = (
-        Report.objects.filter(target_type=Report.Target.POST, status=Report.Status.OPEN)
-        .values('target_id')
+        Report.objects.filter(target_type__in=PILE_KINDS, status=Report.Status.OPEN)
+        .values('target_type', 'target_id')
         .annotate(reporters=Count('reporter', distinct=True), newest=Count('pk'))
         .filter(reporters__gte=limit)
         .order_by('-reporters')[:10]
     )
     found = {}
     for row in rows:
-        key = f'report_pile:post:{row["target_id"]}'
+        kind = row['target_type']
+        key = f'report_pile:{kind}:{row["target_id"]}'
         found[key] = _raise(
             key, 'report_pile',
-            f'A post is sitting on {row["reporters"]} open reports',
-            f'{row["newest"]} reports name post {row["target_id"]}. It stays hidden until someone rules on it.',
-            '/reports?target=post&status=open',
-            context={'post_id': row['target_id'], 'reporters': row['reporters']},
+            f'A {kind} is sitting on {row["reporters"]} open reports',
+            f'{row["newest"]} reports name {kind} {row["target_id"]}. It stays hidden until someone rules on it.',
+            f'/reports?target={kind}&status=open',
+            context={'kind': kind, 'target_id': row['target_id'], 'reporters': row['reporters']},
         )
     return found
 
@@ -219,16 +253,16 @@ def _ageing_coin_queue(hours, now):
 
 def _autohide_wave(limit, now):
     since = now - timedelta(days=1)
-    hides = AuditLog.objects.filter(action='auto_hide_post', created_at__gte=since).count()
+    hides = AuditLog.objects.filter(action__startswith='auto_hide_', created_at__gte=since).count()
     if hides < limit:
         return {}
     # The number worth naming is the one a person can move: how many reports pull
-    # a post out of the feed, which is what produced this pile of hidden content.
+    # content out of the feed, which is what produced this pile of hidden content.
     pile = spam.report_threshold()
     return {
         'autohide_wave': _raise(
             'autohide_wave', 'autohide_wave',
-            f'{hides} posts hid themselves today',
+            f'{hides} pieces hid themselves today',
             f'Moderation pulled this much content on report counts alone in 24 hours. Either a wave of spam '
             f'or a pile threshold set too low ({pile}).',
             '/reports?status=open',

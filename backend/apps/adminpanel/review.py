@@ -42,7 +42,7 @@ MODEL = {'post': Post, 'comment': Comment, 'listing': Listing, 'user': User}
 # Each model calls its own "visible again" state something different.
 LIVE_STATE = {'post': Post.Status.LIVE, 'comment': Comment.Status.LIVE, 'listing': Listing.Status.ACTIVE}
 REMOVED_STATE = {'post': Post.Status.REMOVED, 'comment': Comment.Status.REMOVED, 'listing': Listing.Status.REMOVED}
-HIDDEN_STATE = {'post': Post.Status.HIDDEN, 'comment': Comment.Status.HIDDEN}
+HIDDEN_STATE = {'post': Post.Status.HIDDEN, 'comment': Comment.Status.HIDDEN, 'listing': Listing.Status.HIDDEN}
 AUDIT = {
     'dismiss': 'dismiss_reports',
     'remove': 'remove_content',
@@ -428,9 +428,12 @@ def act(kind, target_id, actor, action, reason='', notice_text='', audience=Publ
             raise ValueError('Say why it is coming down. The author is shown this sentence.')
         if row.status == REMOVED_STATE[kind]:
             raise ValueError(f'That {kind} is already taken down, restore it, or leave it down.')
+        was_live = row.status == LIVE_STATE[kind]
         row.status = REMOVED_STATE[kind]
         row.save(update_fields=['status'])
-        if kind == 'comment':
+        if kind == 'comment' and was_live:
+            # A row that was held pending review already paid the counter when it
+            # was hidden; only a live comment leaving now takes another one off.
             Post.objects.filter(pk=row.post_id).update(comment_count=Greatest(F('comment_count') - 1, 0))
         out['reports_closed'] = close_reports(kind, row.pk, Report.Status.RESOLVED, now)
         campaigns, refunded = cancel_campaigns(kind, row.pk, now, actor=actor)
@@ -469,8 +472,6 @@ def act(kind, target_id, actor, action, reason='', notice_text='', audience=Publ
     elif action == 'release':
         if kind == 'user':
             raise ValueError('An account is not released, it is suspended or it is not.')
-        if kind not in HIDDEN_STATE:
-            raise ValueError('A listing is never held pending review: it is up, or it is taken down.')
         if row.status != HIDDEN_STATE[kind]:
             raise ValueError('Only content hidden pending review can be released.')
         row.status = LIVE_STATE[kind]
