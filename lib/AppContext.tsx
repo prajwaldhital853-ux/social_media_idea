@@ -466,6 +466,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       // opens — a WSGI worker refusing it, a proxy buffering it — must not also
       // cost the reader the message itself. The fallback poll carries both lists.
       void refreshList('inbox', inboxListDef(selfId));
+      // The stream path re-pulls the graph when a follow row lands; the poll
+      // path must answer to the same rule, or a request that arrived while the
+      // stream was down announces itself without the Confirm/No buttons — the
+      // edge only reaches the cache through the session.
+      void pullSession();
     };
 
     const pollTick = () => {
