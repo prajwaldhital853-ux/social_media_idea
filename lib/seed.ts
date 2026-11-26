@@ -372,6 +372,7 @@ export function defaultSettings(): Settings {
   return {
     threshold: 3,
     coinPrice: 10,
+    minPurchase: 100,
     bankName: 'Nepal Bank Ltd',
     bankAccount: '0120-4455-8891',
     bankHolder: 'Exposing Pvt Ltd',

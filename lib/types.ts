@@ -291,6 +291,7 @@ export interface FeatureFlags {
 export interface Settings {
   threshold: number;
   coinPrice: number;
+  minPurchase: number;
   bankName: string;
   bankAccount: string;
   bankHolder: string;

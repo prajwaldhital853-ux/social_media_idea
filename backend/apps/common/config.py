@@ -27,6 +27,30 @@ MIN_AGE = 13
 COIN_PRICE = 10
 
 
+def coin_terms():
+    """What a Coin costs, the smallest purchase and where the rupees land.
+
+    The console's coin pricing desk owns these numbers as rows, so a price the
+    Admin saves there is the price the wallet quotes on the next load — the
+    constant below is only what a deploy answers with before the desk's table
+    exists, and with no desk row written the desk's own defaults stand.
+    """
+    try:
+        from apps.adminpanel import coins as desk
+        return desk.pricing()
+    except Exception:  # noqa: BLE001 - no settings table yet means the shipped numbers stand
+        return {
+            'coin_price': COIN_PRICE,
+            'min_purchase': 100,
+            'bank': {
+                'name': os.environ.get('EXPOSING_BANK_NAME', 'Nepal Bank Ltd'),
+                'account': os.environ.get('EXPOSING_BANK_ACCOUNT', '0120-4455-8891'),
+                'holder': os.environ.get('EXPOSING_BANK_HOLDER', 'Exposing Pvt Ltd'),
+                'qr': os.environ.get('EXPOSING_BANK_QR', ''),
+            },
+        }
+
+
 def shelf():
     """The packages the site sells right now: the console's shelf when a seat has
     edited one, the shipped list otherwise.
@@ -96,21 +120,18 @@ def features():
 
 
 def client_config():
+    terms = coin_terms()
     return {
         'features': features(),
         'packages': shelf(),
         'categories': market_categories(),
         'countries': COUNTRIES,
         'minAge': MIN_AGE,
-        'coinPrice': COIN_PRICE,
+        'coinPrice': terms['coin_price'],
+        'minPurchase': terms['min_purchase'],
         'threshold': int(getattr(settings, 'EXPOSING_REPORT_THRESHOLD', 3)),
         'rateLimits': bool(getattr(settings, 'EXPOSING_RATE_LIMITS', True)),
         'googleClientId': getattr(settings, 'GOOGLE_CLIENT_ID', ''),
         'wording': wording(),
-        'bank': {
-            'name': os.environ.get('EXPOSING_BANK_NAME', 'Nepal Bank Ltd'),
-            'account': os.environ.get('EXPOSING_BANK_ACCOUNT', '0120-4455-8891'),
-            'holder': os.environ.get('EXPOSING_BANK_HOLDER', 'Exposing Pvt Ltd'),
-            'qr': os.environ.get('EXPOSING_BANK_QR', ''),
-        },
+        'bank': terms['bank'],
     }

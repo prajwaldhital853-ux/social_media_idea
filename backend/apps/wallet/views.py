@@ -5,7 +5,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from apps.adminpanel import rbac
+from apps.adminpanel import rbac, settings_store
 from apps.adminpanel.journal import record
 from apps.common.emails import queue_coin_decision_email
 from apps.common.pagination import KeysetPagination
@@ -73,6 +73,11 @@ def coin_request_create(request):
     serializer.is_valid(raise_exception=True)
     if serializer.validated_data['coins'] < 1:
         return Response({'detail': 'Coins must be at least 1.'}, status=400)
+    # The desk's floor is the door's floor: a stale page quoting yesterday's
+    # minimum must not slip a smaller purchase past it. Zero turns the rule off.
+    floor = int(settings_store.get('coin_min_purchase') or 0)
+    if floor and serializer.validated_data['coins'] < floor:
+        return Response({'detail': f'The smallest purchase is {floor} coins.'}, status=400)
     obj = serializer.save(user=request.user)
     return Response(CoinRequestSerializer(obj).data, status=status.HTTP_201_CREATED)
 

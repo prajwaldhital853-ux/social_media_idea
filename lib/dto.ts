@@ -351,6 +351,7 @@ export function mapSettings(config: any): Settings {
   return {
     threshold: Number(config.threshold ?? 3),
     coinPrice: Number(config.coinPrice ?? 10),
+    minPurchase: Number(config.minPurchase ?? 100),
     bankName: config.bank?.name ?? '',
     bankAccount: config.bank?.account ?? '',
     bankHolder: config.bank?.holder ?? '',
