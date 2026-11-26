@@ -17,15 +17,15 @@ import { SettingLine, SpamConfig, SpamDesk } from '@/lib/types';
  * people have to say a post is bad before the platform takes it out of the feed
  * without waiting for a person.
  *
- * The four numbers the site already refuses requests on are marked as such, and the
- * rest are published at `GET /api/spam/config/` for the site to honour. The answer
- * that door gives is printed beside the boxes, because a limit nobody reads is a
- * number in a screen, and a save banner that promises enforcement is how a seat
- * ends up believing a rule that no view ever checks.
+ * Every number on this desk is read again by the door that answers the request, so
+ * a save moves the site within one request rather than at the next deploy. The
+ * answer that door gives is printed beside the boxes, because a limit nobody reads
+ * is a number in a screen, and a save banner that promises enforcement is how a
+ * seat ends up believing a rule that no view ever checks.
  */
 
-/** The four the site holds today, in the words this desk uses for them. */
-const ENFORCED_NOTE = 'the site refuses this at its own door today';
+/** What the desk means by a knob being live: the door refuses on this number now. */
+const ENFORCED_NOTE = 'the site refuses this at its own door';
 
 export default function SpamScreen() {
   const { noteGate } = useSession();
@@ -123,8 +123,10 @@ export default function SpamScreen() {
                 <h2>The rules</h2>
                 <p>
                   A ceiling of zero switches the rule off rather than blocking everything, so the boxes
-                  say what they mean. Nothing here hides or removes a post by itself, it decides when the
-                  platform does it without waiting.
+                  say what they mean. Every one of these is answered where the request is made: a post
+                  past its ceiling, a comment past its own or a post carrying a blocked link is refused
+                  on the way in, and a pile of reporters reaches the number set here without waiting for
+                  a person.
                 </p>
               </div>
             </div>
@@ -229,8 +231,12 @@ export default function SpamScreen() {
                   <div className="term-body">
                     <b className="term-text">A new account</b>
                     <em className="term-note">
-                      waits {quote.new_account.hold_hours} h before it may post and gets{' '}
-                      {quote.new_account.posts_per_day} posts in its first day
+                      {quote.new_account.hold_hours
+                        ? <>waits {quote.new_account.hold_hours} h before it may post</>
+                        : 'may post the moment it signs up'}
+                      {quote.new_account.posts_per_day
+                        ? <> and gets {quote.new_account.posts_per_day} posts in its first day</>
+                        : ', then posts as freely as anybody else'}
                       {quote.new_account.verify_first ? ', and must verify its email first' : ''}
                     </em>
                   </div>
@@ -301,9 +307,10 @@ export default function SpamScreen() {
             <p className="panel-foot">
               {IC.alert}
               <span>
-                {desk.enforced.length} of these numbers are {ENFORCED_NOTE}. The rest are published at{' '}
-                <b>GET /api/spam/config/</b> and are only enforced once the site’s own views read that
-                door, saving them here changes what the platform promises, not yet what it refuses.
+                All {desk.enforced.length} rules here are {ENFORCED_NOTE}: the door that answers a post, a
+                comment, a follow or a sign-up reads this desk on the request itself, so a save changes
+                what a member meets within one action and a restart is not part of it. A zero on a
+                ceiling is that rule switched off, not everybody blocked.
               </span>
             </p>
           </section>

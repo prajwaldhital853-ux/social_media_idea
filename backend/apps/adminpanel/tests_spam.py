@@ -14,12 +14,15 @@ word and a prohibited item are one list with one audit trail, and this file prov
 the desk shows what the rules screen wrote rather than its own copy of it.
 """
 
+from datetime import timedelta
+
+from django.core.cache import cache
 from django.utils import timezone
 from rest_framework.test import APIClient
 
 from apps.accounts.auth import issue_access
 from apps.comments.models import Comment
-from apps.common.testutils import make_user
+from apps.common.testutils import auth_client, make_user
 from apps.marketplace.models import Listing
 from apps.moderation.models import AuditLog, Report
 from apps.posts.models import Post
@@ -32,6 +35,9 @@ DESK_URL = '/api/admin/spam/'
 FLAGS_URL = '/api/admin/spam/flags/'
 CONFIG_URL = '/api/spam/config/'
 TERMS_URL = '/api/admin/policy/terms/'
+POSTS_URL = '/api/posts/'
+COMMENTS_URL = '/api/comments/'
+REPORTS_URL = '/api/moderation/reports/'
 
 
 class SpamDeskTests(RbacTestCase):
@@ -51,13 +57,12 @@ class SpamDeskTests(RbacTestCase):
                        'alert_report_pile', 'spam_autohide', 'spam_link_block'):
             self.assertIn(wanted, keys)
 
-    def test_which_limits_the_site_already_refuses_is_said_per_line(self):
+    def test_every_knob_on_the_desk_is_one_the_site_refuses_on(self):
         got = self.desk.get(DESK_URL)
         lines = {line['key']: line for block in got.data['blocks'] for line in block['lines']}
-        self.assertTrue(lines['spam_signup_per_hour']['enforced'])
-        self.assertFalse(lines['spam_post_per_hour']['enforced'],
-                         'a ceiling the composer would have to read is not yet a refusal')
-        self.assertEqual(got.data['enforced'], list(spam.ENFORCED))
+        for key in lines:
+            self.assertTrue(lines[key]['enforced'], f'{key} is published but answered by no door')
+        self.assertEqual(sorted(got.data['enforced']), sorted(lines))
 
     def test_typing_a_limit_changes_what_the_open_door_answers(self):
         saved = self.desk.post(DESK_URL, {'spam_post_per_hour': '2'}, format='json')
@@ -126,6 +131,104 @@ class SpamDeskTests(RbacTestCase):
         self.assertEqual(turned_away.data['code'], 'staff_only')
 
 
+class DeskDrivesTheDoorsTests(RbacTestCase):
+    """The bug this file was written for: a save on the desk that changed nothing.
+
+    Every rule below is set through the desk, then met at a member's own request,
+    because a number that only moves the screen is a number nobody is protected by.
+    """
+
+    def setUp(self):
+        super().setUp()
+        StaffAccount.objects.create(user=self.admin, role=StaffAccount.Role.ADMIN)
+        self.desk = self.session('client_owner')
+        self.member = make_user('desk_subject', password='Test-Pass-9271')
+        self.post_as = auth_client(self.member)
+
+    def posts(self, count, text='a plain note about the weather'):
+        codes = [self.post_as.post(POSTS_URL, {'text': text}, format='json').status_code for _ in range(count)]
+        return codes
+
+    def test_a_ceiling_typed_on_the_desk_is_met_by_the_next_posts(self):
+        self.assertEqual(self.posts(2), [201, 201], 'the desk ships a ceiling nobody is near')
+        self.desk.post(DESK_URL, {'spam_post_per_hour': '3'}, format='json')
+        self.assertEqual(self.posts(4)[2], 429, 'the fourth post in the hour meets the third')
+
+    def test_a_ceiling_of_zero_switches_that_rule_off_rather_than_blocking_everybody(self):
+        self.assertEqual(len(self.posts(11)), 11)
+        self.desk.post(DESK_URL, {'spam_post_per_hour': '0'}, format='json')
+        self.assertNotIn(429, self.posts(12), 'zero is the rule off, not everybody blocked')
+
+    def test_the_comment_ceiling_is_the_desk_s_number_too(self):
+        subject = Post.objects.create(author=self.member, text='somewhere to comment')
+        self.desk.post(DESK_URL, {'spam_comment_per_hour': '2'}, format='json')
+        codes = [self.post_as.post(COMMENTS_URL, {'post': subject.pk, 'text': f'nice {n}'},
+                                   format='json').status_code for n in range(3)]
+        self.assertEqual(codes[:2], [201, 201])
+        self.assertEqual(codes[2], 429)
+
+    def test_a_post_carrying_a_blocked_link_is_refused_and_told_which_link(self):
+        self.desk.post(TERMS_URL, {'kind': 'link', 'text': 'bit.ly'}, format='json')
+        refused = self.post_as.post(POSTS_URL, {'text': 'look at this https://bit.ly/x'}, format='json')
+        self.assertEqual(refused.status_code, 400, refused.data)
+        self.assertIn('bit.ly', refused.data['detail'])
+        self.assertEqual(refused.data['blocked'], ['bit.ly'], 'the composer paints the words it was told')
+        self.assertFalse(Post.objects.filter(author=self.member).exists(), 'nothing was saved to take back out')
+
+    def test_switching_the_link_rule_off_lets_the_same_post_through(self):
+        self.desk.post(TERMS_URL, {'kind': 'link', 'text': 'bit.ly'}, format='json')
+        self.desk.post(DESK_URL, {'spam_link_block': ''}, format='json')
+        self.assertEqual(
+            self.post_as.post(POSTS_URL, {'text': 'look at this https://bit.ly/x'}, format='json').status_code,
+            201, 'the switch, not the list, decides')
+
+    def test_a_new_account_posts_straight_away_until_a_seat_turns_the_hold_on(self):
+        self.assertEqual(self.posts(1), [201], 'the hold ships off, so a fresh member is not locked out')
+        self.desk.post(DESK_URL, {'spam_new_account_hours': '24'}, format='json')
+        refused = self.post_as.post(POSTS_URL, {'text': 'trying again after the hold'}, format='json')
+        self.assertEqual(refused.status_code, 403, refused.data)
+        self.assertIn('24 hours', refused.data['detail'])
+
+    def test_an_account_old_enough_for_the_hold_is_not_stopped_by_it(self):
+        self.desk.post(DESK_URL, {'spam_new_account_hours': '24'}, format='json')
+        Post.objects.filter(author=self.member).delete()
+        self.member.date_joined = timezone.now() - timedelta(days=3)
+        self.member.save(update_fields=['date_joined'])
+        self.assertEqual(self.posts(1), [201])
+
+    def test_a_pile_only_pulls_content_while_the_desk_lets_it(self):
+        subject = Post.objects.create(author=self.member, text='three people did not like this')
+        pile = spam.report_threshold()
+        for index in range(pile):
+            watcher = make_user(f'pile{index}', password='Test-Pass-9271')
+            auth_client(watcher).post(REPORTS_URL, {'target_type': 'post', 'target_id': str(subject.pk),
+                                                    'reason': 'spam'}, format='json')
+        subject.refresh_from_db()
+        self.assertEqual(subject.status, Post.Status.HIDDEN, 'the shipped pile pulls, as it always did')
+
+        Post.objects.filter(pk=subject.pk).update(status=Post.Status.LIVE)
+        pulled = AuditLog.objects.filter(action='auto_hide_post', target=f'post:{subject.pk}').count()
+        self.desk.post(DESK_URL, {'spam_autohide': ''}, format='json')
+        fourth = make_user('pile_extra', password='Test-Pass-9271')
+        auth_client(fourth).post(REPORTS_URL, {'target_type': 'post', 'target_id': str(subject.pk),
+                                               'reason': 'spam'}, format='json')
+        subject.refresh_from_db()
+        self.assertEqual(subject.status, Post.Status.LIVE, 'the desk said stop, so the pile stopped')
+        self.assertEqual(AuditLog.objects.filter(action='auto_hide_post',
+                                                 target=f'post:{subject.pk}').count(), pulled,
+                         'the log records what the platform did, not what it refused to do')
+
+    def test_raising_the_pile_on_the_desk_means_the_same_post_survives_more_reports(self):
+        subject = Post.objects.create(author=self.member, text='only two of us mind')
+        self.desk.post(DESK_URL, {'alert_report_pile': '4'}, format='json')
+        for index in range(3):
+            watcher = make_user(f'wide{index}', password='Test-Pass-9271')
+            auth_client(watcher).post(REPORTS_URL, {'target_type': 'post', 'target_id': str(subject.pk),
+                                                    'reason': 'spam'}, format='json')
+        subject.refresh_from_db()
+        self.assertEqual(subject.status, Post.Status.LIVE, 'three is not the pile this desk was given')
+
+
 class BlockedLinkTests(RbacTestCase):
     """Links are the rules table with a third kind, not a second list."""
 
@@ -166,7 +269,13 @@ class PublicConfigTests(RbacTestCase):
         self.session('client_owner').post(DESK_URL, {'spam_new_account_hours': '24', 'spam_new_account_verify': '1'},
                                           format='json')
         answered = APIClient().get(CONFIG_URL)
-        self.assertEqual(answered.data['new_account'], {'hold_hours': 24, 'posts_per_day': 5, 'verify_first': True})
+        self.assertEqual(answered.data['new_account'], {'hold_hours': 24, 'posts_per_day': 0, 'verify_first': True})
+
+    def test_the_two_hold_rules_ship_at_zero_so_a_new_account_can_post(self):
+        """Somebody has to turn a wait on; a fresh seat is not made to wait for a
+        rule no person on this platform has decided it wants."""
+        answered = APIClient().get(CONFIG_URL)
+        self.assertEqual(answered.data['new_account'], {'hold_hours': 0, 'posts_per_day': 0, 'verify_first': False})
 
     def test_it_carries_the_words_and_links_the_platform_will_not_carry(self):
         owner = self.session('client_owner')

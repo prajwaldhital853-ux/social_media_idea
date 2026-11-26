@@ -1,6 +1,5 @@
 from datetime import timedelta
 
-from django.conf import settings as django_settings
 from django.db.models import Count, F, Q
 from django.db.models.functions import Greatest
 from django.shortcuts import get_object_or_404
@@ -71,10 +70,20 @@ def reports(request):
 
 
 def _auto_hide_if_piled_on(report):
-    """Enough distinct reporters on one post and it leaves the feed pending review."""
+    """Enough distinct reporters on one post and it leaves the feed pending review.
+
+    Both halves of that rule live on the console's spam desk: `spam_autohide` says
+    whether a pile may pull anything at all, and `report_threshold()` is the size of
+    the pile. With the switch off the report still reaches the review queue and the
+    email, it just waits for a person instead of a number.
+    """
     if report.target_type != Report.Target.POST or not report.target_id.isdigit():
         return
-    threshold = int(getattr(django_settings, 'EXPOSING_REPORT_THRESHOLD', 3))
+    from apps.adminpanel import spam
+
+    if not spam.autohide():
+        return
+    threshold = spam.report_threshold()
     distinct = Report.objects.filter(
         target_type=Report.Target.POST, target_id=report.target_id, status=Report.Status.OPEN,
     ).values('reporter').distinct().count()

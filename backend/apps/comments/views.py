@@ -3,7 +3,7 @@ from django.db.models import Count, F, Q
 from rest_framework import viewsets
 from rest_framework.permissions import BasePermission, IsAuthenticatedOrReadOnly, SAFE_METHODS
 
-from apps.common.rules import blocked_wording
+from apps.common.rules import blocked_wording, write_gate
 from apps.notifications.services import notify
 from apps.posts.models import Post
 from apps.posts.views import visible_posts
@@ -46,10 +46,14 @@ class CommentViewSet(viewsets.ModelViewSet):
         return qs
 
     def create(self, request, *args, **kwargs):
-        """Words on the console's blocked list are answered, not saved."""
+        """Words on the console's blocked list are answered, not saved, and so is a
+        seat that has run past the comment ceiling the spam desk is holding."""
         refused = blocked_wording(request, 'comment')
         if refused:
             return refused
+        gate = write_gate(request, 'comment')
+        if gate:
+            return gate
         return super().create(request, *args, **kwargs)
 
     def update(self, request, *args, **kwargs):
