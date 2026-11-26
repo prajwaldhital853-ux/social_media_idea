@@ -1,3 +1,5 @@
+import random
+
 from django.db.models import Exists, F, OuterRef, Q
 from rest_framework import status, viewsets
 from rest_framework.decorators import action, api_view, permission_classes
@@ -60,6 +62,20 @@ class PostViewSet(viewsets.ModelViewSet):
         if self.request.query_params.get('media') == 'video':
             qs = qs.filter(Exists(PostMedia.objects.filter(post=OuterRef('pk'), kind='video')))
         return qs
+
+    def list(self, request, *args, **kwargs):
+        response = super().list(request, *args, **kwargs)
+        params = request.query_params
+        # The reels shelf is a discovery stream, so a fresh open deals a fresh
+        # hand: nobody opens the same reel first twice in a row. A shelf that is
+        # a question about one person (their profile), a search, or a walk in a
+        # chosen order keeps the order it was asked for, and a cursor page keeps
+        # its own order so the walk stays stable under inserts.
+        reshuffle = (params.get('media') == 'video' and not params.get('author')
+                     and not params.get('q') and not params.get('order') and not params.get('cursor'))
+        if reshuffle and response.status_code == 200 and isinstance(response.data, dict):
+            random.shuffle(response.data['results'])
+        return response
 
     def create(self, request, *args, **kwargs):
         """Blocked wording, the desk's ceilings and blocked links are all answered here.
@@ -182,6 +198,13 @@ def feed(request):
     data = PostSerializer(rows, many=True, context={'request': request}).data
     for item in data:
         item['promoted'] = False
+    if not following and not request.query_params.get('order') and not cursor:
+        # For You is a discovery shelf: the newest window is dealt in a fresh
+        # order on every read, so two arrivals never open on the same screenful
+        # even when nobody has posted. Deeper pages keep the walk's own order,
+        # because a cursor has to stay stable under inserts, and the people a
+        # reader chose (Following, oldest) are listed in the order they chose.
+        random.shuffle(data)
     if promo_ids:
         # The sponsored slot is still a post: a private author or a followers-only
         # ad must not reach a stranger because somebody paid for it.

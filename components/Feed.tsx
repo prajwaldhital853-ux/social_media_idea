@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import PostCard from '@/components/PostCard';
 import { useApp } from '@/lib/AppContext';
@@ -38,6 +38,31 @@ export default function Feed() {
   const { limit, pending, sentinel, hasMore } = useWindowed(posts.length, 10, tab,
     serverMode ? { hasMore: feed.hasMore, loading: feed.loading, load: feed.loadMore } : undefined);
   const filling = serverMode && feed.loading && posts.length === 0;
+
+  // Every arrival at Home is a fresh reading, not a replay of the ids the last
+  // visit left behind: page one is re-read while the rows on screen stay put,
+  // and the server deals that page in a new order each time. A cold load is
+  // already a first reading, so only a return visit re-pulls here.
+  const refeed = useRef(feed.reload);
+  refeed.current = feed.reload;
+  const returned = useRef(false);
+  useEffect(() => {
+    if (!serverMode) return;
+    if (returned.current) refeed.current();
+    returned.current = true;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // A phone's back button hands this page back from the browser's own snapshot
+  // without remounting anything, so the re-pull rides on pageshow instead.
+  useEffect(() => {
+    if (!serverMode) return;
+    const onShow = (event: PageTransitionEvent) => {
+      if (event.persisted) refeed.current();
+    };
+    window.addEventListener('pageshow', onShow);
+    return () => window.removeEventListener('pageshow', onShow);
+  }, [serverMode]);
 
   // Once the reader is past the first card the tab bar slides up against the
   // top bar and thins out, which is the room the posts actually need.
