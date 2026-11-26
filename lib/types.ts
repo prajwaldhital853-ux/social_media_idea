@@ -288,10 +288,21 @@ export interface FeatureFlags {
   appleLogin: boolean;
 }
 
+/** The size one post is allowed to be, the console's post limits desk decides. */
+export interface PostLimits {
+  textChars: number;
+  photoCount: number;
+  photoMb: number;
+  videoCount: number;
+  videoSeconds: number;
+  videoMb: number;
+}
+
 export interface Settings {
   threshold: number;
   coinPrice: number;
   minPurchase: number;
+  limits: PostLimits;
   bankName: string;
   bankAccount: string;
   bankHolder: string;

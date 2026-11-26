@@ -119,6 +119,26 @@ def features():
     }
 
 
+def post_limits():
+    """The size one post is allowed to be, the post limits desk's rows.
+
+    The desk publishes these at `GET /api/limits/config/` for the composer to
+    hold a person to; the config travels with them so a composer is held to the
+    same numbers whether it read the desk or the boot payload. No desk table yet
+    means the shipped numbers stand.
+    """
+    try:
+        from apps.adminpanel import limits as desk
+        return desk.public_config()
+    except Exception:  # noqa: BLE001 - no settings table yet means the shipped numbers stand
+        return {
+            'text': {'characters': 2000},
+            'photo': {'per_post': 4, 'each_mb': 5, 'each_bytes': 5 * 1024 ** 2},
+            'video': {'per_post': 1, 'seconds': 60, 'each_mb': 150, 'each_bytes': 150 * 1024 ** 2},
+            'server_upload_mb': 150,
+        }
+
+
 def client_config():
     terms = coin_terms()
     return {
@@ -129,6 +149,7 @@ def client_config():
         'minAge': MIN_AGE,
         'coinPrice': terms['coin_price'],
         'minPurchase': terms['min_purchase'],
+        'limits': post_limits(),
         'threshold': int(getattr(settings, 'EXPOSING_REPORT_THRESHOLD', 3)),
         'rateLimits': bool(getattr(settings, 'EXPOSING_RATE_LIMITS', True)),
         'googleClientId': getattr(settings, 'GOOGLE_CLIENT_ID', ''),

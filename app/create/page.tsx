@@ -23,16 +23,16 @@ const MOODS = [
   { emoji: '🎉', label: 'festive' },
   { emoji: '😴', label: 'tired' }
 ];
-const CHAR_LIMIT = 3000;
-const MAX_PHOTOS = 10;
-const MAX_VIDEOS = 3;
 /** The ring only ever reports a stage the app is really in: sent, or confirmed. */
 const PUBLISHING = 12;
 const PUBLISHED = 100;
 
 export default function CreatePostPage() {
   const router = useRouter();
-  const { me, addPost, showToast, ready } = useApp();
+  const { me, addPost, showToast, ready, db } = useApp();
+  // The console's post limits desk decides what one post may hold; the seed
+  // carries its shipped numbers until the first config answer replaces them.
+  const limits = db.settings.limits;
   const [text, setText] = useState('');
   const [media, setMedia] = useState<Media[]>([]);
   const [mood, setMood] = useState('');
@@ -84,8 +84,8 @@ export default function CreatePostPage() {
 
   const photoCount = media.filter(m => m.type === 'image').length;
   const videoCount = media.filter(m => m.type === 'video').length;
-  const atCap = photoCount >= MAX_PHOTOS && videoCount >= MAX_VIDEOS;
-  const accept = photoCount >= MAX_PHOTOS ? 'video/*' : videoCount >= MAX_VIDEOS ? 'image/jpeg,image/png,image/webp' : 'image/jpeg,image/png,image/webp,video/*';
+  const atCap = photoCount >= limits.photoCount && videoCount >= limits.videoCount;
+  const accept = photoCount >= limits.photoCount ? 'video/*' : videoCount >= limits.videoCount ? 'image/jpeg,image/png,image/webp' : 'image/jpeg,image/png,image/webp,video/*';
 
   const attach = async (files: FileList | null) => {
     if (!files?.length) return;
@@ -95,12 +95,12 @@ export default function CreatePostPage() {
     try {
       for (const file of Array.from(files)) {
         const video = file.type.startsWith('video/');
-        if (video && next.filter(m => m.type === 'video').length >= MAX_VIDEOS) throw new Error(`Up to ${MAX_VIDEOS} videos per post — remove a clip first.`);
-        if (!video && next.filter(m => m.type === 'image').length >= MAX_PHOTOS) throw new Error(`You can attach up to ${MAX_PHOTOS} photos.`);
+        if (video && next.filter(m => m.type === 'video').length >= limits.videoCount) throw new Error(`Up to ${limits.videoCount} videos per post — remove a clip first.`);
+        if (!video && next.filter(m => m.type === 'image').length >= limits.photoCount) throw new Error(`You can attach up to ${limits.photoCount} photos.`);
         setUpload({ name: file.name, pct: 0 });
         next.push(await mediaFromFile(file, (sent, total) => {
           setUpload({ name: file.name, pct: total > 0 ? Math.min(99, Math.round((sent / total) * 100)) : 0 });
-        }));
+        }, { photoMb: limits.photoMb, videoMb: limits.videoMb, videoSeconds: limits.videoSeconds }));
       }
       setMedia(next);
     } catch (err) {
@@ -201,7 +201,7 @@ export default function CreatePostPage() {
             placeholder={`What's on your mind, ${me.name.split(' ')[0]}?`}
             value={text}
             onChange={e => setText(e.target.value)}
-            maxLength={CHAR_LIMIT}
+            maxLength={limits.textChars}
             aria-label="Post caption"
             autoComplete="off"
             autoCorrect="on"
@@ -264,7 +264,7 @@ export default function CreatePostPage() {
                 <span className="addon-bubble green">{IC.img}</span>
                 <span className="addon-copy">
                   <b>Photos/videos</b>
-                  <small>{media.length ? `${photoCount}/${MAX_PHOTOS} photos · ${videoCount}/${MAX_VIDEOS} videos` : `Up to ${MAX_PHOTOS} photos + ${MAX_VIDEOS} videos`}</small>
+                  <small>{media.length ? `${photoCount}/${limits.photoCount} photos · ${videoCount}/${limits.videoCount} videos` : `Up to ${limits.photoCount} photos + ${limits.videoCount} videos`}</small>
                 </span>
                 <span className="addon-go">{IC.plus}</span>
               </button>
@@ -351,7 +351,7 @@ export default function CreatePostPage() {
         </div>
 
         <footer className="create-post-footer">
-          <span className={`char-count ${text.length > CHAR_LIMIT - 100 ? 'warning' : ''}`}>{text.length}/{CHAR_LIMIT}</span>
+          <span className={`char-count ${text.length > limits.textChars - 100 ? 'warning' : ''}`}>{text.length}/{limits.textChars}</span>
         </footer>
 
         <input

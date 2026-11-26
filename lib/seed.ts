@@ -373,6 +373,7 @@ export function defaultSettings(): Settings {
     threshold: 3,
     coinPrice: 10,
     minPurchase: 100,
+    limits: { textChars: 2000, photoCount: 4, photoMb: 5, videoCount: 1, videoSeconds: 60, videoMb: 150 },
     bankName: 'Nepal Bank Ltd',
     bankAccount: '0120-4455-8891',
     bankHolder: 'Exposing Pvt Ltd',
