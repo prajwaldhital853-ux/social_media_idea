@@ -67,6 +67,29 @@ export default function ReelsFeed({ initialKey }: { initialKey?: string }) {
     serverMode && feature('video'),
   );
 
+  // Every open of the reels page deals a fresh hand: page one is re-read when
+  // the reader arrives, and the server reshuffles that window per read. A cold
+  // load is already a first dealing, so only a return visit re-pulls here.
+  const restream = useRef(stream.reload);
+  restream.current = stream.reload;
+  const returned = useRef(false);
+  useEffect(() => {
+    if (!serverMode) return;
+    if (returned.current) restream.current();
+    returned.current = true;
+  }, []);
+
+  // A phone's back button restores this page from the browser's own snapshot
+  // without remounting anything, so the re-pull rides on pageshow instead.
+  useEffect(() => {
+    if (!serverMode) return;
+    const onShow = (event: PageTransitionEvent) => {
+      if (event.persisted) restream.current();
+    };
+    window.addEventListener('pageshow', onShow);
+    return () => window.removeEventListener('pageshow', onShow);
+  }, [serverMode]);
+
   const byId = new Map(db.posts.map(p => [p.id, p]));
   const reels = serverMode
     ? stream.ids.map(id => byId.get(id)).filter((p): p is Post => !!p && p.status === 'live')

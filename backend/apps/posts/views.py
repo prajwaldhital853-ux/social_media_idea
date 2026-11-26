@@ -1,3 +1,5 @@
+import random
+
 from django.core.cache import cache
 from django.db.models import Exists, F, OuterRef, Q
 from rest_framework import status, viewsets
@@ -77,13 +79,29 @@ class PostViewSet(viewsets.ModelViewSet):
         one would plant a cache entry of its own.
         """
         if request.user.is_authenticated or request.query_params.get('cursor') or request.query_params.get('q'):
-            return super().list(request, *args, **kwargs)
+            response = super().list(request, *args, **kwargs)
+            return self._deal(request, response)
         key = f'feed-anon:{request.get_full_path()}'
         cached = cache.get(key)
         if cached is not None:
             return Response(cached)
         response = super().list(request, *args, **kwargs)
+        self._deal(request, response)
         cache.set(key, response.data, FEED_CACHE_SECONDS)
+        return response
+
+    def _deal(self, request, response):
+        """The reels shelf is a discovery stream, so a fresh open deals a fresh
+        hand: nobody opens the same reel first twice in a row. A shelf that is
+        a question about one person (their profile), a search, or a walk in a
+        chosen order keeps the order it was asked for, and a cursor page keeps
+        its own order so the walk stays stable under inserts. A stranger reading
+        a cached page was dealt the hand the cache entry was planted with."""
+        params = request.query_params
+        if (params.get('media') == 'video' and not params.get('author')
+                and not params.get('q') and not params.get('order') and not params.get('cursor')
+                and response.status_code == 200 and isinstance(response.data, dict)):
+            random.shuffle(response.data['results'])
         return response
 
     def create(self, request, *args, **kwargs):
@@ -229,6 +247,13 @@ def _feed_page(request):
     data = PostSerializer(rows, many=True, context={'request': request}).data
     for item in data:
         item['promoted'] = False
+    if not following and not request.query_params.get('order') and not cursor:
+        # For You is a discovery shelf: the newest window is dealt in a fresh
+        # order on every read, so two arrivals never open on the same screenful
+        # even when nobody has posted. Deeper pages keep the walk's own order,
+        # because a cursor has to stay stable under inserts, and the people a
+        # reader chose (Following, oldest) are listed in the order they chose.
+        random.shuffle(data)
     if promo_ids:
         # The sponsored slot is still a post: a private author or a followers-only
         # ad must not reach a stranger because somebody paid for it.

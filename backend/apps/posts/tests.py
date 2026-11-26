@@ -87,11 +87,17 @@ class FeedKeysetTests(TestCase):
         for i in range(12):
             Post.objects.create(author=self.author, text=f'p{i}', audience='public')
 
-    def test_newest_first_and_stable_pages(self):
+    def test_discovery_page_shuffles_and_pages_stay_stable(self):
         client = auth_client(self.viewer)
         page1 = client.get('/api/feed/')
         self.assertEqual(len(page1.data['results']), 10)
-        self.assertEqual(page1.data['results'][0]['text'], 'p11')
+        # For You deals the newest window in a fresh order on every read, so the
+        # rows a page holds are what is promised, not where they sit.
+        self.assertEqual({p['text'] for p in page1.data['results']}, {f'p{i}' for i in range(2, 12)})
+        again = client.get('/api/feed/')
+        self.assertNotEqual([p['text'] for p in page1.data['results']],
+                            [p['text'] for p in again.data['results']],
+                            'two arrivals at For You opened on the same order')
         self.assertTrue(page1.data['has_more'])
         page2 = client.get('/api/feed/?cursor=' + page1.data['next_cursor'])
         self.assertEqual([p['text'] for p in page2.data['results']], ['p1', 'p0'])
