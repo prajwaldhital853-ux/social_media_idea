@@ -806,6 +806,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       || (patch.cover !== undefined && patch.cover !== self.cover)) {
       forgetLists('feed');
       forgetLists('profile-posts');
+      forgetLists('profile-photos');
+      forgetLists('profile-reels');
     }
   };
 
@@ -992,8 +994,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
       text: comment.text,
     });
     const saved = mapComment(row);
-    merge({ comments: [saved] });
-    setDb(prev => ({ ...prev, posts: prev.posts.map(p => (p.id === saved.pid ? { ...p, comments: (p.comments ?? 0) + 1 } : p)) }));
+    setDb(prev => {
+      const arrived = prev.comments.some(existing => existing.id === saved.id);
+      const next = applyFragment(prev, { comments: [saved] });
+      if (arrived) return next;
+      return {
+        ...next,
+        posts: next.posts.map(p => (p.id === saved.pid ? { ...p, comments: (p.comments ?? 0) + 1 } : p)),
+      };
+    });
     return saved;
   };
 

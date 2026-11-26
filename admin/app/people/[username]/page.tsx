@@ -10,6 +10,7 @@ import { Act } from '@/components/List';
 import { api } from '@/lib/api';
 import { num } from '@/lib/format';
 import { IC } from '@/lib/icons';
+import { useAdminEvent } from '@/lib/live';
 import { ago, stamp } from '@/lib/time';
 import { useSession } from '@/lib/session';
 import { ContentPreview, PersonDetail, PersonOutcome, PersonRow, PersonVerbs } from '@/lib/types';
@@ -89,6 +90,10 @@ export default function PersonRecordPage({ params }: { params: { username: strin
   useEffect(() => {
     if (status === 'in') load();
   }, [load, status]);
+
+  useAdminEvent(['warning', 'coins', 'coin_request', 'audit'], load, pulse =>
+    pulse.kind === 'audit' || !detail || String(pulse.user_id) === String(detail.person.id),
+  );
 
   // A pen clicked at the end of a directory row arrives here with the ask it
   // means, so the reason box is already open on arrival.

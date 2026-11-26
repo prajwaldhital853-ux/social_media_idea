@@ -17,11 +17,8 @@ class IsAuthorOrReadOnly(BasePermission):
         return request.method in SAFE_METHODS or obj.author_id == request.user.id
 
 
-def _pulse_comments(post):
-    """The fresh comment tally, told while the reader is still on the page.
-
-    The author always hears it; the room only for a post the room may read.
-    """
+def _pulse_comments(post, *, row=None, deleted_ids=None, parent_id=None, author_id=None):
+    """The fresh tally for the room, the full row for readers of this post."""
     from apps.common import pulse
     from apps.profiles.models import Profile
 
@@ -32,6 +29,21 @@ def _pulse_comments(post):
         user_id=post.author_id).values_list('is_private', flat=True).first()
     if room:
         pulse.to_site('comment', **event)
+
+    detail = {**event, 'action': 'create' if row else 'delete'}
+    if row:
+        detail.update(comment=row, comment_id=str(row['id']), author_id=row.get('author'))
+    if deleted_ids:
+        detail['deleted_ids'] = [str(pk) for pk in deleted_ids]
+    if author_id:
+        detail['author_id'] = author_id
+    if parent_id:
+        detail['parent_id'] = str(parent_id)
+        detail['parent_replies'] = Comment.objects.filter(pk=parent_id).aggregate(
+            n=Count('replies', filter=Q(replies__status=Comment.Status.LIVE), distinct=True),
+        )['n'] or 0
+    pulse.to_post(post.pk, 'comment', **detail)
+    pulse.to_staff('comment', **{key: value for key, value in detail.items() if key != 'comment'})
 
 
 class CommentViewSet(viewsets.ModelViewSet):
@@ -90,10 +102,14 @@ class CommentViewSet(viewsets.ModelViewSet):
             notify(comment.parent.author, self.request.user, 'reply', f'{self.request.user.username} replied to your comment.', 'post', post.pk)
         else:
             notify(post.author, self.request.user, 'comment', f'{self.request.user.username} commented on your post.', 'post', post.pk)
-        _pulse_comments(post)
+        row = CommentSerializer(comment, context={'request': self.request, '_comment_pulse': True}).data
+        row.pop('my_reaction', None)
+        row.pop('notices', None)
+        _pulse_comments(post, row=row, parent_id=comment.parent_id, author_id=comment.author_id)
 
     def perform_destroy(self, instance):
         post_id = instance.post_id
+        deleted_ids = [instance.pk, *instance.replies.values_list('pk', flat=True)]
         with transaction.atomic():
             Post.objects.select_for_update().get(pk=post_id)
             delta = 1 + instance.replies.count()
@@ -103,4 +119,7 @@ class CommentViewSet(viewsets.ModelViewSet):
         if deleted:
             post = Post.objects.filter(pk=post_id).first()
             if post:
-                _pulse_comments(post)
+                _pulse_comments(
+                    post, deleted_ids=deleted_ids, parent_id=instance.parent_id,
+                    author_id=instance.author_id,
+                )

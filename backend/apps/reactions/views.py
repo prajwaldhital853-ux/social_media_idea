@@ -110,6 +110,7 @@ def _pulse_reaction(target_type, target_id):
     pulse.to_user(owner_pk, 'reaction', **event)
     if room:
         pulse.to_site('reaction', **event)
+    pulse.to_staff('reaction', **event)
 
 
 def _notify_target(request, target_type, target_id):

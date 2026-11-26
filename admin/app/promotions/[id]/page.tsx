@@ -9,6 +9,7 @@ import { useConfirm } from '@/components/Confirm';
 import { api } from '@/lib/api';
 import { num } from '@/lib/format';
 import { IC } from '@/lib/icons';
+import { useAdminEvent } from '@/lib/live';
 import { ago, stamp } from '@/lib/time';
 import { useSession } from '@/lib/session';
 import { PromoDetail, PromoRow } from '@/lib/types';
@@ -97,6 +98,12 @@ export default function CampaignPage({ params }: { params: { id: string } }) {
   useEffect(() => {
     load();
   }, [load]);
+
+  useAdminEvent(['promotion', 'staff_notice'], load, pulse => {
+    if (pulse.kind === 'promotion') return String(pulse.id) === params.id;
+    return pulse.notice_kind === 'promotion'
+      || pulse.route.split('?')[0].replace(/\/+$/, '') === '/promotions';
+  });
 
   const submit = async (which: Verb) => {
     const sure = await confirm({

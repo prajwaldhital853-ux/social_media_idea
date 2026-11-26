@@ -46,6 +46,8 @@ class CommentSerializer(serializers.ModelSerializer):
         return value if value is not None else obj.replies.filter(status=Comment.Status.LIVE).count()
 
     def get_my_reaction(self, obj):
+        if self.context.get('_comment_pulse'):
+            return None
         if '_comment_reactions' not in self.context:
             self.context['_comment_reactions'] = user_reaction_map(
                 self.context.get('request'), 'comment', [obj.pk]
@@ -54,6 +56,8 @@ class CommentSerializer(serializers.ModelSerializer):
 
     def get_notices(self, obj):
         # A page fills this once; a single read asks for its own row.
+        if self.context.get('_comment_pulse'):
+            return []
         if '_comment_notices' not in self.context:
             self.context['_comment_notices'] = notice_map('comment', [obj.pk], self.context.get('request'))
         return self.context['_comment_notices'].get(str(obj.pk), [])

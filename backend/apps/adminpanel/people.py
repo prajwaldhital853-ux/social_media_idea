@@ -664,6 +664,7 @@ def warn(user, caller, *, text, reason='', audience=PublicNotice.Audience.PRIVAT
     try:
         from apps.common import pulse
         pulse.to_user(account.pk, 'warning')
+        pulse.to_staff('warning', user_id=account.pk)
     except Exception:  # noqa: BLE001 - the wire is a courtesy, the warning already stands
         pass
     return {

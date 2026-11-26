@@ -14,6 +14,7 @@ a number on a dashboard and stays there.
 """
 
 from django.contrib.auth import get_user_model
+from django.db import transaction
 from django.db.models import Count, Q
 from django.db.models.signals import post_save
 from django.utils import timezone
@@ -79,7 +80,14 @@ def announce(kind, text, href, permission=''):
         )
         _trim(user)
         told += 1
+    if told:
+        transaction.on_commit(lambda: _pulse(kind, route, permission))
     return told
+
+
+def _pulse(kind, route, permission=''):
+    from apps.common import pulse
+    pulse.to_staff('staff_notice', notice_kind=kind, route=route, permission=permission)
 
 
 def _demo(user):
@@ -131,12 +139,13 @@ def on_signup(instance, created, **kwargs):
 
 
 def on_coin_update(instance, created, update_fields, **kwargs):
-    """New proof on a request that was already waiting: the desk has something new to open.
-
-    The row is not created again, so `created` is False and only `update_fields`
-    says what changed, the same field the console reads to show "answered".
-    """
-    if created or 'resubmitted_at' not in (update_fields or []) or _demo(instance.user):
+    """New proof or a decision on a request already in the desk's queue."""
+    if _demo(instance.user):
+        return
+    changed = set(update_fields or [])
+    if created or changed.intersection({'status', 'resubmitted_at'}):
+        transaction.on_commit(lambda: _coin_pulse(instance))
+    if created or 'resubmitted_at' not in changed:
         return
     announce(
         'coin_proof',
@@ -146,10 +155,17 @@ def on_coin_update(instance, created, update_fields, **kwargs):
     )
 
 
+def _coin_pulse(instance):
+    from apps.common import pulse
+    pulse.to_staff('coin_request', id=instance.pk, user_id=instance.user_id, status=instance.status)
+
+
 def on_promotion(instance, created, update_fields, **kwargs):
-    """A campaign that went live: somebody spent coins and the queue has a name on it."""
+    """A campaign entered or moved in the queue, including a new waiting order."""
     if _demo(instance.owner):
         return
+    if created or 'status' in (update_fields or []):
+        transaction.on_commit(lambda: _promotion_pulse(instance))
     started = (created and instance.status == Promotion.Status.ACTIVE) or (
         not created and 'status' in (update_fields or []) and instance.status == Promotion.Status.ACTIVE
     )
@@ -161,6 +177,11 @@ def on_promotion(instance, created, update_fields, **kwargs):
         '/promotions?status=active',
         'promotions_view',
     )
+
+
+def _promotion_pulse(instance):
+    from apps.common import pulse
+    pulse.to_staff('promotion', id=instance.pk, status=instance.status)
 
 
 def connect():

@@ -9,6 +9,7 @@ import { ContentPicks, Hit, PeoplePicks } from '@/components/Find';
 import { Chips, More } from '@/components/List';
 import { api } from '@/lib/api';
 import { IC } from '@/lib/icons';
+import { useAdminEvent } from '@/lib/live';
 import { ago, stamp } from '@/lib/time';
 import { useSession } from '@/lib/session';
 import { ContentKind, NoticePage, NoticeRow } from '@/lib/types';
@@ -261,6 +262,10 @@ export default function NoticesPage() {
   useEffect(() => {
     if (logOpen) load();
   }, [load, logOpen]);
+
+  useAdminEvent(['audit'], () => {
+    if (logOpen) void load();
+  });
 
   useEffect(() => {
     if (!helpOpen) return;

@@ -16,7 +16,8 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from apps.accounts.models import User
-from apps.adminpanel.models import PublicNotice
+from apps.adminpanel import rbac
+from apps.adminpanel.models import PublicNotice, StaffAccount
 from apps.comments.models import Comment
 from apps.common.api import person
 from apps.common.pagination import KeysetPagination
@@ -24,6 +25,7 @@ from apps.common.stream import acquire, release, stream_user
 from apps.marketplace.models import Listing
 from apps.messages.models import Message
 from apps.posts.models import Post
+from apps.posts.views import visible_posts
 
 from .models import Notification
 
@@ -178,7 +180,61 @@ def _since(user_pk, since_ts, since_pk, limit=50):
     return rows
 
 
-async def _notification_events(user_pk, since_ts, interval, max_life, since_pk=0):
+def _post_visible(user_pk, post_id):
+    user = User.objects.filter(pk=user_pk, is_active=True).first()
+    return bool(user and not user.is_suspended and visible_posts(user).filter(pk=post_id).exists())
+
+
+def _staff_permissions(user_pk):
+    user = User.objects.filter(pk=user_pk, is_active=True, is_staff=True).first()
+    if not user or user.is_suspended:
+        return None
+    seat = StaffAccount.objects.filter(user_id=user_pk, is_enabled=True).first()
+    if seat is None or not seat.is_enrolled:
+        return None
+    keys = set(rbac.permissions_for(seat))
+    return keys or None
+
+
+NOTICE_KINDS = {'report', 'coin_request', 'signup', 'coin_proof', 'promotion', 'alert'}
+
+
+def _staff_allowed(permissions, frame):
+    kind = frame.get('kind')
+    if kind == 'staff_notice' or (kind in NOTICE_KINDS and frame.get('route')):
+        permission = frame.get('permission')
+        if isinstance(permission, str) and permission:
+            return permission in permissions
+        route = str(frame.get('route') or '')
+        if route.startswith('/coins'):
+            needed = {'coins_view', 'coins_review'}
+        elif route.startswith('/people'):
+            needed = {'users'}
+        elif route.startswith('/promotions'):
+            needed = {'promotions_view'}
+        elif route.startswith('/reports'):
+            needed = {'reports'}
+        elif route.startswith('/policy'):
+            needed = {'blocked_words'}
+        elif route.startswith('/alerts'):
+            needed = {'alerts'}
+        else:
+            return False
+        return bool(permissions & needed)
+    if kind in {'comment', 'post_new', 'reaction'}:
+        return bool(permissions & {'content', 'reports', 'overview', 'notices', 'listings'})
+    if kind == 'coin_request':
+        return bool(permissions & {'coins_view', 'coins_review'})
+    if kind == 'coins':
+        return bool(permissions & {'coins_view', 'coins_review', 'coin_ledger'})
+    if kind == 'promotion':
+        return bool(permissions & {'promotions_view', 'promotions_review'})
+    if kind == 'warning':
+        return bool(permissions & {'users', 'user_actions', 'warnings'})
+    return kind == 'audit'
+
+
+async def _notification_events(user_pk, since_ts, interval, max_life, since_pk=0, post_id=None, staff=False):
     deadline = time.monotonic() + max_life
     # A stream opened without a cursor starts from "now" — everything earlier
     # is already on the page from the mount fetch. The baseline is captured
@@ -193,8 +249,9 @@ async def _notification_events(user_pk, since_ts, interval, max_life, since_pk=0
     layer = get_channel_layer()
     channel = await layer.new_channel('pulse.')
     user_group = f'user.{user_pk}'
-    await layer.group_add(user_group, channel)
-    await layer.group_add('site', channel)
+    groups = [f'post.{post_id}'] if post_id else (['staff'] if staff else [user_group, 'site'])
+    for group in groups:
+        await layer.group_add(group, channel)
     frames: asyncio.Queue = asyncio.Queue()
 
     async def pump():
@@ -219,8 +276,28 @@ async def _notification_events(user_pk, since_ts, interval, max_life, since_pk=0
                     landed.append(frames.get_nowait())
             except asyncio.TimeoutError:
                 pass
+            if landed:
+                if post_id and not await sync_to_async(_post_visible)(user_pk, post_id):
+                    return
+                if staff:
+                    permissions = await sync_to_async(_staff_permissions)(user_pk)
+                    if permissions is None:
+                        return
+                    allowed = []
+                    for frame in landed:
+                        try:
+                            payload = json.loads(frame)
+                        except (TypeError, ValueError):
+                            continue
+                        if isinstance(payload, dict) and _staff_allowed(permissions, payload):
+                            allowed.append(frame)
+                    landed = allowed
             for frame in landed:
                 yield f'event: pulse\ndata: {frame}\n\n'
+            if post_id or staff:
+                if not landed:
+                    yield ': keepalive\n\n'
+                continue
             rows = await sync_to_async(_since)(user_pk, since_ts, since_pk)
             for row in rows:
                 since_ts, since_pk = row['created_at'], row['pk']
@@ -231,7 +308,7 @@ async def _notification_events(user_pk, since_ts, interval, max_life, since_pk=0
     finally:
         release(user_pk)
         drainer.cancel()
-        for group in (user_group, 'site'):
+        for group in groups:
             try:
                 await layer.group_discard(group, channel)
             except Exception:  # noqa: BLE001 - a loop already on its way out cannot be argued with
@@ -244,6 +321,22 @@ async def notification_stream(request):
         return JsonResponse({'detail': 'Authentication required.'}, status=401)
     if user.is_suspended:
         return JsonResponse({'detail': 'Account suspended.'}, status=403)
+
+    staff_mode = request.GET.get('staff') == '1'
+    if staff_mode:
+        request.user = user
+        denied = await sync_to_async(rbac.check)(request, [])
+        if denied is not None:
+            return JsonResponse(dict(denied.data), status=denied.status_code)
+
+    post_id = None
+    raw_post = request.GET.get('post')
+    if raw_post:
+        if not raw_post.isdigit():
+            return JsonResponse({'detail': 'No such post.'}, status=404)
+        post_id = int(raw_post)
+        if not await sync_to_async(_post_visible)(user.pk, post_id):
+            return JsonResponse({'detail': 'No such post.'}, status=404)
 
     raw = request.headers.get('Last-Event-ID') or request.GET.get('last_event_id') or ''
     since_ts, since_pk = None, 0
@@ -263,7 +356,10 @@ async def notification_stream(request):
         return JsonResponse({'detail': 'Too many live streams for this account. Close a tab and try again.'}, status=429)
 
     response = StreamingHttpResponse(
-        _notification_events(user.pk, since_ts, settings.SSE_INTERVAL, settings.SSE_MAX_LIFE, since_pk),
+        _notification_events(
+            user.pk, since_ts, settings.SSE_INTERVAL, settings.SSE_MAX_LIFE, since_pk,
+            post_id=post_id, staff=staff_mode,
+        ),
         content_type='text/event-stream',
     )
     response['Cache-Control'] = 'no-cache, no-transform'

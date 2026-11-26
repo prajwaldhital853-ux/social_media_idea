@@ -7,7 +7,7 @@ import { useApp } from '@/lib/AppContext';
 import { ago, uid, REACTIONS, reactionMeta } from '@/lib/utils';
 import { Comment, ReactionKind } from '@/lib/types';
 import { IC } from '@/lib/icons';
-import { commentsFragment, loadList, loadMoreList, pushListRow, useList } from '@/lib/lists';
+import { commentsFragment, forgetLists, loadList, loadMoreList, pushListRow, removeListRow, useList } from '@/lib/lists';
 import { useBackClose, closeLayerWithoutBack } from '@/lib/useBackClose';
 import { useWindowed } from '@/lib/useWindowed';
 import Avatar from './Avatar';
@@ -56,7 +56,9 @@ function CommentText({ text, replyToName }: { text: string; replyToName?: string
 }
 
 export default function Comments({ postId, onClose, mediaIndex }: { postId: string; onClose?: () => void; mediaIndex?: number }) {
-  const { db, me, addComment, deleteComment, react, myReaction, reactionCount, reactionMix, t, serverMode, showToast } = useApp();
+  const { db, setDb, merge, me, addComment, deleteComment, react, myReaction, reactionCount, reactionMix, t, serverMode, showToast } = useApp();
+  const dbRef = useRef(db);
+  dbRef.current = db;
   const [text, setText] = useState('');
   const [blocked, setBlocked] = useState<string[]>([]);
   const [sending, setSending] = useState(false);
@@ -135,6 +137,68 @@ export default function Comments({ postId, onClose, mediaIndex }: { postId: stri
     serverMode && !!postId,
   );
   const replyDef = { path: '/comments/', frag: commentsFragment(me?.id || null) };
+  const streamQueryRef = useRef(streamQuery);
+  streamQueryRef.current = streamQuery;
+  const targetIdRef = useRef(targetId);
+  targetIdRef.current = targetId;
+  const mediaRef = useRef({ isMedia, mediaIndex });
+  mediaRef.current = { isMedia, mediaIndex };
+
+  useEffect(() => {
+    if (!serverMode || !me || !postId) return undefined;
+    const source = new EventSource(`/api/notifications/stream/?post=${encodeURIComponent(postId)}`);
+    const absorb = (raw: any) => {
+      if (!raw || raw.kind !== 'comment' || String(raw.post_id) !== postId) return;
+      const count = Math.max(0, Number(raw.comments) || 0);
+      const post = dbRef.current.posts.find(row => row.id === postId);
+      if (post) merge({ posts: [{ ...post, comments: count }] });
+
+      if (raw.action === 'create' && raw.comment) {
+        const row = raw.comment;
+        const id = String(row.id);
+        if (!dbRef.current.comments.some(comment => comment.id === id)) {
+          merge(commentsFragment([row]));
+        }
+        const parentId = row.parent == null ? null : String(row.parent);
+        if (parentId) {
+          const parent = dbRef.current.comments.find(comment => comment.id === parentId);
+          if (parent) {
+            merge({ comments: [{ ...parent, replies: Math.max(0, Number(raw.parent_replies) || 0) }] });
+          }
+        } else {
+          const rowMedia = row.media_index == null ? undefined : Number(row.media_index);
+          const view = mediaRef.current;
+          const matches = view.isMedia ? rowMedia === view.mediaIndex : rowMedia === undefined;
+          if (matches) pushListRow(`comments:${targetIdRef.current}`, streamQueryRef.current, id);
+        }
+        return;
+      }
+
+      if (raw.action === 'delete') {
+        const ids = new Set((Array.isArray(raw.deleted_ids) ? raw.deleted_ids : []).map(String));
+        if (!ids.size) return;
+        for (const id of ids) {
+          const row = dbRef.current.comments.find(comment => comment.id === id);
+          if (row?.parentId) {
+            removeListRow(`replies:${row.parentId}`, { parent: row.parentId }, id);
+          } else {
+            removeListRow(`comments:${targetIdRef.current}`, streamQueryRef.current, id);
+          }
+          forgetLists(`replies:${id}`);
+        }
+        setDb(prev => ({ ...prev, comments: prev.comments.filter(comment => !ids.has(comment.id)) }));
+        const parentId = raw.parent_id == null ? null : String(raw.parent_id);
+        const parent = parentId ? dbRef.current.comments.find(comment => comment.id === parentId) : null;
+        if (parent) {
+          merge({ comments: [{ ...parent, replies: Math.max(0, Number(raw.parent_replies) || 0) }] });
+        }
+      }
+    };
+    source.addEventListener('pulse', event => {
+      try { absorb(JSON.parse((event as MessageEvent).data)); } catch { /* a bad frame never closes the thread */ }
+    });
+    return () => source.close();
+  }, [serverMode, me?.id, postId, merge]);
 
   const allComments = db.comments.filter(c => c.pid === postId && c.status === 'live' && (isMedia ? c.mediaIndex === mediaIndex : c.mediaIndex === undefined));
   const byId = new Map(allComments.map(c => [c.id, c] as [string, Comment]));

@@ -441,6 +441,7 @@ def decide(promo, actor, action, reason='', choice=''):
         from apps.common import pulse
         pulse.to_user(promo.owner_id, 'promotion', id=str(promo.pk), status=promo.status,
                       starts_at=promo.starts_at, ends_at=promo.ends_at)
+        pulse.to_staff('promotion', id=str(promo.pk), status=promo.status)
     except Exception:  # noqa: BLE001 - the wire is a courtesy, the decision is already made
         pass
     money = (f'{_coins(taken)} coins taken on approval' if taken

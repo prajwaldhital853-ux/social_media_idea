@@ -9,6 +9,7 @@ import DecisionBar from '@/components/Decision';
 import { useConfirm } from '@/components/Confirm';
 import { api } from '@/lib/api';
 import { IC } from '@/lib/icons';
+import { useAdminEvent } from '@/lib/live';
 import { ago, stamp } from '@/lib/time';
 import { useSession } from '@/lib/session';
 import { AsideVerb, ContentKind, Decision as Verb, NoticeRow, Outcome, ReviewCase } from '@/lib/types';
@@ -64,6 +65,29 @@ export default function ReviewCasePage({ params }: { params: { kind: string; id:
   useEffect(() => {
     if (status === 'in') load();
   }, [load, status]);
+
+  useAdminEvent(known
+    ? ['comment', 'reaction', 'post_new', 'audit', 'staff_notice']
+    : [], load, pulse => {
+    const same = (id: string | number | undefined) => id !== undefined && String(id) === params.id;
+    if (pulse.kind === 'audit') return true;
+    if (pulse.kind === 'staff_notice') {
+      return pulse.notice_kind === 'report' || pulse.route.split('?')[0].replace(/\/+$/, '') === '/reports';
+    }
+    if (pulse.kind === 'post_new') return params.kind === 'post' && same(pulse.id);
+    if (pulse.kind === 'comment') {
+      if (params.kind === 'post') return same(pulse.post_id);
+      return params.kind === 'comment'
+        && [pulse.comment_id, pulse.parent_id, ...(pulse.deleted_ids || [])].some(id => same(id));
+    }
+    if (pulse.kind === 'reaction') {
+      const target = pulse.target ?? pulse.target_type;
+      const id = pulse.id ?? pulse.target_id;
+      if (params.kind === 'comment') return target === 'comment' && same(id);
+      return params.kind === 'post' && (same(pulse.post_id) || (target === 'post' && same(id)));
+    }
+    return false;
+  });
 
   const decide = async (verb: Verb, reason: string, notice: string, audience: string) =>
     api<Outcome>(detail!.reports.length

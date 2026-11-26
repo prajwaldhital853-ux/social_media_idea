@@ -7,6 +7,7 @@ import { More } from '@/components/List';
 import { api } from '@/lib/api';
 import { num } from '@/lib/format';
 import { IC } from '@/lib/icons';
+import { useAdminEvent } from '@/lib/live';
 import { ago, stamp } from '@/lib/time';
 import { useSession } from '@/lib/session';
 import { FlaggedPage, FlagRow } from '@/lib/types';
@@ -58,6 +59,11 @@ export default function FlagsScreen() {
   useEffect(() => {
     load();
   }, [load]);
+
+  useAdminEvent(['audit', 'staff_notice'], load, pulse => (
+    pulse.kind === 'audit'
+    || (pulse.kind === 'staff_notice' && pulse.notice_kind === 'report' && pulse.route === '/reports')
+  ));
 
   const older = async () => {
     if (!more) return;

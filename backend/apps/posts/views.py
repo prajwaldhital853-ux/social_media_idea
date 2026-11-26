@@ -86,8 +86,9 @@ class PostViewSet(viewsets.ModelViewSet):
         # The reels shelf is a stream of its own: posts that carry moving pictures.
         # Exists, not media__kind: one clip per post would otherwise be one row
         # per clip and a DISTINCT to tidy it back up.
-        if self.request.query_params.get('media') == 'video':
-            qs = qs.filter(Exists(PostMedia.objects.filter(post=OuterRef('pk'), kind='video')))
+        media = self.request.query_params.get('media')
+        if media in ('video', 'image'):
+            qs = qs.filter(Exists(PostMedia.objects.filter(post=OuterRef('pk'), kind=media)))
         return qs
 
     def list(self, request, *args, **kwargs):
@@ -162,8 +163,9 @@ class PostViewSet(viewsets.ModelViewSet):
             # nothing a stranger could read before the visibility rules let them.
             try:
                 from apps.common import pulse
-                pulse.to_site('post_new', id=str(instance.pk), author=instance.author.username,
-                              video=instance.media.filter(kind='video').exists())
+                video = instance.media.filter(kind='video').exists()
+                pulse.to_site('post_new', id=str(instance.pk), author=instance.author.username, video=video)
+                pulse.to_staff('post_new', id=str(instance.pk), author=instance.author.username, video=video)
             except Exception:  # noqa: BLE001 - the wire is a courtesy, the post is already live
                 pass
 

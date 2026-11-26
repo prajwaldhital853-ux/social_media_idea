@@ -7,6 +7,7 @@ import ConsoleShell from '@/components/ConsoleShell';
 import { useConfirm } from '@/components/Confirm';
 import { api } from '@/lib/api';
 import { IC } from '@/lib/icons';
+import { useAdminEvent } from '@/lib/live';
 import { ago, stamp } from '@/lib/time';
 import { useSession } from '@/lib/session';
 import { CoinDetail, ProofLink } from '@/lib/types';
@@ -50,6 +51,15 @@ export default function CoinRequestPage({ params }: { params: { id: string } }) 
   useEffect(() => {
     load();
   }, [load]);
+
+  useAdminEvent(['coins', 'coin_request', 'staff_notice'], load, pulse => {
+    if (pulse.kind === 'staff_notice') {
+      const route = pulse.route.split('?')[0].replace(/\/+$/, '');
+      return route === '/coins' || route.startsWith('/coins/');
+    }
+    if (pulse.kind === 'coin_request') return String(pulse.id) === params.id;
+    return !detail || String(pulse.user_id) === String(detail.request.card.id);
+  });
 
   // The link is a two-minute window on purpose, so the picture closes itself when
   // the window does rather than staying on screen as if it were still private.

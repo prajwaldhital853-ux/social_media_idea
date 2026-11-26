@@ -9,6 +9,7 @@ import { Chips, More } from '@/components/List';
 import { api } from '@/lib/api';
 import { num } from '@/lib/format';
 import { IC } from '@/lib/icons';
+import { useAdminEvent } from '@/lib/live';
 import { ago, stamp } from '@/lib/time';
 import { useSession } from '@/lib/session';
 import { LedgerPage, LedgerRow, SuggestRow } from '@/lib/types';
@@ -67,6 +68,8 @@ export default function LedgerScreen() {
   useEffect(() => {
     load();
   }, [load]);
+
+  useAdminEvent(['coins', 'coin_request', 'promotion', 'audit'], load);
 
   const older = async () => {
     if (!cursor) return;

@@ -32,7 +32,8 @@ class ReportSerializer(serializers.ModelSerializer):
 
 
 def audit(actor, action, target='', detail=''):
-    AuditLog.objects.create(actor=actor, action=action, target=str(target)[:80], detail=detail[:240])
+    from apps.adminpanel.journal import record
+    return record(actor, action, target, detail)
 
 
 @api_view(['GET', 'POST'])

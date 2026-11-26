@@ -66,6 +66,12 @@ export default function UserProfilePage() {
     { author: username, media: 'video', order: reelOrder === 'latest' ? undefined : reelOrder },
     serverMode && !!username && tab === 'reels',
   );
+  const authorPhotos = useList(
+    'profile-photos',
+    { path: '/posts/', frag: postsFragment(me?.id || null) },
+    { author: username, media: 'image' },
+    serverMode && !!username && tab === 'photos' && !locked,
+  );
 
   useEffect(() => {
     if (!serverMode || !username) return;
@@ -97,15 +103,48 @@ export default function UserProfilePage() {
       .filter(p => p.uid === user.id && p.status === 'live' && canSeePost(p, me?.id ?? null, db.follows, privateIds(db.users)))
       .sort((a, b) => b.ts - a.ts);
   }, [cachedPosts, db.posts, db.follows, user, me?.id, locked, serverMode]);
+  const cachedPhotos = useMemo(() => {
+    const index = new Map(db.posts.map(p => [p.id, p] as [string, Post]));
+    const rows = serverMode
+      ? authorPhotos.ids.map(id => index.get(id)).filter((p): p is Post => !!p && p.status === 'live')
+      : posts;
+    return rows.flatMap(p => (p.media || [])
+      .map((m, i) => ({ m, index: i, post: p }))
+      .filter(cell => cell.m.type === 'image'));
+  }, [authorPhotos.ids, db.posts, posts, serverMode]);
+  const photoCells = locked ? [] : cachedPhotos;
+  // One cell per moving picture this author owns, in the order the reader picked.
+  // Only the demo build sorts: its rows arrive in one order and the words are the
+  // reader's, so the shelf has to re-lay them. The server build must not, because
+  // its paginator breaks a tie its own way — equal tallies oldest-first — and a
+  // second sort here would scramble what the cursor was built on.
+  const reelCells = useMemo(() => {
+    const index = new Map(db.posts.map(p => [p.id, p] as [string, Post]));
+    const rows = serverMode
+      ? authorReels.ids.map(id => index.get(id)).filter((p): p is Post => !!p && p.status === 'live')
+      : user ? db.posts.filter(p => p.uid === user.id && p.status === 'live'
+          && canSeePost(p, me?.id ?? null, db.follows, privateIds(db.users))) : [];
+    const cells = rows.flatMap(p => (p.media || [])
+      .map((m, i) => ({ m, index: i, post: p }))
+      .filter(c => c.m.type === 'video'));
+    return serverMode ? cells : cells.sort((a, b) => (reelOrder === 'views'
+      ? (b.post.views ?? 0) - (a.post.views ?? 0) || b.post.ts - a.post.ts
+      : reelOrder === 'oldest' ? a.post.ts - b.post.ts : b.post.ts - a.post.ts));
+  }, [authorReels.ids, db.posts, db.follows, me?.id, user, reelOrder, serverMode]);
+  const visibleReels = locked ? [] : reelCells;
   const { limit: postLimit, pending: postsPending, sentinel: postsSentinel, hasMore: morePosts } = useWindowed(
     posts.length, 10, user?.id,
     serverMode ? { hasMore: authorPosts.hasMore, loading: authorPosts.loading, load: authorPosts.loadMore } : undefined,
   );
   // The reels grid pages on its own list rather than on the posts the reader has
   // scrolled past, so an author with a hundred reels is not cut off at page one.
-  const { limit: reelLimit, sentinel: reelsSentinel, hasMore: moreReels } = useWindowed(
-    authorReels.ids.length, 12, `${username}:${reelOrder}`,
+  const { limit: reelLimit, pending: reelsPending, sentinel: reelsSentinel, hasMore: moreReels } = useWindowed(
+    visibleReels.length, 12, `${username}:${reelOrder}`,
     serverMode ? { hasMore: authorReels.hasMore, loading: authorReels.loading, load: authorReels.loadMore } : undefined,
+  );
+  const { limit: photoLimit, pending: photosPending, sentinel: photosSentinel, hasMore: morePhotos } = useWindowed(
+    photoCells.length, 12, `${username}:photos`,
+    serverMode ? { hasMore: authorPhotos.hasMore, loading: authorPhotos.loading, load: authorPhotos.loadMore } : undefined,
   );
 
   if (!user) {
@@ -147,25 +186,6 @@ export default function UserProfilePage() {
   // A stored url can only have come through the serializer's http(s) check, but
   // demo data is editable straight from localStorage, so render re-validates.
   const aboutLinks = (user.links || []).map(l => ({ ...l, url: safeUrl(l.url) })).filter((l): l is { label: string; url: string } => !!l.url);
-  const mediaItems = posts.flatMap(p => p.media.map((m, index) => ({ m, index, post: p })));
-  // One cell per moving picture this author owns, in the order the reader picked.
-  // Only the demo build sorts: its rows arrive in one order and the words are the
-  // reader's, so the shelf has to re-lay them. The server build must not, because
-  // its paginator breaks a tie its own way — equal tallies oldest-first — and a
-  // second sort here would scramble what the cursor was built on.
-  const reelCells = (() => {
-    const index = new Map(db.posts.map(p => [p.id, p] as [string, Post]));
-    const rows = serverMode
-      ? authorReels.ids.map(id => index.get(id)).filter((p): p is Post => !!p && p.status === 'live')
-      : db.posts.filter(p => p.uid === user.id && p.status === 'live'
-          && canSeePost(p, me?.id ?? null, db.follows, privateIds(db.users)));
-    const cells = rows.flatMap(p => (p.media || [])
-      .map((m, i) => ({ m, index: i, post: p }))
-      .filter(c => c.m.type === 'video'));
-    return serverMode ? cells : cells.sort((a, b) => (reelOrder === 'views'
-      ? (b.post.views ?? 0) - (a.post.views ?? 0) || b.post.ts - a.post.ts
-      : reelOrder === 'oldest' ? a.post.ts - b.post.ts : b.post.ts - a.post.ts));
-  })();
   const userListings = serverMode
     ? authorListings.ids
         .map(id => db.listings.find(l => l.id === id))
@@ -405,11 +425,10 @@ export default function UserProfilePage() {
         )}
 
         {tab === 'reels' && (
-          reelCells.length === 0 ? (
-            // The shelf asks for its own page, so the first beat of it is empty
-            // for a real reason: a grid holding its shape says "loading", while
-            // "no reels yet" would only ever be true once the page has answered.
-            serverMode && !authorReels.loaded ? (
+          visibleReels.length === 0 ? (
+            locked ? (
+              <div className="feed-empty profile-locked">{IC.lock}<p>{t('privateNotice')}</p></div>
+            ) : serverMode && !authorReels.loaded ? (
               <div className="profile-media-grid" aria-hidden="true">
                 {[0, 1, 2, 3, 4, 5].map(i => <div className="sk-block profile-reel-sk" key={i} />)}
               </div>
@@ -432,7 +451,7 @@ export default function UserProfilePage() {
                 ))}
               </div>
               <div className="profile-media-grid">
-                {(serverMode ? reelCells.slice(0, reelLimit) : reelCells).map(({ m, index, post }) => (
+                {visibleReels.slice(0, reelLimit).map(({ m, index, post }) => (
                   <button
                     type="button"
                     className="profile-media-cell reel-cell"
@@ -446,28 +465,49 @@ export default function UserProfilePage() {
                   </button>
                 ))}
               </div>
+              {reelsPending && moreReels && (
+                <div className="profile-media-grid" aria-hidden="true">
+                  {[0, 1, 2, 3].map(i => <div className="sk-block profile-reel-sk" key={i} />)}
+                </div>
+              )}
               {moreReels && <div ref={reelsSentinel} className="feed-sentinel" aria-hidden="true" />}
             </>
           )
         )}
 
         {tab === 'photos' && (
-          mediaItems.filter(({ m }) => m.type === 'image').length === 0 ? (
-            <p className="feed-empty">{t('noPosts')}</p>
+          photoCells.length === 0 ? (
+            locked ? (
+              <div className="feed-empty profile-locked">{IC.lock}<p>{t('privateNotice')}</p></div>
+            ) : serverMode && !authorPhotos.loaded ? (
+              <div className="profile-media-grid" aria-hidden="true">
+                {[0, 1, 2, 3, 4, 5].map(i => <div className="sk-block profile-reel-sk" key={i} />)}
+              </div>
+            ) : (
+              <p className="feed-empty">{t('noPosts')}</p>
+            )
           ) : (
-            <div className="profile-media-grid photo-grid">
-              {mediaItems.filter(({ m }) => m.type === 'image').map(({ m, index, post }) => (
-                <button
-                  type="button"
-                  className="profile-media-cell"
-                  key={`${post.id}-${index}`}
-                  aria-label={`${t('photos')} by ${user.name}`}
-                  onClick={() => openMedia(post.id, index, false)}
-                >
-                  <img src={m.src || m.gen} alt="" loading="lazy" decoding="async" />
-                </button>
-              ))}
-            </div>
+            <>
+              <div className="profile-media-grid photo-grid">
+                {photoCells.slice(0, photoLimit).map(({ m, index, post }) => (
+                  <button
+                    type="button"
+                    className="profile-media-cell"
+                    key={`${post.id}-${index}`}
+                    aria-label={`${t('photos')} by ${user.name}`}
+                    onClick={() => openMedia(post.id, index, false)}
+                  >
+                    <img src={m.src || m.gen} alt="" loading="lazy" decoding="async" />
+                  </button>
+                ))}
+              </div>
+              {photosPending && morePhotos && (
+                <div className="profile-media-grid" aria-hidden="true">
+                  {[0, 1, 2, 3].map(i => <div className="sk-block profile-reel-sk" key={i} />)}
+                </div>
+              )}
+              {morePhotos && <div ref={photosSentinel} className="feed-sentinel" aria-hidden="true" />}
+            </>
           )
         )}
 

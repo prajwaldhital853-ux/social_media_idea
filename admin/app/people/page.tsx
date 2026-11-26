@@ -8,6 +8,7 @@ import { ActLink, Chips, More } from '@/components/List';
 import { api } from '@/lib/api';
 import { num } from '@/lib/format';
 import { IC } from '@/lib/icons';
+import { useAdminEvent } from '@/lib/live';
 import { ago } from '@/lib/time';
 import { useSession } from '@/lib/session';
 import { PeopleFacets, PersonPage, PersonRow, PersonVerbs } from '@/lib/types';
@@ -81,6 +82,10 @@ export default function PeoplePage() {
   useEffect(() => {
     if (status === 'in') load();
   }, [status, load]);
+
+  useAdminEvent(['warning', 'coins', 'coin_request', 'audit', 'staff_notice'], load, pulse =>
+    pulse.kind !== 'staff_notice' || pulse.route.split('?')[0].replace(/\/+$/, '') === '/people',
+  );
 
   const older = async () => {
     if (!cursor) return;

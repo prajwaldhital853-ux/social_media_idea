@@ -248,6 +248,14 @@ export function pushListRow(key: string, query: Query | undefined, id: string): 
   set(sk, { ids: oldest ? [...state.ids, id] : [id, ...state.ids] });
 }
 
+export function removeListRow(key: string, query: Query | undefined, id: string): void {
+  if (!id) return;
+  const sk = stateKey(key, query);
+  const state = snapshot(sk);
+  if (!state.loaded || !state.ids.includes(id)) return;
+  set(sk, { ids: state.ids.filter(row => row !== id) });
+}
+
 export function useList(key: string, def: ListDef, query?: Query, enabled = true) {
   const sk = stateKey(key, query);
   const defRef = useRef(def);

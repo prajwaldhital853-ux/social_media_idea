@@ -9,6 +9,7 @@ import { ActLink, Chips } from '@/components/List';
 import { ROLE_LABEL, ScreenPicker, roleKeys } from '@/components/SeatDesk';
 import { api } from '@/lib/api';
 import { IC } from '@/lib/icons';
+import { useAdminEvent } from '@/lib/live';
 import { ago } from '@/lib/time';
 import { useSession } from '@/lib/session';
 import { Catalogue, Seat } from '@/lib/types';
@@ -63,6 +64,8 @@ export default function AccessPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  useAdminEvent(['audit'], load);
 
   useEffect(() => {
     api<Catalogue>('admin/permissions/')

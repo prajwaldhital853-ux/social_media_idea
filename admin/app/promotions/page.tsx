@@ -8,6 +8,7 @@ import { ActLink, Chips, More } from '@/components/List';
 import { api } from '@/lib/api';
 import { num } from '@/lib/format';
 import { IC } from '@/lib/icons';
+import { useAdminEvent } from '@/lib/live';
 import { stamp } from '@/lib/time';
 import { useSession } from '@/lib/session';
 import { PromoPage, PromoRow, ReachConfig } from '@/lib/types';
@@ -85,6 +86,11 @@ export default function PromotionsScreen() {
   useEffect(() => {
     load();
   }, [load]);
+
+  useAdminEvent(['promotion', 'staff_notice'], load, pulse =>
+    pulse.kind !== 'staff_notice' || pulse.notice_kind === 'promotion'
+      || pulse.route.split('?')[0].replace(/\/+$/, '') === '/promotions',
+  );
 
   // The open door is what the feed will actually do with these campaigns, so the
   // desk reads it beside the queue: a paused switch or a lowered cap changes what

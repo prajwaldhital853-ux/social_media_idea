@@ -8,6 +8,7 @@ import { ActLink, Chips, More } from '@/components/List';
 import { api } from '@/lib/api';
 import { num } from '@/lib/format';
 import { IC } from '@/lib/icons';
+import { useAdminEvent } from '@/lib/live';
 import { ago, stamp } from '@/lib/time';
 import { useSession } from '@/lib/session';
 import { CoinAsk, CoinPage } from '@/lib/types';
@@ -82,6 +83,12 @@ export default function CoinsPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  useAdminEvent(['coins', 'coin_request', 'staff_notice'], load, pulse => {
+    if (pulse.kind !== 'staff_notice') return true;
+    const route = pulse.route.split('?')[0].replace(/\/+$/, '');
+    return route === '/coins' || route.startsWith('/coins/');
+  });
 
   const older = async () => {
     if (!cursor) return;

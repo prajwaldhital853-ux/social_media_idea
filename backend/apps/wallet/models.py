@@ -131,10 +131,17 @@ def _pulse_balance(user_id, wallet_id):
     Emitted after the ledger's transaction commits, so the number a frame
     carries is a number the account can already see in the API.
     """
+    transaction.on_commit(lambda: _send_balance(user_id, wallet_id))
+
+
+def _send_balance(user_id, wallet_id):
     from apps.common import pulse
 
     fresh = Wallet.objects.filter(pk=wallet_id).values_list('balance', flat=True).first()
+    if fresh is None:
+        return
     pulse.to_user(user_id, 'coins', balance=fresh)
+    pulse.to_staff('coins', user_id=user_id, balance=fresh)
 
 
 @contextmanager

@@ -11,6 +11,7 @@ import { Act, ActLink, Chips, More } from '@/components/List';
 import { api } from '@/lib/api';
 import { num } from '@/lib/format';
 import { IC } from '@/lib/icons';
+import { useAdminEvent } from '@/lib/live';
 import { ago } from '@/lib/time';
 import { useSession } from '@/lib/session';
 import { ContentKind, Outcome, ShelfPage, ShelfRow } from '@/lib/types';
@@ -97,6 +98,12 @@ export default function ContentPage() {
   useEffect(() => {
     if (status === 'in') load();
   }, [status, load]);
+
+  useAdminEvent(['comment', 'reaction', 'post_new', 'audit', 'staff_notice'], load, pulse => {
+    if (pulse.kind !== 'staff_notice') return true;
+    const route = pulse.route.split('?')[0].replace(/\/+$/, '');
+    return route === '/reports' || route === '/content' || route.startsWith('/review/');
+  });
 
   const older = async () => {
     if (!cursor) return;

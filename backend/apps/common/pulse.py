@@ -37,3 +37,14 @@ def to_user(user_pk, kind, **fields):
 def to_site(kind, **fields):
     """Every open tab. Content-free frames only — ids and counts, never words."""
     _send('site', {'kind': kind, **fields})
+
+
+def to_post(post_pk, kind, **fields):
+    """Readers of one visible post; the stream rechecks access before each frame."""
+    if post_pk:
+        _send(f'post.{post_pk}', {'kind': kind, **fields})
+
+
+def to_staff(kind, **fields):
+    """Console seats. Operational ids and counts only, never private content."""
+    _send('staff', {'kind': kind, **fields})

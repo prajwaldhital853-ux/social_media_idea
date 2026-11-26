@@ -7,6 +7,7 @@ import { ActivityChart, ChartSeries, MixRing, RingSlice } from '@/components/Cha
 import { api } from '@/lib/api';
 import { bytes as humanBytes, money, num, percent, waiting } from '@/lib/format';
 import { IC } from '@/lib/icons';
+import { useAdminEvent, useAdminLive } from '@/lib/live';
 import { shipped } from '@/lib/nav';
 import { stamp } from '@/lib/time';
 import { useSession } from '@/lib/session';
@@ -43,6 +44,7 @@ const ACTIVITY_IDS = ['new_users', 'posts', 'comments', 'listings'];
 
 export default function OverviewPage() {
   const { noteGate } = useSession();
+  const { health } = useAdminLive();
   const [data, setData] = useState<Overview | null>(null);
   const [campaigns, setCampaigns] = useState<PromotionAnalytics | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -64,16 +66,22 @@ export default function OverviewPage() {
     }
   }, [noteGate]);
 
+  useAdminEvent([
+    'comment', 'post_new', 'reaction', 'audit', 'staff_notice',
+    'coin_request', 'promotion', 'coins', 'warning',
+  ], load);
+
   useEffect(() => {
     load(false);
   }, [load]);
 
   useEffect(() => {
+    if (health === 'live') return undefined;
     const id = setInterval(() => {
       if (document.visibilityState === 'visible') load(false);
     }, REFRESH_EVERY);
     return () => clearInterval(id);
-  }, [load]);
+  }, [health, load]);
 
   return (
     <ConsoleShell
