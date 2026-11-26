@@ -2854,9 +2854,13 @@ try {
     pileFive.length === 0, `${pileFive.length} of the fixture’s targets at or over five`);
 
   const tightPile = await postOf(owner, '/api/admin/spam/', { alert_report_pile: 1 });
-  ok('a pile of one is refused out loud, because one complaint has never been a consensus',
-    tightPile.status === 400 && tightPile.body.detail.includes('Two people is the smallest pile'),
-    `${tightPile.status}, ${String(tightPile.body.detail).slice(0, 90)}`);
+  ok('a pile of one is the Client\'s call now: one report pulls the thing and its case decides the rest',
+    tightPile.status === 200 && tightPile.body.config.auto_hide.reports === 1,
+    `${tightPile.status}, pile ${tightPile.body.config && tightPile.body.config.auto_hide.reports}`);
+  const offPile = await postOf(owner, '/api/admin/spam/', { alert_report_pile: 0 });
+  ok('zero is refused, because there the number stops meaning "how many" — the switch beside it is the off',
+    offPile.status === 400 && offPile.body.detail.includes('switch beside this number'),
+    `${offPile.status}, ${String(offPile.body.detail).slice(0, 90)}`);
   const stillDesk = await postOf(owner, '/api/admin/spam/', {});
   ok('saving a desk nobody moved is refused rather than written to the log as a change',
     stillDesk.status === 400 && stillDesk.body.detail.includes('no rule has been changed'),

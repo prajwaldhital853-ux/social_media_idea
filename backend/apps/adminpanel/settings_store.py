@@ -13,9 +13,10 @@ from .models import AdminSetting
 # key: (default, type, label, help, group)
 DEFAULTS = {
     'alert_report_pile': (3, 'int', 'Reports before content is pulled',
-                          'How many different people have to report one post before the platform hides it by '
-                          'itself. At 3 the third report hides the post, and it stays hidden until a person '
-                          'reviews it.', 'safety'),
+                          'How many different people have to report one thing before the platform hides it by '
+                          'itself — a post, a comment or a marketplace listing. At 1 the first report pulls it, '
+                          'and it stays hidden until a person reviews it. The switch below turns the whole rule off.',
+                          'safety'),
     'alert_report_age_hours': (24, 'int', 'A report may sit unanswered for (hours)',
                                'Raises an alert when an open report is older than this.', 'safety'),
     'alert_coin_queue_hours': (24, 'int', 'A coin request may wait for (hours)',

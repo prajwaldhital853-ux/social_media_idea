@@ -16,6 +16,7 @@ the desk shows what the rules screen wrote rather than its own copy of it.
 
 from datetime import timedelta
 
+from django.core import mail
 from django.core.cache import cache
 from django.utils import timezone
 from rest_framework.test import APIClient
@@ -25,10 +26,11 @@ from apps.comments.models import Comment
 from apps.common.testutils import auth_client, make_user
 from apps.marketplace.models import Listing
 from apps.moderation.models import AuditLog, Report
+from apps.notifications.models import Notification
 from apps.posts.models import Post
 
 from . import people, spam
-from .models import AdminSetting, PolicyTerm, StaffAccount
+from .models import AdminAlert, AdminSetting, PolicyTerm, StaffAccount, StaffNotice
 from .tests_staff import RbacTestCase
 
 DESK_URL = '/api/admin/spam/'
@@ -78,11 +80,20 @@ class SpamDeskTests(RbacTestCase):
         self.assertEqual(bad.status_code, 400)
         self.assertFalse(AdminSetting.objects.filter(key='spam_post_per_hour').exists())
 
-    def test_one_reporter_is_not_a_pile(self):
-        """A threshold of 1 makes every single complaint an automatic takedown."""
-        low = self.desk.post(DESK_URL, {'alert_report_pile': '1'}, format='json')
+    def test_one_reporter_is_a_pile_the_desk_may_now_be_given(self):
+        """The Client sets how big a pile pulls content; one report is their call.
+
+        Zero is refused, because there the number stops meaning "how many" — the
+        switch beside it is what turns auto-hide off.
+        """
+        low = self.desk.post(DESK_URL, {'alert_report_pile': '0'}, format='json')
         self.assertEqual(low.status_code, 400)
-        self.assertIn('smallest pile', low.data['detail'])
+        self.assertIn('switch beside this number', low.data['detail'])
+        one = self.desk.post(DESK_URL, {'alert_report_pile': '1'}, format='json')
+        self.assertEqual(one.status_code, 200)
+        self.assertEqual(spam.report_threshold(), 1)
+        self.assertEqual(APIClient().get(CONFIG_URL).data['auto_hide']['reports'], 1,
+                         'the open door publishes the pile the desk was given')
 
     def test_the_pile_a_seat_sets_is_the_number_every_screen_counts_with(self):
         self.desk.post(DESK_URL, {'alert_report_pile': '5'}, format='json')
@@ -227,6 +238,64 @@ class DeskDrivesTheDoorsTests(RbacTestCase):
                                                     'reason': 'spam'}, format='json')
         subject.refresh_from_db()
         self.assertEqual(subject.status, Post.Status.LIVE, 'three is not the pile this desk was given')
+
+    def test_the_pile_pulls_a_comment_off_its_thread_too(self):
+        subject = Post.objects.create(author=self.member, text='somewhere to talk')
+        reply = Comment.objects.create(post=subject, author=self.member, text='a comment people mind')
+        self.desk.post(DESK_URL, {'alert_report_pile': '1'}, format='json')
+        watcher = make_user('pile_one_comment', password='Test-Pass-9271')
+        auth_client(watcher).post(REPORTS_URL, {'target_type': 'comment', 'target_id': str(reply.pk),
+                                                'reason': 'spam'}, format='json')
+        reply.refresh_from_db()
+        subject.refresh_from_db()
+        self.assertEqual(reply.status, Comment.Status.HIDDEN, 'one report is the pile the desk was given')
+        self.assertEqual(subject.comment_count, 0, 'the thread stops counting a comment it no longer shows')
+        listed = APIClient().get(COMMENTS_URL, {'post': subject.pk})
+        self.assertNotIn(reply.pk, [row['id'] for row in listed.data['results']],
+                         'a held comment is not on the thread for anybody, its author included')
+        self.assertTrue(Notification.objects.filter(recipient=self.member, kind='warning').exists(),
+                        'the author is told in their bell')
+        self.assertEqual(len(mail.outbox), 1, 'and by email')
+        self.assertIn('taken down automatically', mail.outbox[0].subject)
+        self.assertTrue(AuditLog.objects.filter(action='auto_hide_comment', target=f'comment:{reply.pk}').exists())
+
+    def test_the_pile_pulls_a_listing_off_the_grid_and_tells_everyone_who_matters(self):
+        advert = Listing.objects.create(seller=self.member, title='a bike people mind', price='100.00')
+        self.desk.post(DESK_URL, {'alert_report_pile': '1'}, format='json')
+        watcher = make_user('pile_one_listing', password='Test-Pass-9271')
+        auth_client(watcher).post(REPORTS_URL, {'target_type': 'listing', 'target_id': str(advert.pk),
+                                                'reason': 'spam'}, format='json')
+        advert.refresh_from_db()
+        self.assertEqual(advert.status, Listing.Status.HIDDEN)
+        grid = APIClient().get('/api/marketplace/')
+        self.assertNotIn(advert.pk, [row['id'] for row in grid.data['results']],
+                         'the public grid no longer shows it')
+        mine = auth_client(self.member).get('/api/marketplace/', {'mine': 1})
+        self.assertNotIn(advert.pk, [row['id'] for row in mine.data['results']],
+                         'the seller does not see their own held ad either')
+        self.assertTrue(Notification.objects.filter(recipient=self.member, kind='warning').exists())
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn('taken down automatically', mail.outbox[0].subject)
+        self.assertTrue(StaffNotice.objects.filter(kind='autohide').exists(),
+                        'the seats get a bell row naming what the system did')
+        self.assertTrue(AdminAlert.objects.filter(key='autohide_event').exists(),
+                        'and the alerts desk holds the condition')
+
+    def test_a_seat_releases_the_hidden_listing_and_it_reappears_in_the_grid(self):
+        advert = Listing.objects.create(seller=self.member, title='a bike nobody minded', price='100.00')
+        self.desk.post(DESK_URL, {'alert_report_pile': '1'}, format='json')
+        watcher = make_user('pile_release', password='Test-Pass-9271')
+        auth_client(watcher).post(REPORTS_URL, {'target_type': 'listing', 'target_id': str(advert.pk),
+                                                'reason': 'spam'}, format='json')
+        out = self.desk.post(f'/api/admin/content/listing/{advert.pk}/', {'action': 'release'}, format='json')
+        self.assertEqual(out.status_code, 200, out.data)
+        advert.refresh_from_db()
+        self.assertEqual(advert.status, Listing.Status.ACTIVE)
+        grid = APIClient().get('/api/marketplace/')
+        self.assertIn(advert.pk, [row['id'] for row in grid.data['results']], 'released means back on the grid')
+        self.assertTrue(Notification.objects.filter(recipient=self.member,
+                                                    text__icontains='back').exists(),
+                        'the author is told it is back')
 
 
 class BlockedLinkTests(RbacTestCase):

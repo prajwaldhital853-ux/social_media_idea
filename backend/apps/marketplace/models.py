@@ -6,6 +6,7 @@ class Listing(models.Model):
     class Status(models.TextChoices):
         ACTIVE = 'active', 'Active'
         SOLD = 'sold', 'Sold'
+        HIDDEN = 'hidden', 'Hidden by moderation'
         REMOVED = 'removed', 'Removed'
 
     seller = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='listings')

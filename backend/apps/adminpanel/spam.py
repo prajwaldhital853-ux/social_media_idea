@@ -124,10 +124,12 @@ def write(actor, posted):
         if number is None:
             bad.append(f'{spec["label"]} has to be a whole number.')
             continue
-        if key == 'alert_report_pile' and number < 2:
-            # One reporter is not a pile: a threshold of 1 makes every single
-            # complaint an automatic takedown, with nobody having agreed to it.
-            bad.append('Two people is the smallest pile this desk will pull content for.')
+        if key == 'alert_report_pile' and number < 1:
+            # Zero here would not be "off", it would be "hide on every report": the
+            # number says how big the pile has to be, and the switch beside it is
+            # what turns the rule off.
+            bad.append('Auto-hide is switched off with the switch beside this number; '
+                       'the smallest pile it will pull content for is one report.')
             continue
         if number > 100000:
             bad.append(f'{spec["label"]} is far past any number this desk means.')
