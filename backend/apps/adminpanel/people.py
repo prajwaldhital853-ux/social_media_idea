@@ -289,8 +289,14 @@ def rows(users):
 
 def facets(users=None):
     """The numbers the filter chips are drawn from."""
-    base = User.objects.all()
+    # Every number on this screen must count the same people the table lists:
+    # staff seats are the staff screen's population, and counting them here is
+    # how the search bar promised fourteen accounts over eleven rows.
+    base = User.objects.exclude(
+        Q(is_staff=True) | Q(is_superuser=True) | Q(staff_account__is_enabled=True)
+    )
     now = timezone.now()
+    member_ids = set(base.values_list('pk', flat=True))
     return {
         'total': base.count(),
         'shown': users.count() if users is not None else None,
@@ -299,7 +305,9 @@ def facets(users=None):
         'locked': base.filter(locked_until__gt=now).count(),
         'verified': base.filter(profile__verified=True).count(),
         'deactivated': base.filter(is_active=False).count(),
-        'flagged': len(flagged_ids()),
+        # A pile can sit on a staff seat too, but the flag filter can never
+        # return one, so the chip would count an account no view can show.
+        'flagged': len([pk for pk in flagged_ids() if pk in member_ids]),
         'by_provider': {key: base.filter(provider=key).count() for key in PROVIDERS},
         'auto_hide_at': threshold(),
     }
