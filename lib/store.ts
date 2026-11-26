@@ -15,7 +15,10 @@ export type Fragment = Partial<Pick<
   | 'users' | 'posts' | 'comments' | 'listings' | 'reactions' | 'promotions'
   | 'notifications' | 'messages' | 'follows' | 'reports' | 'audit' | 'ledger'
   | 'coinRequests' | 'saves' | 'listingSaves'
->>;
+>> & {
+  /** The account row this seat just wrote, blanks and all. */
+  saved?: User[];
+};
 
 function byId<T extends { id: string }>(existing: T[], incoming: T[], keep?: (a: T, b: T) => T): T[] {
   const index = new Map(existing.map(row => [row.id, row] as [string, T]));
@@ -50,6 +53,12 @@ function upsertBy<T extends Record<string, any>>(existing: T[], incoming: T[], k
 export function merge(db: Database, frag: Fragment): Database {
   const next: Database = { ...db };
   if (frag.users) next.users = byId(db.users, frag.users, keepProfile) as User[];
+  // A row the seat just wrote is taken as it came back, empty values included.
+  // `keepProfile` is there so a thin card cannot erase a richer record, but the
+  // answer to a PATCH is not a card that forgot a field — a cleared cover and a
+  // blank bio are the whole point of the write, and skipping them left the old
+  // picture on the screen no matter what the server had just agreed to.
+  if (frag.saved) next.users = byId(next.users, frag.saved) as User[];
   if (frag.posts) next.posts = byId(db.posts, frag.posts);
   if (frag.comments) next.comments = byId(db.comments, frag.comments);
   if (frag.listings) next.listings = byId(db.listings, frag.listings);

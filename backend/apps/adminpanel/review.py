@@ -317,19 +317,60 @@ def notice_row(notice):
     }
 
 
-def withdraw(notice, actor):
+def withdraw(notice, actor, *, tell=True):
+    """Take a standing notice down again, and tell the account it stood on.
+
+    Withdrawing is a verdict in the other direction, so the person the sentence was
+    written over hears it the way they heard the sentence: a line in their bell and
+    the same letter in their mailbox. `tell` is off only where the caller writes one
+    summary for a whole pile, which is what clearing an account's flags does.
+    """
     if not notice.is_live:
         raise ValueError('That notice was already withdrawn.')
     notice.is_live = False
     notice.withdrawn_at = timezone.now()
     notice.save(update_fields=['is_live', 'withdrawn_at'])
     record(actor, 'withdraw_notice', f'{notice.target_type}:{notice.target_id}', notice.text[:120])
-    return notice
+    out = notice_row(notice)
+    if tell:
+        out['told'] = unsaid(notice, actor)
+    return out
+
+
+def unsaid(notice, actor):
+    """The retraction, in the bell and in the mailbox of the account it was about."""
+    where = 'your account' if notice.target_type == 'user' else f'your {notice.target_type}'
+    bell = notify(
+        notice.about, actor, 'warning',
+        f'The Exposing team withdrew the notice on {where}. It no longer shows: “{notice.text}”'[:240],
+        notice.target_type, notice.target_id, notice=notice,
+    )
+    mailed = _mail(
+        notice.about, f'A notice on {where} has been withdrawn',
+        f'The notice the Exposing team had put on {where} has been withdrawn and no longer shows '
+        f'anywhere on the platform. What it said was: “{notice.text}”. Nothing else about your '
+        'account has changed.',
+        optional=True,
+    )
+    return {'bell': bell is not None, 'emailed': mailed}
 
 
 def _say(kind, row, actor, text, notice=None):
     """The author-facing half of a moderation decision, in their bell."""
     return notify(owner_for(kind, row), actor, 'warning', text, kind, row.pk, notice=notice)
+
+
+def _mail(owner, subject, body, *, optional):
+    """One rule for the mailbox copy of a moderation sentence."""
+    if owner is None or not owner.email:
+        return None
+    profile = getattr(owner, 'profile', None)
+    if optional and profile is not None and not profile.notify_email:
+        return None
+    # people imports this module for account warnings, so the return visit stays inside the call.
+    from .people import enforcement_email
+
+    return enforcement_email(owner, subject, body)
 
 
 def email_owner(kind, row, subject, body, *, warning=False):
@@ -339,16 +380,7 @@ def email_owner(kind, row, subject, body, *, warning=False):
     content is optional, so their setting decides it. A takedown is not, they
     cannot sign in to find out why, so the mailbox is the only notice they get.
     """
-    owner = owner_for(kind, row)
-    if owner is None or not owner.email:
-        return None
-    profile = getattr(owner, 'profile', None)
-    if warning and profile is not None and not profile.notify_email:
-        return None
-    # people imports this module for account warnings, so the return visit stays inside the call.
-    from .people import enforcement_email
-
-    return enforcement_email(owner, subject, body)
+    return _mail(owner_for(kind, row), subject, body, optional=warning)
 
 
 def suspension_notice(kind, row, actor, reason):

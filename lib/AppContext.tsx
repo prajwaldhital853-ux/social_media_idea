@@ -730,10 +730,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return;
     }
     const data = await api.patch<any>(`/api/profiles/${self.username}/`, toProfilePayload(patch));
-    merge({ users: [{ ...self, ...profilePatch(data) }] });
+    merge({ saved: [{ ...self, ...profilePatch(data) }] });
     // A changed photo or banner is announced by a post the server just created,
-    // so the lists that already hold a page of this author have to be re-read.
-    if ((patch.avatar && patch.avatar !== self.avatar) || (patch.cover && patch.cover !== self.cover)) {
+    // so the lists that already hold a page of this author have to be re-read —
+    // and a removed one has to be re-read for the same reason, the cached cards
+    // still carry the picture that is no longer there.
+    if ((patch.avatar !== undefined && patch.avatar !== self.avatar)
+      || (patch.cover !== undefined && patch.cover !== self.cover)) {
       forgetLists('feed');
       forgetLists('profile-posts');
     }

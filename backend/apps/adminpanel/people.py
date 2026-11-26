@@ -707,7 +707,10 @@ def clear_flags(user, caller, *, reason=''):
                 .update(status=Report.Status.DISMISSED, resolved_at=now)
     withdrawn = 0
     for notice in PublicNotice.objects.select_for_update().filter(about=account, is_live=True):
-        review.withdraw(notice, caller)
+        # `tell=False`: this pile gets one bell row and one letter for the whole
+        # clearing, below. A notice answering for itself would mail five times
+        # over a five-notice pile, all of them saying less than that one does.
+        review.withdraw(notice, caller, tell=False)
         withdrawn += 1
     account.failed_attempts = 0
     account.locked_until = None

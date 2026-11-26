@@ -43,6 +43,16 @@ export function useBell(): BellValue {
 const EMPTY: Tray = { items: [], total: 0, routes: {}, walked: {}, poll_seconds: 20 };
 
 /**
+ * A polled tray is merged over the empty one, never swapped in whole. The console
+ * reaches the browser minutes after a merge and the API behind it much later, so a
+ * poll can answer from a build that has never heard of a field this shell indexes;
+ * `walked` did exactly that, and reading it off a bare payload threw on every page.
+ */
+function over(next: Tray | null): Tray {
+  return { ...EMPTY, ...(next || {}) };
+}
+
+/**
  * The tray is polled rather than pushed: this console has no socket, and a seat who
  * is not looking at the screen should not be the reason a report sits unseen. The
  * interval stops while the tab is hidden and one read starts on the way back, so a
@@ -57,7 +67,7 @@ export function BellProvider({ children }: { children: ReactNode }) {
 
   const load = useCallback(async () => {
     try {
-      setTray(await api<Tray>('admin/bell/'));
+      setTray(over(await api<Tray>('admin/bell/')));
     } catch {
       // A seat whose window just ended has bigger things to read than a bell error.
     }
@@ -65,7 +75,7 @@ export function BellProvider({ children }: { children: ReactNode }) {
 
   const write = useCallback(async (body: Record<string, unknown>) => {
     try {
-      setTray(await api<Tray>('admin/bell/read/', { method: 'POST', body }));
+      setTray(over(await api<Tray>('admin/bell/read/', { method: 'POST', body })));
     } catch {
       // The notice is still on the screen it came from, which is the point of it.
     }
