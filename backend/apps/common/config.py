@@ -27,6 +27,30 @@ MIN_AGE = 13
 COIN_PRICE = 10
 
 
+def coin_terms():
+    """What a Coin costs, the smallest purchase and where the rupees land.
+
+    The console's coin pricing desk owns these numbers as rows, so a price the
+    Admin saves there is the price the wallet quotes on the next load — the
+    constant below is only what a deploy answers with before the desk's table
+    exists, and with no desk row written the desk's own defaults stand.
+    """
+    try:
+        from apps.adminpanel import coins as desk
+        return desk.pricing()
+    except Exception:  # noqa: BLE001 - no settings table yet means the shipped numbers stand
+        return {
+            'coin_price': COIN_PRICE,
+            'min_purchase': 100,
+            'bank': {
+                'name': os.environ.get('EXPOSING_BANK_NAME', 'Nepal Bank Ltd'),
+                'account': os.environ.get('EXPOSING_BANK_ACCOUNT', '0120-4455-8891'),
+                'holder': os.environ.get('EXPOSING_BANK_HOLDER', 'Exposing Pvt Ltd'),
+                'qr': os.environ.get('EXPOSING_BANK_QR', ''),
+            },
+        }
+
+
 def shelf():
     """The packages the site sells right now: the console's shelf when a seat has
     edited one, the shipped list otherwise.
@@ -95,22 +119,40 @@ def features():
     }
 
 
+def post_limits():
+    """The size one post is allowed to be, the post limits desk's rows.
+
+    The desk publishes these at `GET /api/limits/config/` for the composer to
+    hold a person to; the config travels with them so a composer is held to the
+    same numbers whether it read the desk or the boot payload. No desk table yet
+    means the shipped numbers stand.
+    """
+    try:
+        from apps.adminpanel import limits as desk
+        return desk.public_config()
+    except Exception:  # noqa: BLE001 - no settings table yet means the shipped numbers stand
+        return {
+            'text': {'characters': 2000},
+            'photo': {'per_post': 4, 'each_mb': 5, 'each_bytes': 5 * 1024 ** 2},
+            'video': {'per_post': 1, 'seconds': 60, 'each_mb': 150, 'each_bytes': 150 * 1024 ** 2},
+            'server_upload_mb': 150,
+        }
+
+
 def client_config():
+    terms = coin_terms()
     return {
         'features': features(),
         'packages': shelf(),
         'categories': market_categories(),
         'countries': COUNTRIES,
         'minAge': MIN_AGE,
-        'coinPrice': COIN_PRICE,
+        'coinPrice': terms['coin_price'],
+        'minPurchase': terms['min_purchase'],
+        'limits': post_limits(),
         'threshold': int(getattr(settings, 'EXPOSING_REPORT_THRESHOLD', 3)),
         'rateLimits': bool(getattr(settings, 'EXPOSING_RATE_LIMITS', True)),
         'googleClientId': getattr(settings, 'GOOGLE_CLIENT_ID', ''),
         'wording': wording(),
-        'bank': {
-            'name': os.environ.get('EXPOSING_BANK_NAME', 'Nepal Bank Ltd'),
-            'account': os.environ.get('EXPOSING_BANK_ACCOUNT', '0120-4455-8891'),
-            'holder': os.environ.get('EXPOSING_BANK_HOLDER', 'Exposing Pvt Ltd'),
-            'qr': os.environ.get('EXPOSING_BANK_QR', ''),
-        },
+        'bank': terms['bank'],
     }

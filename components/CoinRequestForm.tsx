@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import DemoQr from '@/components/DemoQr';
 import { useApp } from '@/lib/AppContext';
@@ -13,7 +13,6 @@ import { uid } from '@/lib/utils';
 import { CoinRequest } from '@/lib/types';
 
 const PRESETS = [50, 100, 200, 500, 1000];
-
 /**
  * The coin request form, once per payment method. The two wallet pages differ
  * only by which detail the buyer copies, so the amount, the reference and the
@@ -31,7 +30,19 @@ export default function CoinRequestForm({ method }: { method: 'bank' | 'qr' }) {
   if (!me) return null;
 
   const price = db.settings.coinPrice;
+  const floor = db.settings.minPurchase;
   const amount = coins * price;
+  // The desk's floor decides which shortcuts are worth showing: a minimum of
+  // 250 hides every preset under it instead of letting one be clicked and
+  // bounced by the door.
+  const presets = PRESETS.filter(value => value >= floor);
+  const choices = presets.length > 0 ? presets : [floor];
+
+  // The desk's floor can arrive after this form rendered (the seed says 100
+  // until /api/meta/ answers), so a pick made in that window is re-clamped.
+  useEffect(() => {
+    setCoins(prev => (prev < floor ? floor : prev));
+  }, [floor]);
 
   const copy = async (value: string) => {
     try {
@@ -94,7 +105,7 @@ export default function CoinRequestForm({ method }: { method: 'bank' | 'qr' }) {
       <div className="wallet-field">
         <span className="wallet-label">{t('chooseCoins')}</span>
         <div className="wallet-amounts">
-          {PRESETS.map(value => (
+          {choices.map(value => (
             <button
               key={value}
               type="button"
@@ -109,11 +120,11 @@ export default function CoinRequestForm({ method }: { method: 'bank' | 'qr' }) {
           <span>{t('coins')}</span>
           <input
             type="number"
-            min={10}
+            min={floor}
             max={10000}
             step={10}
             value={coins}
-            onChange={e => setCoins(Math.max(10, Math.min(10000, Number(e.target.value) || 10)))}
+            onChange={e => setCoins(Math.max(floor, Math.min(10000, Number(e.target.value) || floor)))}
             aria-label={t('chooseCoins')}
           />
         </label>
@@ -137,6 +148,15 @@ export default function CoinRequestForm({ method }: { method: 'bank' | 'qr' }) {
           <div><dt>{t('accountHolder')}</dt><dd>{db.settings.bankHolder}</dd></div>
           <div><dt>{t('amount')}</dt><dd className="wallet-mono">NPR {amount}</dd></div>
         </dl>
+      ) : db.settings.qrImage ? (
+        <div className="wallet-qr-row">
+          <img src={db.settings.qrImage} alt={t('qrPay')} className="wallet-qr" />
+          <div className="wallet-qr-copy">
+            <b>{t('qrPay')}</b>
+            <p className="wallet-hint">{t('scanHint')}</p>
+            <p className="wallet-hint wallet-mono">NPR {amount}</p>
+          </div>
+        </div>
       ) : (
         <div className="wallet-qr-row">
           <DemoQr seed={`exposing-pay-${me.id}-${coins}`} />

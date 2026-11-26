@@ -10,13 +10,13 @@ export const MAX_PHOTO_MB = 10;
 const mb = (bytes: number) => Math.max(1, Math.round(bytes / (1024 * 1024)));
 
 /** What a photo must already be before a picker spends time reading it. */
-export function checkPhoto(file: File): void {
+export function checkPhoto(file: File, maxMb = MAX_PHOTO_MB): void {
   if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
     throw new Error('Choose a JPEG, PNG or WebP image.');
   }
   if (!file.size) throw new Error('That file is empty — choose another one.');
-  if (file.size > MAX_PHOTO_MB * 1024 * 1024) {
-    throw new Error(`Photo must be under ${MAX_PHOTO_MB} MB — this one is ${mb(file.size)} MB.`);
+  if (file.size > maxMb * 1024 * 1024) {
+    throw new Error(`Photo must be under ${maxMb} MB — this one is ${mb(file.size)} MB.`);
   }
 }
 
@@ -47,17 +47,34 @@ async function resizeImageSafe(file: File, max = 2560): Promise<string> {
   }
 }
 
-export async function mediaFromFile(file: File, onProgress?: Progress): Promise<Media> {
+/**
+ * The caps a post composer holds its attachments to, straight from the console's
+ * post limits desk. Left out, the shipped ceilings stand — proof screenshots,
+ * listing photos and avatars are not posts and keep those.
+ */
+export interface MediaLimits {
+  photoMb?: number;
+  videoMb?: number;
+  videoSeconds?: number;
+}
+
+export async function mediaFromFile(
+  file: File,
+  onProgress?: Progress,
+  limits?: MediaLimits,
+): Promise<Media> {
   const video = file.type.startsWith('video/');
+  const photoMb = limits?.photoMb || MAX_PHOTO_MB;
+  const videoMb = limits?.videoMb || MAX_VIDEO_MB;
   if (!video && !['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
     throw new Error('Choose a JPEG, PNG or WebP photo, or a video.');
   }
   if (!file.size) throw new Error('That file is empty — choose another one.');
-  if (video && file.size > MAX_VIDEO_MB * 1024 * 1024) {
-    throw new Error(`Video must be under ${MAX_VIDEO_MB} MB — this one is ${mb(file.size)} MB.`);
+  if (video && file.size > videoMb * 1024 * 1024) {
+    throw new Error(`Video must be under ${videoMb} MB — this one is ${mb(file.size)} MB.`);
   }
-  if (!video && file.size > MAX_PHOTO_MB * 1024 * 1024) {
-    throw new Error(`Photo must be under ${MAX_PHOTO_MB} MB — this one is ${mb(file.size)} MB.`);
+  if (!video && file.size > photoMb * 1024 * 1024) {
+    throw new Error(`Photo must be under ${photoMb} MB — this one is ${mb(file.size)} MB.`);
   }
   if (!video) return imageFromFile(file, onProgress);
   const src = URL.createObjectURL(file);
@@ -69,6 +86,9 @@ export async function mediaFromFile(file: File, onProgress?: Progress): Promise<
     throw new Error('This video could not be read. Try another clip.');
   } finally {
     URL.revokeObjectURL(src);
+  }
+  if (limits?.videoSeconds && dur > limits.videoSeconds) {
+    throw new Error(`Choose a video up to ${limits.videoSeconds} seconds long — this one runs ${Math.round(dur)}.`);
   }
   if (API_ENABLED) return { type: 'video', src: (await uploadFile(file, undefined, onProgress)).url, dur };
   const blobId = uid();

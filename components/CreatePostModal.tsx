@@ -15,7 +15,9 @@ import PromoteForm from './PromoteForm';
 import BlockedEcho from './BlockedEcho';
 
 function Composer({ original }: { original?: Post }) {
-  const { me, t, closeComposer, addPost, updatePost, showToast, requestPromotion, feature } = useApp();
+  const { me, t, closeComposer, addPost, updatePost, showToast, requestPromotion, feature, db } = useApp();
+  // The console's post limits desk decides what one post may hold.
+  const limits = db.settings.limits;
   const [stage, setStage] = useState<'choose' | 'post' | 'reel'>(original ? original.kind || 'post' : 'choose');
   const [text, setText] = useState(original?.text || '');
   const [media, setMedia] = useState<Media[]>(original?.media || []);
@@ -73,14 +75,14 @@ function Composer({ original }: { original?: Post }) {
       for (const file of Array.from(files)) {
         const video = file.type.startsWith('video/');
         if (!video && !['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) throw new Error('Choose a JPEG, PNG, WebP photo or a video.');
-        if (file.size > (video ? 100 : 10) * 1024 * 1024) throw new Error(video ? 'Videos must be under 100 MB.' : 'Photos must be under 10 MB.');
-        if (video && next.some(m => m.type === 'video')) throw new Error('Choose one video at a time.');
-        if (!video && next.filter(m => m.type === 'image').length >= 4) throw new Error('You can attach up to four photos.');
+        if (file.size > (video ? limits.videoMb : limits.photoMb) * 1024 * 1024) throw new Error(video ? `Videos must be under ${limits.videoMb} MB.` : `Photos must be under ${limits.photoMb} MB.`);
+        if (video && next.filter(m => m.type === 'video').length >= limits.videoCount) throw new Error(`Up to ${limits.videoCount} videos per post.`);
+        if (!video && next.filter(m => m.type === 'image').length >= limits.photoCount) throw new Error(`You can attach up to ${limits.photoCount} photos.`);
         if (video) {
           const src = URL.createObjectURL(file);
           urls.current.push(src);
           const dur = await videoDuration(src);
-          if (!Number.isFinite(dur) || dur > 60) throw new Error('Choose a video up to 60 seconds long.');
+          if (!Number.isFinite(dur) || dur > limits.videoSeconds) throw new Error(`Choose a video up to ${limits.videoSeconds} seconds long.`);
           next.push(API_ENABLED ? { type: 'video', src: (await uploadFile(file, undefined, send(file))).url, dur } : { type: 'video', src, dur });
         } else {
           next.push(await imageFromFile(file, send(file)));
@@ -157,7 +159,7 @@ function Composer({ original }: { original?: Post }) {
             <div className="cp-body">
               <div className="cp-author"><Avatar user={me} size={40} /><div><b>{me.name}</b><span className="cp-public">{IC.globe} Public</span></div></div>
               <div className="field-echo-wrap">
-                <textarea ref={areaRef} className="cp-text" aria-label="Post caption" placeholder={stage === 'reel' ? 'Add a caption…' : 'What would you like to share?'} value={text} maxLength={500} onChange={e => setText(e.target.value)} />
+                <textarea ref={areaRef} className="cp-text" aria-label="Post caption" placeholder={stage === 'reel' ? 'Add a caption…' : 'What would you like to share?'} value={text} maxLength={limits.textChars} onChange={e => setText(e.target.value)} />
                 <BlockedEcho text={text} words={blocked} fieldRef={areaRef} fieldClass="cp-text" />
               </div>
               {media.length > 0 && <div className={`cp-media n${media.length}`}>
@@ -178,7 +180,7 @@ function Composer({ original }: { original?: Post }) {
               {promote && <PromoteForm targetType="post" confirmLabel="Use this promotion" onConfirm={cfg => setPromoConfig(cfg)} />}
               {promote && promoConfig && <small>Promotion selected. It will be requested when you post.</small>}
             </div>
-            <div className="cp-foot"><span className="cp-count">{text.length}/500</span><button type="button" className="cp-publish" disabled={!canPost} onClick={publish}>{original ? 'Save changes' : stage === 'reel' ? 'Post reel' : 'Post'}</button></div>
+            <div className="cp-foot"><span className="cp-count">{text.length}/{limits.textChars}</span><button type="button" className="cp-publish" disabled={!canPost} onClick={publish}>{original ? 'Save changes' : stage === 'reel' ? 'Post reel' : 'Post'}</button></div>
           </>}
           {busy && !sending && <p className="cp-feedback" role="status">Preparing your attachment…</p>}
           {error && <p className="cp-feedback cp-error" role="alert">{error}</p>}
