@@ -627,19 +627,41 @@ def notice_create(request):
 @permission_classes([IsAuthenticated])
 @rbac.staff_only('notices')
 def notice_withdraw(request, pk):
-    """Take a public notice down again, and say who did it.
+    """Take a public notice down again, say who did it, and tell the account it stood on.
 
     Withdrawing is not deleting: the notice was on the platform, people read it,
-    and a later question about why it vanished has one honest answer.
+    and a later question about why it vanished has one honest answer. And a
+    sentence that stops showing is only half a retraction until the person it was
+    written over is told it stopped, so the bell row and the letter go with it.
     """
     notice = PublicNotice.objects.filter(pk=pk).first()
     if notice is None:
         return Response({'detail': 'No such notice.'}, status=404)
+    # The aside's "withdraw every sentence on this target" comes down as several
+    # calls, and three letters about one post is three letters too many: it asks
+    # for the rows to come down without the telling, and says so in its own line.
+    quiet = str(request.data.get('tell', '1')).strip().lower() in ('0', 'false', 'no', '')
     try:
-        review.withdraw(notice, request.user)
+        out = review.withdraw(notice, request.user, tell=not quiet)
     except ValueError as err:
         return Response({'detail': str(err)}, status=400)
-    return Response(review.notice_row(notice))
+    told = out.get('told') or {}
+    mailed = told.get('emailed')
+    out['detail'] = (
+        'The notice is withdrawn and the audit row says who took it down. '
+        if not quiet else
+        'The notice is withdrawn and the audit row says who took it down, and the seat that '
+        'brought it down chose not to tell the account about this one. '
+    ) + (
+        '' if quiet else
+        f'@{out["about"]} '
+        + ('read the retraction in their bell' if told.get('bell')
+           else 'got no bell row, because the seat that withdrew it is their own')
+        + (f', and a copy is on its way to {mailed["to"]}.' if mailed
+           else ', and nothing was mailed: that account has no address on file, or asks '
+                'not to be written to about warnings.')
+    )
+    return Response(out)
 
 
 @api_view(['GET'])

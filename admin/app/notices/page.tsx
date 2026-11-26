@@ -299,7 +299,8 @@ export default function NoticesPage() {
   const withdraw = async (notice: NoticeRow) => {
     const sure = await confirm({
       title: 'Withdraw this notice?',
-      body: `The sentence about @${notice.about} stops showing on the content or profile. It stays on the record, marked withdrawn, with your name on it.`,
+      body: `The sentence about @${notice.about} stops showing on the content or profile. It stays on the record, marked withdrawn, with your name on it. `
+        + `@${notice.about} is told in their bell and at their email address that it has been taken back.`,
       confirmLabel: 'Withdraw',
       tone: 'danger',
     });
@@ -307,8 +308,8 @@ export default function NoticesPage() {
     setBusy(true);
     setBanner(null);
     try {
-      await api(`admin/notices/${notice.id}/withdraw/`, { method: 'POST', body: {} });
-      setBanner({ kind: 'ok', text: `The notice about @${notice.about} is withdrawn. The audit row says who took it down.` });
+      const out = await api<{ detail?: string }>(`admin/notices/${notice.id}/withdraw/`, { method: 'POST', body: {} });
+      setBanner({ kind: 'ok', text: out.detail || `The notice about @${notice.about} is withdrawn. The audit row says who took it down.` });
       await load();
     } catch (err) {
       if (!noteGate(err)) setBanner({ kind: 'bad', text: (err as Error).message });
