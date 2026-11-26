@@ -23,6 +23,21 @@ def enforce(key, limit, window):
         raise Throttled(wait=window)
 
 
+def left(key, limit, window):
+    """What this bucket may still spend in the running window, without spending it.
+
+    A button needs to know whether pressing it is worth trying before it tries, and
+    asking that question must not itself use up the room. None means no ceiling is
+    in force -- either the switch is off or the desk set the number to zero -- so
+    the caller never has to learn that zero means off.
+    """
+    if not settings.EXPOSING_RATE_LIMITS or limit <= 0:
+        return None
+    bucket = f'rl:{key}:{int(time.time() // window)}'
+    spent = cache.get(bucket) or 0
+    return max(0, limit - spent)
+
+
 def client_ip(request):
     """The address this connection came from, read through the trusted proxies.
 

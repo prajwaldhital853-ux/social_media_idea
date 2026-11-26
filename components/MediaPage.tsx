@@ -19,7 +19,7 @@ interface MediaPageProps {
 
 export default function MediaPage({ postId, initialIndex }: MediaPageProps) {
   const router = useRouter();
-  const { db, me, t, sharePost } = useApp();
+  const { db, me, t, sharePost, mayShare, showToast } = useApp();
   const post = db.posts.find(p => p.id === postId);
   // A direct link to /post/<id>/media/<n> has no list behind it; ask for the row.
   const { remote, pull } = useRemoteRow('post', postId, !!post);
@@ -105,7 +105,11 @@ export default function MediaPage({ postId, initialIndex }: MediaPageProps) {
     }
   };
 
-  const share = (i: number) => setSharing(i);
+  const share = async (i: number) => {
+    const refused = await mayShare(postId);
+    if (refused) { showToast(refused); return; }
+    setSharing(i);
+  };
 
   return (
     <div className="media-page">

@@ -325,7 +325,8 @@ class LoginLockoutTests(TestCase):
         self.assertEqual(set(codes[2:10]), {423})
         self.assertEqual(codes[10], 429)
         # The refusal is shown to a person, so it says what to do and for how long.
-        self.assertIn('Too many attempts', responses[10].data['detail'])
+        self.assertIn('Too many tries', responses[10].data['detail'])
+        self.assertIn('Wait a minute', responses[10].data['detail'])
         self.assertGreater(responses[10].data['retry_in'], 0)
 
     def test_suspended_account_cannot_login(self):

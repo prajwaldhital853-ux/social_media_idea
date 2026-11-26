@@ -4,9 +4,9 @@ from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.permissions import AllowAny, BasePermission, IsAuthenticatedOrReadOnly, SAFE_METHODS
 from rest_framework.response import Response
 
+from apps.common.errors import throttle_text
 from apps.common.pagination import KeysetPagination
-from apps.common.ratelimit import client_ip
-from apps.common.rules import blocked_wording, rate, write_gate
+from apps.common.rules import blocked_wording, rate, room, seat, write_gate
 from apps.follows.models import Block, Follow
 from apps.promotions.services import plan, serving
 
@@ -98,16 +98,27 @@ class PostViewSet(viewsets.ModelViewSet):
         return self._paginator
 
 
-@api_view(['POST'])
+@api_view(['GET', 'POST'])
 @permission_classes([AllowAny])
 def share_post(request, pk):
-    """Record one share of one post.
+    """Ask whether the share button may answer, then record one share of one post.
+
+    A GET spends nothing: it is the button asking before it opens the sheet, so a
+    reader past the ceiling is stopped where they can see it rather than told nothing
+    happened while the link quietly left. A POST is the record itself, and it is
+    refused by the same ceiling, so the asking is a courtesy and not the rule.
 
     The link is already out of the app's hands when the client reports it, so
     this is a tally rather than a transaction: it can only ever go up, and a
     visitor who shares the same post twice is counted twice.
     """
-    rate(f'share:{client_ip(request)}', 'spam_share_per_minute', 60, 30)
+    bucket = f'share:{seat(request)}'
+    if request.method == 'GET':
+        allowed = room(bucket, 'spam_share_per_minute', 60, 30)
+        if allowed:
+            return Response({'allowed': True})
+        return Response({'allowed': False, 'detail': throttle_text(60), 'retry_in': 60})
+    rate(bucket, 'spam_share_per_minute', 60, 30)
     if not visible_posts(request.user).filter(pk=pk).exists():
         return Response({'detail': 'No such post.'}, status=status.HTTP_404_NOT_FOUND)
     Post.objects.filter(pk=pk).update(share_count=F('share_count') + 1)
@@ -118,8 +129,10 @@ def share_post(request, pk):
 @permission_classes([AllowAny])
 def count_view(request, pk):
     """One reel watched. A view is cheap to grant and expensive to fake, so the
-    limit is generous and the count is a tally rather than a unique-audience measure."""
-    rate(f'view:{client_ip(request)}', 'spam_view_per_minute', 60, 120)
+    limit is generous and the count is a tally rather than a unique-audience measure.
+    It is counted per person, not per address: two hundred readers out of one college
+    wifi are two hundred people, and a reel still plays when its counter refuses."""
+    rate(f'view:{seat(request)}', 'spam_view_per_minute', 60, 120)
     if not visible_posts(request.user).filter(pk=pk).exists():
         return Response({'detail': 'No such post.'}, status=status.HTTP_404_NOT_FOUND)
     Post.objects.filter(pk=pk).update(views=F('views') + 1)

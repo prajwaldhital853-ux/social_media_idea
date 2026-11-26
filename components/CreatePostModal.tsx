@@ -123,7 +123,10 @@ function Composer({ original }: { original?: Post }) {
     } catch (err) {
       const data = (err as { data?: { blocked?: string[] } })?.data;
       if (data?.blocked?.length) setBlocked(data.blocked);
-      setError(err instanceof Error ? err.message : 'This post could not be published. Try again.');
+      // What the site decided is not a fault in the form, so it arrives as the
+      // same dark bar every other answer from the server arrives in. The draft
+      // stays on the screen either way.
+      showToast(err instanceof Error ? err.message : 'This post could not be published. Try again.');
     } finally {
       setBusy(false);
     }

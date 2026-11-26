@@ -142,8 +142,10 @@ export default function CreatePostPage() {
       router.push('/');
     } catch (err) {
       // A post the server refused keeps its text and attachments on the screen.
+      // What the site decided is not a fault in the form, so it arrives as the
+      // same dark bar every other answer from the server arrives in.
       setProgress(null);
-      setError(err instanceof Error ? err.message : 'Your post could not be published.');
+      showToast(err instanceof Error ? err.message : 'Your post could not be published.');
     }
   };
 

@@ -76,13 +76,15 @@ DEFAULTS = {
                               'How many password tries one email address may make in a minute. Past that the '
                               'sign-in is refused, even with the right password.',
                               'safety'),
-    'spam_share_per_minute': (30, 'int', 'Shares one address may send in a minute',
-                              'How many times one internet address may share in a minute. Past that the share '
-                              'is refused. Zero puts no ceiling on it.', 'safety'),
-    'spam_view_per_minute': (120, 'int', 'Feed reads one address may make in a minute',
-                             'How many posts and reels one address may count as watched in a minute. Past that '
-                             'the watch is not counted. Nobody reaches this by hand. Zero puts no ceiling on it.',
-                             'safety'),
+    'spam_share_per_minute': (30, 'int', 'Shares one account may make in a minute',
+                              'How many times one signed-in person may share in a minute. Past that the share '
+                              'button refuses and the reader is told to wait. A visitor with no account is '
+                              'counted by their internet address instead. Zero puts no ceiling on it.', 'safety'),
+    'spam_view_per_minute': (120, 'int', 'Feed reads one account may make in a minute',
+                             'How many posts and reels one signed-in person may count as watched in a minute. '
+                             'Past that the watch is not counted, but the post still opens -- nobody is told '
+                             'anything. A visitor with no account is counted by their internet address. Nobody '
+                             'reaches this by hand. Zero puts no ceiling on it.', 'safety'),
     'spam_post_per_hour': (10, 'int', 'Posts one account may make in an hour',
                            'How many posts one account may publish in an hour. The next one is refused until the '
                            'hour rolls over.', 'safety'),

@@ -13,7 +13,7 @@ from datetime import timedelta
 from django.utils import timezone
 from rest_framework.response import Response
 
-from apps.common.ratelimit import enforce
+from apps.common.ratelimit import client_ip, enforce, left
 
 
 def blocked_wording(request, kind):
@@ -56,6 +56,30 @@ def rate(bucket, key, window, fallback=0, values=None):
     how long the count stands, so a seat changes only how much of it is allowed.
     """
     enforce(bucket, whole(values if values is not None else desk(), key, fallback), window)
+
+
+def room(bucket, key, window, fallback=0, values=None):
+    """Whether this bucket still stands inside its ceiling, without using any of it.
+
+    This is the question a button asks before it presses. The write itself is still
+    refused by `rate`, so a client that skips the asking changes nothing about what
+    the door allows.
+    """
+    room_left = left(bucket, whole(values if values is not None else desk(), key, fallback), window)
+    return room_left is None or room_left > 0
+
+
+def seat(request):
+    """What a per-connection ceiling is counted against.
+
+    A signed-in person is counted as themselves. An address is only used when there
+    is no account to count, because an address is a shared thing: a college wifi or a
+    carrier hands two hundred people the same one, and a ceiling written as "what one
+    reader does in a minute" would refuse them all for what one busy minute looks like
+    from outside.
+    """
+    pk = getattr(getattr(request, 'user', None), 'pk', None)
+    return f'account:{pk}' if pk else f'address:{client_ip(request)}'
 
 
 def write_gate(request, kind):

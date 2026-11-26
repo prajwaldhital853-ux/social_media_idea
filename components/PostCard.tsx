@@ -97,7 +97,7 @@ function FeedFollow({ author }: { author: User }) {
 
 export default function PostCard({ post, author, featured }: PostCardProps) {
   const router = useRouter();
-  const { db, me, t, deletePost, toggleSave, isSaved, sharePost, openComposer, activePromo, promoEligible, showToast, showConfirm, reactionCount } = useApp();
+  const { db, me, t, deletePost, toggleSave, isSaved, sharePost, mayShare, openComposer, activePromo, promoEligible, showToast, showConfirm, reactionCount } = useApp();
   const [menuOpen, setMenuOpen] = useState(false);
   const [showComments, setShowComments] = useState(false);
   const [reporting, setReporting] = useState(false);
@@ -132,14 +132,19 @@ export default function PostCard({ post, author, featured }: PostCardProps) {
   const openReel = (index: number) => router.push(`/video/${post.id}-${index}`);
 
   // Opening the sheet is not a share; the counter moves only when the reader
-  // actually sends it to a person or hands the link to another app.
-  const handleShare = (e?: React.MouseEvent) => {
+  // actually sends it to a person or hands the link to another app. The desk's
+  // ceiling is asked first, so a share past it stops at the button.
+  const handleShare = async (e?: React.MouseEvent) => {
     e?.preventDefault();
     e?.stopPropagation();
+    const refused = await mayShare(post.id);
+    if (refused) { showToast(refused); return; }
     setSharing(true);
   };
 
   const copyShareLink = async () => {
+    const refused = await mayShare(post.id);
+    if (refused) { showToast(refused); return; }
     const url = `${window.location.origin}/post/${post.id}`;
     try {
       await navigator.clipboard.writeText(url);

@@ -35,7 +35,7 @@ export default function ReelsFeed({ initialKey }: { initialKey?: string }) {
   const router = useRouter();
   const {
     db, me, feature, toggleSave, isSaved, toggleFollow, isFollowing, serverMode,
-    sharePost, countView, blockUser, isBlocked, t,
+    sharePost, mayShare, countView, blockUser, isBlocked, t, showToast,
   } = useApp();
   const [index, setIndex] = useState(0);
   const [commentsOpen, setCommentsOpen] = useState(false);
@@ -201,8 +201,13 @@ export default function ReelsFeed({ initialKey }: { initialKey?: string }) {
   };
 
   // The menu hands out the same sheet the rail does: a reel is shared to people
-  // and apps, not just pasted as a link on the clipboard.
-  const shareReel = (slide: ReelSlide) => setSharing(slide);
+  // and apps, not just pasted as a link on the clipboard. The desk's ceiling is
+  // asked first, so a share past it stops at the button.
+  const shareReel = async (slide: ReelSlide) => {
+    const refused = await mayShare(slide.post.id);
+    if (refused) { showToast(refused); return; }
+    setSharing(slide);
+  };
 
   return (
     <div className="reels-page">
@@ -245,7 +250,7 @@ export default function ReelsFeed({ initialKey }: { initialKey?: string }) {
                   )}
                   {menuFor === slide.key && (
                     <div className="reel-menu" role="dialog" aria-label={t('reelOptions')} onClick={e => e.stopPropagation()}>
-                      <button type="button" className="reel-menu-item" onClick={() => { setMenuFor(null); shareReel(slide); }}>
+                      <button type="button" className="reel-menu-item" onClick={() => { setMenuFor(null); void shareReel(slide); }}>
                         {t('share')}
                       </button>
                       <div className="reel-menu-row">

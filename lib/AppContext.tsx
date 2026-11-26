@@ -50,6 +50,8 @@ interface AppContextType {
   toggleSave: (pid: string) => Promise<void>;
   isSaved: (pid: string) => boolean;
   sharePost: (pid: string) => Promise<void>;
+  /** The share button asks this before it opens. Null means go ahead; a string is what to say. */
+  mayShare: (pid: string) => Promise<string | null>;
   /** One reel watched. Fire-and-forget: a refused counter must never spoil playback. */
   countView: (pid: string) => Promise<void>;
   blockUser: (targetId: string) => Promise<void>;
@@ -1278,6 +1280,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setDb(prev => ({ ...prev, posts: prev.posts.map(p => (p.id === pid ? { ...p, [field]: value } : p)) }));
   };
 
+  /** Whether the share button is allowed to open at all, as the console's desk answers. */
+  const mayShare = async (pid: string): Promise<string | null> => {
+    if (!API_ENABLED) return null;
+    try {
+      const data = await api.get<any>(`/api/posts/${pid}/share/`);
+      if (data?.allowed === false) return data.detail || 'Wait a moment and share again.';
+      return null;
+    } catch {
+      // A desk that will not answer is not a reason to stop a person sharing.
+      return null;
+    }
+  };
+
   const sharePost = async (pid: string) => {
     // The link has already left the app by the time this is called, so a refused
     // POST is a lost tally and nothing the reader should be told about.
@@ -1718,7 +1733,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         addPost, updatePost, deletePost, addComment, deleteComment,
         toggleFollow, isFollowing, followState, requestFrom, incomingRequests, acceptRequest, declineRequest, removeFollower, mutualIds,
         react, myReaction, reactionCount, reactionMix, reactionPeople, myPostReaction, toggleSave, isSaved, toggleListingSave, isListingSaved,
-        sharePost, countView, blockUser, unblockUser, isBlocked, blockedIds,
+        sharePost, mayShare, countView, blockUser, unblockUser, isBlocked, blockedIds,
         notify, markAllRead, markRead, sendMessage, markThreadRead, addReport, logAudit,
         requestPromotion, cancelPromotion, activePromo, promoEligible,
         setPromotionStatus, updatePromotion,
