@@ -177,7 +177,7 @@ export default function Comments({ postId, onClose, mediaIndex }: { postId: stri
       if (raw.action === 'delete') {
         const ids = new Set((Array.isArray(raw.deleted_ids) ? raw.deleted_ids : []).map(String));
         if (!ids.size) return;
-        for (const id of ids) {
+        ids.forEach(id => {
           const row = dbRef.current.comments.find(comment => comment.id === id);
           if (row?.parentId) {
             removeListRow(`replies:${row.parentId}`, { parent: row.parentId }, id);
@@ -185,7 +185,7 @@ export default function Comments({ postId, onClose, mediaIndex }: { postId: stri
             removeListRow(`comments:${targetIdRef.current}`, streamQueryRef.current, id);
           }
           forgetLists(`replies:${id}`);
-        }
+        });
         setDb(prev => ({ ...prev, comments: prev.comments.filter(comment => !ids.has(comment.id)) }));
         const parentId = raw.parent_id == null ? null : String(raw.parent_id);
         const parent = parentId ? dbRef.current.comments.find(comment => comment.id === parentId) : null;
