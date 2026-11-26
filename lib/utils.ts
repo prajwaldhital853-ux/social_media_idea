@@ -158,6 +158,17 @@ export const resizeImage = (file: File, max = 2048): Promise<string> => {
       const w = img.naturalWidth || img.width;
       const h = img.naturalHeight || img.height;
       const s = Math.min(1, max / Math.max(w, h));
+      // A picture that already fits the frame is kept byte for byte: another
+      // JPEG pass is exactly the blur uploads were blamed for, and nothing
+      // here needs it — the cropper's own output lands here already sized.
+      if (s === 1) {
+        const reader = new FileReader();
+        reader.onload = () => res(String(reader.result));
+        reader.onerror = () => rej();
+        URL.revokeObjectURL(url);
+        reader.readAsDataURL(file);
+        return;
+      }
       const tw = Math.max(1, Math.round(w * s));
       const th = Math.max(1, Math.round(h * s));
       let from: HTMLImageElement | HTMLCanvasElement = img;
@@ -174,7 +185,9 @@ export const resizeImage = (file: File, max = 2048): Promise<string> => {
         sh = dh;
       }
       URL.revokeObjectURL(url);
-      res(blit(from, sw, sh, tw, th).toDataURL('image/jpeg', 0.82));
+      // 0.94 is where JPEG artefacts stop being visible; 0.82 smeared detail
+      // on anything with fine edges.
+      res(blit(from, sw, sh, tw, th).toDataURL('image/jpeg', 0.94));
     };
     img.onerror = () => {
       URL.revokeObjectURL(url);
