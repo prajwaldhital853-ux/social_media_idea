@@ -766,7 +766,9 @@ button.link:disabled:hover { color: var(--muted); text-decoration: none; }
 .banner-bad { color: #8a090b; background: var(--red-tint); border-color: rgba(228, 1, 4, 0.22); }
 
 /* An action that worked is announced once, quietly, in the same small dark pill
-   the platform uses, it must not push the list down or stay on the screen. */
+   the platform uses, it must not push the list down or stay on the screen. The
+   pill keeps a literal dark ground: --ink is the theme's text colour, and in
+   dark mode that flips to near-white, leaving white words on a white pill. */
 .toast {
   position: fixed;
   left: 50%;
@@ -778,7 +780,7 @@ button.link:disabled:hover { color: var(--muted); text-decoration: none; }
   max-width: min(560px, calc(100vw - 28px));
   padding: 9px 8px 9px 16px;
   border-radius: 9999px;
-  background: var(--ink);
+  background: #1A1E24;
   color: #fff;
   font-size: 13px;
   font-weight: 600;
