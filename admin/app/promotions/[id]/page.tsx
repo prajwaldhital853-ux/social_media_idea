@@ -101,8 +101,11 @@ export default function CampaignPage({ params }: { params: { id: string } }) {
 
   useAdminEvent(['promotion', 'staff_notice'], load, pulse => {
     if (pulse.kind === 'promotion') return String(pulse.id) === params.id;
-    return pulse.notice_kind === 'promotion'
-      || pulse.route.split('?')[0].replace(/\/+$/, '') === '/promotions';
+    if (pulse.kind === 'staff_notice') {
+      return pulse.notice_kind === 'promotion'
+        || pulse.route.split('?')[0].replace(/\/+$/, '') === '/promotions';
+    }
+    return false;
   });
 
   const submit = async (which: Verb) => {

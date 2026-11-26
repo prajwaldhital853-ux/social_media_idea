@@ -58,7 +58,8 @@ export default function CoinRequestPage({ params }: { params: { id: string } }) 
       return route === '/coins' || route.startsWith('/coins/');
     }
     if (pulse.kind === 'coin_request') return String(pulse.id) === params.id;
-    return !detail || String(pulse.user_id) === String(detail.request.card.id);
+    return pulse.kind === 'coins'
+      && (!detail || String(pulse.user_id) === String(detail.request.card.id));
   });
 
   // The link is a two-minute window on purpose, so the picture closes itself when
