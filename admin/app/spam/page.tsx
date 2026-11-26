@@ -150,10 +150,11 @@ export default function SpamScreen() {
                           </button>
                         ))}
                       </div>
+                      <p className="desk-plain">{item.help}</p>
                       <em className="desk-who">
                         {item.set
-                          ? <>turned by <b>{item.by}</b> {ago(item.at || '')}, {item.help}</>
-                          : <>never moved from the platform’s own answer, {item.help}</>}
+                          ? <>turned by <b>{item.by}</b> {ago(item.at || '')}</>
+                          : <>never moved from the platform’s own answer</>}
                       </em>
                     </div>
                   ) : (
@@ -165,10 +166,11 @@ export default function SpamScreen() {
                         data-enforced={item.enforced ? '1' : undefined}
                         onChange={event => setDraft({ ...draft, [item.key]: event.target.value.replace(/[^\d]/g, '') })}
                       />
+                      <p className="desk-plain">{item.help}</p>
                       <em className="desk-who">
                         {item.set
-                          ? <>written by <b>{item.by}</b> {ago(item.at || '')}, {item.help}</>
-                          : <>the number the site was built with, still untouched, {item.help}</>}
+                          ? <>written by <b>{item.by}</b> {ago(item.at || '')}</>
+                          : <>the number the site was built with, still untouched</>}
                         {item.enforced && <b className="desk-live">, {ENFORCED_NOTE}</b>}
                       </em>
                     </label>

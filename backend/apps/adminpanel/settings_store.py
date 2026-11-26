@@ -13,7 +13,9 @@ from .models import AdminSetting
 # key: (default, type, label, help, group)
 DEFAULTS = {
     'alert_report_pile': (3, 'int', 'Reports before content is pulled',
-                          'Distinct open reports on one post that hides it pending review.', 'safety'),
+                          'How many different people have to report one post before the platform hides it by '
+                          'itself. At 3 the third report hides the post, and it stays hidden until a person '
+                          'reviews it.', 'safety'),
     'alert_report_age_hours': (24, 'int', 'A report may sit unanswered for (hours)',
                                'Raises an alert when an open report is older than this.', 'safety'),
     'alert_coin_queue_hours': (24, 'int', 'A coin request may wait for (hours)',
@@ -62,38 +64,59 @@ DEFAULTS = {
     # zero is the rule switched off. `alert_report_pile`, above, is the auto-hide
     # number, one row, because two knobs that both mean "how many reports pull a
     # post" would drift apart within a month.
+    #
+    # The help on each line is the sentence a seat reads to know what the box does,
+    # so it says who is counted (one address or one account), over how long, and
+    # what happens to the request that goes past it -- in the words a person who has
+    # never read this code would use.
     'spam_signup_per_hour': (3, 'int', 'Sign-ups one address may start in an hour',
-                             'A fourth sign-up from one address in an hour is refused.', 'safety'),
+                             'How many new accounts one internet address may create in an hour. Past that the '
+                             'sign-up is refused until the hour is up.', 'safety'),
     'spam_login_per_minute': (10, 'int', 'Sign-in tries one account may get in a minute',
-                              'After this the attempt is refused, right password or not.',
+                              'How many password tries one email address may make in a minute. Past that the '
+                              'sign-in is refused, even with the right password.',
                               'safety'),
     'spam_share_per_minute': (30, 'int', 'Shares one address may send in a minute',
-                              'The share button stops answering past this. Zero puts no ceiling on it.', 'safety'),
+                              'How many times one internet address may share in a minute. Past that the share '
+                              'is refused. Zero puts no ceiling on it.', 'safety'),
     'spam_view_per_minute': (120, 'int', 'Feed reads one address may make in a minute',
-                             'The feed itself stops counting past this. Zero puts no ceiling on it.', 'safety'),
+                             'How many posts and reels one address may count as watched in a minute. Past that '
+                             'the watch is not counted. Nobody reaches this by hand. Zero puts no ceiling on it.',
+                             'safety'),
     'spam_post_per_hour': (10, 'int', 'Posts one account may make in an hour',
-                           'The ceiling a normal person never reaches and a script does.', 'safety'),
+                           'How many posts one account may publish in an hour. The next one is refused until the '
+                           'hour rolls over.', 'safety'),
     'spam_post_per_day': (30, 'int', 'Posts one account may make in a day',
-                          'The daily ceiling, counted with the hourly one.', 'safety'),
+                          'How many posts one account may publish in a day, counted along with the hourly limit.',
+                          'safety'),
     'spam_comment_per_hour': (20, 'int', 'Comments one account may make in an hour',
-                              'Copy-pasted under every post is what this ceiling is for.', 'safety'),
+                              'How many comments one account may send in an hour. This is the one that stops '
+                              'the same reply pasted under every post.', 'safety'),
     'spam_follow_per_hour': (30, 'int', 'Accounts one account may follow in an hour',
-                             'Follow-and-drop farms run into this one first.', 'safety'),
+                             'How many people one account may follow in an hour. Follow-and-drop accounts hit '
+                             'this first.', 'safety'),
     # The two hold-the-newcomer knobs ship at zero on purpose. They are the only
     # rules on this desk that can lock a genuine member out of their first post
     # without any report or blocked word behind it, so a platform switched on by
     # default would refuse people it has never seen a problem with. A seat turns
     # them on when it wants that wait; the number is enforced the moment it does.
     'spam_new_account_hours': (0, 'int', 'A new account may not post for (hours)',
-                               'Zero lets a fresh account post straight away.', 'safety'),
+                               'How long a brand-new account waits before it may post anything. At 0 it can post '
+                               'the minute it signs up. At 24 a new account stays silent for its first day.',
+                               'safety'),
     'spam_new_account_posts': (0, 'int', 'Posts a first-day account may make',
-                               'Zero gives a first-day account the same room as anybody else.', 'safety'),
+                               'How many posts an account may make in the first 24 hours of its life. At 0 a new '
+                               'account has the same room as anybody else.', 'safety'),
     'spam_new_account_verify': (False, 'bool', 'Hold a new account until its email is verified',
-                                'An unverified address cannot post at all while this is on.', 'safety'),
+                                'On: an account cannot post until it has confirmed its email address. Off: '
+                                'anyone may post straight away.', 'safety'),
     'spam_autohide': (True, 'bool', 'Pull content out of the feed on report counts alone',
-                      'Switch this off and every report waits for a person to read it.', 'safety'),
+                      'On: the report number above is enough to hide a post with nobody reading it. Off: every '
+                      'report waits in the review queue for a person.', 'safety'),
     'spam_link_block': (True, 'bool', 'Refuse a post that carries a blocked link',
-                        'Matches the link list below against what a post points at.', 'safety'),
+                        'On: a post containing one of the blocked domains below is refused as it is written, and '
+                        'the author is told which link stopped it. Off: the list is kept but stops nothing.',
+                        'safety'),
     # Contract 6.7: the coin desk. A person pays in rupees and the platform decides
     # what a Coin costs, what the smallest purchase is, and which bank account the
     # money goes to, so all three are rows, not constants, and a price change does
