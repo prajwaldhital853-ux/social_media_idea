@@ -157,7 +157,7 @@ export default function Comments({ postId, onClose, mediaIndex }: { postId: stri
         const row = raw.comment;
         const id = String(row.id);
         if (!dbRef.current.comments.some(comment => comment.id === id)) {
-          merge(commentsFragment([row]));
+          merge(commentsFragment(me?.id || null)([row]));
         }
         const parentId = row.parent == null ? null : String(row.parent);
         if (parentId) {

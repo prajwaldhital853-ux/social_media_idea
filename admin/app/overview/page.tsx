@@ -69,7 +69,7 @@ export default function OverviewPage() {
   useAdminEvent([
     'comment', 'post_new', 'reaction', 'audit', 'staff_notice',
     'coin_request', 'promotion', 'coins', 'warning',
-  ], load);
+  ], () => { void load(false); });
 
   useEffect(() => {
     load(false);
