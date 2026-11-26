@@ -1,3 +1,4 @@
+from django.core.cache import cache
 from django.db.models import Exists, F, OuterRef, Q
 from rest_framework import status, viewsets
 from rest_framework.decorators import action, api_view, permission_classes
@@ -12,6 +13,11 @@ from apps.promotions.services import plan, serving
 
 from .models import Post, PostMedia
 from .serializers import PostSerializer
+
+# How far a signed-out reader may walk the feed, and how long a stranger's first
+# page is served without touching the database again.
+ANON_FEED_ROWS = 30
+FEED_CACHE_SECONDS = 15
 
 
 class IsAuthorOrReadOnly(BasePermission):
@@ -61,6 +67,25 @@ class PostViewSet(viewsets.ModelViewSet):
             qs = qs.filter(Exists(PostMedia.objects.filter(post=OuterRef('pk'), kind='video')))
         return qs
 
+    def list(self, request, *args, **kwargs):
+        """A stranger's first page is the one answer every anonymous client asks for.
+
+        It is cached for a few seconds keyed on the exact query, so a thousand
+        visitors opening the app in the same quarter minute read one database
+        query instead of a thousand. Only page one, and only without a search
+        term: search terms and cursors are attacker-chosen text, and each unique
+        one would plant a cache entry of its own.
+        """
+        if request.user.is_authenticated or request.query_params.get('cursor') or request.query_params.get('q'):
+            return super().list(request, *args, **kwargs)
+        key = f'feed-anon:{request.get_full_path()}'
+        cached = cache.get(key)
+        if cached is not None:
+            return Response(cached)
+        response = super().list(request, *args, **kwargs)
+        cache.set(key, response.data, FEED_CACHE_SECONDS)
+        return response
+
     def create(self, request, *args, **kwargs):
         """Blocked wording, the desk's ceilings and blocked links are all answered here.
 
@@ -88,13 +113,14 @@ class PostViewSet(viewsets.ModelViewSet):
     @property
     def paginator(self):
         """`order=views` sorts on a count instead of a timestamp, so that shelf
-        walks its own index and needs a cursor built for it."""
+        walks its own index and needs a cursor built for it. Both shelves hand
+        their signed-out readers the same bounded walk."""
         if self.request is not None and self.request.query_params.get('order') == 'views':
             if not hasattr(self, '_views_paginator'):
-                self._views_paginator = KeysetPagination(sort_field='views')
+                self._views_paginator = KeysetPagination(sort_field='views', anon_cap=ANON_FEED_ROWS)
             return self._views_paginator
         if not hasattr(self, '_paginator'):
-            self._paginator = self.pagination_class() if self.pagination_class else None
+            self._paginator = KeysetPagination(anon_cap=ANON_FEED_ROWS)
         return self._paginator
 
 
@@ -154,7 +180,28 @@ def promo_card(promo):
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def feed(request):
-    """Newest-first ordinary feed; matching promoted posts lead the first page."""
+    """Newest-first ordinary feed; matching promoted posts lead the first page.
+
+    A stranger's first page is the one answer every anonymous client asks for, so
+    it is served from a short cache and the database hears the question once per
+    quarter-minute instead of once per stranger. Only page one is cached: a
+    cursor is caller-chosen text, and every unique one would plant an entry of
+    its own. The cache skips nothing a stranger's page would have done — the
+    promotion desk answers nobody who is not signed in, and the impression
+    ledger only moves for people it can name.
+    """
+    if not request.user.is_authenticated and not request.query_params.get('cursor'):
+        key = f'feed-anon:{request.get_full_path()}'
+        cached = cache.get(key)
+        if cached is not None:
+            return Response(cached)
+        response = _feed_page(request)
+        cache.set(key, response.data, FEED_CACHE_SECONDS)
+        return response
+    return _feed_page(request)
+
+
+def _feed_page(request):
     cursor = request.query_params.get('cursor')
     following = bool(request.query_params.get('following'))
     # The sponsored slot belongs at the head of a newest-first page. On an
@@ -177,7 +224,7 @@ def feed(request):
         )
     if promo_ids:
         qs = qs.exclude(pk__in=promo_ids)
-    paginator = KeysetPagination()
+    paginator = KeysetPagination(anon_cap=ANON_FEED_ROWS)
     rows = paginator.paginate_queryset(qs, request)
     data = PostSerializer(rows, many=True, context={'request': request}).data
     for item in data:

@@ -356,6 +356,12 @@ export default function ReelsFeed({ initialKey }: { initialKey?: string }) {
                 </div>
               );
             })}
+            {!me && stream.loaded && !stream.hasMore && (
+              <div className="reel-slide reel-end">
+                <p>{t('keepReading')}</p>
+                <Link href="/login">{t('signIn')}</Link>
+              </div>
+            )}
           </div>
         ) : serverMode && !stream.loaded && !stream.error ? (
           <div className="feed-skeleton reel-skeleton" aria-hidden="true">

@@ -3988,6 +3988,29 @@ body::-webkit-scrollbar {
   backdrop-filter: blur(6px);
 }
 
+.reel-slide.reel-end {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  text-align: center;
+  color: #fff;
+  padding: 24px;
+}
+
+.reel-slide.reel-end p {
+  max-width: 30ch;
+  line-height: 1.5;
+  opacity: 0.85;
+}
+
+.reel-slide.reel-end a {
+  color: #fff;
+  font-weight: 600;
+  text-decoration: underline;
+}
+
 .reel-top {
   position: absolute;
   top: 0;

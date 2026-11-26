@@ -104,6 +104,12 @@ export default function Feed() {
         const author = db.users.find(u => u.id === post.uid);
         return author ? <PostCard key={post.id} post={post} author={author} /> : null;
       })}
+      {!serverMode || me || feed.error || feed.loading || hasMore || !posts.length ? null : (
+        <div className="feed-empty">
+          <p>{t('keepReading')}</p>
+          <Link href="/login">{t('signIn')}</Link>
+        </div>
+      )}
       {pending && hasMore && !filling && skeleton}
       {hasMore && <div ref={sentinel} className="feed-sentinel" aria-hidden="true" />}
     </>
