@@ -17,6 +17,23 @@ class IsAuthorOrReadOnly(BasePermission):
         return request.method in SAFE_METHODS or obj.author_id == request.user.id
 
 
+def _pulse_comments(post):
+    """The fresh comment tally, told while the reader is still on the page.
+
+    The author always hears it; the room only for a post the room may read.
+    """
+    from apps.common import pulse
+    from apps.profiles.models import Profile
+
+    count = Post.objects.filter(pk=post.pk).values_list('comment_count', flat=True).first() or 0
+    event = {'post_id': str(post.pk), 'comments': count}
+    pulse.to_user(post.author_id, 'comment', **event)
+    room = post.audience == Post.Audience.PUBLIC and not Profile.objects.filter(
+        user_id=post.author_id).values_list('is_private', flat=True).first()
+    if room:
+        pulse.to_site('comment', **event)
+
+
 class CommentViewSet(viewsets.ModelViewSet):
     serializer_class = CommentSerializer
     permission_classes = [IsAuthenticatedOrReadOnly, IsAuthorOrReadOnly]
@@ -73,6 +90,7 @@ class CommentViewSet(viewsets.ModelViewSet):
             notify(comment.parent.author, self.request.user, 'reply', f'{self.request.user.username} replied to your comment.', 'post', post.pk)
         else:
             notify(post.author, self.request.user, 'comment', f'{self.request.user.username} commented on your post.', 'post', post.pk)
+        _pulse_comments(post)
 
     def perform_destroy(self, instance):
         post_id = instance.post_id
@@ -82,3 +100,7 @@ class CommentViewSet(viewsets.ModelViewSet):
             deleted, _ = Comment.objects.filter(pk=instance.pk).delete()
             if deleted:
                 Post.objects.filter(pk=post_id).update(comment_count=F('comment_count') - delta)
+        if deleted:
+            post = Post.objects.filter(pk=post_id).first()
+            if post:
+                _pulse_comments(post)

@@ -119,8 +119,22 @@ def apply(wallet_id, kind, amount, note='', actor=None, ref=''):
         if wallet.balance + delta < 0:
             raise ValueError('Insufficient balance.')
         Wallet.objects.filter(pk=wallet.pk).update(balance=F('balance') + delta)
-        return Transaction.objects.create(wallet=wallet, kind=kind, amount=amount,
-                                          note=note[:200], actor=actor, ref=str(ref or '')[:80])
+        row = Transaction.objects.create(wallet=wallet, kind=kind, amount=amount,
+                                         note=note[:200], actor=actor, ref=str(ref or '')[:80])
+    _pulse_balance(wallet.user_id, wallet.pk)
+    return row
+
+
+def _pulse_balance(user_id, wallet_id):
+    """The new balance, told to the one tab that shows it, the moment it moved.
+
+    Emitted after the ledger's transaction commits, so the number a frame
+    carries is a number the account can already see in the API.
+    """
+    from apps.common import pulse
+
+    fresh = Wallet.objects.filter(pk=wallet_id).values_list('balance', flat=True).first()
+    pulse.to_user(user_id, 'coins', balance=fresh)
 
 
 @contextmanager

@@ -8,6 +8,7 @@ import { canSeePost, privateIds, compact } from '@/lib/utils';
 import { IC } from '@/lib/icons';
 import { Post, User, Media } from '@/lib/types';
 import { postsFragment, useList } from '@/lib/lists';
+import { onLive } from '@/lib/live';
 import AutoVideo from './AutoVideo';
 import Comments from './Comments';
 import Avatar from './Avatar';
@@ -53,6 +54,15 @@ export default function ReelsFeed({ initialKey }: { initialKey?: string }) {
   const wheelAcc = useRef(0);
   const wheelTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const countedKey = useRef<string | null>(null);
+
+  // A reel uploaded while the shelf is open knocks once: the pill offers a
+  // fresh first page instead of yanking the reader off the slide they are on.
+  const [fresh, setFresh] = useState(false);
+  useEffect(() => onLive(p => {
+    if (p.kind !== 'post_new' || !p.video || !serverMode) return;
+    if (p.author && me && p.author === me.username) return;
+    setFresh(true);
+  }), [serverMode, me]);
 
   useEffect(() => setMounted(true), []);
 
@@ -241,6 +251,19 @@ export default function ReelsFeed({ initialKey }: { initialKey?: string }) {
           </button>
           <span className="reel-title">Reels</span>
         </div>
+        {fresh && (
+          <button
+            type="button"
+            className="live-pill reels-new"
+            onClick={() => {
+              setFresh(false);
+              scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+              restream.current();
+            }}
+          >
+            {t('newReels')}
+          </button>
+        )}
         {feature('video') && slides.length > 0 ? (
           <div className="reels-scroll" ref={scrollRef} onScroll={onScroll}>
             {slides.map((slide, i) => {

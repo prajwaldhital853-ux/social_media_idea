@@ -133,7 +133,16 @@ class PostViewSet(viewsets.ModelViewSet):
         return super().update(request, *args, **kwargs)
 
     def perform_create(self, serializer):
-        serializer.save(author=self.request.user)
+        instance = serializer.save(author=self.request.user)
+        if instance.status == Post.Status.LIVE:
+            # The room learns a post exists — an id, a video flag and a handle,
+            # nothing a stranger could read before the visibility rules let them.
+            try:
+                from apps.common import pulse
+                pulse.to_site('post_new', id=str(instance.pk), author=instance.author.username,
+                              video=instance.media.filter(kind='video').exists())
+            except Exception:  # noqa: BLE001 - the wire is a courtesy, the post is already live
+                pass
 
     @property
     def paginator(self):
