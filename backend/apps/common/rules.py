@@ -82,6 +82,51 @@ def seat(request):
     return f'account:{pk}' if pk else f'address:{client_ip(request)}'
 
 
+def post_limits_gate(request):
+    """None when this write's size is inside the limits desk's contract, otherwise
+    the 400 to hand back instead.
+
+    The composer holds the same numbers, but it is site code: a stale tab, an old
+    build or a hand-written request carries whatever it likes. The counts and the
+    seconds are judged here, at the door, so nothing oversized is ever saved.
+    Each file's size is the upload endpoint's half of the contract and stays there.
+    """
+    try:
+        from apps.adminpanel import limits
+        published = limits.public_config()
+    except Exception:  # noqa: BLE001 - the door answers for itself before the console
+        return None
+    data = request.data if isinstance(request.data, dict) else {}
+    media = data.get('media') if isinstance(data.get('media'), list) else []
+    rows = [row for row in media if isinstance(row, dict)]
+    photos = [row for row in rows if row.get('kind') != 'video']
+    videos = [row for row in rows if row.get('kind') == 'video']
+
+    text = str(data.get('text') or '')
+    chars = published['text']['characters']
+    if text and len(text) > chars:
+        return Response({'detail': f'A post runs up to {chars} characters. Yours is {len(text)}.'}, status=400)
+    most = published['photo']['per_post']
+    if len(photos) > most:
+        return Response({
+            'detail': f'A post carries {most} photo{"s" if most != 1 else ""}. '
+                      f'Yours has {len(photos)} — take some out and post again.',
+        }, status=400)
+    most = published['video']['per_post']
+    if len(videos) > most:
+        return Response({
+            'detail': f'A post carries {most} video{"s" if most != 1 else ""}. '
+                      f'Yours has {len(videos)} — take some out and post again.',
+        }, status=400)
+    seconds = published['video']['seconds']
+    longest = max((float(row.get('duration') or 0) for row in videos), default=0)
+    if longest > seconds:
+        return Response({
+            'detail': f'A video here runs up to {seconds} seconds — one of yours runs {round(longest)}.',
+        }, status=400)
+    return None
+
+
 def write_gate(request, kind):
     """None when the desk allows this write, otherwise the answer to hand back instead.
 

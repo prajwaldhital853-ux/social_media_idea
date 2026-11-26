@@ -9,7 +9,7 @@ from rest_framework.response import Response
 
 from apps.common.errors import throttle_text
 from apps.common.pagination import KeysetPagination
-from apps.common.rules import blocked_wording, rate, room, seat, write_gate
+from apps.common.rules import blocked_wording, post_limits_gate, rate, room, seat, write_gate
 from apps.follows.models import Block, Follow
 from apps.promotions.services import plan, serving
 
@@ -116,11 +116,18 @@ class PostViewSet(viewsets.ModelViewSet):
         refused = write_gate(request, 'post')
         if refused:
             return refused
+        refused = post_limits_gate(request)
+        if refused:
+            return refused
         return super().create(request, *args, **kwargs)
 
     def update(self, request, *args, **kwargs):
-        """So is an edit that puts the wording back in after the fact."""
+        """So is an edit that puts the wording back in after the fact, or one that
+        re-commits more attachments than the limits desk allows."""
         refused = blocked_wording(request, 'post')
+        if refused:
+            return refused
+        refused = post_limits_gate(request)
         if refused:
             return refused
         return super().update(request, *args, **kwargs)
