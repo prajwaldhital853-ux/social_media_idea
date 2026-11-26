@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useApp } from '@/lib/AppContext';
 import { useBackClose } from '@/lib/useBackClose';
+import { canEncodeWebp } from '@/lib/utils';
 import { IC } from '@/lib/icons';
 
 type Props = {
@@ -183,10 +184,15 @@ export default function ImageCropper({ src, name, ratio, round, max, onCancel, o
     ctx.fillStyle = '#fff';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.drawImage(img, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
-    canvas.toBlob(blob => {
-      if (!blob) return bail();
-      onCrop(new File([blob], name.replace(/\.(png|webp|jpe?g)$/i, '') + '.jpg', { type: 'image/jpeg' }));
-    }, 'image/jpeg', 0.94);
+    // WebP keeps the crop near half the JPEG size at the same look; browsers
+    // without the encoder get the old JPEG pass.
+    void canEncodeWebp().then(ok => {
+      canvas.toBlob(blob => {
+        if (!blob) return bail();
+        const ext = blob.type === 'image/webp' ? '.webp' : '.jpg';
+        onCrop(new File([blob], name.replace(/\.(png|webp|jpe?g)$/i, '') + ext, { type: blob.type }));
+      }, ok ? 'image/webp' : 'image/jpeg', ok ? 0.9 : 0.94);
+    });
   };
 
   return createPortal(
