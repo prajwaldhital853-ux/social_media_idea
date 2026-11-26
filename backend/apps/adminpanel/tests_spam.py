@@ -47,13 +47,14 @@ class SpamDeskTests(RbacTestCase):
         StaffAccount.objects.create(user=self.mod, role=StaffAccount.Role.MODERATOR)
         self.desk = self.session('client_owner')
 
-    def test_the_desk_shows_the_limits_in_three_blocks(self):
+    def test_the_desk_shows_the_limits_in_four_blocks(self):
         got = self.desk.get(DESK_URL)
         self.assertEqual(got.status_code, 200)
         blocks = {item['id'] for item in got.data['blocks']}
-        self.assertEqual(blocks, {'rate', 'new', 'pile'})
+        self.assertEqual(blocks, {'rate', 'reads', 'new', 'pile'})
         keys = [line['key'] for block in got.data['blocks'] for line in block['lines']]
         for wanted in ('spam_signup_per_hour', 'spam_post_per_hour', 'spam_new_account_hours',
+                       'spam_read_per_minute', 'spam_guest_read_per_minute', 'spam_guest_feed_rows',
                        'alert_report_pile', 'spam_autohide', 'spam_link_block'):
             self.assertIn(wanted, keys)
 
@@ -266,16 +267,16 @@ class BlockedLinkTests(RbacTestCase):
 
 class PublicConfigTests(RbacTestCase):
     def test_the_door_publishes_the_new_account_rules_without_a_login(self):
-        self.session('client_owner').post(DESK_URL, {'spam_new_account_hours': '24', 'spam_new_account_verify': '1'},
+        self.session('client_owner').post(DESK_URL, {'spam_new_account_hours': '24'},
                                           format='json')
         answered = APIClient().get(CONFIG_URL)
-        self.assertEqual(answered.data['new_account'], {'hold_hours': 24, 'posts_per_day': 0, 'verify_first': True})
+        self.assertEqual(answered.data['new_account'], {'hold_hours': 24, 'posts_per_day': 0})
 
     def test_the_two_hold_rules_ship_at_zero_so_a_new_account_can_post(self):
         """Somebody has to turn a wait on; a fresh seat is not made to wait for a
         rule no person on this platform has decided it wants."""
         answered = APIClient().get(CONFIG_URL)
-        self.assertEqual(answered.data['new_account'], {'hold_hours': 0, 'posts_per_day': 0, 'verify_first': False})
+        self.assertEqual(answered.data['new_account'], {'hold_hours': 0, 'posts_per_day': 0})
 
     def test_it_carries_the_words_and_links_the_platform_will_not_carry(self):
         owner = self.session('client_owner')

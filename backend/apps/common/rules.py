@@ -159,8 +159,6 @@ def _new_account(request, values):
                 'detail': f'New accounts wait {hold} hour{"s" if hold != 1 else ""} before their first '
                           f'post. Yours can post from {timezone.localtime(opens):%H:%M}.',
             }, status=403)
-    if on(values, 'spam_new_account_verify') and not user.email_verified:
-        return Response({'detail': 'Confirm your email address before you post.'}, status=403)
     first = whole(values, 'spam_new_account_posts')
     day_ago = timezone.now() - timedelta(days=1)
     if first and user.date_joined >= day_ago and user.posts.filter(created_at__gte=day_ago).count() >= first:

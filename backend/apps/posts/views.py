@@ -17,9 +17,30 @@ from .models import Post, PostMedia
 from .serializers import PostSerializer
 
 # How far a signed-out reader may walk the feed, and how long a stranger's first
-# page is served without touching the database again.
+# page is served without touching the database again. The spam desk owns both
+# numbers (`spam_guest_feed_rows`, `spam_guest_feed_cache_seconds`); these remain
+# only for a request that arrives while the desk cannot be read.
 ANON_FEED_ROWS = 30
 FEED_CACHE_SECONDS = 15
+
+
+def guest_feed_rows():
+    """How far a stranger may walk the feed, from the desk. Zero walks it all."""
+    try:
+        from apps.adminpanel import settings_store
+        cap = int(settings_store.values().get('spam_guest_feed_rows', 0))
+    except Exception:  # noqa: BLE001 - the door answers for itself before the console
+        return ANON_FEED_ROWS
+    return cap or None
+
+
+def guest_feed_seconds():
+    """How long a stranger's first page is reused, from the desk. Zero is fresh."""
+    try:
+        from apps.adminpanel import settings_store
+        return int(settings_store.values().get('spam_guest_feed_cache_seconds', 0))
+    except Exception:  # noqa: BLE001 - the door answers for itself before the console
+        return FEED_CACHE_SECONDS
 
 
 class IsAuthorOrReadOnly(BasePermission):
@@ -87,7 +108,9 @@ class PostViewSet(viewsets.ModelViewSet):
             return Response(cached)
         response = super().list(request, *args, **kwargs)
         self._deal(request, response)
-        cache.set(key, response.data, FEED_CACHE_SECONDS)
+        seconds = guest_feed_seconds()
+        if seconds:
+            cache.set(key, response.data, seconds)
         return response
 
     def _deal(self, request, response):
@@ -151,10 +174,10 @@ class PostViewSet(viewsets.ModelViewSet):
         their signed-out readers the same bounded walk."""
         if self.request is not None and self.request.query_params.get('order') == 'views':
             if not hasattr(self, '_views_paginator'):
-                self._views_paginator = KeysetPagination(sort_field='views', anon_cap=ANON_FEED_ROWS)
+                self._views_paginator = KeysetPagination(sort_field='views', anon_cap=guest_feed_rows())
             return self._views_paginator
         if not hasattr(self, '_paginator'):
-            self._paginator = KeysetPagination(anon_cap=ANON_FEED_ROWS)
+            self._paginator = KeysetPagination(anon_cap=guest_feed_rows())
         return self._paginator
 
 
@@ -230,7 +253,9 @@ def feed(request):
         if cached is not None:
             return Response(cached)
         response = _feed_page(request)
-        cache.set(key, response.data, FEED_CACHE_SECONDS)
+        seconds = guest_feed_seconds()
+        if seconds:
+            cache.set(key, response.data, seconds)
         return response
     return _feed_page(request)
 
@@ -258,7 +283,7 @@ def _feed_page(request):
         )
     if promo_ids:
         qs = qs.exclude(pk__in=promo_ids)
-    paginator = KeysetPagination(anon_cap=ANON_FEED_ROWS)
+    paginator = KeysetPagination(anon_cap=guest_feed_rows())
     rows = paginator.paginate_queryset(qs, request)
     data = PostSerializer(rows, many=True, context={'request': request}).data
     for item in data:

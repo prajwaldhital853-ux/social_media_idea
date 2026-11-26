@@ -239,7 +239,6 @@ export default function SpamScreen() {
                       {quote.new_account.posts_per_day
                         ? <> and gets {quote.new_account.posts_per_day} posts in its first day</>
                         : ', then posts as freely as anybody else'}
-                      {quote.new_account.verify_first ? ', and must verify its email first' : ''}
                     </em>
                   </div>
                 </li>

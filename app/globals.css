@@ -1400,6 +1400,8 @@ a:focus:not(:focus-visible) {
   transition: background 0.15s ease;
 }
 .suggest-follow:hover { background: var(--brand-tint); }
+.suggest-follow.on { color: var(--muted); }
+.suggest-follow.pending { color: var(--muted); }
 .suggest-more { flex: none; margin-top: 10px; border: 0; background: none; color: var(--muted); font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; padding: 4px; }
 .suggest-more:hover { color: var(--ink); }
 

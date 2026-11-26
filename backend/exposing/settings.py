@@ -173,9 +173,11 @@ REST_FRAMEWORK = {
     'PAGE_SIZE': 10,
     'EXCEPTION_HANDLER': 'apps.common.errors.exception_handler',
     'DEFAULT_THROTTLE_CLASSES': [
-        'apps.common.throttles.AnonIPThrottle',
-        'rest_framework.throttling.UserRateThrottle',
+        'apps.common.throttles.DeskAnonThrottle',
+        'apps.common.throttles.DeskUserThrottle',
     ],
+    # The read ceilings are the spam desk's rows now; these rates are only what a
+    # request is measured against while the desk itself cannot be read.
     'DEFAULT_THROTTLE_RATES': {
         'anon': '120/min',
         'user': '600/min',
