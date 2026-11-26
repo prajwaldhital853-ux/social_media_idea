@@ -187,6 +187,7 @@ export default function PersonRecordPage({ params }: { params: { username: strin
                 <div><dt>Location</dt><dd>{[person.city, person.country].filter(Boolean).join(', ') || '-'}</dd></div>
                 <div><dt>Private account</dt><dd>{person.is_private ? 'Yes, followers only' : 'No'}</dd></div>
                 <div><dt>Warning emails</dt><dd>{person.notify_email ? 'On' : 'Off'}</dd></div>
+                <div><dt>Follower emails</dt><dd>{person.notify_follow_email ? 'On' : 'Off'}</dd></div>
                 <div><dt>Bio</dt><dd>{person.bio || '-'}</dd></div>
               </dl>
             </Section>

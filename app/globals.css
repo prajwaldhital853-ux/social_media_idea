@@ -3403,6 +3403,23 @@ body::-webkit-scrollbar {
   transform: scale(1.01);
 }
 
+/* A single photo is shown whole, at its own shape. The 16/10 frame cropped
+   what the tap viewer then revealed in full, so the feed and the viewer
+   disagreed about which picture the post carried. The height cap keeps an
+   extreme portrait from owning the whole screen; the dark ground it letter-
+   boxes onto is the mosaic's own. */
+.media-mosaic.single-photo { aspect-ratio: auto; height: auto; max-height: none; }
+.media-mosaic.single-photo .mosaic-cell { display: grid; justify-items: center; }
+.media-mosaic.single-photo img {
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: min(72svh, 600px);
+  object-fit: contain;
+}
+.thread-view .post-featured .media-mosaic.single-photo { aspect-ratio: auto; height: auto; max-height: none; }
+
+
 /* Fixed layout for comment section - prevent jumping */
 .post-actions {
   margin-bottom: 0;

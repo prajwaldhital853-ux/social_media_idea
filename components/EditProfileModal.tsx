@@ -258,7 +258,7 @@ export default function EditProfileModal({ onClose }: { onClose: () => void }) {
         <ImageCropper
           src={crop.src}
           name={crop.kind === 'avatar' ? 'avatar.jpg' : 'cover.jpg'}
-          ratio={crop.kind === 'avatar' ? 1 : 2.4}
+          ratio={crop.kind === 'avatar' ? 1 : undefined}
           round={crop.kind === 'avatar'}
           max={crop.kind === 'avatar' ? 320 : 1600}
           onCancel={stopCrop}

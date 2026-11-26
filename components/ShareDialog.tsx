@@ -159,12 +159,41 @@ export default function ShareDialog({ open, url, title, text, preview, onShared,
     }
   };
 
-  const nativeShare = async () => {
-    try {
-      await navigator.share({ title, text: text || title, url });
+  // No web dialog exists for Messenger: a phone hands the link to the app's own
+  // composer, and a desktop copies it and opens messenger.com to paste from.
+  const shareMessenger = () => {
+    if (/Android/i.test(navigator.userAgent)) {
+      const fallback = encodeURIComponent('https://www.messenger.com/');
+      window.location.href = `intent://share/?link=${link}#Intent;package=com.facebook.orca;scheme=fb-messenger;S.browser_fallback_url=${fallback};end`;
       onShared();
       onClose();
-    } catch { /* the sheet was closed; nothing left the phone */ }
+      return;
+    }
+    if (/iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+      window.location.href = `fb-messenger://share/?link=${link}`;
+      // An iPhone without the app ignores the scheme; then the link is copied
+      // and messenger.com opens so the share still happens somewhere.
+      setTimeout(async () => {
+        if (document.visibilityState !== 'visible') return;
+        try { await navigator.clipboard.writeText(url); showToast(t('messengerCopied')); } catch { /* clipboard refused */ }
+        window.open('https://www.messenger.com/', '_blank', 'noopener,noreferrer');
+      }, 1200);
+      onShared();
+      onClose();
+      return;
+    }
+    void navigator.clipboard.writeText(url)
+      .then(() => showToast(t('messengerCopied')))
+      .catch(() => { /* private mode */ });
+    openApp('https://www.messenger.com/');
+  };
+
+  // Instagram accepts no share from the web: the link goes to the clipboard
+  // first, then the app (phone) or the site (desktop) opens for the paste.
+  const shareInstagram = async () => {
+    try { await navigator.clipboard.writeText(url); showToast(t('instagramCopied')); } catch { /* clipboard refused; open anyway */ }
+    if (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) window.location.href = 'instagram://app';
+    else openApp('https://www.instagram.com/');
   };
 
   const message = encodeURIComponent(`${text || title} ${url}`);
@@ -175,8 +204,8 @@ export default function ShareDialog({ open, url, title, text, preview, onShared,
     { key: 'copy', label: t('copyLink'), mark: <span className="share-mark">{IC.link}</span>, run: () => { void copy(); } },
     { key: 'whatsapp', label: 'WhatsApp', mark: <span className="share-mark wa">{IC.phone}</span>, run: () => openApp(`https://wa.me/?text=${message}`) },
     { key: 'facebook', label: 'Facebook', mark: <span className="share-mark fb">{IC.fb}</span>, run: () => openApp(`https://www.facebook.com/sharer/sharer.php?u=${link}`) },
-    { key: 'messenger', label: 'Messenger', mark: <span className="share-mark ms">{IC.msg}</span>, run: () => { void nativeShare(); } },
-    { key: 'instagram', label: 'Instagram', mark: <span className="share-mark ig">{IC.camera}</span>, run: () => { void nativeShare(); } },
+    { key: 'messenger', label: 'Messenger', mark: <span className="share-mark ms">{IC.msg}</span>, run: () => shareMessenger() },
+    { key: 'instagram', label: 'Instagram', mark: <span className="share-mark ig">{IC.camera}</span>, run: () => { void shareInstagram(); } },
     { key: 'email', label: 'Email', mark: <span className="share-mark">{IC.send}</span>, run: () => openApp(`mailto:?subject=${subject}&body=${message}`) },
     { key: 'x', label: 'X', mark: <span className="share-mark x">X</span>, run: () => openApp(`https://twitter.com/intent/tweet?text=${message}`) },
   ];

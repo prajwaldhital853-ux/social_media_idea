@@ -47,7 +47,7 @@ class ProfileSerializer(serializers.ModelSerializer):
         model = Profile
         fields = [
             'id', 'username', 'name', 'bio', 'avatar_url', 'cover_url', 'location', 'province',
-            'website', 'phone', 'links', 'verified', 'is_private', 'two_step', 'notify_email',
+            'website', 'phone', 'links', 'verified', 'is_private', 'two_step', 'notify_email', 'notify_follow_email',
             'dob', 'country', 'city',
         ]
         read_only_fields = ['id', 'username', 'verified']

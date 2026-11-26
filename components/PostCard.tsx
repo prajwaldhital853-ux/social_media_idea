@@ -259,7 +259,7 @@ export default function PostCard({ post, author, featured }: PostCardProps) {
       <NoticeBanner notices={post.notices} full={featured}/>
 
       {shown.length > 0 && (
-        <div className={`media-mosaic ${mosaicClass(shown.length)}`} onClick={e => e.stopPropagation()}>
+        <div className={`media-mosaic ${mosaicClass(shown.length)}${single && media[0]?.type === 'image' ? ' single-photo' : ''}`} onClick={e => e.stopPropagation()}>
           {shown.map((item, index) => (
             <div className="mosaic-cell" key={`${item.type}-${item.src || item.gen || index}`}>
               {item.type === 'video' ? (

@@ -268,6 +268,7 @@ function PersonRowView({ row, verbs, mine }: { row: PersonRow; verbs: PersonVerb
               </span>
             )}
             {!row.notify_email && <span className="pill mute">warning emails off</span>}
+            {!row.notify_follow_email && <span className="pill mute">follower emails off</span>}
             {mine && <span className="pill mute">You</span>}
           </div>
         </td>

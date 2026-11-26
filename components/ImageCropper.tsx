@@ -11,8 +11,9 @@ type Props = {
   src: string;
   /** Name the cropped JPEG is stored under. */
   name: string;
-  /** Width / height of the frame the picture is going into. */
-  ratio: number;
+  /** Width / height of the frame the picture is going into; left out, the frame
+      takes the picture's own shape and the whole photo is what gets stored. */
+  ratio?: number;
   /** Circular preview, for a profile picture. */
   round?: boolean;
   /** Longest edge of the exported image, in pixels. */
@@ -54,25 +55,35 @@ export default function ImageCropper({ src, name, ratio, round, max, onCancel, o
     const stage = stageRef.current;
     if (!stage) return;
     const measure = () => {
+      // Read the sheet's declared room, not the height a previous pass left inline.
+      stage.style.height = '';
       const r = stage.getBoundingClientRect();
       const css = getComputedStyle(stage);
       // The stage is border-box, so its own padding is not room the picture may
       // fill; without this the frame ran into the edge of the card.
       const padX = parseFloat(css.paddingLeft) + parseFloat(css.paddingRight);
       const padY = parseFloat(css.paddingTop) + parseFloat(css.paddingBottom);
-      let w = Math.max(0, r.width - padX);
-      let h = w / ratio;
-      if (h > r.height - padY) {
-        h = r.height - padY;
-        w = h * ratio;
+      const boxW = Math.max(0, r.width - padX);
+      const boxH = Math.max(0, r.height - padY);
+      // A free crop has no frame to squeeze the photo into: the frame takes the
+      // picture's own shape and the stage shrinks around it, so nothing sits
+      // above or below the photo looking like a piece that got cut off.
+      const ar = ratio || (nat.w && nat.h ? nat.w / nat.h : 0);
+      if (!ar || !boxW || !boxH) return;
+      let w = boxW;
+      let h = w / ar;
+      if (h > boxH) {
+        h = boxH;
+        w = h * ar;
       }
       setSize({ w: Math.max(0, Math.round(w)), h: Math.max(0, Math.round(h)) });
+      if (!ratio) stage.style.height = `${Math.round(h) + padY}px`;
     };
     measure();
     const ro = new ResizeObserver(measure);
     ro.observe(stage);
     return () => ro.disconnect();
-  }, [ratio]);
+  }, [ratio, nat.w, nat.h]);
 
   const base = nat.w && size.w ? Math.max(size.w / nat.w, size.h / nat.h) : 1;
   const scale = base * zoom;
@@ -175,7 +186,7 @@ export default function ImageCropper({ src, name, ratio, round, max, onCancel, o
     canvas.toBlob(blob => {
       if (!blob) return bail();
       onCrop(new File([blob], name.replace(/\.(png|webp|jpe?g)$/i, '') + '.jpg', { type: 'image/jpeg' }));
-    }, 'image/jpeg', 0.92);
+    }, 'image/jpeg', 0.94);
   };
 
   return createPortal(

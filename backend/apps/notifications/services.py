@@ -69,7 +69,9 @@ def email_activity(recipient, actor, kind):
     copy = EMAIL_COPY.get(kind)
     if recipient is None or actor is None or copy is None or not recipient.email:
         return None
-    if not getattr(recipient.profile, 'notify_email', True):
+    # Follower and request notices answer to their own switch; the staff
+    # warning switch does not reach into this inbox.
+    if not getattr(recipient.profile, 'notify_follow_email', True):
         return None
     subject, body = (line.format(name=name_of(actor), username=actor.username) for line in copy)
     queue_event_email(
