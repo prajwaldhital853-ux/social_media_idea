@@ -3388,9 +3388,10 @@ body::-webkit-scrollbar {
   border-radius: 14px;
 }
 
-.media-mosaic.single {
-  aspect-ratio: 16 / 10;
-}
+/* The single frame's own aspect-ratio lives in the base block above; the phone
+   block below releases it so a photo shows at its own shape. Restating 16/10
+   here would land after that release in the cascade and box every phone photo
+   back into a frame it does not fill — the black band under a cover card. */
 
 .media-mosaic img,
 .media-mosaic video {
@@ -8318,7 +8319,11 @@ button.profile-stat:hover b, a.profile-stat:hover b { color: var(--red); }
    drags inside is the picture they keep. The box is measured in JS because the
    stage is letterboxed to one aspect at any viewport, which max-width and
    max-height cannot both express. */
-.cropper-overlay { z-index: 1360; }
+/* The cropper is itself a dialog and can be opened from inside one — the Edit
+   Profile modal sits at 1650 — so it must clear that tier; only the toast (1700)
+   may sit above it. A lower number painted it under the modal it was opened
+   from, where picking a photo looked like nothing had happened. */
+.cropper-overlay { z-index: 1680; }
 
 .image-cropper {
   width: min(400px, 84%);
