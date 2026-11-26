@@ -556,7 +556,6 @@ export default function UserProfilePage() {
         <ImageCropper
           src={crop}
           name="cover.jpg"
-          ratio={2.4}
           max={1600}
           onCancel={() => { URL.revokeObjectURL(crop); setCrop(null); }}
           onCrop={file => { void useCover(file); }}
