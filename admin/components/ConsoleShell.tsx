@@ -93,10 +93,12 @@ export default function ConsoleShell({
   // Walking into the queue is the same answer as opening the bell about it: a seat
   // who is already reading the report pile has read what was waiting there, and a
   // badge left standing over their shoulder only teaches them to ignore badges.
+  // Alerts are not in that bargain — the desk they point at is usually the one this
+  // seat is already sitting on, so they stay until the row itself is clicked.
   useEffect(() => {
-    if (status !== 'in' || !here || !(bell.routes[here] > 0)) return;
+    if (status !== 'in' || !here || !(bell.walked[here] > 0)) return;
     bell.readRoute(here);
-  }, [status, here, bell.routes, bell]);
+  }, [status, here, bell.walked, bell]);
 
   useEffect(() => {
     if (!bell.open) return undefined;

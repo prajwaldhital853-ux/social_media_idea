@@ -190,23 +190,26 @@ def tray(user):
     The unread-only list is what the drawer shows; `routes` is what turns a nav row
     red, and it is built in the same query pass so opening the tray and painting the
     drawer cannot disagree about how many reports are waiting.
+
+    `walked` is `routes` without the alert rows, and it is what the console marks
+    read on the seat's behalf when they walk into a desk. An alert is a standing
+    condition rather than an arrival, and the screen it points at is usually the one
+    the seat is already sitting on, so counting it here would let a page view read
+    the notice before anybody has seen it.
     """
     seat = StaffAccount.objects.filter(user=user).first()
     keys = held(seat, user)
-    rows = StaffNotice.objects.filter(recipient=user, read_at__isnull=True).filter(
+    waiting = StaffNotice.objects.filter(recipient=user, read_at__isnull=True).filter(
         Q(permission='') | Q(permission__in=keys)
-    ).order_by('-created_at', '-pk')[:KEEP]
-    now = timezone.now()
-    items = [line(item, now) for item in rows]
-    routes = counts_map(
-        StaffNotice.objects.filter(recipient=user, read_at__isnull=True)
-        .filter(Q(permission='') | Q(permission__in=keys))
-        .values('route').annotate(n=Count('pk'))
     )
+    now = timezone.now()
+    items = [line(item, now) for item in waiting.order_by('-created_at', '-pk')[:KEEP]]
+    routes = counts_map(waiting.values('route').annotate(n=Count('pk')))
     return {
         'items': items,
         'total': sum(routes.values()),
         'routes': routes,
+        'walked': counts_map(waiting.exclude(kind='alert').values('route').annotate(n=Count('pk'))),
         'poll_seconds': POLL_SECONDS,
     }
 
@@ -220,7 +223,9 @@ def mark(user, notice_id=None, route=None, all_read=False):
 
     A route is marked as a batch because the drawer does the same thing: a seat who
     opened the report queue read what was waiting there, whether or not they ever
-    clicked the bell.
+    clicked the bell. An alert row is not part of that bargain , it says a condition
+    is still true somewhere else, and the desk it links to does not answer it. Only
+    a click on the row itself, or on Mark all read, closes one.
     """
     now = timezone.now()
     rows = StaffNotice.objects.filter(recipient=user, read_at__isnull=True)
@@ -228,7 +233,7 @@ def mark(user, notice_id=None, route=None, all_read=False):
         if notice_id:
             rows = rows.filter(pk=notice_id)
         elif route:
-            rows = rows.filter(route=route)
+            rows = rows.filter(route=route).exclude(kind='alert')
         else:
             return 400, {'detail': 'Say which notice, or which screen, was read.'}
     updated = rows.update(read_at=now)
