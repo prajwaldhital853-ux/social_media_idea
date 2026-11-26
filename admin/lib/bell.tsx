@@ -19,6 +19,7 @@ interface Tray {
   items: BellItem[];
   total: number;
   routes: Record<string, number>;
+  walked: Record<string, number>;
   poll_seconds: number;
 }
 
@@ -39,7 +40,7 @@ export function useBell(): BellValue {
   return value;
 }
 
-const EMPTY: Tray = { items: [], total: 0, routes: {}, poll_seconds: 20 };
+const EMPTY: Tray = { items: [], total: 0, routes: {}, walked: {}, poll_seconds: 20 };
 
 /**
  * The tray is polled rather than pushed: this console has no socket, and a seat who
