@@ -16,9 +16,11 @@ class Profile(models.Model):
     verified = models.BooleanField(default=False)
     is_private = models.BooleanField(default=False)
     two_step = models.BooleanField(default=True)
-    # The in-app bell always records an event; this only decides whether a
-    # follower also lands in the member's inbox.
+    # The in-app bell always records an event; these decide what also lands in
+    # the member's inbox — a staff warning on one line, follower and request
+    # notices on the other, each switchable without touching the other.
     notify_email = models.BooleanField(default=True)
+    notify_follow_email = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):

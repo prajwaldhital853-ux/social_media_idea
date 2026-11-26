@@ -256,6 +256,7 @@ def row(user, pile=None, balance=None):
         'verified': bool(profile.verified) if profile else False,
         'is_private': bool(profile.is_private) if profile else False,
         'notify_email': bool(profile.notify_email) if profile else True,
+        'notify_follow_email': bool(profile.notify_follow_email) if profile else True,
         'provider': user.provider,
         'provider_label': PROVIDERS.get(user.provider, user.provider or 'Unknown'),
         'email_verified': user.email_verified,

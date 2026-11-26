@@ -451,6 +451,7 @@ export interface PersonRow {
   is_private: boolean;
   /** Their own setting: false means a warning reaches the bell but not the inbox. */
   notify_email: boolean;
+  notify_follow_email: boolean;
   provider: string;
   provider_label: string;
   email_verified: boolean;

@@ -72,6 +72,7 @@ def me_payload(user):
         'private': profile.is_private,
         'twoStep': profile.two_step,
         'notifyEmail': profile.notify_email,
+        'notifyFollowEmail': profile.notify_follow_email,
         'joined': user.date_joined,
         'coins': int(wallet.balance) if wallet else 0,
         'susp': {'until': user.suspended_until, 'reason': user.suspend_reason} if suspended else None,

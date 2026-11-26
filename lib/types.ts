@@ -25,6 +25,7 @@ export interface User {
   twoStep?: boolean;
   /** Email a member about new followers as well as the in-app bell. */
   notifyEmail?: boolean;
+  notifyFollowEmail?: boolean;
   website?: string;
   phone?: string;
   links?: ProfileLink[];

@@ -71,6 +71,7 @@ export function mapMe(p: any): User {
     private: !!p.private,
     twoStep: p.twoStep !== false,
     notifyEmail: p.notifyEmail !== false,
+    notifyFollowEmail: p.notifyFollowEmail !== false,
     joined: at(p.joined),
     coins: Math.round(amount(p.coins)),
   };
@@ -462,6 +463,7 @@ export function profilePatch(data: any): Partial<User> {
   if (data.is_private !== undefined) patch.private = data.is_private;
   if (data.two_step !== undefined) patch.twoStep = data.two_step;
   if (data.notify_email !== undefined) patch.notifyEmail = !!data.notify_email;
+  if (data.notify_follow_email !== undefined) patch.notifyFollowEmail = !!data.notify_follow_email;
   if (data.dob !== undefined) patch.dob = data.dob || '';
   if (data.country !== undefined) patch.country = data.country || '';
   if (data.city !== undefined) patch.city = data.city || patch.city;
@@ -477,7 +479,7 @@ export function toProfilePayload(patch: Record<string, any>): Record<string, any
   const keys: Array<[string, string]> = [
     ['name', 'name'], ['bio', 'bio'], ['avatar', 'avatar_url'], ['cover', 'cover_url'],
     ['province', 'province'], ['private', 'is_private'], ['twoStep', 'two_step'],
-    ['notifyEmail', 'notify_email'],
+    ['notifyEmail', 'notify_email'], ['notifyFollowEmail', 'notify_follow_email'],
     ['dob', 'dob'], ['country', 'country'], ['city', 'city'], ['website', 'website'],
     ['phone', 'phone'], ['links', 'links'],
   ];

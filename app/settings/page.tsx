@@ -36,7 +36,7 @@ export default function SettingsPage() {
     );
   }
 
-  const setFlag = async (key: 'twoStep' | 'private' | 'notifyEmail', on: boolean) => {
+  const setFlag = async (key: 'twoStep' | 'private' | 'notifyEmail' | 'notifyFollowEmail', on: boolean) => {
     const flip = (value: boolean) => setDb(prev => ({ ...prev, users: prev.users.map(u => (u.id === me.id ? { ...u, [key]: value } : u)) }));
     flip(on);
     if (!serverMode) return showToast(t('savedOk'));
@@ -160,10 +160,19 @@ export default function SettingsPage() {
           </div>
           <div className="settings-row">
             <span className="settings-row-copy">
+              <b>{t('warnEmails')}</b>
+              <small>{t('warnEmailsSub')}</small>
+            </span>
+            <button type="button" role="switch" aria-checked={me.notifyEmail !== false} aria-label={t('warnEmails')} className={`switch ${me.notifyEmail !== false ? 'on' : ''}`} onClick={() => setFlag('notifyEmail', me.notifyEmail === false)}>
+              <span className="switch-knob" />
+            </button>
+          </div>
+          <div className="settings-row">
+            <span className="settings-row-copy">
               <b>{t('emailAlerts')}</b>
               <small>{t('emailAlertsSub')}</small>
             </span>
-            <button type="button" role="switch" aria-checked={me.notifyEmail !== false} aria-label={t('emailAlerts')} className={`switch ${me.notifyEmail !== false ? 'on' : ''}`} onClick={() => setFlag('notifyEmail', me.notifyEmail === false)}>
+            <button type="button" role="switch" aria-checked={me.notifyFollowEmail !== false} aria-label={t('emailAlerts')} className={`switch ${me.notifyFollowEmail !== false ? 'on' : ''}`} onClick={() => setFlag('notifyFollowEmail', me.notifyFollowEmail === false)}>
               <span className="switch-knob" />
             </button>
           </div>
