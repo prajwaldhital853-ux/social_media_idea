@@ -56,21 +56,21 @@ DEFAULTS = {
                         'Raises an alert when this many people ask for coins inside an hour.', 'safety'),
     'alert_coin_coins_hour': (3000, 'int', 'Coins asked for in an hour that is unusual',
                               'Raises an alert when the requests in one hour add up to more coins than this.', 'safety'),
-    # Contract 6.9: the spam desk. The first four are the numbers the site enforces
-    # today, written down so a seat can see them in one place; the rest are the
-    # limits and restrictions the contract asks for, published at
-    # `GET /api/spam/config/` for the site to enforce. `alert_report_pile`, above,
-    # is the auto-hide number, one row, because two knobs that both mean "how many
-    # reports pull a post" would drift apart within a month.
+    # Contract 6.9: the spam desk. Every number here is read again by the door that
+    # answers the request, so a save on this desk changes what a member meets rather
+    # than only what the desk prints. Zero is not "nothing allowed": a ceiling of
+    # zero is the rule switched off. `alert_report_pile`, above, is the auto-hide
+    # number, one row, because two knobs that both mean "how many reports pull a
+    # post" would drift apart within a month.
     'spam_signup_per_hour': (3, 'int', 'Sign-ups one address may start in an hour',
-                             'What the site already holds: a fourth sign-up from one address is refused.', 'safety'),
+                             'A fourth sign-up from one address in an hour is refused.', 'safety'),
     'spam_login_per_minute': (10, 'int', 'Sign-in tries one account may get in a minute',
-                              'What the site already holds: after this the attempt is refused, right password or not.',
+                              'After this the attempt is refused, right password or not.',
                               'safety'),
     'spam_share_per_minute': (30, 'int', 'Shares one address may send in a minute',
-                              'What the site already holds on the share button.', 'safety'),
+                              'The share button stops answering past this. Zero puts no ceiling on it.', 'safety'),
     'spam_view_per_minute': (120, 'int', 'Feed reads one address may make in a minute',
-                            'What the site already holds on the feed itself.', 'safety'),
+                             'The feed itself stops counting past this. Zero puts no ceiling on it.', 'safety'),
     'spam_post_per_hour': (10, 'int', 'Posts one account may make in an hour',
                            'The ceiling a normal person never reaches and a script does.', 'safety'),
     'spam_post_per_day': (30, 'int', 'Posts one account may make in a day',
@@ -79,10 +79,15 @@ DEFAULTS = {
                               'Copy-pasted under every post is what this ceiling is for.', 'safety'),
     'spam_follow_per_hour': (30, 'int', 'Accounts one account may follow in an hour',
                              'Follow-and-drop farms run into this one first.', 'safety'),
-    'spam_new_account_hours': (1, 'int', 'A new account may not post for (hours)',
+    # The two hold-the-newcomer knobs ship at zero on purpose. They are the only
+    # rules on this desk that can lock a genuine member out of their first post
+    # without any report or blocked word behind it, so a platform switched on by
+    # default would refuse people it has never seen a problem with. A seat turns
+    # them on when it wants that wait; the number is enforced the moment it does.
+    'spam_new_account_hours': (0, 'int', 'A new account may not post for (hours)',
                                'Zero lets a fresh account post straight away.', 'safety'),
-    'spam_new_account_posts': (5, 'int', 'Posts a first-day account may make',
-                               'The ceiling for an account in its first day, whatever its age limit says.', 'safety'),
+    'spam_new_account_posts': (0, 'int', 'Posts a first-day account may make',
+                               'Zero gives a first-day account the same room as anybody else.', 'safety'),
     'spam_new_account_verify': (False, 'bool', 'Hold a new account until its email is verified',
                                 'An unverified address cannot post at all while this is on.', 'safety'),
     'spam_autohide': (True, 'bool', 'Pull content out of the feed on report counts alone',

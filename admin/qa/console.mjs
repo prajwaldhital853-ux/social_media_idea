@@ -2821,10 +2821,10 @@ try {
     knobs: document.querySelectorAll('[data-spam="rules"] [data-knob]').length,
     told: [...document.querySelectorAll('[data-spam="rules"] .desk-live')].map(node => node.textContent.trim()),
   }));
-  ok('the spam desk is a screen of rules, and the four the site already refuses on are marked as refused-on',
-    ruleBoxes.knobs === 14 && ruleBoxes.told.length === 4
-      && ruleBoxes.told.every(line => line.includes('the site refuses this at its own door today')),
-    `${ruleBoxes.knobs} knobs · ${ruleBoxes.told.length} marked as already enforced`);
+  ok('the spam desk is a screen of rules, and every number on it is marked as one the site refuses on',
+    ruleBoxes.knobs === 14 && ruleBoxes.told.length === 11
+      && ruleBoxes.told.every(line => line.includes('the site refuses this at its own door')),
+    `${ruleBoxes.knobs} knobs · ${ruleBoxes.told.length} marked as enforced at the door`);
 
   const quoteOpen = await statusOf(unseated, '/api/spam/config/');
   ok('what the desk publishes is readable with nobody signed in, because that is the half that makes "no code changes" true',

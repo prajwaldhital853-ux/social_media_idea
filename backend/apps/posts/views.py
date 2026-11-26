@@ -5,8 +5,8 @@ from rest_framework.permissions import AllowAny, BasePermission, IsAuthenticated
 from rest_framework.response import Response
 
 from apps.common.pagination import KeysetPagination
-from apps.common.ratelimit import client_ip, enforce
-from apps.common.rules import blocked_wording
+from apps.common.ratelimit import client_ip
+from apps.common.rules import blocked_wording, rate, write_gate
 from apps.follows.models import Block, Follow
 from apps.promotions.services import plan, serving
 
@@ -62,8 +62,15 @@ class PostViewSet(viewsets.ModelViewSet):
         return qs
 
     def create(self, request, *args, **kwargs):
-        """A post carrying blocked wording is answered, not saved."""
+        """Blocked wording, the desk's ceilings and blocked links are all answered here.
+
+        Nothing is written on any of them, so a post the console has ruled out never
+        reaches the feed to be hunted through it afterwards.
+        """
         refused = blocked_wording(request, 'post')
+        if refused:
+            return refused
+        refused = write_gate(request, 'post')
         if refused:
             return refused
         return super().create(request, *args, **kwargs)
@@ -100,7 +107,7 @@ def share_post(request, pk):
     this is a tally rather than a transaction: it can only ever go up, and a
     visitor who shares the same post twice is counted twice.
     """
-    enforce(f'share:{client_ip(request)}', 30, 60)
+    rate(f'share:{client_ip(request)}', 'spam_share_per_minute', 60, 30)
     if not visible_posts(request.user).filter(pk=pk).exists():
         return Response({'detail': 'No such post.'}, status=status.HTTP_404_NOT_FOUND)
     Post.objects.filter(pk=pk).update(share_count=F('share_count') + 1)
@@ -112,7 +119,7 @@ def share_post(request, pk):
 def count_view(request, pk):
     """One reel watched. A view is cheap to grant and expensive to fake, so the
     limit is generous and the count is a tally rather than a unique-audience measure."""
-    enforce(f'view:{client_ip(request)}', 120, 60)
+    rate(f'view:{client_ip(request)}', 'spam_view_per_minute', 60, 120)
     if not visible_posts(request.user).filter(pk=pk).exists():
         return Response({'detail': 'No such post.'}, status=status.HTTP_404_NOT_FOUND)
     Post.objects.filter(pk=pk).update(views=F('views') + 1)

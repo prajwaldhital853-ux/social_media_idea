@@ -3,6 +3,7 @@ from django.test import TestCase, TransactionTestCase
 from rest_framework.test import APIClient
 
 from apps.common.testutils import auth_client, make_user, run_threads
+from apps.adminpanel.models import AdminSetting
 from apps.follows.models import Follow
 from apps.posts.models import Post, PostMedia
 
@@ -167,6 +168,10 @@ class PostConcurrencyTests(TransactionTestCase):
     def setUp(self):
         cache.clear()
         self.author = make_user('concposter')
+        # Twenty posts from one account is what a race needs, not what a person
+        # does, so the spam desk's hourly ceiling is switched off for this test
+        # the way a seat would switch it off: a zero, not a bigger number.
+        AdminSetting.objects.create(key='spam_post_per_hour', value='0')
 
     def test_simultaneous_posts_all_persist(self):
         clients = [auth_client(self.author) for _ in range(20)]

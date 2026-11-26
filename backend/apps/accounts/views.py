@@ -17,6 +17,7 @@ from rest_framework.response import Response
 
 from apps.common.emails import queue_welcome_email
 from apps.common.ratelimit import client_ip, enforce
+from apps.common.rules import rate
 from apps.profiles.models import Profile
 from apps.wallet.models import purging_ledger
 
@@ -282,7 +283,7 @@ def _queue_welcome(user):
 @permission_classes([AllowAny])
 @authentication_classes([])
 def signup(request):
-    enforce(f'signup:{client_ip(request)}', 3, 3600)
+    rate(f'signup:{client_ip(request)}', 'spam_signup_per_hour', 3600, 3)
     data = request.data
     username = (data.get('username') or '').strip().lower()
     email = _email(data.get('email'))
@@ -417,7 +418,7 @@ def login(request):
         return Response({'detail': 'Enter your email address.'}, status=400)
     if '@' not in email:
         return Response({'detail': 'Sign in with your email address, not your username.'}, status=400)
-    enforce(f'login-id:{email}', 10, 60)
+    rate(f'login-id:{email}', 'spam_login_per_minute', 60, 10)
     password = request.data.get('password') or ''
     user = User.objects.filter(email__iexact=email).order_by('id').first()
     if not user or user.seeded or _is_staff_member(user):

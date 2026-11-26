@@ -5,11 +5,12 @@ together. *Rates* are how often an account may act; *new-account rules* are what
 day-old account may not do yet; *the pile* is how many people have to say a post is
 bad before the platform takes it out of the feed without waiting for a person.
 
-The first four rate numbers are the ones the site already refuses requests on today,
-written down here so a seat can see them in one place. The rest are published at
-`GET /api/spam/config/` for the site's own views to enforce, the door is what makes
-"no code changes" true, and the desk prints what that door answers so nobody has to
-believe a save banner.
+The desk is not a poster. Every number on it is read again by the door that answers
+the request -- `apps.common.rules` for the rates and the new-account rules,
+`report_threshold()` and `spam_autohide` for the pile -- so moving a knob changes
+what a member meets within one request, not at the next deploy. A ceiling of zero
+means the rule is switched off rather than blocking everything, which is what the
+desk says a zero is.
 
 `report_threshold()` reads a seat's typed answer ahead of the environment value the
 server was started with: `EXPOSING_REPORT_THRESHOLD` is a decision somebody made on
@@ -37,8 +38,8 @@ BLOCKS = (
     )),
 )
 
-# The four limits the site enforces where it answers the request, from its own code.
-ENFORCED = ('spam_signup_per_hour', 'spam_login_per_minute', 'spam_share_per_minute', 'spam_view_per_minute')
+# Every knob on this desk is enforced: a save moves the site, not just the screen.
+ENFORCED = {key for _block, _label, keys in BLOCKS for key in keys}
 
 WRITABLE = {key for _block, _label, keys in BLOCKS for key in keys}
 
@@ -47,6 +48,16 @@ def report_threshold():
     """Distinct open reporters that pull a post out of the feed on their own."""
     started = int(getattr(django_settings, 'EXPOSING_REPORT_THRESHOLD', 3))
     return max(1, int(settings_store.written('alert_report_pile', started)))
+
+
+def autohide():
+    """Whether a pile of reports is allowed to pull a post out by itself at all.
+
+    Read fresh on every report rather than from `public_config`, because the point
+    of the desk is that switching this off takes effect on the next complaint, not
+    on the next deploy.
+    """
+    return bool(settings_store.values().get('spam_autohide', True))
 
 
 def links(active_only=False):
@@ -85,7 +96,7 @@ def desk(staff=None):
         'words': PolicyTerm.objects.filter(kind=PolicyTerm.Kind.WORD, is_active=True).count(),
         'items': PolicyTerm.objects.filter(kind=PolicyTerm.Kind.ITEM, is_active=True).count(),
         'links': links(),
-        'enforced': list(ENFORCED),
+        'enforced': [key for _block, _label, keys in BLOCKS for key in keys],
         'can_write_links': rbac.can(staff, 'blocked_words') if staff is not None else False,
     }
 

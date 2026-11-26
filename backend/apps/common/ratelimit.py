@@ -14,7 +14,9 @@ def hit(key, limit, window):
 
 
 def enforce(key, limit, window):
-    if not settings.EXPOSING_RATE_LIMITS:
+    # A ceiling of zero is the spam desk switching a rule off, not blocking
+    # everything, which is what that desk says out loud to the seat typing it.
+    if not settings.EXPOSING_RATE_LIMITS or limit <= 0:
         return
     allowed, _ = hit(key, limit, window)
     if not allowed:

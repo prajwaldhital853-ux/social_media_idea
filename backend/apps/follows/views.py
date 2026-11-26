@@ -9,6 +9,7 @@ from rest_framework.response import Response
 
 from apps.accounts.models import User
 from apps.common.pagination import KeysetPagination
+from apps.common.rules import rate
 from apps.notifications.models import Notification
 from apps.notifications.services import email_activity, notify
 from apps.profiles.models import Profile
@@ -47,6 +48,7 @@ def follow(request):
         Q(blocker=request.user, blocked=target) | Q(blocker=target, blocked=request.user)
     ).exists():
         return Response({'detail': 'This account cannot be followed.'}, status=403)
+    rate(f'follow-hour:{request.user.pk}', 'spam_follow_per_hour', 3600, 30)
     profile = getattr(target, 'profile', None)
     private = bool(profile and profile.is_private)
     # A POST on an edge that already exists is a stale client, not a violation:
