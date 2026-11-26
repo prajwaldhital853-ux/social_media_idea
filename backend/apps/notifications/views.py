@@ -3,6 +3,7 @@ import json
 import time
 
 from asgiref.sync import sync_to_async
+from channels.layers import get_channel_layer
 from django.conf import settings
 from django.core.serializers.json import DjangoJSONEncoder
 from django.db.models import Q
@@ -185,19 +186,56 @@ async def _notification_events(user_pk, since_ts, interval, max_life, since_pk=0
     # and every row created before a poll would silently never be delivered.
     if since_ts is None:
         since_ts = timezone.now()
+    # Pulse frames (reaction tallies, balances, decisions, new posts) ring the
+    # same connection as a doorbell instead of waiting for the tick. A pump
+    # drains the channel into a queue so a frame that lands during a slow tick
+    # is never dropped; the tick below stays exactly the beat it always was.
+    layer = get_channel_layer()
+    channel = await layer.new_channel('pulse.')
+    user_group = f'user.{user_pk}'
+    await layer.group_add(user_group, channel)
+    await layer.group_add('site', channel)
+    frames: asyncio.Queue = asyncio.Queue()
+
+    async def pump():
+        while True:
+            try:
+                message = await layer.receive(channel)
+            except asyncio.CancelledError:
+                return
+            except Exception:  # noqa: BLE001 - a layer folding under us ends the stream anyway
+                return
+            if isinstance(message, dict) and message.get('frame'):
+                frames.put_nowait(message['frame'])
+
+    drainer = asyncio.ensure_future(pump())
     try:
         yield 'retry: 4000\n\n'
         while time.monotonic() < deadline:
-            await asyncio.sleep(interval)
+            landed = []
+            try:
+                landed.append(await asyncio.wait_for(frames.get(), timeout=interval))
+                while not frames.empty():
+                    landed.append(frames.get_nowait())
+            except asyncio.TimeoutError:
+                pass
+            for frame in landed:
+                yield f'event: pulse\ndata: {frame}\n\n'
             rows = await sync_to_async(_since)(user_pk, since_ts, since_pk)
             for row in rows:
                 since_ts, since_pk = row['created_at'], row['pk']
                 payload = json.dumps(row['data'], cls=DjangoJSONEncoder, separators=(',', ':'))
                 yield f"event: notification\nid: {row['event_id']}\ndata: {payload}\n\n"
-            if not rows:
+            if not rows and not landed:
                 yield ': keepalive\n\n'
     finally:
         release(user_pk)
+        drainer.cancel()
+        for group in (user_group, 'site'):
+            try:
+                await layer.group_discard(group, channel)
+            except Exception:  # noqa: BLE001 - a loop already on its way out cannot be argued with
+                pass
 
 
 async def notification_stream(request):

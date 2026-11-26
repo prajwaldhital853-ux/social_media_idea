@@ -62,6 +62,56 @@ def _adjust_counter(target_type, target_id, delta):
             PostMedia.objects.filter(post_id=media[0], position=media[1]).update(like_count=F('like_count') + delta)
 
 
+def _pulse_reaction(target_type, target_id):
+    """Tell the room the tally's new shape while the readers are still on the page.
+
+    Every frame carries the absolute count and the kind mix, so a frame that
+    arrives twice or a stream that reconnects cannot stack the number. A private
+    post's tally reaches only its author — the room's copy is for content the
+    room is allowed to see in the first place.
+    """
+    from apps.common import pulse
+
+    kinds = dict(
+        Reaction.objects.filter(target_type=target_type, target_id=str(target_id))
+        .values('kind').annotate(n=Count('id')).values_list('kind', 'n')
+    )
+    event = {'target': target_type, 'kinds': kinds}
+    owner_pk, room = None, False
+    if target_type == 'post' and str(target_id).isdigit():
+        row = Post.objects.filter(pk=int(target_id)).select_related('author__profile').first()
+        if not row:
+            return
+        owner_pk = row.author_id
+        room = row.audience == Post.Audience.PUBLIC and not row.author.profile.is_private
+        event.update(post_id=str(row.pk), likes=row.like_count)
+    elif target_type == 'media':
+        target = _media_target(target_id)
+        if not target:
+            return
+        row = Post.objects.filter(pk=target[0]).select_related('author__profile').first()
+        media = PostMedia.objects.filter(post_id=target[0], position=target[1]).first()
+        if not row or not media:
+            return
+        owner_pk = row.author_id
+        room = row.audience == Post.Audience.PUBLIC and not row.author.profile.is_private
+        event.update(post_id=str(row.pk), position=target[1], likes=media.like_count)
+    elif target_type == 'comment' and str(target_id).isdigit():
+        row = Comment.objects.filter(
+            pk=int(target_id), status=Comment.Status.LIVE,
+        ).select_related('post__author__profile').first()
+        if not row:
+            return
+        owner_pk = row.post.author_id
+        room = row.post.audience == Post.Audience.PUBLIC and not row.post.author.profile.is_private
+        event.update(post_id=str(row.post_id), id=str(row.pk), likes=row.like_count)
+    else:
+        return
+    pulse.to_user(owner_pk, 'reaction', **event)
+    if room:
+        pulse.to_site('reaction', **event)
+
+
 def _notify_target(request, target_type, target_id):
     """Tell the owner of the liked thing — except when they liked their own."""
     owner = None
@@ -132,6 +182,7 @@ class ReactionViewSet(viewsets.ModelViewSet):
                     raise
         if created:
             _notify_target(request, obj.target_type, obj.target_id)
+        _pulse_reaction(obj.target_type, obj.target_id)
         return Response(self.get_serializer(obj).data, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
 
     def perform_destroy(self, instance):
@@ -139,6 +190,8 @@ class ReactionViewSet(viewsets.ModelViewSet):
             deleted, _ = Reaction.objects.filter(pk=instance.pk).delete()
             if deleted:
                 _adjust_counter(instance.target_type, instance.target_id, -1)
+        if deleted:
+            _pulse_reaction(instance.target_type, instance.target_id)
 
 
 @api_view(['DELETE'])
@@ -154,6 +207,7 @@ def toggle_off(request):
         if not deleted:
             return Response({'detail': 'No reaction to remove.'}, status=404)
         _adjust_counter(target_type, target_id, -1)
+    _pulse_reaction(target_type, target_id)
     return Response({'detail': 'Reaction removed.'})
 
 

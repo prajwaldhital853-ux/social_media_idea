@@ -13,7 +13,8 @@ import {
   idOf, at, mapComment, mapFollow, mapMe, mapMessage, mapNotification, mapPerson, mapPost, mapPromotion,
   mapReport, mapSettings, mediaPayload, profilePatch, reactionsOfPost, toPostPayload, toProfilePayload,
 } from './dto';
-import { bindListCache, forgetLists, inboxListDef, listingsFragment, notificationsFragment, postsFragment, pushListRow, refreshList } from './lists';
+import { bindListCache, forgetLists, inboxListDef, listingsFragment, notificationsFragment, postsFragment, pushListRow, refreshList, walletFragment } from './lists';
+import { emitLive, onLive } from './live';
 
 type Target = 'post' | 'comment' | 'media';
 
@@ -459,6 +460,64 @@ export function AppProvider({ children }: { children: ReactNode }) {
       void pullBadges();
     };
 
+    /**
+     * The pulses that ride the same stream beside the bell's rows: tallies,
+     * balances, decisions, a post that just went live. Each one carries the
+     * whole current state of the thing it names, so applying it is a patch of
+     * absolute values — never an increment — and a repeated frame is harmless.
+     * A row the cache does not hold is skipped: nothing mounted shows it, and
+     * the list that owns it will read the truth when it is next pulled.
+     */
+    const pulse = (p: any) => {
+      if (!p || !p.kind) return;
+      if (p.kind === 'reaction') {
+        if (p.target === 'comment') {
+          setDb(prev => {
+            const row = prev.comments.find(c => c.id === String(p.id));
+            if (!row) return prev;
+            return applyFragment(prev, { comments: [{ ...row, likes: Number(p.likes) || 0 }] });
+          });
+          return;
+        }
+        setDb(prev => {
+          const post = prev.posts.find(x => x.id === String(p.post_id));
+          if (!post) return prev;
+          if (p.target === 'media') {
+            const pos = Number(p.position);
+            const media = post.media.map((m, i) =>
+              i === pos ? { ...m, likes: Number(p.likes) || 0, reactionKinds: p.kinds || undefined } : m);
+            return applyFragment(prev, { posts: [{ ...post, media }] });
+          }
+          return applyFragment(prev, { posts: [{ ...post, likes: Number(p.likes) || 0, reactionKinds: p.kinds || undefined }] });
+        });
+      } else if (p.kind === 'comment') {
+        setDb(prev => {
+          const post = prev.posts.find(x => x.id === String(p.post_id));
+          if (!post) return prev;
+          return applyFragment(prev, { posts: [{ ...post, comments: Number(p.comments) || 0 }] });
+        });
+      } else if (p.kind === 'coins') {
+        setDb(prev => {
+          const row = prev.users.find(u => u.id === prev.meId);
+          if (!row) return prev;
+          return applyFragment(prev, { saved: [{ ...row, coins: Math.round(Number(p.balance) || 0) }] } as any);
+        });
+        void refreshList('wallet', { path: '/wallet/', frag: walletFragment(selfId) });
+      } else if (p.kind === 'promotion') {
+        setDb(prev => {
+          const row = prev.promotions.find(x => x.id === String(p.id));
+          if (!row) return prev;
+          return applyFragment(prev, { promotions: [{ ...row, status: String(p.status || row.status) as Promotion['status'] }] });
+        });
+        void pullBadges();
+      } else if (p.kind === 'warning') {
+        void pullBadges();
+        void pullSession();
+      } else if (p.kind === 'post_new') {
+        emitLive(p);
+      }
+    };
+
     const refreshPage = () => {
       void pullBadges();
       // refreshList, not a bare fetch: the popover renders the list's id order,
@@ -501,6 +560,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       es = source;
       source.addEventListener('open', () => { errors = 0; stopPolling(); });
       source.addEventListener('notification', ev => absorb(JSON.parse((ev as MessageEvent).data)));
+      source.addEventListener('pulse', ev => pulse(JSON.parse((ev as MessageEvent).data)));
       source.addEventListener('error', () => {
         errors += 1;
         if (errors >= 3 && es === source) {

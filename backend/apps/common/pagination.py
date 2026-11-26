@@ -36,8 +36,12 @@ class KeysetPagination(BasePagination):
 
     page_size = 10
 
-    def __init__(self, sort_field='created_at'):
+    def __init__(self, sort_field='created_at', anon_cap=None):
         self.sort_field = sort_field
+        # `anon_cap` bounds how far a signed-out reader may walk this list, counted
+        # in rows after the list's own ordering. None leaves the list uncapped, so
+        # only the shelves that ask for the bound pay for it.
+        self.anon_cap = anon_cap
 
     def paginate_queryset(self, queryset, request, view=None):
         # `order=oldest` walks the same index in the other direction; the cursor
@@ -47,6 +51,13 @@ class KeysetPagination(BasePagination):
             queryset = queryset.order_by(self.sort_field, 'pk')
         else:
             queryset = queryset.order_by(f'-{self.sort_field}', '-pk')
+        # The cap is a place, not a per-page allowance: it names the row `anon_cap`
+        # steps into the list, and every page of a signed-out walk is cut at that
+        # same line. Cutting the queryset itself would re-arm a fresh window past
+        # every cursor, and the walk would never run out.
+        capped = None
+        if self.anon_cap and not request.user.is_authenticated:
+            capped = queryset.values_list(self.sort_field, 'pk')[self.anon_cap - 1:self.anon_cap].first()
         cursor = decode_cursor(request.query_params.get('cursor'))
         if cursor:
             ts, pk = cursor
@@ -55,6 +66,16 @@ class KeysetPagination(BasePagination):
             queryset = queryset.filter(
                 Q(**{f'{self.sort_field}__{step}': ts}) | Q(**{f'{self.sort_field}': ts, after: pk})
             )
+        if capped:
+            edge_ts, edge_pk = capped
+            if self.ascending:
+                queryset = queryset.filter(
+                    Q(**{f'{self.sort_field}__lt': edge_ts}) | Q(**{f'{self.sort_field}': edge_ts, 'pk__lte': edge_pk})
+                )
+            else:
+                queryset = queryset.filter(
+                    Q(**{f'{self.sort_field}__gt': edge_ts}) | Q(**{f'{self.sort_field}': edge_ts, 'pk__gte': edge_pk})
+                )
         self.has_more = False
         rows = list(queryset[:self.page_size + 1])
         if len(rows) > self.page_size:

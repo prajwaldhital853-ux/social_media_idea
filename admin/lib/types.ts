@@ -945,7 +945,7 @@ export interface SpamDesk {
 /** What the member site is told, with nobody signed in. */
 export interface SpamConfig {
   limits: Record<string, string | number | boolean>;
-  new_account: { hold_hours: number; posts_per_day: number; verify_first: boolean };
+  new_account: { hold_hours: number; posts_per_day: number };
   auto_hide: { enabled: boolean; reports: number };
   link_block: boolean;
   blocked_links: string[];

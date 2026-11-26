@@ -5,6 +5,7 @@ import Link from 'next/link';
 import PostCard from '@/components/PostCard';
 import { useApp } from '@/lib/AppContext';
 import { postsFragment, useList } from '@/lib/lists';
+import { onLive } from '@/lib/live';
 import { useWindowed } from '@/lib/useWindowed';
 import { canSeePost, privateIds } from '@/lib/utils';
 import { useBackClose } from '@/lib/useBackClose';
@@ -52,6 +53,16 @@ export default function Feed() {
     returned.current = true;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // A post that went live while this page was open knocks once, quietly: the
+  // pill offers the newest page without shoving rows under a reader mid-scroll.
+  // The author's own composition is already on screen and asks for no pill.
+  const [fresh, setFresh] = useState(false);
+  useEffect(() => onLive(p => {
+    if (p.kind !== 'post_new' || !serverMode) return;
+    if (p.author && me && p.author === me.username) return;
+    setFresh(true);
+  }), [serverMode, me]);
 
   // A phone's back button hands this page back from the browser's own snapshot
   // without remounting anything, so the re-pull rides on pageshow instead.
@@ -109,6 +120,15 @@ export default function Feed() {
           <button type="button" role="tab" aria-selected={tab === 'following'} className={`tab ${tab === 'following' ? 'active' : ''}`} onClick={() => setFeedTab('following')}>{t('following')}</button>
         </div>
       </header>
+      {fresh && (
+        <button
+          type="button"
+          className="live-pill"
+          onClick={() => { setFresh(false); window.scrollTo({ top: 0, behavior: 'smooth' }); feed.reload(); }}
+        >
+          {t('newPosts')}
+        </button>
+      )}
       {tab === 'following' && !me ? (
         <div className="feed-empty"><p>{t('followingSignIn')}</p><Link href="/login">{t('signIn')}</Link></div>
       ) : feed.error ? (
@@ -129,6 +149,12 @@ export default function Feed() {
         const author = db.users.find(u => u.id === post.uid);
         return author ? <PostCard key={post.id} post={post} author={author} /> : null;
       })}
+      {!serverMode || me || feed.error || feed.loading || hasMore || !posts.length ? null : (
+        <div className="feed-empty">
+          <p>{t('keepReading')}</p>
+          <Link href="/login">{t('signIn')}</Link>
+        </div>
+      )}
       {pending && hasMore && !filling && skeleton}
       {hasMore && <div ref={sentinel} className="feed-sentinel" aria-hidden="true" />}
     </>

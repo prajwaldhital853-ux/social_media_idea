@@ -30,8 +30,11 @@ BLOCKS = (
         'spam_signup_per_hour', 'spam_login_per_minute', 'spam_share_per_minute', 'spam_view_per_minute',
         'spam_post_per_hour', 'spam_post_per_day', 'spam_comment_per_hour', 'spam_follow_per_hour',
     )),
+    ('reads', 'How much one person may read', (
+        'spam_read_per_minute', 'spam_guest_read_per_minute', 'spam_guest_feed_rows', 'spam_guest_feed_cache_seconds',
+    )),
     ('new', 'What a new account may not do yet', (
-        'spam_new_account_hours', 'spam_new_account_posts', 'spam_new_account_verify',
+        'spam_new_account_hours', 'spam_new_account_posts',
     )),
     ('pile', 'How content leaves the feed without a person', (
         'alert_report_pile', 'spam_autohide', 'spam_link_block',
@@ -160,7 +163,6 @@ def public_config():
         'new_account': {
             'hold_hours': values['spam_new_account_hours'],
             'posts_per_day': values['spam_new_account_posts'],
-            'verify_first': bool(values['spam_new_account_verify']),
         },
         'auto_hide': {'enabled': bool(values['spam_autohide']), 'reports': report_threshold()},
         'link_block': bool(values['spam_link_block']),

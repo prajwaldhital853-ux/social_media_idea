@@ -14,7 +14,7 @@ const GLANCE = 4;
 const ROSTER = 30;
 
 export default function SuggestCard() {
-  const { db, me, isFollowing, toggleFollow, t, serverMode } = useApp();
+  const { db, me, followState, toggleFollow, t, serverMode } = useApp();
   const router = useRouter();
   const [expanded, setExpanded] = useState(false);
 
@@ -40,24 +40,28 @@ export default function SuggestCard() {
         <Link href="/people">{t('seeAll')}</Link>
       </div>
       <ul className="suggest-list">
-        {shown.map(u => (
-          <li key={u.id} className="suggest-row">
-            <Link href={`/u/${u.username}`} className="suggest-id">
-              <Avatar user={u} size={40} />
-              <span className="suggest-meta">
-                <b>{u.name}{u.verified && <VerifiedBadge size={15} />}</b>
-                <span>@{u.username}</span>
-              </span>
-            </Link>
-            <button
-              type="button"
-              className="suggest-follow"
-              onClick={() => (me ? toggleFollow(u.id) : router.push('/login'))}
-            >
-              {isFollowing(u.id) ? t('unfollow') : t('follow')}
-            </button>
-          </li>
-        ))}
+        {shown.map(u => {
+          const state = followState(u.id);
+          const followsMe = !!me && db.follows.some(f => f.follower === u.id && f.following === me.id && f.status !== 'pending');
+          return (
+            <li key={u.id} className="suggest-row">
+              <Link href={`/u/${u.username}`} className="suggest-id">
+                <Avatar user={u} size={40} />
+                <span className="suggest-meta">
+                  <b>{u.name}{u.verified && <VerifiedBadge size={15} />}</b>
+                  <span>@{u.username}</span>
+                </span>
+              </Link>
+              <button
+                type="button"
+                className={`suggest-follow ${state === 'following' ? 'on' : ''} ${state === 'pending' ? 'pending' : ''}`}
+                onClick={() => (me ? toggleFollow(u.id) : router.push('/login'))}
+              >
+                {state === 'following' ? t('unfollow') : state === 'pending' ? t('requested') : followsMe ? t('followBack') : u.private ? t('requestFollow') : t('follow')}
+              </button>
+            </li>
+          );
+        })}
       </ul>
       {suggestions.length > GLANCE && (
         <button type="button" className="suggest-more" onClick={() => setExpanded(e => !e)}>

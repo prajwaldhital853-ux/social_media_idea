@@ -1,5 +1,6 @@
 import random
 
+from django.core.cache import cache
 from django.db.models import Exists, F, OuterRef, Q
 from rest_framework import status, viewsets
 from rest_framework.decorators import action, api_view, permission_classes
@@ -8,12 +9,38 @@ from rest_framework.response import Response
 
 from apps.common.errors import throttle_text
 from apps.common.pagination import KeysetPagination
-from apps.common.rules import blocked_wording, rate, room, seat, write_gate
+from apps.common.rules import blocked_wording, post_limits_gate, rate, room, seat, write_gate
 from apps.follows.models import Block, Follow
 from apps.promotions.services import plan, serving
 
 from .models import Post, PostMedia
 from .serializers import PostSerializer
+
+# How far a signed-out reader may walk the feed, and how long a stranger's first
+# page is served without touching the database again. The spam desk owns both
+# numbers (`spam_guest_feed_rows`, `spam_guest_feed_cache_seconds`); these remain
+# only for a request that arrives while the desk cannot be read.
+ANON_FEED_ROWS = 30
+FEED_CACHE_SECONDS = 15
+
+
+def guest_feed_rows():
+    """How far a stranger may walk the feed, from the desk. Zero walks it all."""
+    try:
+        from apps.adminpanel import settings_store
+        cap = int(settings_store.values().get('spam_guest_feed_rows', 0))
+    except Exception:  # noqa: BLE001 - the door answers for itself before the console
+        return ANON_FEED_ROWS
+    return cap or None
+
+
+def guest_feed_seconds():
+    """How long a stranger's first page is reused, from the desk. Zero is fresh."""
+    try:
+        from apps.adminpanel import settings_store
+        return int(settings_store.values().get('spam_guest_feed_cache_seconds', 0))
+    except Exception:  # noqa: BLE001 - the door answers for itself before the console
+        return FEED_CACHE_SECONDS
 
 
 class IsAuthorOrReadOnly(BasePermission):
@@ -64,16 +91,39 @@ class PostViewSet(viewsets.ModelViewSet):
         return qs
 
     def list(self, request, *args, **kwargs):
+        """A stranger's first page is the one answer every anonymous client asks for.
+
+        It is cached for a few seconds keyed on the exact query, so a thousand
+        visitors opening the app in the same quarter minute read one database
+        query instead of a thousand. Only page one, and only without a search
+        term: search terms and cursors are attacker-chosen text, and each unique
+        one would plant a cache entry of its own.
+        """
+        if request.user.is_authenticated or request.query_params.get('cursor') or request.query_params.get('q'):
+            response = super().list(request, *args, **kwargs)
+            return self._deal(request, response)
+        key = f'feed-anon:{request.get_full_path()}'
+        cached = cache.get(key)
+        if cached is not None:
+            return Response(cached)
         response = super().list(request, *args, **kwargs)
+        self._deal(request, response)
+        seconds = guest_feed_seconds()
+        if seconds:
+            cache.set(key, response.data, seconds)
+        return response
+
+    def _deal(self, request, response):
+        """The reels shelf is a discovery stream, so a fresh open deals a fresh
+        hand: nobody opens the same reel first twice in a row. A shelf that is
+        a question about one person (their profile), a search, or a walk in a
+        chosen order keeps the order it was asked for, and a cursor page keeps
+        its own order so the walk stays stable under inserts. A stranger reading
+        a cached page was dealt the hand the cache entry was planted with."""
         params = request.query_params
-        # The reels shelf is a discovery stream, so a fresh open deals a fresh
-        # hand: nobody opens the same reel first twice in a row. A shelf that is
-        # a question about one person (their profile), a search, or a walk in a
-        # chosen order keeps the order it was asked for, and a cursor page keeps
-        # its own order so the walk stays stable under inserts.
-        reshuffle = (params.get('media') == 'video' and not params.get('author')
-                     and not params.get('q') and not params.get('order') and not params.get('cursor'))
-        if reshuffle and response.status_code == 200 and isinstance(response.data, dict):
+        if (params.get('media') == 'video' and not params.get('author')
+                and not params.get('q') and not params.get('order') and not params.get('cursor')
+                and response.status_code == 200 and isinstance(response.data, dict)):
             random.shuffle(response.data['results'])
         return response
 
@@ -89,28 +139,45 @@ class PostViewSet(viewsets.ModelViewSet):
         refused = write_gate(request, 'post')
         if refused:
             return refused
+        refused = post_limits_gate(request)
+        if refused:
+            return refused
         return super().create(request, *args, **kwargs)
 
     def update(self, request, *args, **kwargs):
-        """So is an edit that puts the wording back in after the fact."""
+        """So is an edit that puts the wording back in after the fact, or one that
+        re-commits more attachments than the limits desk allows."""
         refused = blocked_wording(request, 'post')
+        if refused:
+            return refused
+        refused = post_limits_gate(request)
         if refused:
             return refused
         return super().update(request, *args, **kwargs)
 
     def perform_create(self, serializer):
-        serializer.save(author=self.request.user)
+        instance = serializer.save(author=self.request.user)
+        if instance.status == Post.Status.LIVE:
+            # The room learns a post exists — an id, a video flag and a handle,
+            # nothing a stranger could read before the visibility rules let them.
+            try:
+                from apps.common import pulse
+                pulse.to_site('post_new', id=str(instance.pk), author=instance.author.username,
+                              video=instance.media.filter(kind='video').exists())
+            except Exception:  # noqa: BLE001 - the wire is a courtesy, the post is already live
+                pass
 
     @property
     def paginator(self):
         """`order=views` sorts on a count instead of a timestamp, so that shelf
-        walks its own index and needs a cursor built for it."""
+        walks its own index and needs a cursor built for it. Both shelves hand
+        their signed-out readers the same bounded walk."""
         if self.request is not None and self.request.query_params.get('order') == 'views':
             if not hasattr(self, '_views_paginator'):
-                self._views_paginator = KeysetPagination(sort_field='views')
+                self._views_paginator = KeysetPagination(sort_field='views', anon_cap=guest_feed_rows())
             return self._views_paginator
         if not hasattr(self, '_paginator'):
-            self._paginator = self.pagination_class() if self.pagination_class else None
+            self._paginator = KeysetPagination(anon_cap=guest_feed_rows())
         return self._paginator
 
 
@@ -170,7 +237,30 @@ def promo_card(promo):
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def feed(request):
-    """Newest-first ordinary feed; matching promoted posts lead the first page."""
+    """Newest-first ordinary feed; matching promoted posts lead the first page.
+
+    A stranger's first page is the one answer every anonymous client asks for, so
+    it is served from a short cache and the database hears the question once per
+    quarter-minute instead of once per stranger. Only page one is cached: a
+    cursor is caller-chosen text, and every unique one would plant an entry of
+    its own. The cache skips nothing a stranger's page would have done — the
+    promotion desk answers nobody who is not signed in, and the impression
+    ledger only moves for people it can name.
+    """
+    if not request.user.is_authenticated and not request.query_params.get('cursor'):
+        key = f'feed-anon:{request.get_full_path()}'
+        cached = cache.get(key)
+        if cached is not None:
+            return Response(cached)
+        response = _feed_page(request)
+        seconds = guest_feed_seconds()
+        if seconds:
+            cache.set(key, response.data, seconds)
+        return response
+    return _feed_page(request)
+
+
+def _feed_page(request):
     cursor = request.query_params.get('cursor')
     following = bool(request.query_params.get('following'))
     # The sponsored slot belongs at the head of a newest-first page. On an
@@ -193,7 +283,7 @@ def feed(request):
         )
     if promo_ids:
         qs = qs.exclude(pk__in=promo_ids)
-    paginator = KeysetPagination()
+    paginator = KeysetPagination(anon_cap=guest_feed_rows())
     rows = paginator.paginate_queryset(qs, request)
     data = PostSerializer(rows, many=True, context={'request': request}).data
     for item in data:

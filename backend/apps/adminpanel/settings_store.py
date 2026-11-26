@@ -98,6 +98,30 @@ DEFAULTS = {
     'spam_follow_per_hour': (30, 'int', 'Accounts one account may follow in an hour',
                              'How many people one account may follow in an hour. Follow-and-drop accounts hit '
                              'this first.', 'safety'),
+    # How much one person may read. The first two are the doors DRF itself counts
+    # -- every API request one signed-in account, or one visitor address, may make
+    # in a minute -- and they were hard-coded in settings.py until the Client asked
+    # for them at the desk. The last two bound what a stranger's feed walk may ask
+    # the database for. Zero is the rule switched off, as everywhere else on this
+    # desk: no ceiling rather than no reading.
+    'spam_read_per_minute': (600, 'int', 'Requests one account may make in a minute',
+                             'Every door the member app opens -- feed pages, profiles, comments, anything a '
+                             'signed-in account reads -- counts against this ceiling. Past it the app answers '
+                             '"too many requests" until the minute is up. Zero puts no ceiling on it.', 'safety'),
+    'spam_guest_read_per_minute': (120, 'int', 'Requests one visitor may make in a minute',
+                                   'The same ceiling for a person with no account, counted by internet address '
+                                   'because there is no account to count. Two hundred people on one college '
+                                   'wifi share one visitor bucket, so keep this above what one busy address '
+                                   'honestly looks like. Zero puts no ceiling on it.', 'safety'),
+    'spam_guest_feed_rows': (30, 'int', 'Posts a visitor may walk the feed for',
+                             'How far a person with no account may scroll the feed before it stops handing '
+                             'them more. Signed-in members are not limited by this. Zero lets a visitor walk '
+                             'the whole feed.', 'safety'),
+    'spam_guest_feed_cache_seconds': (15, 'int', 'Seconds a visitor\'s first feed page is reused',
+                                      'The first page of the feed for a person with no account is served to '
+                                      'every visitor from one copy for this long, so a thousand strangers '
+                                      'opening the site read one database query. Zero serves every visitor a '
+                                      'page built fresh.', 'safety'),
     # The two hold-the-newcomer knobs ship at zero on purpose. They are the only
     # rules on this desk that can lock a genuine member out of their first post
     # without any report or blocked word behind it, so a platform switched on by
@@ -110,9 +134,6 @@ DEFAULTS = {
     'spam_new_account_posts': (0, 'int', 'Posts a first-day account may make',
                                'How many posts an account may make in the first 24 hours of its life. At 0 a new '
                                'account has the same room as anybody else.', 'safety'),
-    'spam_new_account_verify': (False, 'bool', 'Hold a new account until its email is verified',
-                                'On: an account cannot post until it has confirmed its email address. Off: '
-                                'anyone may post straight away.', 'safety'),
     'spam_autohide': (True, 'bool', 'Pull content out of the feed on report counts alone',
                       'On: the report number above is enough to hide a post with nobody reading it. Off: every '
                       'report waits in the review queue for a person.', 'safety'),

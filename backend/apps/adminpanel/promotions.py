@@ -437,6 +437,12 @@ def decide(promo, actor, action, reason='', choice=''):
             'stop': f'Your campaign {promo.pk} was stopped: {reason}',
         }[action]
     notify(promo.owner, actor, 'promotion', say[:240], 'promotion', promo.pk)
+    try:
+        from apps.common import pulse
+        pulse.to_user(promo.owner_id, 'promotion', id=str(promo.pk), status=promo.status,
+                      starts_at=promo.starts_at, ends_at=promo.ends_at)
+    except Exception:  # noqa: BLE001 - the wire is a courtesy, the decision is already made
+        pass
     money = (f'{_coins(taken)} coins taken on approval' if taken
              else f'{_coins(refund)} coins refunded' if refund else 'no coins moved')
     record(actor, f'promo_{action}', f'promotion:{promo.pk}',
