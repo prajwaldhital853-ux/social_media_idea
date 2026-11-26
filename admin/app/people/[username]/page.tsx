@@ -91,9 +91,13 @@ export default function PersonRecordPage({ params }: { params: { username: strin
     if (status === 'in') load();
   }, [load, status]);
 
-  useAdminEvent(['warning', 'coins', 'coin_request', 'audit'], load, pulse =>
-    pulse.kind === 'audit' || !detail || String(pulse.user_id) === String(detail.person.id),
-  );
+  useAdminEvent(['warning', 'coins', 'coin_request', 'audit'], load, pulse => {
+    if (pulse.kind === 'audit' || !detail) return true;
+    if (pulse.kind === 'warning' || pulse.kind === 'coins' || pulse.kind === 'coin_request') {
+      return String(pulse.user_id) === String(detail.person.id);
+    }
+    return false;
+  });
 
   // A pen clicked at the end of a directory row arrives here with the ask it
   // means, so the reason box is already open on arrival.
