@@ -22,6 +22,25 @@ const SUGGESTIONS = ['Nice!', 'Beautiful!', 'Congrats!', 'Love this!', 'Amazing!
 const EMOJIS = ['😀', '😂', '🥰', '😍', '😎', '🤩', '😢', '😡', '👍', '👏', '🙏', '🔥', '❤️', '💯', '🎉', '✨', '🌸', '🍜', '🏔️', '📸', '🥳', '😴', '🤔', '😅', '😊', '🙌', '👌', '✌️', '💖', '😭', '🤣', '💪', '😇', '🥺', '😤', '🤯', '😋', '😘', '😜', '🤗'];
 const PAGE = 4;
 
+/**
+ * Put the reader back on the control that opened a sheet without the browser
+ * painting its focus ring on it. A back gesture or Escape is keyboard input to
+ * Chromium, so restoring focus the plain way left the comment icon wearing a
+ * brand-red oval that read as a mark on the draft that was never sent. The ring
+ * is only held off until the next real key or tap.
+ */
+function focusQuietly(el: HTMLElement) {
+  el.dataset.quietFocus = '1';
+  el.focus();
+  const clear = () => {
+    delete el.dataset.quietFocus;
+    document.removeEventListener('keydown', clear, true);
+    document.removeEventListener('pointerdown', clear, true);
+  };
+  document.addEventListener('keydown', clear, true);
+  document.addEventListener('pointerdown', clear, true);
+}
+
 function CommentText({ text, replyToName }: { text: string; replyToName?: string }) {
   const nodes: ReactNode[] = [];
   let rest = text;
@@ -171,7 +190,8 @@ export default function Comments({ postId, onClose, mediaIndex }: { postId: stri
     dialog.current?.focus();
     return () => {
       document.body.style.overflow = overflow;
-      previous?.focus();
+      // A hand tap leaves no element focused, so only a real opener gets it back.
+      if (previous && previous !== document.body) focusQuietly(previous);
     };
   }, [sheet]);
 

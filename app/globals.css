@@ -8918,7 +8918,10 @@ html { overscroll-behavior-y: none; }
 }
 
 /* The comment box grew into a draft pad: it starts one line tall and grows
-   with what is typed, Enter opens a line, Ctrl+Enter sends. */
+   with what is typed, Enter opens a line, Ctrl+Enter sends.
+   Its scroller is hidden, not the scroll: a long draft still moves under the
+   caret and the wheel, but the browser's own gray bar never takes a slice out
+   of the pill and never looks like something is wrong with the words. */
 .compose-row textarea {
   flex: 1;
   min-width: 0;
@@ -8934,12 +8937,28 @@ html { overscroll-behavior-y: none; }
   resize: none;
   max-height: 120px;
   overflow-y: auto;
+  scrollbar-width: none;
   transition: box-shadow 0.15s ease;
+}
+
+.compose-row textarea::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
 }
 
 .compose-row textarea:focus {
   outline: none;
   box-shadow: 0 0 0 2px var(--brand-ring);
+}
+
+/* Focus handed back by a closing sheet is not a thing the reader did: a back
+   gesture or Escape counts as keyboard input to the browser, so the comment
+   icon came back wearing the brand-red ring and read as a flag on the draft
+   that was never sent. The mark returns on the next real key or tap. */
+[data-quiet-focus]:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
 }
 
 .comment-bubble p { white-space: pre-wrap; overflow-wrap: anywhere; }
