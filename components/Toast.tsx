@@ -1,18 +1,24 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useApp } from '@/lib/AppContext';
 
 export default function Toast() {
   const { toast, hideToast, confirmBox, hideConfirm, t } = useApp();
   const [show, setShow] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
   useEffect(() => {
     if (!toast && !confirmBox) { setShow(false); return; }
     const frame = requestAnimationFrame(() => setShow(true));
     return () => cancelAnimationFrame(frame);
   }, [toast, confirmBox]);
 
-  return (
+  if (!mounted) return null;
+  // Portalled to the body: a transformed ancestor would otherwise capture the
+  // fixed bar and pin the question inside a post instead of over the viewport.
+  return createPortal(
     <>
       {toast && (
         <div className={`toast ${show ? 'show' : ''}`} role="status">
@@ -39,6 +45,7 @@ export default function Toast() {
           </span>
         </div>
       )}
-    </>
+    </>,
+    document.body,
   );
 }

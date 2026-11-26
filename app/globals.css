@@ -2472,6 +2472,14 @@ a.trend-item:hover { text-decoration: none; }
 
 .toast-btn.solid { background: var(--paper); border-color: var(--paper); color: var(--ink); }
 
+/* The question is a snackbar, not a squeezed bubble: the text takes the room
+   the buttons leave (two lines when it must) instead of wrapping into a tall
+   pill, and on a phone the bar spans the hand like the desktop's does. */
+.toast-confirm > span:first-of-type { flex: 1 1 auto; min-width: 0; text-align: left; }
+@media (max-width: 768px) {
+  .toast-confirm { width: calc(100vw - 20px); }
+}
+
 /* ===== Mobile: top bar + bottom menu ===== */
 .m-top { display: none; }
 .post-fab { display: none; }

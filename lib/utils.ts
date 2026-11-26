@@ -148,9 +148,34 @@ const blit = (src: HTMLImageElement | HTMLCanvasElement, sw: number, sh: number,
   return c;
 };
 
-// 2048 rather than 1280: a phone shows a card at two pixels per css point, so a
-// 1280 edge is upscaled by the display and every uploaded photo looks soft.
-export const resizeImage = (file: File, max = 2048): Promise<string> => {
+let webpEncoder: Promise<boolean> | null = null;
+
+// 2560 rather than 2048: a phone shows a card at two pixels per css point, and
+// the extra edge is what keeps a zoomed-in picture from going soft. WebP at
+// 0.88 pays for it — it lands near half the bytes of the JPEG it replaces
+// while the eye stops telling the copy from the original. Browsers without a
+// WebP encoder (old Safari) fall back to the old JPEG pass. Detection runs
+// once and is remembered for the session.
+export const canEncodeWebp = (): Promise<boolean> => {
+  if (!webpEncoder) {
+    webpEncoder = new Promise(done => {
+      const c = document.createElement('canvas');
+      c.width = 2;
+      c.height = 2;
+      c.toBlob(b => done(!!b && b.type === 'image/webp'), 'image/webp', 0.5);
+    });
+  }
+  return webpEncoder;
+};
+
+const blobToDataUrl = (blob: Blob): Promise<string> => new Promise((res, rej) => {
+  const reader = new FileReader();
+  reader.onload = () => res(String(reader.result));
+  reader.onerror = () => rej();
+  reader.readAsDataURL(blob);
+});
+
+export const resizeImage = (file: File, max = 2560): Promise<string> => {
   return new Promise((res, rej) => {
     const url = URL.createObjectURL(file);
     const img = new Image();
@@ -158,10 +183,12 @@ export const resizeImage = (file: File, max = 2048): Promise<string> => {
       const w = img.naturalWidth || img.width;
       const h = img.naturalHeight || img.height;
       const s = Math.min(1, max / Math.max(w, h));
-      // A picture that already fits the frame is kept byte for byte: another
-      // JPEG pass is exactly the blur uploads were blamed for, and nothing
-      // here needs it — the cropper's own output lands here already sized.
-      if (s === 1) {
+      // A picture that already fits and is already light stays byte for byte —
+      // the cropper's output lands here that way, and re-encoding a few hundred
+      // kilobytes spends time to save nothing. Anything heavier goes through
+      // the encoder even at its own size: one pass from the decoded original,
+      // not a re-compression of a JPEG, is what keeps the edges crisp.
+      if (s === 1 && file.size <= 600 * 1024) {
         const reader = new FileReader();
         reader.onload = () => res(String(reader.result));
         reader.onerror = () => rej();
@@ -185,9 +212,20 @@ export const resizeImage = (file: File, max = 2048): Promise<string> => {
         sh = dh;
       }
       URL.revokeObjectURL(url);
-      // 0.94 is where JPEG artefacts stop being visible; 0.82 smeared detail
-      // on anything with fine edges.
-      res(blit(from, sw, sh, tw, th).toDataURL('image/jpeg', 0.94));
+      const canvas = blit(from, sw, sh, tw, th);
+      canEncodeWebp().then(ok => {
+        if (!ok) {
+          res(canvas.toDataURL('image/jpeg', 0.94));
+          return;
+        }
+        canvas.toBlob(blob => {
+          if (!blob || blob.type !== 'image/webp') {
+            res(canvas.toDataURL('image/jpeg', 0.94));
+            return;
+          }
+          res(blobToDataUrl(blob));
+        }, 'image/webp', 0.88);
+      }).catch(() => rej());
     };
     img.onerror = () => {
       URL.revokeObjectURL(url);
