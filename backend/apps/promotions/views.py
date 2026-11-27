@@ -1,5 +1,6 @@
 from decimal import Decimal
 
+from django.db.models import Q
 from django.utils import timezone
 from rest_framework import serializers, status
 from rest_framework.decorators import api_view, permission_classes
@@ -119,6 +120,27 @@ def promotion_list(request):
             target = Listing.objects.filter(pk=target_id, seller=request.user).first() if target_id.isdigit() else None
         if not target:
             return Response({'detail': 'You can only promote your own content.'}, status=400)
+        # One campaign at a time per post or advert. Two live orders on one card would
+        # spend two budgets on the same audience and leave the desk judging the same
+        # advert twice, and a refused or finished campaign is not a live one — that
+        # target is free to be bought again.
+        held = Promotion.objects.filter(
+            target_type=target_type, target_id=target_id,
+            status__in=[Promotion.Status.PENDING, Promotion.Status.ACTIVE, Promotion.Status.PAUSED],
+        ).filter(Q(ends_at__isnull=True) | Q(ends_at__gt=timezone.now())).order_by('-created_at').first()
+        if held:
+            what = 'post' if target_type == Promotion.Target.POST else 'listing'
+            if held.status == Promotion.Status.PENDING:
+                return Response(
+                    {'detail': f'This {what} is already waiting for approval. Please wait for the '
+                               'admin to approve or refuse it before sending another request.'},
+                    status=409,
+                )
+            return Response(
+                {'detail': f'This {what} is already being promoted. End that campaign before '
+                           'sending another request for it.'},
+                status=409,
+            )
         # Nobody outside the approved followers can see a private account's post,
         # so a promotion there would spend coins on an audience of zero. Say so
         # before the wallet is touched rather than after.

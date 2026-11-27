@@ -73,6 +73,24 @@ def coin_request_create(request):
     serializer.is_valid(raise_exception=True)
     if serializer.validated_data['coins'] < 1:
         return Response({'detail': 'Coins must be at least 1.'}, status=400)
+    # One order in the queue per person. The desk judges a receipt against the request it
+    # belongs to, so a second one before the first is answered is two payments to read for
+    # one buyer. An ask for more proof is answered on that request, not with a new one.
+    waiting = CoinRequest.objects.filter(
+        user=request.user, status=CoinRequest.Status.PENDING,
+    ).order_by('-created_at').first()
+    if waiting:
+        if _proof_asks([waiting]).get(waiting.pk):
+            return Response(
+                {'detail': f'Coin request #{waiting.pk} is waiting on a new screenshot from you. '
+                           'Send it on that request before making another one.'},
+                status=409,
+            )
+        return Response(
+            {'detail': f'Coin request #{waiting.pk} is still waiting for the admin. Please wait '
+                       'for it to be approved or refused before sending another request.'},
+            status=409,
+        )
     # The desk's floor is the door's floor: a stale page quoting yesterday's
     # minimum must not slip a smaller purchase past it. Zero turns the rule off.
     floor = int(settings_store.get('coin_min_purchase') or 0)

@@ -97,7 +97,7 @@ function FeedFollow({ author }: { author: User }) {
 
 export default function PostCard({ post, author, featured }: PostCardProps) {
   const router = useRouter();
-  const { db, me, t, deletePost, toggleSave, isSaved, sharePost, mayShare, openComposer, activePromo,
+  const { db, me, t, deletePost, toggleSave, isSaved, sharePost, mayShare, openComposer, activePromo, openPromo,
     promoEligible, trackPromo, showToast, showConfirm, reactionCount, serverMode, blockUser, unblockUser, isBlocked } = useApp();
   const [menuOpen, setMenuOpen] = useState(false);
   const [showComments, setShowComments] = useState(false);
@@ -115,6 +115,10 @@ export default function PostCard({ post, author, featured }: PostCardProps) {
   const paid = !!promo || post.promoted;
   const own = me?.id === post.uid;
   const saved = isSaved(post.id);
+  // A post already under a campaign does not get the door twice. A running one hides it
+  // outright; a waiting one stays on the menu only long enough to say what it waits on.
+  const held = own ? openPromo('post', post.id) : undefined;
+  const waiting = held?.status === 'pending' ? held : undefined;
 
   const comments = db.comments
     .filter(c => c.pid === post.id && c.status === 'live')
@@ -275,7 +279,13 @@ export default function PostCard({ post, author, featured }: PostCardProps) {
               {menuOpen && (
                 <div className="post-menu" onClick={e => e.stopPropagation()}>
                   {menuItem(t('copyLink'), () => { void copyShareLink(); })}
-                  {own && !me?.private && db.settings.features.promotion && menuItem(t('promote'), () => setPromoting(true))}
+                  {own && !me?.private && db.settings.features.promotion && (!held || waiting) && menuItem(
+                    t('promote'),
+                    () => {
+                      if (waiting) { showToast(t('promoWaiting', { what: t('dpost') })); return; }
+                      setPromoting(true);
+                    },
+                  )}
                   {own && menuItem(t('edit'), () => openComposer(post.id))}
                   {own && menuItem(t('del'), () => showConfirm(t('confirmDelete'), () => deletePost(post.id)), true)}
                   {!own && me && menuItem(t('report'), () => setReporting(true))}

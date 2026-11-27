@@ -16,13 +16,16 @@ interface PromoteModalProps {
 export default function PromoteModal({ targetType, targetId, defaultCategory, onClose }: PromoteModalProps) {
   const { t, requestPromotion } = useApp();
   useBackClose(true, onClose);
+  // The composer's toggle label was this sheet's title on both doors, so a seller
+  // promoting an advert was told it was a post.
+  const head = `${t('promote')} ${t(targetType === 'listing' ? 'dlisting' : 'dpost')}`;
   if (typeof document === 'undefined') return null;
 
   return createPortal(
     <div className="modal-overlay" onClick={e => { e.stopPropagation(); onClose(); }}>
-      <div className="modal-content promote-modal" onClick={e => e.stopPropagation()} role="dialog" aria-label={t('promoteSection')}>
+      <div className="modal-content promote-modal" onClick={e => e.stopPropagation()} role="dialog" aria-label={head}>
         <div className="modal-header">
-          <b>{t('promoteSection')}</b>
+          <b>{head}</b>
           <button type="button" className="modal-close" onClick={onClose} aria-label={t('close')}>{IC.x}</button>
         </div>
         <div className="promote-modal-body">

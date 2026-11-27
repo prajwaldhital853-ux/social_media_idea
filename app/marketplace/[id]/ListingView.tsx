@@ -23,7 +23,7 @@ import type { Listing } from '@/lib/types';
 export default function ListingPage() {
   const params = useParams();
   const router = useRouter();
-  const { db, me, t, feature, setDb, serverMode, showToast, showConfirm, activePromo, isListingSaved, toggleListingSave } = useApp();
+  const { db, me, t, feature, setDb, serverMode, showToast, showConfirm, activePromo, openPromo, isListingSaved, toggleListingSave } = useApp();
   const lang = db.lang;
   const [photo, setPhoto] = useState(0);
   const [editing, setEditing] = useState(false);
@@ -82,6 +82,11 @@ export default function ListingPage() {
   const seller = db.users.find(u => u.id === listing.uid);
   const mine = me?.id === listing.uid;
   const promo = activePromo('listing', listing.id);
+  // The promote door follows the campaign, not the card: a listing already running (or
+  // held back paused) offers no second one, and a waiting order only offers the sentence
+  // about what it waits for.
+  const held = mine ? openPromo('listing', listing.id) : undefined;
+  const waiting = held?.status === 'pending' ? held : undefined;
   const images = listing.media.filter(m => m.type === 'image' && m.src);
   const current = images[Math.min(photo, images.length - 1)];
   const saved = isListingSaved(listing.id);
@@ -199,8 +204,15 @@ export default function ListingPage() {
               {mine ? (
                 <>
                   <button type="button" className="promote-submit" onClick={() => setEditing(true)}>{IC.edit}{t('edit')}</button>
-                  {listing.status === 'active' && feature('promotion') && !promo && (
-                    <button type="button" className="ghost-btn" onClick={() => setPromote(true)}>{IC.chart}{t('promote')}</button>
+                  {listing.status === 'active' && feature('promotion') && (!held || waiting) && (
+                    <button
+                      type="button"
+                      className="ghost-btn"
+                      onClick={() => {
+                        if (waiting) { showToast(t('promoWaiting', { what: t('dlisting') })); return; }
+                        setPromote(true);
+                      }}
+                    >{IC.chart}{t('promote')}</button>
                   )}
                   {listing.status === 'active' ? (
                     <button type="button" className="ghost-btn" onClick={() => setStatus('sold')}>{IC.check}{t('markSold')}</button>
