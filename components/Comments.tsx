@@ -151,7 +151,15 @@ export default function Comments({ postId, onClose, mediaIndex }: { postId: stri
       if (!raw || raw.kind !== 'comment' || String(raw.post_id) !== postId) return;
       const count = Math.max(0, Number(raw.comments) || 0);
       const post = dbRef.current.posts.find(row => row.id === postId);
-      if (post) merge({ posts: [{ ...post, comments: count }] });
+      if (post) {
+        // A picture wears a number of its own and the server just counted it, so
+        // the badge under an open sheet says the same thing as its heading.
+        const photos = raw.media_comments || {};
+        const media = (post.media || []).map((m, i) => (
+          photos[i] === undefined ? m : { ...m, comments: Math.max(0, Number(photos[i]) || 0) }
+        ));
+        merge({ posts: [{ ...post, comments: count, media }] });
+      }
 
       if (raw.action === 'create' && raw.comment) {
         const row = raw.comment;
@@ -201,7 +209,9 @@ export default function Comments({ postId, onClose, mediaIndex }: { postId: stri
     return () => source.close();
   }, [serverMode, me?.id, postId, merge]);
 
-  const allComments = db.comments.filter(c => c.pid === postId && c.status === 'live' && (isMedia ? c.mediaIndex === mediaIndex : c.mediaIndex === undefined));
+  // A word left on one picture of a multi-picture post is a comment on the post
+  // as well, so the post's own list carries it and the picture repeats it.
+  const allComments = db.comments.filter(c => c.pid === postId && c.status === 'live' && (!isMedia || c.mediaIndex === mediaIndex));
   const byId = new Map(allComments.map(c => [c.id, c] as [string, Comment]));
   // The server's rows in the server's order; replies join them from the cache
   // once their own thread has been opened.
@@ -209,9 +219,16 @@ export default function Comments({ postId, onClose, mediaIndex }: { postId: stri
   const topLevelComments = serverMode
     ? fromServer
     : allComments.filter(c => !c.parentId).sort((a, b) => sort === 'newest' ? b.ts - a.ts : a.ts - b.ts);
-  // The cached lines this sheet could fill, replies left out because they hang
-  // under a row rather than taking one of their own.
-  const threaded = allComments.filter(c => !c.parentId).length;
+  // The cached rows this sheet is about — every reply counts as a comment, even
+  // while it hangs under its parent.
+  const threaded = allComments.length;
+  // The number the sheet is named with comes off the rows on the server, so a
+  // thread opened straight from one picture says what that picture holds before
+  // its replies are paged in. The cached count stands in for a build with no
+  // server behind it, and for a post read before the tallies were carried.
+  const own = db.posts.find(p => p.id === postId);
+  const counted = isMedia ? own?.media?.[mediaIndex as number]?.comments : own?.comments;
+  const shownTotal = serverMode ? counted ?? threaded : threaded;
   const { limit: commentLimit, pending: commentsPending, sentinel: commentsSentinel, hasMore: moreComments } = useWindowed(
     topLevelComments.length, 10, `${postId}|${mediaIndex}|${sort}`,
     serverMode ? {
@@ -516,7 +533,7 @@ export default function Comments({ postId, onClose, mediaIndex }: { postId: stri
             <option value="oldest">Oldest</option>
           </select>
         </label>
-        <span>{serverMode && !isMedia ? (db.posts.find(p => p.id === postId)?.comments ?? threaded) : threaded}</span>
+        <span>{shownTotal}</span>
       </div>
       <div className="comments-list" ref={list}>
         {serverMode && stream.error ? (

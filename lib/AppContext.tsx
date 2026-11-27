@@ -234,6 +234,28 @@ function readTheme(): ThemeMode {
   return window.matchMedia('(min-width: 1024px)').matches ? 'dark' : 'light';
 }
 
+/**
+ * Move the number a post wears and the number each picture of it wears by the
+ * rows that just arrived or left. A word written on one picture counts on the
+ * post once and on that picture once, so both numbers have to follow the same
+ * rows without the post tally doubling.
+ */
+function moveTally(post: Post, rows: Comment[], delta: 1 | -1): Post {
+  const photos = new Map<number, number>();
+  rows.forEach(row => {
+    if (row.mediaIndex === undefined || row.mediaIndex === null) return;
+    photos.set(row.mediaIndex, (photos.get(row.mediaIndex) ?? 0) + 1);
+  });
+  return {
+    ...post,
+    comments: Math.max(0, (post.comments ?? 0) + delta * rows.length),
+    media: (post.media ?? []).map((m, i) => {
+      const n = photos.get(i);
+      return n ? { ...m, comments: Math.max(0, (m.comments ?? 0) + delta * n) } : m;
+    }),
+  };
+}
+
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export function AppProvider({ children }: { children: ReactNode }) {
@@ -1197,12 +1219,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const arrived = prev.comments.some(existing => existing.id === saved.id);
       const next = applyFragment(prev, { comments: [saved] });
       if (arrived) return next;
-      // The tally on the card is the number of lines its sheet can fill, so a
-      // reply under a comment or a word left on one photo adds no line to it.
-      const line = !saved.parentId && saved.mediaIndex === undefined;
+      // One comment, one count — whether it answers another comment or sits on
+      // one picture of a multi-picture post, and whichever list shows it first.
       return {
         ...next,
-        posts: next.posts.map(p => (p.id === saved.pid && line ? { ...p, comments: (p.comments ?? 0) + 1 } : p)),
+        posts: next.posts.map(p => (p.id === saved.pid ? moveTally(p, [saved], 1) : p)),
       };
     });
     return saved;
@@ -1210,12 +1231,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const deleteComment = async (id: string) => {
     const snapshot = dbRef.current;
-    setDb(prev => ({
-      ...prev,
-      comments: prev.comments.filter(c => c.id !== id && c.parentId !== id),
-      reactions: prev.reactions.filter(r => !(r.targetType === 'comment' && r.targetId === id)),
-      reports: prev.reports.filter(r => !(r.type === 'comment' && r.targetId === id))
-    }));
+    setDb(prev => {
+      // A comment takes its thread with it, so the tally moves by the rows that
+      // actually leave rather than by one.
+      const gone = prev.comments.filter(c => c.id === id || c.parentId === id);
+      const pid = gone[0]?.pid;
+      return {
+        ...prev,
+        comments: prev.comments.filter(c => c.id !== id && c.parentId !== id),
+        reactions: prev.reactions.filter(r => !(r.targetType === 'comment' && r.targetId === id)),
+        reports: prev.reports.filter(r => !(r.type === 'comment' && r.targetId === id)),
+        posts: pid
+          ? prev.posts.map(p => (p.id === pid ? moveTally(p, gone, -1) : p))
+          : prev.posts,
+      };
+    });
     if (!API_ENABLED) return;
     try {
       await api.del(`/api/comments/${id}/`);

@@ -130,6 +130,11 @@ export function mapMedia(m: any): Media {
     src: mediaUrl(m.url || m.file),
     dur: m.duration ? Number(m.duration) : undefined,
     likes: amount(m.like_count),
+    // Every comment hanging on this picture, replies and words on the picture
+    // alike, counted where the rows live so the badge is right before the
+    // thread is opened. Absent means the server said nothing, so the reader's
+    // own cached rows stand in.
+    comments: m.comment_count === undefined ? undefined : amount(m.comment_count),
   };
 }
 
@@ -163,10 +168,11 @@ export function mapPost(row: any): Post {
     activity: row.activity === 'profile' || row.activity === 'cover' ? row.activity : undefined,
     audience: row.audience === 'followers' ? 'followers' : 'public',
     likes: amount(row.like_count),
-    // The tally the comment sheet fills, not the engagement tally: a reply sits
-    // under its parent and a word on one photo sits in that picture, and a card
-    // that counted both read as a number with lines missing.
-    comments: amount(row.thread_count ?? row.comment_count),
+    // Every comment the post still has counts: a reply the reader wrote and a
+    // word left on one picture of a multi-picture post are both comments, even
+    // though the first hangs under its parent and the second also sits in that
+    // picture's own thread. Counted once, wherever it is read.
+    comments: amount(row.comment_total ?? row.comment_count),
     shares: amount(row.share_count),
     views: amount(row.views),
     reactionKinds: row.reaction_kinds || undefined,

@@ -126,8 +126,8 @@ export default function PostCard({ post, author, featured }: PostCardProps) {
 
   /** The card counts comments before the panel is ever opened, so it reads the
    *  server's aggregate when there is one and only falls back to the cached
-   *  rows that panel would list — a reply hangs under a line, not beside one. */
-  const commentCount = post.comments ?? comments.filter(c => !c.parentId && c.mediaIndex === undefined).length;
+   *  rows — a reply and a word left on a picture are comments too. */
+  const commentCount = post.comments ?? comments.length;
 
   /** Media-level likes fold into the card count: server sums in API mode, reaction rows in demo. */
   const mediaLikes = post.media?.some(m => m.likes !== undefined)

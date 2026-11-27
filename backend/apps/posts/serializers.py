@@ -1,16 +1,26 @@
 from rest_framework import serializers
 
-from apps.common.api import notice_map, post_page_reactions, thread_counts
+from apps.common.api import notice_map, post_page_reactions, comment_totals, media_totals
 
 from .models import Post, PostMedia
 
 
 class PostMediaSerializer(serializers.ModelSerializer):
+    comment_count = serializers.SerializerMethodField()
+
     class Meta:
         model = PostMedia
-        fields = ['id', 'kind', 'url', 'file', 'duration', 'position', 'like_count']
+        fields = ['id', 'kind', 'url', 'file', 'duration', 'position', 'like_count', 'comment_count']
         # position is assigned from the order the client sends, never from the payload.
-        read_only_fields = ['id', 'like_count', 'position']
+        read_only_fields = ['id', 'like_count', 'position', 'comment_count']
+
+    def get_comment_count(self, obj):
+        # A page counts every picture of every post at once; a single read counts
+        # the pictures it is about, so the badge is right before anyone opens it.
+        if '_media_totals' not in self.context:
+            self.context['_media_totals'] = media_totals([obj.post_id] if obj else [])
+        photos = self.context['_media_totals'].get(str(obj.post_id), {})
+        return photos.get(str(obj.position), 0)
 
 
 class PostListSerializer(serializers.ListSerializer):
@@ -18,7 +28,8 @@ class PostListSerializer(serializers.ListSerializer):
         posts = list(data.all() if hasattr(data, 'all') else data)
         self.context['_reactions'] = post_page_reactions(self.context.get('request'), posts)
         self.context['_notices'] = notice_map('post', [post.pk for post in posts], self.context.get('request'))
-        self.context['_threads'] = thread_counts([post.pk for post in posts])
+        self.context['_totals'] = comment_totals([post.pk for post in posts])
+        self.context['_media_totals'] = media_totals([post.pk for post in posts])
         return [self.child.to_representation(post) for post in posts]
 
 
@@ -36,7 +47,7 @@ class PostSerializer(serializers.ModelSerializer):
     reaction_kinds = serializers.SerializerMethodField()
     media_reaction_kinds = serializers.SerializerMethodField()
     reaction_people = serializers.SerializerMethodField()
-    thread_count = serializers.SerializerMethodField()
+    comment_total = serializers.SerializerMethodField()
     notices = serializers.SerializerMethodField()
 
     class Meta:
@@ -44,7 +55,7 @@ class PostSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'author', 'author_username', 'author_name', 'author_avatar_url', 'author_verified',
             'author_is_private', 'text', 'audience', 'status',
-            'mood', 'place', 'category', 'activity', 'like_count', 'comment_count', 'thread_count',
+            'mood', 'place', 'category', 'activity', 'like_count', 'comment_count', 'comment_total',
             'share_count', 'views',
             'edited', 'created_at', 'updated_at', 'media',
             'my_reaction', 'my_media_reactions', 'reaction_kinds', 'media_reaction_kinds', 'reaction_people',
@@ -79,11 +90,11 @@ class PostSerializer(serializers.ModelSerializer):
     def get_reaction_people(self, obj):
         return self._reactions()['people'].get(str(obj.pk), [])
 
-    def get_thread_count(self, obj):
+    def get_comment_total(self, obj):
         # A page counts every row at once; a single read counts its own.
-        if '_threads' not in self.context:
-            self.context['_threads'] = thread_counts([obj.pk] if obj else [])
-        return self.context['_threads'].get(str(obj.pk), 0)
+        if '_totals' not in self.context:
+            self.context['_totals'] = comment_totals([obj.pk] if obj else [])
+        return self.context['_totals'].get(str(obj.pk), 0)
 
     def get_notices(self, obj):
         # A page fills this once; a single read asks for its own row.
