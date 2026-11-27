@@ -25,7 +25,7 @@ interface ShareDialogProps {
   title: string;
   text?: string;
   preview?: SharePreview;
-  onShared: () => void;
+  onShared: (people?: string[]) => void;
   onClose: () => void;
 }
 
@@ -138,7 +138,9 @@ export default function ShareDialog({ open, url, title, text, preview, onShared,
     }
     if (picked.length === 1) showToast(t('shareSent').replace('{name}', picked[0].name || picked[0].username));
     else showToast(t('shareSentMany').replace('{count}', String(picked.length)));
-    onShared();
+    // The names travel with the record: a post sent to the same person twice is one
+    // share, not two, and only the server has ever seen who it went to before.
+    onShared(picked.map(p => String(p.id)));
     onClose();
   };
 

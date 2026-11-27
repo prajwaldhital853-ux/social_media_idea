@@ -177,7 +177,7 @@ export default function MediaPage({ postId, initialIndex }: MediaPageProps) {
               image: media[sharing]?.type === 'image' ? (media[sharing]?.src || media[sharing]?.gen) : undefined,
               video: media[sharing]?.type === 'video' ? media[sharing]?.src : undefined,
             } : undefined}
-            onShared={() => { void sharePost(postId); }}
+            onShared={(people) => { void sharePost(postId, people); }}
             onClose={() => setSharing(null)}
           />
         </>

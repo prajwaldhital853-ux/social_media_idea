@@ -57,10 +57,20 @@ class SharedPost(models.Model):
     kind who sends things out, so the reach desk would have to guess. A share is the
     strongest signal on the site short of a follow — a person puts their own name
     behind the link — so the paid queue wants it per pair, not pooled.
+
+    The pair is the sender, the post and the person it was handed to, because sending
+    a thing to three people is three acts of name-putting-behind, while sending the
+    same thing to the same person twice is one act repeated. `with_user` is empty for
+    a link that left for another app, where there is no person on Exposing to name;
+    that hand-off is remembered once per post for the same reason.
     """
 
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='shared_posts')
     post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name='shared_by')
+    with_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, null=True, blank=True,
+        related_name='shared_with_me',
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -69,9 +79,13 @@ class SharedPost(models.Model):
             models.Index(fields=['user', '-created_at'], name='shared_post_user_newest'),
         ]
         constraints = [
-            # The tally still counts a repeat share; this row only says the pair
-            # happened, so a second copy of it would be a duplicate, not news.
-            models.UniqueConstraint(fields=['user', 'post'], name='one_share_record_per_user_post'),
+            # A second copy of the same hand-off to the same person is a repeat, not
+            # news: it adds no row, so it adds no tally and no weight in the queue.
+            models.UniqueConstraint(fields=['user', 'post', 'with_user'], name='one_share_record_per_pair'),
+            models.UniqueConstraint(
+                fields=['user', 'post'], condition=models.Q(with_user__isnull=True),
+                name='one_link_share_record_per_user_post',
+            ),
         ]
 
     def __str__(self):

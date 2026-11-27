@@ -390,7 +390,7 @@ export default function PostCard({ post, author, featured }: PostCardProps) {
           image: firstPicture ? (firstPicture.src || firstPicture.gen) : undefined,
           video: !firstPicture && firstClip ? firstClip.src : undefined,
         }}
-        onShared={() => { void sharePost(post.id); }}
+        onShared={(people) => { void sharePost(post.id, people); }}
         onClose={() => setSharing(false)}
       />
     </article>
