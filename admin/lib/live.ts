@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useSyncExternalStore } from 'react';
+import { useEffect, useRef, useSyncExternalStore, type MutableRefObject } from 'react';
 
 export type AdminPulseKind =
   | 'comment'
@@ -100,10 +100,10 @@ export type AdminEventFilter = (pulse: AdminPulse) => boolean;
 
 interface Subscription {
   kinds: ReadonlySet<AdminPulseKind>;
-  latest: {
+  latest: MutableRefObject<{
     handler: AdminEventHandler;
     filter?: AdminEventFilter;
-  };
+  }>;
   pulse: AdminPulse | null;
   timer: ReturnType<typeof setTimeout> | null;
 }
@@ -151,15 +151,15 @@ export function useAdminLive(): { live: boolean; health: AdminHealth } {
 export function publishAdminPulse(pulse: AdminPulse): void {
   subscriptions.forEach(subscription => {
     if (!subscription.kinds.has(pulse.kind)) return;
-    if (subscription.latest.filter && !subscription.latest.filter(pulse)) return;
+    if (subscription.latest.current.filter && !subscription.latest.current.filter(pulse)) return;
     subscription.pulse = pulse;
     if (subscription.timer !== null) return;
     subscription.timer = setTimeout(() => {
       const latest = subscription.pulse;
       subscription.pulse = null;
       subscription.timer = null;
-      if (latest && (!subscription.latest.filter || subscription.latest.filter(latest))) {
-        subscription.latest.handler(latest);
+      if (latest && (!subscription.latest.current.filter || subscription.latest.current.filter(latest))) {
+        subscription.latest.current.handler(latest);
       }
     }, REFRESH_DELAY);
   });

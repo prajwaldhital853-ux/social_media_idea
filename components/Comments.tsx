@@ -175,7 +175,8 @@ export default function Comments({ postId, onClose, mediaIndex }: { postId: stri
       }
 
       if (raw.action === 'delete') {
-        const ids = new Set((Array.isArray(raw.deleted_ids) ? raw.deleted_ids : []).map(String));
+        const doomed: any[] = Array.isArray(raw.deleted_ids) ? raw.deleted_ids : [];
+        const ids = new Set<string>(doomed.map(one => String(one)));
         if (!ids.size) return;
         ids.forEach(id => {
           const row = dbRef.current.comments.find(comment => comment.id === id);
