@@ -18,8 +18,36 @@ import { api, API_ENABLED, ApiError } from './api';
 const SW_PATH = '/sw.js';
 const SUBSCRIBE = '/api/notifications/push/subscribe/';
 const UNSUBSCRIBE = '/api/notifications/push/unsubscribe/';
+const CONFIG = '/api/notifications/push/config/';
+// The ask is remembered per browser: Chrome shows its prompt a couple of times
+// and then refuses the origin outright for a site that keeps knocking.
+const ASKED = 'exposing.push.asked';
+// And so is a switch the member turned off by hand, which the arrival ask must
+// not quietly undo on the next load.
+const MUTED = 'exposing.push.muted';
 
 export type PushState = 'on' | 'off' | 'blocked' | 'unsupported';
+
+/** The two flags live in storage that a private window can refuse to give. */
+function read(key: string): boolean {
+  try {
+    return window.localStorage.getItem(key) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function remember(key: string): void {
+  try {
+    window.localStorage.setItem(key, '1');
+  } catch { /* nothing kept, so the next load simply asks again */ }
+}
+
+function forget(key: string): void {
+  try {
+    window.localStorage.removeItem(key);
+  } catch { /* nothing kept in the first place */ }
+}
 
 /** What this browser is physically able to do, before anybody is asked. */
 export function pushSupported(): boolean {
@@ -82,11 +110,38 @@ export async function pushState(): Promise<PushState> {
   }
 }
 
+async function hasAddress(): Promise<boolean> {
+  try {
+    return !!(await (await worker()).pushManager.getSubscription());
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Chrome answers a permission call from a page nobody is looking at with a
+ * refusal the member never saw, so the arrival ask waits for the tab to come
+ * forward rather than burning the shot the origin gets.
+ */
+function untilVisible(): Promise<void> {
+  if (document.visibilityState === 'visible') return Promise.resolve();
+  return new Promise(resolve => {
+    const wake = () => {
+      if (document.visibilityState !== 'visible') return;
+      document.removeEventListener('visibilitychange', wake);
+      resolve();
+    };
+    document.addEventListener('visibilitychange', wake);
+  });
+}
+
 /**
  * Ask, subscribe, hand the address over.
  *
- * The prompt is only ever raised from a click: a page that asks on arrival gets
- * dismissed by reflex, and a dismissal sticks for a while.
+ * Nothing here throws: a browser that will not register its worker, or a server
+ * that is briefly unreachable, has to come back as an answer the switch can
+ * show. A click whose promise rejects leaves the switch frozen mid-click, which
+ * reads to the member as a control that does nothing.
  */
 export async function enablePush(): Promise<{ ok: boolean; detail?: string }> {
   if (!pushSupported()) return { ok: false, detail: 'This browser cannot receive notifications.' };
@@ -94,28 +149,68 @@ export async function enablePush(): Promise<{ ok: boolean; detail?: string }> {
   if (Notification.permission === 'denied') {
     return { ok: false, detail: 'Notifications are blocked for this site. Allow them in the address bar.' };
   }
-  const permission = await Notification.requestPermission();
-  if (permission !== 'granted') return { ok: false, detail: 'Notifications were not allowed.' };
-
-  const config = await api.get<{ enabled: boolean; public_key: string }>('/api/notifications/push/config/');
-  if (!config.enabled || !config.public_key) {
-    return { ok: false, detail: 'Push is not switched on at Exposing yet.' };
+  try {
+    if (Notification.permission !== 'granted') {
+      const permission = await Notification.requestPermission();
+      if (permission !== 'granted') return { ok: false, detail: 'Notifications were not allowed.' };
+    }
+    const config = await api.get<{ enabled: boolean; public_key: string }>(CONFIG);
+    if (!config.enabled || !config.public_key) {
+      return { ok: false, detail: 'Push is not switched on at Exposing yet.' };
+    }
+    const reg = await worker();
+    const held = await reg.pushManager.getSubscription();
+    // An address filed under a key we no longer hold is a dead one — the push
+    // service shrugs at every card sealed for the new half. Throw it and re-take.
+    const keeps = held !== null && filedKey(held) === config.public_key;
+    if (held && !keeps) await held.unsubscribe();
+    const sub = keeps
+      ? held!
+      : await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: asKey(config.public_key),
+      });
+    await api.post(SUBSCRIBE, { endpoint: sub.endpoint, keys: keysOf(sub) });
+    forget(MUTED);
+    return { ok: true };
+  } catch {
+    return { ok: false, detail: 'This browser would not take the address. Try again.' };
   }
-  const reg = await worker();
-  const held = await reg.pushManager.getSubscription();
-  // An address filed under a key we no longer hold is a dead one — the push
-  // service shrugs at every card sealed for the new half. Throw it and re-take.
-  const keeps = held !== null && filedKey(held) === config.public_key;
-  if (held && !keeps) await held.unsubscribe();
-  const sub = keeps
-    ? held!
-    : await reg.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: asKey(config.public_key),
-    });
-  const keys = keysOf(sub);
-  await api.post(SUBSCRIBE, { endpoint: sub.endpoint, keys });
-  return { ok: true };
+}
+
+/**
+ * Turn alerts on as soon as the site is open.
+ *
+ * The member's ask is that Exposing want the right up front instead of leaving
+ * it to be found in Settings. Two things keep that from turning into nagging:
+ * a browser that already holds the right is only re-filed, never re-asked, and
+ * a browser that was asked once is not asked again — the answer sticks either
+ * way, and Chrome starts refusing an origin that keeps knocking.
+ */
+export async function autoPush(): Promise<PushState> {
+  if (!pushSupported() || !API_ENABLED) return 'unsupported';
+  if (Notification.permission === 'denied') return 'blocked';
+  if (Notification.permission === 'granted') {
+    // The right is already held — including by a member who allowed it from the
+    // address bar without ever finding the switch. Keep the address pointed at
+    // whoever signs in now and take one when the browser has none, but leave a
+    // browser that was switched off by hand alone.
+    if (read(MUTED)) return 'off';
+    await syncPush();
+    if (await hasAddress()) return 'on';
+    return (await enablePush()).ok ? 'on' : 'off';
+  }
+  // Nothing answered yet. Ask once per browser: the prompt's own answer sticks,
+  // and a member who dismissed it has the switch in Settings to say yes later.
+  if (read(ASKED)) return 'off';
+  await untilVisible();
+  remember(ASKED);
+  return (await enablePush()).ok ? 'on' : 'off';
+}
+
+/** Remember that this browser was switched off by hand, so arrival leaves it be. */
+export function mutePush(): void {
+  remember(MUTED);
 }
 
 /** Silence this browser, here and at the server, in whichever order they work. */

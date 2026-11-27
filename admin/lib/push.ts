@@ -19,8 +19,34 @@ const SW_PATH = '/sw.js';
 const CONFIG = 'admin/push/config/';
 const SUBSCRIBE = 'admin/push/subscribe/';
 const UNSUBSCRIBE = 'admin/push/unsubscribe/';
+// The ask is remembered per browser: Chrome shows its prompt a couple of times
+// and then refuses the origin outright for a console that keeps knocking.
+const ASKED = 'exposing.console.asked';
+// And so is a switch the seat turned off by hand, which arrival must not undo.
+const MUTED = 'exposing.console.muted';
 
 export type PushState = 'on' | 'off' | 'blocked' | 'unsupported';
+
+/** The two flags live in storage that a private window can refuse to give. */
+function read(key: string): boolean {
+  try {
+    return window.localStorage.getItem(key) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function remember(key: string): void {
+  try {
+    window.localStorage.setItem(key, '1');
+  } catch { /* nothing kept, so the next load simply asks again */ }
+}
+
+function forget(key: string): void {
+  try {
+    window.localStorage.removeItem(key);
+  } catch { /* nothing kept in the first place */ }
+}
 
 /** What this browser is physically able to do, before anybody is asked. */
 export function pushSupported(): boolean {
@@ -77,41 +103,98 @@ export async function pushState(): Promise<PushState> {
   }
 }
 
+async function hasAddress(): Promise<boolean> {
+  try {
+    return !!(await (await worker()).pushManager.getSubscription());
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Chrome answers a permission call from a page nobody is looking at with a
+ * refusal the seat never saw, so the arrival ask waits for the tab to come
+ * forward rather than burning the shot the origin gets.
+ */
+function untilVisible(): Promise<void> {
+  if (document.visibilityState === 'visible') return Promise.resolve();
+  return new Promise(resolve => {
+    const wake = () => {
+      if (document.visibilityState !== 'visible') return;
+      document.removeEventListener('visibilitychange', wake);
+      resolve();
+    };
+    document.addEventListener('visibilitychange', wake);
+  });
+}
+
 /**
  * Ask, subscribe, hand the address over.
  *
- * The prompt is only ever raised from a click: a screen that asks on arrival
- * gets dismissed by reflex, and a dismissal sticks for a while.
+ * Nothing here throws: a browser that will not register its worker, or a server
+ * that is briefly unreachable, has to come back as an answer the screen can
+ * show. A click whose promise rejects leaves the button switched off forever,
+ * which reads to a seat as a control that does nothing.
  */
 export async function enablePush(): Promise<{ ok: boolean; detail?: string }> {
   if (!pushSupported()) return { ok: false, detail: 'This browser cannot receive notifications.' };
   if (Notification.permission === 'denied') {
     return { ok: false, detail: 'Notifications are blocked for this site. Allow them in the address bar.' };
   }
-  const permission = await Notification.requestPermission();
-  if (permission !== 'granted') return { ok: false, detail: 'Notifications were not allowed.' };
-
-  const config = await api<{ enabled: boolean; public_key: string }>(CONFIG);
-  if (!config.enabled || !config.public_key) {
-    return { ok: false, detail: 'Push is not switched on at Exposing yet.' };
+  try {
+    if (Notification.permission !== 'granted') {
+      const permission = await Notification.requestPermission();
+      if (permission !== 'granted') return { ok: false, detail: 'Notifications were not allowed.' };
+    }
+    const config = await api<{ enabled: boolean; public_key: string }>(CONFIG);
+    if (!config.enabled || !config.public_key) {
+      return { ok: false, detail: 'Push is not switched on at Exposing yet.' };
+    }
+    const reg = await worker();
+    const held = await reg.pushManager.getSubscription();
+    // An address filed under a key we no longer hold is a dead one — the push
+    // service shrugs at every card sealed for the new half. Throw it and re-take.
+    const keeps = held !== null && filedKey(held) === config.public_key;
+    if (held && !keeps) await held.unsubscribe();
+    const sub = keeps
+      ? held!
+      : await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: asKey(config.public_key),
+      });
+    await api(SUBSCRIBE, { method: 'POST', body: { endpoint: sub.endpoint, keys: keysOf(sub) } });
+    forget(MUTED);
+    return { ok: true };
+  } catch {
+    return { ok: false, detail: 'This browser would not take the address. Try again.' };
   }
-  const reg = await worker();
-  const held = await reg.pushManager.getSubscription();
-  // An address filed under a key we no longer hold is a dead one — the push
-  // service shrugs at every card sealed for the new half. Throw it and re-take.
-  const keeps = held !== null && filedKey(held) === config.public_key;
-  if (held && !keeps) await held.unsubscribe();
-  const sub = keeps
-    ? held!
-    : await reg.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: asKey(config.public_key),
-    });
-  await api(SUBSCRIBE, {
-    method: 'POST',
-    body: { endpoint: sub.endpoint, keys: keysOf(sub) },
-  });
-  return { ok: true };
+}
+
+/**
+ * Turn alerts on as soon as the console is open.
+ *
+ * A seat that already holds the right is re-filed and never re-asked, a seat
+ * that was asked once is not asked again, and a browser whose switch was turned
+ * off by hand stays off.
+ */
+export async function autoPush(): Promise<PushState> {
+  if (!pushSupported()) return 'unsupported';
+  if (Notification.permission === 'denied') return 'blocked';
+  if (Notification.permission === 'granted') {
+    if (read(MUTED)) return 'off';
+    await syncPush();
+    if (await hasAddress()) return 'on';
+    return (await enablePush()).ok ? 'on' : 'off';
+  }
+  if (read(ASKED)) return 'off';
+  await untilVisible();
+  remember(ASKED);
+  return (await enablePush()).ok ? 'on' : 'off';
+}
+
+/** Remember that this browser was switched off by hand, so arrival leaves it be. */
+export function mutePush(): void {
+  remember(MUTED);
 }
 
 /** Silence this browser, here and at the server, in whichever order they work. */

@@ -16,7 +16,7 @@ import {
 } from './dto';
 import { bindListCache, coinRequestsFragment, dropListRow, forgetLists, inboxListDef, listingsFragment, notificationsFragment, promotionsFragment, postsFragment, pushListRow, refreshList, removeListRow, walletFragment } from './lists';
 import { emitLive, onLive } from './live';
-import { disablePush, pushSupported, syncPush } from './push';
+import { autoPush, disablePush, pushSupported } from './push';
 import { bumpNew } from './newCount';
 
 type Target = 'post' | 'comment' | 'media';
@@ -291,11 +291,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [pathname]);
 
   useEffect(() => {
+    // The right belongs to the browser, not the seat, so a visitor is asked the
+    // moment the site opens instead of after they find a setting. A guest cannot
+    // file an address yet; the next effect does that once they have a session.
+    void autoPush();
+  }, []);
+
+  useEffect(() => {
     // Whoever signs in owns this browser's address for as long as the seat
-    // lasts. The call is cheap when nothing is subscribed and does nothing at
-    // all when the member never allowed notifications.
+    // lasts, and a browser that has never been asked is asked now rather than
+    // whenever the member finds the switch in Settings. Both calls do nothing at
+    // all to a member who has already said no.
     if (!API_ENABLED || !db.meId) return;
-    void syncPush();
+    void autoPush();
   }, [db.meId]);
 
   useEffect(() => {
