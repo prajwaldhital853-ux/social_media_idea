@@ -28,7 +28,7 @@ self.addEventListener('push', (event) => {
   }
   const options = {
     body: card.body || '',
-    // One card per thread or per post: the tenth message in a conversation
+    // One card per thread or per post, so the tenth message in a conversation
     // replaces the ninth instead of stacking ten deep over the same shelf.
     tag: card.tag || 'exposing',
     icon: '/exposing-icon.png',
@@ -38,7 +38,14 @@ self.addEventListener('push', (event) => {
   // A card that replaces another is silent unless it asks to be heard again —
   // which is how a second message from the same person still makes a noise.
   if (card.renotify) options.renotify = true;
-  event.waitUntil(self.registration.showNotification(card.title || 'Exposing', options));
+  event.waitUntil((async () => {
+    // Somebody reading the page in front of them does not need to be told about
+    // it. The tray updates live, so a card here would only cover up the thing
+    // it is describing — the wake-up is for the background and the closed tab.
+    const tabs = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    if (tabs.some((tab) => tab.visibilityState === 'visible')) return;
+    await self.registration.showNotification(card.title || 'Exposing', options);
+  })());
 });
 
 self.addEventListener('notificationclick', (event) => {
