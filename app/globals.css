@@ -6856,6 +6856,13 @@ a.wallet-sec-note:hover { color: var(--brand); text-decoration: underline; }
   background: var(--calm);
   scrollbar-width: thin; scrollbar-color: var(--line) transparent;
 }
+/* A short thread reads from the foot of the column, not from its crown. The
+   spare height belongs under the last bubble, so the keyboard lifting the
+   compose row takes the conversation with it instead of leaving the bubbles
+   hanging under the name. Once the thread is taller than the box there is no
+   spare height left, this margin settles to nothing and the scroll behaves
+   like any other top-down list. */
+.chat-thread::before { content: ''; margin-top: auto; flex-shrink: 0; }
 .chat-thread::-webkit-scrollbar { width: 8px; }
 .chat-thread::-webkit-scrollbar-track { background: transparent; }
 .chat-thread::-webkit-scrollbar-thumb { background: var(--line); border-radius: 8px; }
