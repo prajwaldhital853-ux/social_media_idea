@@ -76,11 +76,11 @@ def admin_alert_feed(request):
 @permission_classes([IsAuthenticated])
 @rbac.staff_only('overview')
 def admin_promotion_analytics(request):
-    """Views, opens, reactions, comments, saves, followers and coins per campaign.
+    """Views, opens, reactions, comments, saves, followers, messages and coins per campaign.
 
-    The two metrics with no event behind them come back as `unmeasured` sentences
-    rather than zeros, so the screen says what is not known instead of implying a
-    campaign achieved nothing.
+    A metric with no events behind it still comes back as an `unmeasured` sentence
+    rather than a zero, so the screen says what is not known instead of implying a
+    campaign achieved nothing. Nothing on the table is unmeasured any more.
 
     `limit` and `offset` page the table, because scoring a campaign costs a
     handful of queries and a platform with three hundred promotions should not

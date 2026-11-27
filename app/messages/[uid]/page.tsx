@@ -12,12 +12,19 @@ import { User } from '@/lib/types';
 /**
  * A thread opened from an advert's "Message now" carries the question the payer
  * wants answered, so the reader starts a beat into the conversation rather than
- * from a blank line. The sentence rides on the URL, which is what makes the
- * button a normal link a phone can hand to another app.
+ * from a blank line. Both halves ride on the URL — the sentence, and the campaign
+ * that paid for it — which is what makes the button a normal link a phone can
+ * hand to another app.
  */
 function SeededThread({ other }: { other: User }) {
   const query = useSearchParams();
-  return <ChatThread other={other} seed={query.get('text') || undefined} />;
+  return (
+    <ChatThread
+      other={other}
+      seed={query.get('text') || undefined}
+      promo={query.get('promo') || undefined}
+    />
+  );
 }
 
 export default function ConversationPage() {

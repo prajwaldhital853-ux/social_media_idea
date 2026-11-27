@@ -281,6 +281,16 @@ export function mapPromotion(row: any): Promotion {
     impressions: amount(row.impressions),
     clicks: amount(row.clicks),
     profileVisits: amount(row.profile_visits),
+    messages: amount(row.messages),
+    reach: amount(row.reach),
+    cpm: row.cpm === null || row.cpm === undefined ? null : amount(row.cpm),
+    cpr: row.cpr === null || row.cpr === undefined ? null : amount(row.cpr),
+    conversionRate: row.conversion_rate === null || row.conversion_rate === undefined
+      ? null : amount(row.conversion_rate),
+    engagementRate: row.engagement_rate === null || row.engagement_rate === undefined
+      ? null : amount(row.engagement_rate),
+    quality: row.quality === 'above' || row.quality === 'average' || row.quality === 'below' ? row.quality : null,
+    editedAt: at(row.edited_at),
     targetLabel: row.target_label || undefined,
   };
 }

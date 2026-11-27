@@ -482,12 +482,10 @@ class PromotionPerformanceTests(TestCase):
         self.assertEqual(row['metrics']['comments'], 0, 'a listing has no comment thread')
         self.assertIsNone(row['click_rate'], 'nobody saw it, so a rate would be a division by nothing')
 
-    def test_one_metric_is_named_as_unmeasured_instead_of_shown_as_zero(self):
+    def test_no_metric_is_left_as_an_unmeasured_gap(self):
         row = self._row()
-        self.assertEqual(set(row['unmeasured']), {'listing_messages'})
-        for key in row['unmeasured']:
-            self.assertNotIn(key, row['metrics'], 'a gap in instrumentation must not arrive as a result')
-            self.assertGreater(len(row['unmeasured'][key]), 20, 'and it has to say why')
+        self.assertEqual(row['unmeasured'], {})
+        self.assertIn('messages', row['metrics'], 'a chat the advert carried the reader into is counted')
         self.assertEqual(len(stats.METRIC_LABELS), len(row['metrics']) + len(row['unmeasured']))
 
 
@@ -570,7 +568,7 @@ class OverviewEndpointTests(RbacTestCase):
         self.assertEqual(len(response.data['metrics']), 9)
         self.assertEqual(response.data['rows'][0]['owner'], 'booster')
         self.assertEqual(response.data['totals']['views'], 90)
-        self.assertEqual(set(response.data['unmeasured']), {'listing_messages'})
+        self.assertEqual(response.data['unmeasured'], {})
 
     def test_the_row_count_is_a_number_even_when_the_query_string_is_not(self):
         owner = self.session('client_owner')

@@ -836,6 +836,19 @@ export interface PromoRow {
   charged: boolean;
   impressions: number;
   clicks: number;
+  /** Readers the paid card walked to the payer's page. */
+  profile_visits: number;
+  /** A message that really left the reader's composer, credited to this campaign. */
+  messages: number;
+  /** The rates the payer's own wallet reads, from the same two ledgers. */
+  reach: number;
+  cpm: number | null;
+  cpr: number | null;
+  conversion_rate: number | null;
+  engagement_rate: number | null;
+  quality: 'above' | 'average' | 'below' | null;
+  /** When the payer last moved the audience themselves, or null for never. */
+  edited_at: string | null;
   /** What the package promised, what the ledger has handed out, and how many
    *  separate people that reached, `people` is only answered on one campaign. */
   reach_bought: number;

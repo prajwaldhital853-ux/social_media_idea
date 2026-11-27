@@ -112,7 +112,9 @@ export default function ListingPage() {
 
   const contact = () => {
     if (!me) { router.push('/login'); return; }
-    router.push(`/messages/${seller?.username || listing.uid}`);
+    // The campaign id rides along so a message written from an advertised listing is
+    // credited to the listing's own run, at the server's door rather than here.
+    router.push(`/messages/${seller?.username || listing.uid}${promo ? `?promo=${promo.id}` : ''}`);
   };
 
   const save = () => {

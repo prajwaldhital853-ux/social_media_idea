@@ -33,7 +33,7 @@ from apps.marketplace.models import Listing
 from apps.notifications.services import notify
 from apps.posts.models import Post
 from apps.promotions.models import Promotion
-from apps.promotions.services import people_reached
+from apps.promotions.services import campaign_figures
 from apps.wallet.models import Transaction, Wallet, apply as coin_apply
 
 from . import review, settings_store
@@ -244,13 +244,20 @@ def owed(promo, action, now=None):
     return Decimal('0')
 
 
-def row(promo, last=None, deep=False):
-    """One campaign as the desk sees it: who paid, what they bought, what is on it."""
+def row(promo, last=None, deep=False, figures=None):
+    """One campaign as the desk sees it: who paid, what they bought, what is on it.
+
+    `figures` is what `campaign_figures` answers for a whole page at once. A caller
+    that has the page passes it, because the ranking inside those figures reads every
+    campaign on the platform and running it per row would make a queue of forty rows
+    do that scan forty times.
+    """
     last = last if last is not None else latest(promo.pk)
     now = timezone.now()
     state = sign_off(promo, last)
     target = target_of(promo)
     pack = package_by_id(promo.package)
+    tuned = figures or campaign_figures([promo])[promo.pk]
     out = {
         'id': promo.pk,
         'owner': promo.owner.username,
@@ -280,12 +287,24 @@ def row(promo, last=None, deep=False):
         'impressions': promo.impressions,
         'clicks': promo.clicks,
         'profile_visits': promo.profile_visits,
+        # The reader who went as far as writing to the payer. Counted at the chat's
+        # own door, from the campaign the advert actually carried them out of.
+        'messages': promo.messages,
+        # The last time the payer moved the audience themselves — the answer to "why
+        # did this run's numbers turn around on the ninth?".
+        'edited_at': promo.edited_at.isoformat() if promo.edited_at else None,
+        'reach': tuned['reach'],
+        'cpm': tuned['cpm'],
+        'cpr': tuned['cpr'],
+        'conversion_rate': tuned['conversion_rate'],
+        'engagement_rate': tuned['engagement_rate'],
+        'quality': tuned['quality'],
         # What the package promised against what the ledger has actually handed out.
         # A payer reading "up to 40,000 people" beside a campaign that reached 300 is
         # a conversation the desk should be able to have without opening a console.
         'reach_bought': (pack or {}).get('reach_max') or 0,
         'delivered': promo.impressions,
-        'people': people_reached(promo.pk) if deep else None,
+        'people': tuned['reach'] if deep else None,
         'created_at': promo.created_at.isoformat(),
         'starts_at': promo.starts_at.isoformat() if promo.starts_at else None,
         'ends_at': promo.ends_at.isoformat() if promo.ends_at else None,

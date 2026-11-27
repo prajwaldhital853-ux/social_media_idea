@@ -53,10 +53,10 @@ class PromotionSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'owner', 'owner_username', 'target_type', 'target_id', 'category', 'age_min', 'age_max',
             'country', 'cities', 'budget', 'package', 'status', 'impressions', 'clicks', 'profile_visits',
-            'created_at', 'starts_at', 'ends_at',
+            'messages', 'edited_at', 'created_at', 'starts_at', 'ends_at',
         ]
-        read_only_fields = ['id', 'owner', 'status', 'impressions', 'clicks', 'profile_visits',
-                            'created_at', 'starts_at', 'ends_at']
+        read_only_fields = ['id', 'owner', 'status', 'impressions', 'clicks', 'profile_visits', 'messages',
+                            'edited_at', 'created_at', 'starts_at', 'ends_at']
 
     def validate_cities(self, value):
         return clean_cities(value)
@@ -92,10 +92,15 @@ def _rows(promos):
     """
     promos = list(promos)
     labels = services.target_labels(promos)
+    # The rates travel with the rows rather than from a second door, so the screen a
+    # payer reads is built from the same two ledgers in the same request — and shows
+    # the figures as of the moment it was answered.
+    figures = services.campaign_figures(promos)
     out = []
     for promo in promos:
         row = PromotionSerializer(promo).data
         row['target_label'] = labels.get((promo.target_type, str(promo.target_id or '')), '')
+        row.update(figures.get(promo.pk) or {})
         out.append(row)
     return out
 
@@ -172,7 +177,7 @@ def promotion_track(request, pk):
     def counted():
         return {
             'id': promo.pk, 'impressions': promo.impressions, 'clicks': promo.clicks,
-            'profile_visits': promo.profile_visits,
+            'profile_visits': promo.profile_visits, 'messages': promo.messages,
         }
 
     event = request.data.get('event')
@@ -180,6 +185,8 @@ def promotion_track(request, pk):
     # to be allowed to post. It is not wrong, it is just not the source any more.
     if event == 'impression':
         return Response(counted())
+    # A reader cannot report the message they sent. Only the chat's own door writes
+    # that one, because only that door knows a sentence actually left the composer.
     if event not in (PromoEvent.Kind.CLICK, PromoEvent.Kind.PROFILE):
         return Response({'detail': 'Unknown event.'}, status=400)
     if not request.user.is_authenticated or promo.status != Promotion.Status.ACTIVE:
@@ -247,7 +254,10 @@ def promotion_update(request, pk):
         return Response({'detail': 'age_min cannot exceed age_max.'}, status=400)
     if promo.age_min < 13 or promo.age_max > 100:
         return Response({'detail': 'Age range must sit between 13 and 100.'}, status=400)
-    promo.save(update_fields=fields)
+    # The payer's own stamp, and only theirs — a seat's decision has its ledger. This
+    # is what explains a run whose numbers change halfway through: the audience moved.
+    promo.edited_at = timezone.now()
+    promo.save(update_fields=[*fields, 'edited_at'])
     return Response(_row(promo))
 
 

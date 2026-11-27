@@ -25,6 +25,7 @@ from apps.common.api import person
 from apps.common.pagination import KeysetPagination
 from apps.moderation.models import Report
 from apps.promotions.models import Promotion
+from apps.promotions.services import campaign_figures
 
 from . import promotions, rbac, review
 from .models import PromoReview
@@ -115,8 +116,12 @@ def promotion_queue(request):
             'promotion', '-created_at', '-id'):
         last.setdefault(item.promotion_id, item)
     tuned = promotions.algorithm()
+    # One figures read for the whole page: the ranking inside it looks at every
+    # campaign on the platform, which a row at a time would make forty scans of the
+    # same table on a queue page.
+    figures = campaign_figures(rows)
     response = paginator.get_paginated_response(
-        [promotions.row(item, last.get(item.pk), deep=True) for item in rows])
+        [promotions.row(item, last.get(item.pk), deep=True, figures=figures.get(item.pk)) for item in rows])
     response.data.update({
         'counts': _counts(),
         'state': state,

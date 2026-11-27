@@ -38,13 +38,14 @@ export default function WalletOverviewPage() {
     PAGED_WINDOW);
   const promos = mine.slice(0, limit);
 
-  // The three figures answer for every campaign this client knows, not the ten
+  // The four figures answer for every campaign this client knows, not the ten
   // rows on screen: a total that moved with the scroll would sit a different
   // number over the list it came from.
   const known = me ? db.promotions.filter(p => p.uid === me.id) : [];
   const running = known.filter(p => p.status === 'active' || p.status === 'paused');
   const reach = known.reduce((sum, p) => sum + p.impressions, 0);
   const spent = known.reduce((sum, p) => sum + p.coins, 0);
+  const answered = known.reduce((sum, p) => sum + (p.messages || 0), 0);
 
   // The caption usually rides the post rows, which this screen never asks for; the
   // server's own line for the advertised target is what stops a live campaign from
@@ -86,6 +87,7 @@ export default function WalletOverviewPage() {
           <div><b>{running.length}</b><span>{t('active')}</span></div>
           <div><b>{reach.toLocaleString('en-US')}</b><span>{t('impressions')}</span></div>
           <div><b>{spent}</b><span>{t('spent')}</span></div>
+          <div><b>{answered.toLocaleString('en-US')}</b><span title={t('conversionHint')}>{t('promoMessages')}</span></div>
         </div>
         {mine.length === 0 ? (serverMode && !list.loaded ? (
           <div className="wallet-rows" aria-hidden="true">
@@ -99,7 +101,9 @@ export default function WalletOverviewPage() {
               <div className="wallet-entry" key={p.id}>
                 <span className="wallet-entry-main">
                   <b>{targetTitle(p.targetType, p.targetId, p.targetLabel)}</b>
-                  <small>{ago(p.ts, db.lang)} · {t('clicks')} {p.clicks}</small>
+                  <small>
+                    {ago(p.ts, db.lang)} · {t('clicks')} {p.clicks} · {t('promoMessages')} {(p.messages || 0).toLocaleString('en-US')}
+                  </small>
                 </span>
                 <StatusChip status={p.status} />
               </div>

@@ -491,6 +491,7 @@ export default function Comments({ postId, onClose, mediaIndex }: { postId: stri
                 key={kind}
                 type="button"
                 className={`comment-reaction-icon ${myPostReaction === kind ? 'on' : ''}`}
+                data-kind={kind}
                 title={t(kind)}
                 aria-label={t(kind)}
                 aria-pressed={myPostReaction === kind}

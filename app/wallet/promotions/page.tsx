@@ -13,6 +13,23 @@ import { Promotion } from '@/lib/types';
 const pct = (clicks: number, impressions: number) =>
   impressions > 0 ? `${Math.round((clicks / impressions) * 1000) / 10}%` : '—';
 
+// A rate the server could not divide has no number yet, and a dash is the honest
+// thing to sit in its place: a 0 here would read as "nobody answered".
+const num = (value?: number | null, suffix = '') =>
+  value === null || value === undefined ? '—' : `${value}${suffix}`;
+
+const cnt = (value?: number | null) =>
+  value === null || value === undefined ? '—' : value.toLocaleString('en-US');
+
+type QualityKey = 'qualityAbove' | 'qualityAverage' | 'qualityBelow' | 'qualitySoon';
+
+const QUALITY: Record<NonNullable<Promotion['quality']>, QualityKey> = {
+  above: 'qualityAbove', average: 'qualityAverage', below: 'qualityBelow',
+};
+
+const qualityLabel = (value: Promotion['quality'], t: (key: QualityKey) => string) =>
+  value ? t(QUALITY[value]) : t('qualitySoon');
+
 const daysLeft = (ends: number) => Math.max(0, Math.ceil((ends - Date.now()) / 86400000));
 
 export default function WalletPromotionsPage() {
@@ -82,13 +99,24 @@ export default function WalletPromotionsPage() {
 
               <div className="promo-figures">
                 <div><b>{p.impressions.toLocaleString('en-US')}</b><span>{t('impressions')}</span></div>
+                <div><b>{cnt(p.reach)}</b><span title={t('reachHint')}>{t('reachCount')}</span></div>
                 <div><b>{p.clicks.toLocaleString('en-US')}</b><span>{t('clicks')}</span></div>
                 <div><b>{(p.profileVisits || 0).toLocaleString('en-US')}</b><span>{t('profileVisits')}</span></div>
+                <div><b title={t('conversionHint')}>{(p.messages || 0).toLocaleString('en-US')}</b><span>{t('promoMessages')}</span></div>
                 <div><b>{pct(p.clicks, p.impressions)}</b><span>{t('openRate')}</span></div>
                 <div><b title={waiting ? t('notChargedYet') : undefined}>{p.coins}</b><span>{waiting ? t('notChargedYet') : t('spent')}</span></div>
               </div>
 
               <dl className="promo-facts">
+                <div><dt title={t('cpmHint')}>{t('cpm')}</dt><dd>{num(p.cpm, ' coins')}</dd></div>
+                <div><dt title={t('cprHint')}>{t('cpr')}</dt><dd>{num(p.cpr, ' coins')}</dd></div>
+                <div><dt title={t('conversionHint')}>{t('conversionRate')}</dt><dd>{num(p.conversionRate, '%')}</dd></div>
+                <div><dt title={t('engagementHint')}>{t('engagementRate')}</dt><dd>{num(p.engagementRate, '%')}</dd></div>
+                <div><dt title={t('qualityHint')}>{t('qualityRank')}</dt><dd>{qualityLabel(p.quality, t)}</dd></div>
+                <div>
+                  <dt>{t('lastEdited')}</dt>
+                  <dd>{p.editedAt ? ago(p.editedAt, db.lang) : t('neverEdited')}</dd>
+                </div>
                 <div><dt>{t('package')}</dt><dd>{pack(p)}</dd></div>
                 <div><dt>{t('category')}</dt><dd>{p.category || '—'}</dd></div>
                 <div><dt>{t('targetAge')}</dt><dd>{t('ageRange', { min: p.ageMin, max: p.ageMax })}</dd></div>

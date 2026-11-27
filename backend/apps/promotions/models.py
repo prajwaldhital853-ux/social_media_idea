@@ -38,6 +38,13 @@ class Promotion(models.Model):
     # selling, that tap is closer to a sale than the ad view was, and until a reader's
     # tap is written down the number simply does not exist.
     profile_visits = models.PositiveIntegerField(default=0)
+    # How many readers the paid card walked into the payer's chat and then actually
+    # wrote to them. A tap on the button only opens a window — the message is the
+    # answer, and it is the one number a payer would call a result.
+    messages = models.PositiveIntegerField(default=0)
+    # The last time the payer moved the audience themselves. Staff decisions have
+    # their own ledger, so this single line stays the owner's own edit stamp.
+    edited_at = models.DateTimeField(null=True, blank=True)
     # When the money was actually taken and the run actually began — approval, not
     # the order. A campaign that was never approved has no start and no bill.
     starts_at = models.DateTimeField(null=True, blank=True)
@@ -106,6 +113,7 @@ class PromoEvent(models.Model):
     class Kind(models.TextChoices):
         CLICK = 'click', 'Opened the promoted post'
         PROFILE = 'profile', 'Visited the payer'
+        MESSAGE = 'message', 'Messaged the payer'
 
     promotion = models.ForeignKey(Promotion, on_delete=models.CASCADE, related_name='events')
     viewer = models.ForeignKey(

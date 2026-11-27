@@ -100,9 +100,12 @@ function ShareCard({ path, postId, index }: { path: string; postId: string; inde
  *
  * `seed` is a sentence the reader arrived with — an advert's "Message now"
  * button writes the question so the first thing they do is send it, not invent
- * it. It fills the composer; it never sends anything by itself.
+ * it. It fills the composer; it never sends anything by itself. `promo` is the
+ * campaign that sentence came from, and it is spent on the first message that
+ * actually leaves the composer, which is the only thing worth billing an advert
+ * for.
  */
-export default function ChatThread({ other, seed }: { other: User; seed?: string }) {
+export default function ChatThread({ other, seed, promo }: { other: User; seed?: string; promo?: string }) {
   const router = useRouter();
   const { db, me, t, setDb, markThreadRead, sendMessage, serverMode } = useApp();
   const lang = db.lang;
@@ -358,7 +361,7 @@ export default function ChatThread({ other, seed }: { other: User; seed?: string
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!me || !text.trim()) return;
-    void sendMessage(other.id, text);
+    void sendMessage(other.id, text, promo);
     setText('');
     inputRef.current?.focus();
   };

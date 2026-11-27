@@ -25,6 +25,14 @@ const STAMP: Record<string, { tone: string; label: string }> = {
 
 type Verb = 'approve' | 'pause' | 'resume' | 'reject' | 'stop';
 
+/** How this card answered against the other adverts on the platform, which is the
+ *  only comparison the ledger can actually make. */
+const RANK: Record<string, { tone: string; label: string }> = {
+  above: { tone: 'good', label: 'Above the platform average' },
+  average: { tone: 'mute', label: 'At the platform average' },
+  below: { tone: 'warn', label: 'Below the platform average' },
+};
+
 /**
  * An order that has not been approved has no run to pause and no money to hand
  * back, so the only two things a seat can do to it are take the coins or refuse.
@@ -215,7 +223,38 @@ export default function CampaignPage({ params }: { params: { id: string } }) {
                 <li><span>People reached</span><b>{row.people === null ? 'not counted' : num(row.people)}</b></li>
                 <li><span>Reach bought</span><b>{row.reach_bought ? `${num(row.reach_bought)} people` : 'nothing promised'}</b></li>
                 <li><span>Clicks</span><b>{num(row.clicks)}</b></li>
+                <li><span>Profile visits</span><b>{num(row.profile_visits)}</b></li>
+                {/* The only number on this list a payer would call a result: a chat
+                    the advert walked somebody into, and a sentence they sent. */}
+                <li><span>Messages sent</span><b>{num(row.messages)}</b></li>
                 <li><span>Standing</span><b><span className={`pill ${standing.tone}`}>{standing.label}</span></b></li>
+              </ul>
+            </Section>
+
+            <Section title="What the answers cost">
+              <ul className="promo-facts" data-rates>
+                <li><span>Cost per thousand (CPM)</span>
+                  <b>{row.cpm === null ? (row.charged ? 'nobody has seen it yet' : 'no coins taken yet') : `${num(row.cpm)} coins`}</b>
+                </li>
+                <li><span>Cost per message (CPR)</span>
+                  <b>{row.cpr === null ? `${num(row.messages)} messages so far` : `${num(row.cpr)} coins`}</b>
+                </li>
+                <li><span>Tap to message</span>
+                  <b>{row.conversion_rate === null ? 'nobody tapped through yet' : `${row.conversion_rate}%`}</b>
+                </li>
+                <li><span>Engagement rate</span>
+                  <b>{row.engagement_rate === null ? 'nobody saw it yet' : `${row.engagement_rate}%`}</b>
+                </li>
+                <li><span>Quality ranking</span>
+                  <b>
+                    {RANK[row.quality || '']
+                      ? <span className={`pill ${RANK[row.quality || ''].tone}`}>{RANK[row.quality || ''].label}</span>
+                      : 'too few showings to rank'}
+                  </b>
+                </li>
+                <li><span>Last edit by the payer</span>
+                  <b>{row.edited_at ? `${ago(row.edited_at)} (${stamp(row.edited_at)})` : 'audience never changed'}</b>
+                </li>
               </ul>
             </Section>
 

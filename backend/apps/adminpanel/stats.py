@@ -338,9 +338,10 @@ def health(cutoffs, media=None):
 
 # --- promotion performance ---------------------------------------------------
 
-# The contract's nine metrics. One has no event behind it anywhere in this codebase,
-# and the API says so per campaign instead of sending a number that would be read as
-# "zero people did it".
+# The contract's nine metrics. Every one of them has an event behind it now: the last
+# one used to be the honest gap — a message carried no listing id, so no campaign
+# could be credited with it. The chat now knows which advert walked the reader in, and
+# counts the sentence that was actually sent rather than the button that was tapped.
 METRIC_LABELS = (
     ('views', 'Views'),
     ('opens', 'Opens'),
@@ -349,12 +350,10 @@ METRIC_LABELS = (
     ('comments', 'Comments'),
     ('saves', 'Saves'),
     ('new_followers', 'New followers'),
-    ('listing_messages', 'Listing messages'),
+    ('messages', 'Messages'),
     ('coins_spent', 'Coins spent'),
 )
-UNMEASURED = {
-    'listing_messages': 'A message carries no listing id, so no campaign can be credited with it.',
-}
+UNMEASURED = {}
 
 
 def _window_of(promo, now):
@@ -415,6 +414,9 @@ def promotion_row(promo, now):
             'new_followers': Follow.objects.filter(
                 followee_id=promo.owner_id, status=Follow.Status.ACCEPTED, **span,
             ).count(),
+            # Written by the chat's own door, and only for a reader the reach ledger
+            # says this campaign was handed to — so it is a result the money bought.
+            'messages': promo.messages,
             # Coins only count as spent once approval has actually taken them; an
             # order still in the queue has cost its payer nothing.
             'coins_spent': int(promo.budget or 0) if promo.starts_at else 0,

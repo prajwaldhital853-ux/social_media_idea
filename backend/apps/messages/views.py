@@ -177,6 +177,15 @@ def thread(request, username):
         # told; whoever is here already sees the bubble land.
         if not is_watching(other.pk, request.user.pk):
             notify_latest(other, request.user, 'message', f'{request.user.username} sent you a message.', 'user', request.user.pk)
+        # The advert's own number is written here and nowhere else: a tap on
+        # "Message now" only opens a window, and the payer is buying the sentence
+        # that came out of it. `credited` refuses a campaign this reader was never
+        # actually shown, so a chat that was going to happen anyway stays unclaimed.
+        from apps.promotions import services as promo_services
+        from apps.promotions.models import PromoEvent
+        campaign = promo_services.credited(request.user, request.data.get('promo'), other.pk)
+        if campaign is not None:
+            promo_services.answer(request.user, campaign, PromoEvent.Kind.MESSAGE)
         broadcast_message(message, [request.user.pk, other.pk])
         return Response(MessageSerializer(message).data, status=status.HTTP_201_CREATED)
     conversation = Conversation.objects.filter(participants=request.user).filter(participants=other).first()

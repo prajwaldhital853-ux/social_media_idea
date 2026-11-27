@@ -148,11 +148,13 @@ export default function PostCard({ post, author, featured }: PostCardProps) {
   // An advert is bought for an answer, not for a look. The button says the same
   // thing on every paid card and hands the reader a message already started, so
   // the step from "somebody paid for me to see this" to "I asked them about it"
-  // is one tap — and that tap is the click the payer is billed for.
+  // is one tap — and that tap is the click the payer is billed for. The campaign id
+  // rides along so the message at the other end can be credited to the card that
+  // carried it, rather than to the button that was once pressed.
   const askText = (post.text || '').trim()
     ? t('promoAsk', { text: post.text.trim().slice(0, 80) })
     : t('promoAskBare');
-  const askHref = `/messages/${author.username}?text=${encodeURIComponent(askText)}`;
+  const askHref = `/messages/${author.username}?text=${encodeURIComponent(askText)}${promo ? `&promo=${promo.id}` : ''}`;
   const openAsk = () => {
     answer('click');
     router.push(me ? askHref : '/login');

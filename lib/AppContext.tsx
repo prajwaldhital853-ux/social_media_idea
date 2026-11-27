@@ -68,7 +68,7 @@ interface AppContextType {
   notify: (uid: string, kind: NotificationKind, text: string, href?: string, actor?: string) => void;
   markAllRead: () => Promise<void>;
   markRead: (id: string) => Promise<void>;
-  sendMessage: (to: string, text: string) => Promise<void>;
+  sendMessage: (to: string, text: string, promo?: string) => Promise<void>;
   deleteConversation: (to: string) => Promise<boolean>;
   markThreadRead: (username: string, opts?: { force?: boolean }) => Promise<void>;
   addReport: (type: 'post' | 'comment' | 'listing' | 'profile', targetId: string, reason: string, note: string) => Promise<void>;
@@ -544,6 +544,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
             impressions: Number(p.impressions) || 0,
             clicks: Number(p.clicks) || 0,
             profileVisits: Number(p.profile_visits) || 0,
+            messages: Number(p.messages) || 0,
+            reach: Number(p.reach) || 0,
+            // A rate the server could not divide arrives as nothing, and nothing is
+            // what stays on the screen — a 0 here would read as a campaign nobody
+            // answered rather than one that has not happened enough to divide.
+            cpm: p.cpm ?? null, cpr: p.cpr ?? null,
+            conversionRate: p.conversion_rate ?? null,
+            engagementRate: p.engagement_rate ?? null,
+            quality: p.quality ?? null,
           }] });
         });
       } else if (p.kind === 'warning') {
@@ -1719,7 +1728,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } catch { /* the worst case is a dot that returns on reload */ }
   };
 
-  const sendMessage = async (to: string, text: string) => {
+  // `promo` is the campaign the advert was carrying the reader in from. It buys the
+  // server nothing on its own — only a message that really left the composer is
+  // counted, and only against a campaign the reach ledger says it was shown.
+  const sendMessage = async (to: string, text: string, promo?: string) => {
     const self = currentMe();
     const body = text.trim();
     if (!self || !body) return;
@@ -1743,7 +1755,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const optimistic = { id: uid(), from: self.id, to, text: body, ts: Date.now(), read: false, status: 'sent' as const };
     setDb(prev => ({ ...prev, messages: [...prev.messages, optimistic] }));
     try {
-      const row = await api.post<any>(`/api/messages/${username}/`, { text: body });
+      const row = await api.post<any>(`/api/messages/${username}/`, {
+        text: body, ...(promo ? { promo } : {}),
+      });
       const real = mapMessage(row, self.id, to);
       setDb(prev => {
         // A live wire can beat the response to the same row. Whichever arrives

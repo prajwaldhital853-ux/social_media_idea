@@ -273,7 +273,9 @@ export default function ReelsFeed({ initialKey }: { initialKey?: string }) {
                 const seed = slide.post.text?.trim()
                   ? t('promoAsk', { text: slide.post.text.trim().slice(0, 80) })
                   : t('promoAskBare');
-                router.push(me ? `/messages/${slide.author.username}?text=${encodeURIComponent(seed)}` : '/login');
+                router.push(me
+                  ? `/messages/${slide.author.username}?text=${encodeURIComponent(seed)}${promo ? `&promo=${promo.id}` : ''}`
+                  : '/login');
               };
               return (
                 <div className="reel-slide" key={slide.key}>
@@ -384,6 +386,7 @@ export default function ReelsFeed({ initialKey }: { initialKey?: string }) {
                     {paid && (
                       <div className="reel-promo">
                         <span className="reel-promo-chip">{IC.chart}{t('promoted')}</span>
+                        <p className="reel-promo-tag">{t('promoTagline')}</p>
                         <button type="button" className="reel-promo-cta" onClick={askReel}>
                           {IC.msg}
                           <span>{t('messageNow')}</span>

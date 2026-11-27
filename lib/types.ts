@@ -250,6 +250,21 @@ export interface Promotion {
   clicks: number;
   /** Readers the paid card walked to the payer's own page. */
   profileVisits?: number;
+  /** Readers who went on to actually write to the payer from this card. */
+  messages?: number;
+  /** Separate people the card was handed to, read off the reach ledger. */
+  reach?: number;
+  /** Coins per thousand showings, and per message. Absent while nothing has been charged. */
+  cpm?: number | null;
+  cpr?: number | null;
+  /** Of the readers who tapped the card, how many sent the message. */
+  conversionRate?: number | null;
+  /** Everything anybody did with the card, as a share of the showings. */
+  engagementRate?: number | null;
+  /** Against the platform's own middle. Null until the card has been seen enough to rank. */
+  quality?: 'above' | 'average' | 'below' | null;
+  /** The last time the payer moved the audience themselves. Zero means never. */
+  editedAt?: number;
   /** The server's own line naming what the campaign advertises, for a target the page never loaded. */
   targetLabel?: string;
 }

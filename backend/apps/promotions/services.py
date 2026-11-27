@@ -16,6 +16,7 @@ the ledger's own count, never a number a client POSTs.
 """
 
 from datetime import timedelta
+import statistics
 
 from django.db import IntegrityError, transaction as db_atomic
 from django.db.models import Count, F, Q
@@ -23,6 +24,19 @@ from django.utils import timezone
 from django.utils.dateparse import parse_date
 
 from .models import Promotion, PromoEvent, PromoImpression
+
+# Which tally on the campaign row each answered card moves. The ledger and the
+# counter are kept in step inside one transaction, so a counter is only ever a
+# number a row can be shown to have produced.
+COUNTER = {
+    PromoEvent.Kind.CLICK: 'clicks',
+    PromoEvent.Kind.PROFILE: 'profile_visits',
+    PromoEvent.Kind.MESSAGE: 'messages',
+}
+
+# The showings a campaign needs before its answer rate is a rate worth ranking it
+# on. Two readers and one tap is a coin flip, not a quality signal.
+QUALITY_FLOOR = 10
 
 # The numbers the platform shipped with, so a feed still scores the same way on a
 # server where nobody has opened the desk and the settings row does not exist yet.
@@ -430,7 +444,7 @@ def answer(user, promo, kind, today=None):
     if not user.is_authenticated or promo is None:
         return False
     day = today or timezone.now().date()
-    column = 'clicks' if kind == PromoEvent.Kind.CLICK else 'profile_visits'
+    column = COUNTER[kind]
     try:
         with db_atomic.atomic():
             PromoEvent.objects.create(promotion=promo, viewer=user, day=day, kind=kind)
@@ -441,6 +455,96 @@ def answer(user, promo, kind, today=None):
     return True
 
 
+def credited(user, promo_id, other_id):
+    """The campaign a chat was walked in from, if it still deserves the credit.
+
+    A message is a result of an advert only when the advert is what put the reader
+    there: the campaign still runs, the person on the other end of the thread is the
+    one who paid for it, and the reach ledger says this reader was handed the card.
+    Anything else is a conversation that was going to happen anyway, and billing it
+    to a campaign would sell the payer a result their coins never bought.
+    """
+    key = str(promo_id or '')
+    if not key.isdigit() or not user.is_authenticated:
+        return None
+    promo = Promotion.objects.filter(
+        pk=int(key), owner_id=other_id, status=Promotion.Status.ACTIVE,
+    ).first()
+    if promo is None:
+        return None
+    if not PromoImpression.objects.filter(promotion=promo, viewer=user).exists():
+        return None
+    return promo
+
+
+def _rate(numerator, denominator, places):
+    """A division that says when it has no denominator.
+
+    A rate only exists above a real number of things. `None` is the answer that
+    reads correctly on an analytics screen — "not enough has happened yet" — where a
+    zero would be read as a campaign nobody answered.
+    """
+    return round(numerator / denominator, places) if denominator else None
+
+
+def quality_ranks():
+    """Above, average or below the platform's own middle, by answer rate.
+
+    An advert competing for the same scroll can only be ranked against the other
+    adverts on this platform, which is the comparison actually available and the one
+    that can be explained to a payer. The yard is the share of paid showings a card
+    got somebody to answer, and the band around the middle stops a campaign that
+    simply *is* the middle from reading as an outlier.
+    """
+    rows = list(Promotion.objects.filter(impressions__gte=QUALITY_FLOOR).values(
+        'pk', 'impressions', 'clicks', 'profile_visits', 'messages'))
+    if not rows:
+        return {}
+    rates = sorted(
+        (row['clicks'] + row['profile_visits'] + row['messages']) / row['impressions'] for row in rows)
+    mid = statistics.median(rates)
+    out = {}
+    for row in rows:
+        rate = (row['clicks'] + row['profile_visits'] + row['messages']) / row['impressions']
+        out[row['pk']] = ('above' if rate > mid * 1.15
+                          else 'below' if rate < mid * 0.85 else 'average')
+    return out
+
+
+def campaign_figures(promos):
+    """Every rate a campaign can be shown, from the two ledgers and nothing else.
+
+    Each number is a division between things the platform wrote down — the reach
+    ledger that sold the impression, the answer ledger that banked the tap, and the
+    bill a seat actually took. So a payer reading cost per thousand or a conversion
+    rate is reading their own campaign's arithmetic, and a campaign that has spent
+    nothing, having never been approved, has no cost figures at all.
+    """
+    promos = list(promos)
+    people = people_reached([promo.pk for promo in promos])
+    ranks = quality_ranks()
+    out = {}
+    for promo in promos:
+        answers = promo.clicks + promo.profile_visits + promo.messages
+        # A run that no seat approved has a promise and no bill, so it has no cost
+        # figures either. Printing "0 coins per thousand" for it would be a number
+        # nobody paid.
+        spent = float(promo.budget or 0) if promo.starts_at else 0.0
+        out[promo.pk] = {
+            # Reach is people, not showings: a package sells "up to 3,000 people".
+            'reach': people.get(promo.pk, 0),
+            # Everything a reached person did with the card, added once.
+            'answers': answers,
+            'cpm': _rate(spent * 1000, promo.impressions, 2) if spent else None,
+            'cpr': _rate(spent, promo.messages, 1) if spent else None,
+            # Of the readers who tapped the advert, how many went on to write.
+            'conversion_rate': _rate(promo.messages * 100.0, promo.clicks, 1),
+            'engagement_rate': _rate(answers * 100.0, promo.impressions, 1),
+            'quality': ranks.get(promo.pk),
+        }
+    return out
+
+
 def report_to_owner(promo_id):
     """Tell the payer what their campaign has added up to, in the ledger's own numbers.
 
@@ -448,16 +552,23 @@ def report_to_owner(promo_id):
     pulse, which left an analytics screen showing the figures as of the moment its tab
     was opened. One small frame per answered person is the cost of a live number, and
     it is bounded by the same once-a-day rule the ledger already keeps. The frame
-    carries the totals rather than a delta so a repeated frame is harmless.
+    carries the totals rather than a delta so a repeated frame is harmless, and it
+    carries the divided figures too — a payer watching a campaign sees the cost per
+    thousand move with the showing that produced it, not only after a reload.
     """
     try:
         from apps.common import pulse
-        row = Promotion.objects.filter(pk=promo_id).values(
-            'owner_id', 'impressions', 'clicks', 'profile_visits').first()
-        if row and row['owner_id']:
-            pulse.to_user(row['owner_id'], 'promo_metric', id=str(promo_id),
-                          impressions=row['impressions'], clicks=row['clicks'],
-                          profile_visits=row['profile_visits'])
+        promo = Promotion.objects.filter(pk=promo_id).first()
+        if promo and promo.owner_id:
+            tuned = campaign_figures([promo]).get(promo.pk, {})
+            pulse.to_user(promo.owner_id, 'promo_metric', id=str(promo.pk),
+                          impressions=promo.impressions, clicks=promo.clicks,
+                          profile_visits=promo.profile_visits, messages=promo.messages,
+                          reach=tuned.get('reach'), cpm=tuned.get('cpm'),
+                          cpr=tuned.get('cpr'),
+                          conversion_rate=tuned.get('conversion_rate'),
+                          engagement_rate=tuned.get('engagement_rate'),
+                          quality=tuned.get('quality'))
     except Exception:  # noqa: BLE001 - the number is already banked; the wire is a courtesy
         pass
 

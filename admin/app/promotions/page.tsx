@@ -234,14 +234,15 @@ export default function PromotionsScreen() {
           <table className="grid review">
             <thead>
               <tr>
-                <th style={{ width: '17%' }}>Who bought reach</th>
-                <th style={{ width: '8%' }}>Coins</th>
-                <th style={{ width: '13%' }}>Package bought</th>
+                <th style={{ width: '16%' }}>Who bought reach</th>
+                <th style={{ width: '6%' }}>Coins</th>
+                <th style={{ width: '11%' }}>Package bought</th>
                 <th style={{ width: '22%' }}>What it sells</th>
-                <th style={{ width: '12%' }}>Audience</th>
-                <th style={{ width: '10%' }}>Run left</th>
-                <th style={{ width: '10%' }}>Standing</th>
-                <th style={{ width: '6%' }}>Decided</th>
+                <th style={{ width: '10%' }}>Audience</th>
+                <th style={{ width: '9%' }}>Run left</th>
+                <th style={{ width: '7%' }}>Messages</th>
+                <th style={{ width: '9%' }}>Standing</th>
+                <th style={{ width: '8%' }}>Decided</th>
                 <th style={{ width: '2%' }} aria-label="Actions"/>
               </tr>
             </thead>
@@ -305,6 +306,14 @@ function Campaign({ row }: { row: PromoRow }) {
               : row.left_hours === null ? 'open run' : `${Math.round(row.left_hours / 24)} d`}</b>
           </span>
           <p className="promo-wait">{Math.round(row.age_hours)} h since {billed ? 'approved' : 'ordered'}</p>
+        </td>
+        <td data-label="Messages" className="num" data-messages>
+          <b>{num(row.messages)}</b>
+          <p className="promo-wait">
+            {row.conversion_rate === null
+              ? `${num(row.clicks)} tap${row.clicks === 1 ? '' : 's'}, no chat yet`
+              : `${row.conversion_rate}% of taps became a chat`}
+          </p>
         </td>
         <td data-label="Standing"><span className={`pill ${standing.tone}`}>{standing.label}</span></td>
         <td data-label="Decided" className="dim">
