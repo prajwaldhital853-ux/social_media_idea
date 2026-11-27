@@ -85,10 +85,11 @@ export async function mediaMetadata(id: string, index: number): Promise<Metadata
   const who = clip(row.author_name || row.author_username, 60);
   const items = (row.media || []).filter((m: any) => m.url || m.file);
   const shown = items[n];
-  const still = shown && shown.kind !== 'video' ? abs(shown.url || shown.file) : '';
+  const moving = !!shown && shown.kind === 'video';
+  const still = moving ? '' : abs(shown?.url || shown?.file);
   const album = items.length > 1 ? ` (${n + 1}/${items.length})` : '';
   return card(
-    clip(`${who}${album} — Photo on Exposing`, 90),
+    clip(`${who}${album} — ${moving ? 'Clip' : 'Photo'} on Exposing`, 90),
     clip(row.text) || (still ? 'See this photo on Exposing.' : 'Watch this clip on Exposing.'),
     path,
     [still || stills(row)[0] || face(row)],
