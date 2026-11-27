@@ -12,7 +12,7 @@ import { IC } from '@/lib/icons';
 
 // The popover is a jump list, not the inbox: twelve threads, then the screen.
 const PANEL_ROWS = 12;
-// Three names from the band, so the conversations already running keep the rest.
+// A few names from the band, so the conversations already running keep the rest.
 const PANEL_BAND = 3;
 
 export default function MessengerPanel({ close }: { close: () => void }) {
@@ -27,7 +27,9 @@ export default function MessengerPanel({ close }: { close: () => void }) {
     !needle || c.other.name.toLowerCase().includes(needle) || c.other.username.toLowerCase().includes(needle)
   );
   const band = matching.filter(c => c.suggested).slice(0, PANEL_BAND);
-  const shown = [...band, ...matching.filter(c => !c.suggested)].slice(0, PANEL_ROWS);
+  // The threads lead here too: a message that landed a second ago is what the
+  // reader opened this panel for, and the band only offers a place to start.
+  const shown = [...matching.filter(c => !c.suggested), ...band].slice(0, PANEL_ROWS);
 
   const go = (username: string) => {
     closeLayerWithoutBack();
