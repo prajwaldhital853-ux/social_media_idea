@@ -164,19 +164,28 @@ def on_promotion(instance, created, update_fields, **kwargs):
     """A campaign entered or moved in the queue, including a new waiting order."""
     if _demo(instance.owner):
         return
-    if created or 'status' in (update_fields or []):
-        transaction.on_commit(lambda: _promotion_pulse(instance))
-    started = (created and instance.status == Promotion.Status.ACTIVE) or (
-        not created and 'status' in (update_fields or []) and instance.status == Promotion.Status.ACTIVE
-    )
-    if not started:
+    if not (created or 'status' in (update_fields or [])):
+        # Retargeting a waiting order moves nothing in the queue; the bell rings for
+        # work to do, not for every save of a row that was already waiting.
         return
-    announce(
-        'promotion',
-        f'@{instance.owner.username} put a {instance.target_type} behind a campaign',
-        '/promotions?status=active',
-        'promotions_view',
-    )
+    transaction.on_commit(lambda: _promotion_pulse(instance))
+    if instance.status == Promotion.Status.PENDING:
+        # A member's order is reviewable the second it is placed. Waiting for the
+        # approval to ring the bell would mean the desk only ever hears about work
+        # after somebody already found it by hand.
+        announce(
+            'promotion',
+            f'@{instance.owner.username} asked the desk to approve a {instance.target_type} campaign',
+            '/promotions?status=pending',
+            'promotions_view',
+        )
+    elif instance.status == Promotion.Status.ACTIVE:
+        announce(
+            'promotion',
+            f'@{instance.owner.username} put a {instance.target_type} behind a campaign',
+            '/promotions?status=active',
+            'promotions_view',
+        )
 
 
 def _promotion_pulse(instance):

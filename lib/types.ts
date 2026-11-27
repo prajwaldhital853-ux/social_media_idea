@@ -250,6 +250,8 @@ export interface Promotion {
   clicks: number;
   /** Readers the paid card walked to the payer's own page. */
   profileVisits?: number;
+  /** The server's own line naming what the campaign advertises, for a target the page never loaded. */
+  targetLabel?: string;
 }
 
 export interface PromoPackage {

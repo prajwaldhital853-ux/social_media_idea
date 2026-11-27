@@ -334,23 +334,52 @@ def ad_priors(promos, weights):
     return out
 
 
-def served_promos(user, day=None):
-    """The campaigns this person was already handed today, by advertised post id.
+def live_campaigns(post_ids):
+    """Every campaign running right now against these posts, by advertised post id.
 
-    A paid card takes one slot per campaign, so on the next page that post is back in
-    the ordinary walk — and an unlabelled copy of it reads as a chronological listing
-    of somebody's advert, which is the one thing a promotion should never look like.
-    The feed therefore marks those rows as promoted without spending a second slot.
+    A paid post does not stop being an advert because it reached the second page, the
+    author's own profile or a link opened from outside the app. The payer bought the
+    reach and the reader is owed the line over the row wherever the platform hands it
+    to them, so this answers the disclosure question for any door that returns posts.
+    Metering stays where it was — a label spends no slot and writes no impression — so
+    an organic read of a promoted post cannot inflate the reach a package promised.
     """
-    if not user.is_authenticated:
+    keys = [str(pk) for pk in post_ids if pk]
+    if not keys:
         return {}
     rows = Promotion.objects.filter(
         status=Promotion.Status.ACTIVE,
         target_type=Promotion.Target.POST,
-        impression_rows__viewer=user,
-        impression_rows__day=day or timezone.now().date(),
-    ).distinct()
-    return {str(promo.target_id): promo for promo in rows if str(promo.target_id or '').isdigit()}
+        target_id__in=keys,
+    ).filter(Q(ends_at__isnull=True) | Q(ends_at__gt=timezone.now())).select_related('owner')
+    return {str(promo.target_id): promo for promo in rows}
+
+
+def target_labels(promos):
+    """One line per campaign naming the thing it advertises, keyed by (type, id).
+
+    The wallet screens used to reach into this browser's own post cache for the title,
+    and nothing on those screens ever filled that cache — so a cold load of a live,
+    running campaign read "This post is not available" under a link to a post that
+    existed. The server was handed the target when the order was placed; it can say
+    what it is in two grouped reads instead of one per row.
+    """
+    posts = [int(promo.target_id) for promo in promos
+             if promo.target_type == Promotion.Target.POST and str(promo.target_id or '').isdigit()]
+    listings = [int(promo.target_id) for promo in promos
+                if promo.target_type == Promotion.Target.LISTING and str(promo.target_id or '').isdigit()]
+    out = {}
+    if posts:
+        from apps.posts.models import Post
+        captions = dict(Post.Activity.choices)
+        for row in Post.objects.filter(pk__in=posts).values('pk', 'text', 'activity'):
+            text = (row['text'] or '').strip()
+            out[(Promotion.Target.POST, str(row['pk']))] = (text[:70] or captions.get(row['activity'] or '', ''))
+    if listings:
+        from apps.marketplace.models import Listing
+        for row in Listing.objects.filter(pk__in=listings).values('pk', 'title'):
+            out[(Promotion.Target.LISTING, str(row['pk']))] = (row['title'] or '')[:70]
+    return out
 
 
 def seen_today(user):
@@ -366,21 +395,27 @@ def serving(user, promos, today=None):
     One row per campaign per person per day, and the campaign's own tally only
     ever goes up when a row was really added — so the number a payer is charged
     against is the number the ledger can be read back to.
+
+    The frame to the payer rides on `on_commit`, for the reason every other pulse in
+    the platform does: a tab must never be told a number the transaction has not
+    agreed to keep. A decision taken inside another transaction is therefore reported
+    when the outer one lands, which is the right answer anyway.
     """
     if not promos or not user.is_authenticated:
         return 0
     day = today or timezone.now().date()
-    written = 0
+    told = []
     for promo in promos:
         try:
             with db_atomic.atomic():
                 PromoImpression.objects.create(promotion=promo, viewer=user, day=day)
                 Promotion.objects.filter(pk=promo.pk).update(impressions=F('impressions') + 1)
-                written += 1
+                db_atomic.on_commit(lambda pk=promo.pk: report_to_owner(pk))
+                told.append(promo)
         except IntegrityError:
             # Another page of theirs got there first; a duplicate is not reach.
             continue
-    return written
+    return len(told)
 
 
 def answer(user, promo, kind, today=None):
@@ -400,9 +435,31 @@ def answer(user, promo, kind, today=None):
         with db_atomic.atomic():
             PromoEvent.objects.create(promotion=promo, viewer=user, day=day, kind=kind)
             Promotion.objects.filter(pk=promo.pk).update(**{column: F(column) + 1})
+            db_atomic.on_commit(lambda pk=promo.pk: report_to_owner(pk))
     except IntegrityError:
         return False
     return True
+
+
+def report_to_owner(promo_id):
+    """Tell the payer what their campaign has added up to, in the ledger's own numbers.
+
+    The counters rise through a queryset `update()`, which fires no signal and so no
+    pulse, which left an analytics screen showing the figures as of the moment its tab
+    was opened. One small frame per answered person is the cost of a live number, and
+    it is bounded by the same once-a-day rule the ledger already keeps. The frame
+    carries the totals rather than a delta so a repeated frame is harmless.
+    """
+    try:
+        from apps.common import pulse
+        row = Promotion.objects.filter(pk=promo_id).values(
+            'owner_id', 'impressions', 'clicks', 'profile_visits').first()
+        if row and row['owner_id']:
+            pulse.to_user(row['owner_id'], 'promo_metric', id=str(promo_id),
+                          impressions=row['impressions'], clicks=row['clicks'],
+                          profile_visits=row['profile_visits'])
+    except Exception:  # noqa: BLE001 - the number is already banked; the wire is a courtesy
+        pass
 
 
 def candidates(user, limit=2, target_type=None, tuned=None):

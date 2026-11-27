@@ -9,7 +9,7 @@ from apps.common.errors import throttle_text
 from apps.common.pagination import KeysetPagination
 from apps.common.rules import blocked_wording, post_limits_gate, rate, room, seat, write_gate
 from apps.follows.models import Block, Follow
-from apps.promotions.services import plan, served_promos, serving
+from apps.promotions.services import live_campaigns, plan, serving
 
 from .models import Post, PostMedia, SharedPost
 from .serializers import PostSerializer
@@ -99,15 +99,29 @@ class PostViewSet(viewsets.ModelViewSet):
         one would plant a cache entry of its own.
         """
         if request.user.is_authenticated or request.query_params.get('cursor') or request.query_params.get('q'):
-            return super().list(request, *args, **kwargs)
+            return self.labeled(super().list(request, *args, **kwargs))
         key = f'feed-anon:{request.get_full_path()}'
         cached = cache.get(key)
         if cached is not None:
             return Response(cached)
-        response = super().list(request, *args, **kwargs)
+        response = self.labeled(super().list(request, *args, **kwargs))
         seconds = guest_feed_seconds()
         if seconds:
             cache.set(key, response.data, seconds)
+        return response
+
+    def labeled(self, response):
+        """Every shelf wears the label, not just the one the algorithm was paid for.
+
+        The cached anonymous page is labelled before it is stored, so a stranger who
+        arrives a minute later reads the same disclosure as the first one did.
+        """
+        mark_promoted(response.data.get('results') or [])
+        return response
+
+    def retrieve(self, request, *args, **kwargs):
+        response = super().retrieve(request, *args, **kwargs)
+        mark_promoted([response.data])
         return response
 
     def create(self, request, *args, **kwargs):
@@ -224,6 +238,28 @@ def promo_card(promo):
     }
 
 
+def mark_promoted(items):
+    """Say, row by row, which of these posts somebody is paying to put in front of people.
+
+    Every door that hands out posts goes through here, because a disclosure that only
+    exists on the feed is not a disclosure: the same advert read on the author's
+    profile, on the saved shelf or from a shared link looked like an ordinary post, and
+    the only copy wearing the label was the one the algorithm had placed. It cannot be
+    a per-reader answer either — the anonymous first page is one cached response handed
+    to every stranger — so what a paid post is made of is the same fact for everyone,
+    and the metering stays inside the slot the feed actually spent.
+    """
+    live = live_campaigns([item.get('id') for item in items])
+    for item in items:
+        promo = live.get(str(item.get('id')))
+        if promo is None:
+            item['promoted'] = False
+            continue
+        item['promoted'] = True
+        item['promo_id'] = promo.pk
+        item['promo'] = promo_card(promo)
+
+
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def feed(request):
@@ -284,15 +320,7 @@ def _feed_page(request):
     # a second one, but its post is still sitting in the ordinary walk below. Marked
     # as promoted there too, or the payer's advert turns up twice and only the copy
     # nobody paid for wears the label.
-    spent = served_promos(request.user)
-    for item in data:
-        promo = spent.get(str(item['id']))
-        if promo is None:
-            item['promoted'] = False
-            continue
-        item['promoted'] = True
-        item['promo_id'] = promo.pk
-        item['promo'] = promo_card(promo)
+    mark_promoted(data)
     if promo_ids:
         # The sponsored slot is still a post: a private author or a followers-only
         # ad must not reach a stranger because somebody paid for it.

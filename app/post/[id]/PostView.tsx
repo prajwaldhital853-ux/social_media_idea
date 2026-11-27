@@ -52,10 +52,10 @@ export default function PostPage() {
         </div>
       ) : remote === 'error' ? (
         <p className="feed-empty">
-          Could not load this post. <button type="button" className="ghost-btn" onClick={pull}>{t('retry')}</button>
+          {t('postFailed')} <button type="button" className="ghost-btn" onClick={pull}>{t('retry')}</button>
         </p>
       ) : (
-        <p className="feed-empty">This post is not available.</p>
+        <p className="feed-empty">{t('unavailable')}</p>
       )}
     </div>
   </AppShell>;

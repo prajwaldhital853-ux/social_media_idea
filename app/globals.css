@@ -6718,6 +6718,17 @@ a.wallet-sec-note:hover { color: var(--brand); text-decoration: underline; }
 /* ---------- Notifications ---------- */
 .notif-view { animation: fadeIn .2s ease; }
 .notif-mark { padding: 7px 12px; font-size: 12.5px; }
+/* The mobile shell hides every page's header row because its own top bar carries
+   the chrome — but the mark-all-read tick belongs to this list, and a phone user
+   with forty unread rows had no way to clear them. The row comes back here, and the
+   button keeps only its icon so the copy still gets a full line. */
+@media (max-width: 768px) {
+  .notif-view .home-header-row { display: flex; padding: 8px 12px 4px; }
+  .notif-view .header-title { font-size: 18px; }
+  .notif-view .header-sub { font-size: 12.5px; }
+  .notif-view .notif-mark { padding: 8px; }
+  .notif-view .notif-mark span { display: none; }
+}
 .notif-list { padding: 4px 0 28px; }
 .notif-group-label {
   margin: 0; padding: 14px 16px 6px; font-size: 12.5px; font-weight: 800; color: var(--muted);
@@ -6858,6 +6869,12 @@ a.wallet-sec-note:hover { color: var(--brand); text-decoration: underline; }
   display: flex; flex-direction: column; height: var(--visible-height, 100vh);
   background: var(--paper); animation: fadeIn .18s ease;
 }
+/* The thread scrolls on its own, so the page must not be a screen taller than the one
+   the browser is showing. `min-height: 100vh` on the shell and its column made the
+   document longer than a phone's visual viewport, and pulling the compose row up
+   scrolled the page instead of the thread and left the spare height showing as a white
+   band under the conversation. */
+.chat-page, .chat-page .main { min-height: 0; }
 .chat-header { flex-shrink: 0; position: static; animation: none; }
 .chat-header-id {
   display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0;
@@ -6871,6 +6888,9 @@ a.wallet-sec-note:hover { color: var(--brand); text-decoration: underline; }
 .chat-thread {
   flex: 1; overflow-y: auto; padding: 14px 14px 8px; display: flex; flex-direction: column;
   background: var(--calm);
+  /* Reaching the top of an old conversation hands the gesture back to the page, which
+     is exactly the drag that used to lift the compose row into white space. */
+  overscroll-behavior: contain;
   scrollbar-width: thin; scrollbar-color: var(--line) transparent;
 }
 /* A short thread reads from the foot of the column, not from its crown. The

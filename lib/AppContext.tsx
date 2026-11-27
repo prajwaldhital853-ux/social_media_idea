@@ -14,7 +14,7 @@ import {
   idOf, at, mapComment, mapFollow, mapMe, mapMessage, mapNotification, mapPerson, mapPost, mapPromotion,
   mapReport, mapSettings, mediaPayload, profilePatch, reactionsOfPost, toPostPayload, toProfilePayload,
 } from './dto';
-import { bindListCache, forgetLists, inboxListDef, listingsFragment, notificationsFragment, postsFragment, pushListRow, refreshList, removeListRow, walletFragment } from './lists';
+import { bindListCache, coinRequestsFragment, forgetLists, inboxListDef, listingsFragment, notificationsFragment, promotionsFragment, postsFragment, pushListRow, refreshList, removeListRow, walletFragment } from './lists';
 import { emitLive, onLive } from './live';
 
 type Target = 'post' | 'comment' | 'media';
@@ -507,14 +507,42 @@ export function AppProvider({ children }: { children: ReactNode }) {
           if (!row) return prev;
           return applyFragment(prev, { saved: [{ ...row, coins: Math.round(Number(p.balance) || 0) }] } as any);
         });
-        void refreshList('wallet', { path: '/wallet/', frag: walletFragment(selfId) });
+        // The two wallet lists, not a key no screen mounts: the balance line and the
+        // row that explains it are asked for in one breath, or a debit shows as a
+        // number that moved with nothing behind it.
+        void refreshList('wallet-ledger', { path: '/wallet/', frag: walletFragment(selfId) });
+        void refreshList('coin-requests', { path: '/wallet/requests/list/', frag: coinRequestsFragment });
       } else if (p.kind === 'promotion') {
         setDb(prev => {
           const row = prev.promotions.find(x => x.id === String(p.id));
           if (!row) return prev;
-          return applyFragment(prev, { promotions: [{ ...row, status: String(p.status || row.status) as Promotion['status'] }] });
+          const starts = p.starts_at ? at(p.starts_at) : row.starts || 0;
+          const ends = p.ends_at ? at(p.ends_at) : row.ends;
+          return applyFragment(prev, { promotions: [{
+            ...row,
+            status: String(p.status || row.status) as Promotion['status'],
+            starts,
+            ends,
+            // The approval is what takes the coins, and the clock the frame carries is
+            // the line between "spent" and "quoted" — the same rule the DTO applies when
+            // a page is first read, so a live decision costs the payer the same figure a
+            // reload would have shown.
+            coins: starts ? row.budget || 0 : 0,
+          }] });
         });
+        void refreshList('promotions', { path: '/promotions/', frag: promotionsFragment });
         void pullBadges();
+      } else if (p.kind === 'promo_metric') {
+        setDb(prev => {
+          const row = prev.promotions.find(x => x.id === String(p.id));
+          if (!row) return prev;
+          return applyFragment(prev, { promotions: [{
+            ...row,
+            impressions: Number(p.impressions) || 0,
+            clicks: Number(p.clicks) || 0,
+            profileVisits: Number(p.profile_visits) || 0,
+          }] });
+        });
       } else if (p.kind === 'warning') {
         void pullBadges();
         void pullSession();
@@ -1732,8 +1760,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setDb(prev => ({ ...prev, audit: [{ id: uid(), ts: Date.now(), actor: self.id, action, target, reason }, ...prev.audit] }));
   };
 
+  // A campaign with no end date is a run that goes on until the payer stops it, so an
+  // absent `ends_at` is not an expired one. Reading it as expiry is what made the
+  // "Why am I seeing this" card answer nothing on a post that was plainly advertised.
   const activePromo = (targetType: 'post' | 'listing', targetId: string) =>
-    db.promotions.find(p => p.targetType === targetType && p.targetId === targetId && p.status === 'active' && p.ends > Date.now());
+    db.promotions.find(p => p.targetType === targetType && p.targetId === targetId
+      && p.status === 'active' && (!p.ends || p.ends > Date.now()));
 
   const promoEligible = (promo: Promotion) => {
     const self = currentMe();

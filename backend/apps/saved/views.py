@@ -9,7 +9,7 @@ from apps.common.pagination import KeysetPagination
 from apps.marketplace.models import Listing
 from apps.marketplace.views import ListingSerializer
 from apps.posts.serializers import PostSerializer
-from apps.posts.views import visible_posts
+from apps.posts.views import mark_promoted, visible_posts
 
 from .models import SavedListing, SavedPost
 
@@ -35,6 +35,7 @@ def saved_posts(request):
     paginator = KeysetPagination()
     rows = paginator.paginate_queryset(qs, request)
     data = PostSerializer([r.post for r in rows], many=True, context={'request': request}).data
+    mark_promoted(data)
     return paginator.get_paginated_response(data)
 
 

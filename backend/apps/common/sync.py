@@ -17,6 +17,7 @@ from apps.follows.suggest import suggested_accounts
 from apps.messages.models import Message
 from apps.notifications.models import Notification
 from apps.promotions.models import Promotion
+from apps.promotions.services import target_labels
 from apps.saved.models import SavedListing, SavedPost
 from apps.wallet.models import Wallet
 
@@ -147,6 +148,7 @@ def sync(request):
         read_at__isnull=True, conversation__participants=user
     ).exclude(sender=user).count()
     own_promotions = Promotion.objects.filter(owner=user).order_by('-created_at')[:20]
+    promo_labels = target_labels(own_promotions)
 
     return Response({
         'me': me_payload(user),
@@ -175,6 +177,7 @@ def sync(request):
                 'created_at': promo.created_at,
                 'starts_at': promo.starts_at,
                 'ends_at': promo.ends_at,
+                'target_label': promo_labels.get((promo.target_type, str(promo.target_id or '')), ''),
             }
             for promo in own_promotions
         ],

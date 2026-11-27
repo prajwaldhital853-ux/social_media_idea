@@ -78,7 +78,26 @@ class PromotionSerializer(serializers.ModelSerializer):
 
 
 def _row(promo):
-    return PromotionSerializer(promo).data
+    return _rows([promo])[0]
+
+
+def _rows(promos):
+    """The campaigns as their payer reads them, with the advert named in words.
+
+    A row alone is `post 431`, which the wallet can only turn into a caption if the
+    post happens to be sitting in the page's cache — and it usually is not, so the
+    list of things being advertised read as "Post not available". One lookup per page
+    carries the line the server already knows, and the client's cache becomes a
+    nicer phrasing rather than the only source.
+    """
+    promos = list(promos)
+    labels = services.target_labels(promos)
+    out = []
+    for promo in promos:
+        row = PromotionSerializer(promo).data
+        row['target_label'] = labels.get((promo.target_type, str(promo.target_id or '')), '')
+        out.append(row)
+    return out
 
 
 @api_view(['GET', 'POST'])
@@ -127,7 +146,7 @@ def promotion_list(request):
     qs = Promotion.objects.filter(owner=request.user).select_related('owner')
     paginator = KeysetPagination()
     rows = paginator.paginate_queryset(qs, request)
-    return paginator.get_paginated_response([_row(promo) for promo in rows])
+    return paginator.get_paginated_response(_rows(rows))
 
 
 @api_view(['POST'])
@@ -182,7 +201,7 @@ def promotion_queue(request):
         qs = qs.filter(status=request.query_params['status'])
     paginator = KeysetPagination()
     rows = paginator.paginate_queryset(qs, request)
-    data = [_row(promo) for promo in rows]
+    data = _rows(rows)
     for promo, item in zip(rows, data):
         item['owner_card'] = person(promo.owner)
     return paginator.get_paginated_response(data)

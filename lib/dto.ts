@@ -281,6 +281,7 @@ export function mapPromotion(row: any): Promotion {
     impressions: amount(row.impressions),
     clicks: amount(row.clicks),
     profileVisits: amount(row.profile_visits),
+    targetLabel: row.target_label || undefined,
   };
 }
 

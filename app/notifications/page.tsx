@@ -26,7 +26,10 @@ export default function NotificationsPage() {
   const today = all.filter(n => n.ts >= todayStart);
   const earlier = all.filter(n => n.ts < todayStart);
   const shown = today.length + earlier.length;
-  const { limit, pending, sentinel, hasMore } = useWindowed(shown, 20, 'notifications',
+  // Ten at a time, which is the same cut the server pages its answer by, so one
+  // screen step is exactly one round trip rather than a window that runs ahead of
+  // the rows that exist.
+  const { limit, pending, sentinel, hasMore } = useWindowed(shown, 10, 'notifications',
     serverMode ? {
       hasMore: feed.hasMore, loading: feed.loading, load: feed.loadMore,
       loaded: feed.loaded, error: feed.error, retry: feed.reload,
@@ -54,7 +57,8 @@ export default function NotificationsPage() {
           </div>
           <div className="header-actions">
             {unread > 0 && (
-              <button type="button" className="ghost-btn notif-mark" onClick={markAllRead}>
+              <button type="button" className="ghost-btn notif-mark" onClick={markAllRead}
+                title={t('markAllRead')} aria-label={t('markAllRead')}>
                 {IC.check}<span>{t('markAllRead')}</span>
               </button>
             )}
@@ -98,11 +102,11 @@ export default function NotificationsPage() {
               ))}
             </section>
           ))}
-          {pending && hasMore && (
-            <div className="people-skeleton" aria-hidden="true">
+          {pending && hasMore && [0, 1, 2].map(i => (
+            <div className="people-skeleton" key={`sk-${i}`} aria-hidden="true">
               <span className="sk-avatar" /><span className="sk-lines"><i /><i /></span>
             </div>
-          )}
+          ))}
           {hasMore && <div ref={sentinel} className="feed-sentinel" aria-hidden="true" />}
         </div>
       )}

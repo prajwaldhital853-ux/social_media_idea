@@ -14,10 +14,13 @@ export default function WalletOverviewPage() {
   const reach = promos.reduce((sum, p) => sum + p.impressions, 0);
   const spent = promos.reduce((sum, p) => sum + p.coins, 0);
 
-  const targetTitle = (targetType: 'post' | 'listing', targetId: string) =>
+  // The caption usually rides the post rows, which this screen never asks for; the
+  // server's own line for the advertised target is what stops a live campaign from
+  // being introduced as something that is not available.
+  const targetTitle = (targetType: 'post' | 'listing', targetId: string, label?: string) =>
     targetType === 'post'
-      ? (db.posts.find(p => p.id === targetId)?.text || '').slice(0, 60) || t('unavailable')
-      : db.listings.find(l => l.id === targetId)?.title || t('unavailable');
+      ? (db.posts.find(p => p.id === targetId)?.text || label || '').slice(0, 60) || t('unavailable')
+      : db.listings.find(l => l.id === targetId)?.title || label || t('unavailable');
 
   return (
     <WalletShell>
@@ -59,7 +62,7 @@ export default function WalletOverviewPage() {
             {promos.slice(0, 3).map(p => (
               <div className="wallet-entry" key={p.id}>
                 <span className="wallet-entry-main">
-                  <b>{targetTitle(p.targetType, p.targetId)}</b>
+                  <b>{targetTitle(p.targetType, p.targetId, p.targetLabel)}</b>
                   <small>{ago(p.ts, db.lang)} · {t('clicks')} {p.clicks}</small>
                 </span>
                 <StatusChip status={p.status} />
