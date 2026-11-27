@@ -54,14 +54,32 @@ function readBody(text: string, ok: boolean, status: number): any {
   }
 }
 const CSRF_COOKIE = 'exposing_csrf';
+const DEVICE_COOKIE = 'exposing_device';
 
+function deviceCookie(): string {
+  if (typeof document === 'undefined') return '';
+  const pair = document.cookie.split('; ').find(c => c.startsWith(`${DEVICE_COOKIE}=`));
+  return pair ? decodeURIComponent(pair.slice(DEVICE_COOKIE.length + 1)) : '';
+}
+
+/**
+ * The id this browser is known by at the login door.
+ *
+ * localStorage answers fastest and outlives a sign-out, but WebKit throws away a
+ * week of quiet tabs — the id inside them included — and the door then reads a
+ * returning owner as a stranger arriving from nowhere. The server mirrors the id into
+ * a first-party cookie with the seat's own lifetime, so the string survives the
+ * storage it was minted in. Nothing here is allowed to fail a sign-in: storage can be
+ * full, unreadable, or switched off, and a thrown exception would kill the call that
+ * only needed a header.
+ */
 function deviceId(): string {
   if (typeof window === 'undefined') return '';
-  let id = localStorage.getItem(DEVICE_KEY);
-  if (!id) {
-    id = (crypto.randomUUID?.() || `d${Date.now()}${Math.random().toString(36).slice(2)}`);
-    localStorage.setItem(DEVICE_KEY, id);
-  }
+  let id = '';
+  try { id = localStorage.getItem(DEVICE_KEY) || ''; } catch { /* storage unreadable */ }
+  if (!id) id = deviceCookie();
+  if (!id) id = globalThis.crypto?.randomUUID?.() || `d${Date.now()}${Math.random().toString(36).slice(2)}`;
+  try { localStorage.setItem(DEVICE_KEY, id); } catch { /* refused; the cookie still carries it */ }
   return id;
 }
 
@@ -165,7 +183,11 @@ function wake(): Promise<boolean> {
 async function classifyRefresh(res: Response): Promise<RefreshOutcome> {
   if (res.ok) return 'ok';
   const text = await res.text();
-  if (res.status >= 500 || !text.trimStart().startsWith('{')) return 'unreachable';
+  // A 429 is "ask again in a moment", never "this session is over", and the ceiling
+  // it counts is the address this connection came from — which a mobile carrier or
+  // a relay hands to a thousand browsers at once. Reading one as a refusal threw the
+  // 401 onward and ended a seat that was still good.
+  if (res.status === 429 || res.status >= 500 || !text.trimStart().startsWith('{')) return 'unreachable';
   return 'rejected';
 }
 
@@ -215,6 +237,16 @@ function offline(timedOut: boolean): ApiError {
 }
 
 /**
+ * A replay after a refresh has to carry what the browser holds now. The headers a
+ * call left with were built before the sign-in dance handed out a CSRF cookie, so
+ * sending them again is a 403 that never stops arriving — and only the two auth
+ * headers change under a refresh. Content-Type and the body ride along untouched.
+ */
+function reauthorized(init: RequestInit): RequestInit {
+  return { ...init, headers: { ...(init.headers as Record<string, string> | undefined), ...headers() } };
+}
+
+/**
  * Send, and make sure the wait has an ending.
  *
  * A 5xx whose body is not JSON was not written by this API — Django answers every
@@ -254,7 +286,7 @@ async function send(path: string, init: RequestInit, refresh = true, replay = tr
   const refreshable = refresh && res.status === 401 && (!path.startsWith('/api/auth/') || path === '/api/auth/me/');
   if (refreshable) {
     const outcome = await refreshSession();
-    if (outcome === 'ok') return send(path, init, false, replay);
+    if (outcome === 'ok') return send(path, reauthorized(init), false, replay);
     // Nobody answered, so nobody said this session is over: report the network
     // and leave the signed-in state alone rather than throwing the 401 onward.
     if (outcome === 'unreachable') throw offline(false);
