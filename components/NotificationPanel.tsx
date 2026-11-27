@@ -8,7 +8,7 @@ import { useApp } from '@/lib/AppContext';
 import { closeLayerWithoutBack } from '@/lib/useBackClose';
 import { IC } from '@/lib/icons';
 import { useNotifications } from '@/lib/useNotifications';
-import { useWindowed } from '@/lib/useWindowed';
+import { PAGED_WINDOW, useWindowed } from '@/lib/useWindowed';
 import { Notification } from '@/lib/types';
 
 export default function NotificationPanel({ close }: { close: () => void }) {
@@ -25,7 +25,8 @@ export default function NotificationPanel({ close }: { close: () => void }) {
     serverMode ? {
       hasMore: feed.hasMore, loading: feed.loading, load: feed.loadMore,
       loaded: feed.loaded, error: feed.error, retry: feed.reload,
-    } : undefined);
+    } : undefined,
+    { margin: '200px 0px', dwell: 260 });
   const shown = listed.slice(0, limit);
   const fresh = shown.filter(n => !n.read);
   const older = shown.filter(n => n.read);

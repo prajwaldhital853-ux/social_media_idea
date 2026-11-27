@@ -1,18 +1,50 @@
 'use client';
 
+import { useMemo } from 'react';
 import Link from 'next/link';
 import WalletShell, { StatusChip } from '@/components/WalletShell';
 import { LedgerRows, ProofAskBanner, RequestRows } from '@/components/WalletLists';
 import { useApp } from '@/lib/AppContext';
+import { promotionsFragment, useList } from '@/lib/lists';
+import { PAGED_WINDOW, useWindowed } from '@/lib/useWindowed';
 import { ago } from '@/lib/utils';
+import { Promotion } from '@/lib/types';
+
+const WINDOW = 10;
 
 export default function WalletOverviewPage() {
-  const { db, me, t } = useApp();
+  const { db, me, t, serverMode } = useApp();
   const price = db.settings.coinPrice;
-  const promos = me ? db.promotions.filter(p => p.uid === me.id).sort((a, b) => b.ts - a.ts) : [];
-  const running = promos.filter(p => p.status === 'active' || p.status === 'paused');
-  const reach = promos.reduce((sum, p) => sum + p.impressions, 0);
-  const spent = promos.reduce((sum, p) => sum + p.coins, 0);
+
+  // The rows are read through the campaign list, so the overview answers for
+  // orders placed, decided and served while the page sat open — and the eleventh
+  // campaign is one scroll away instead of behind a link.
+  const list = useList(
+    'promotions',
+    { path: '/promotions/', frag: promotionsFragment },
+    undefined,
+    serverMode && !!me,
+  );
+  const mine = useMemo<Promotion[]>(() => {
+    if (!me) return [];
+    if (serverMode) {
+      const index = new Map(db.promotions.map(p => [p.id, p] as [string, Promotion]));
+      return list.ids.map(id => index.get(id)).filter((p): p is Promotion => !!p && p.uid === me.id);
+    }
+    return db.promotions.filter(p => p.uid === me.id).sort((a, b) => b.ts - a.ts);
+  }, [db.promotions, list.ids, me, serverMode]); // eslint-disable-line react-hooks/exhaustive-deps
+  const { limit, pending, sentinel, hasMore } = useWindowed(mine.length, WINDOW, 'wallet-overview',
+    serverMode ? { hasMore: list.hasMore, loading: list.loading, load: list.loadMore } : undefined,
+    PAGED_WINDOW);
+  const promos = mine.slice(0, limit);
+
+  // The three figures answer for every campaign this client knows, not the ten
+  // rows on screen: a total that moved with the scroll would sit a different
+  // number over the list it came from.
+  const known = me ? db.promotions.filter(p => p.uid === me.id) : [];
+  const running = known.filter(p => p.status === 'active' || p.status === 'paused');
+  const reach = known.reduce((sum, p) => sum + p.impressions, 0);
+  const spent = known.reduce((sum, p) => sum + p.coins, 0);
 
   // The caption usually rides the post rows, which this screen never asks for; the
   // server's own line for the advertised target is what stops a live campaign from
@@ -55,11 +87,15 @@ export default function WalletOverviewPage() {
           <div><b>{reach.toLocaleString('en-US')}</b><span>{t('impressions')}</span></div>
           <div><b>{spent}</b><span>{t('spent')}</span></div>
         </div>
-        {promos.length === 0 ? (
-          <p className="wallet-empty">{t('noPromos')}</p>
+        {mine.length === 0 ? (serverMode && !list.loaded ? (
+          <div className="wallet-rows" aria-hidden="true">
+            <i className="wallet-skel" /><i className="wallet-skel" />
+          </div>
         ) : (
+          <p className="wallet-empty">{t('noPromos')}</p>
+        )) : (
           <div className="wallet-rows">
-            {promos.slice(0, 3).map(p => (
+            {promos.map(p => (
               <div className="wallet-entry" key={p.id}>
                 <span className="wallet-entry-main">
                   <b>{targetTitle(p.targetType, p.targetId, p.targetLabel)}</b>
@@ -68,7 +104,12 @@ export default function WalletOverviewPage() {
                 <StatusChip status={p.status} />
               </div>
             ))}
+            {pending && hasMore && [0, 1].map(i => <i className="wallet-skel" key={`sk-${i}`} aria-hidden="true" />)}
+            {hasMore && <div ref={sentinel} className="feed-sentinel" aria-hidden="true" />}
           </div>
+        )}
+        {mine.length > WINDOW && (
+          <Link className="wallet-more" href="/wallet/promotions">{t('viewAll')} · {known.length}</Link>
         )}
       </section>
 
@@ -77,7 +118,7 @@ export default function WalletOverviewPage() {
           <h2>{t('pendingRequests')}</h2>
           <Link href="/wallet/requests" className="wallet-sec-note">{t('viewAll')}</Link>
         </div>
-        <RequestRows cap={4} href="/wallet/requests" />
+        <RequestRows cap={WINDOW} href="/wallet/requests" />
       </section>
 
       <section className="wallet-sec">
@@ -85,7 +126,7 @@ export default function WalletOverviewPage() {
           <h2>{t('ledger')}</h2>
           <Link href="/wallet/history" className="wallet-sec-note">{t('viewAll')}</Link>
         </div>
-        <LedgerRows cap={6} href="/wallet/history" />
+        <LedgerRows cap={WINDOW} href="/wallet/history" />
       </section>
     </WalletShell>
   );

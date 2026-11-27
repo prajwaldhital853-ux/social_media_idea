@@ -6,7 +6,7 @@ import NotificationRow from '@/components/NotificationRow';
 import ThemeToggle from '@/components/ThemeToggle';
 import { useApp } from '@/lib/AppContext';
 import { useNotifications } from '@/lib/useNotifications';
-import { useWindowed } from '@/lib/useWindowed';
+import { PAGED_WINDOW, useWindowed } from '@/lib/useWindowed';
 import { IC } from '@/lib/icons';
 import { Notification } from '@/lib/types';
 
@@ -33,7 +33,10 @@ export default function NotificationsPage() {
     serverMode ? {
       hasMore: feed.hasMore, loading: feed.loading, load: feed.loadMore,
       loaded: feed.loaded, error: feed.error, retry: feed.reload,
-    } : undefined);
+    } : undefined,
+    // Asked for close enough that the reader is looking at the seam when the page
+    // arrives, and held long enough that a warm answer still shows as a page.
+    PAGED_WINDOW);
   // One window over two day-groups: the newest day fills first, so a page break
   // never splits "Earlier" above something still waiting under "Today".
   const visibleToday = today.slice(0, limit);

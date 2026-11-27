@@ -145,6 +145,19 @@ export default function PostCard({ post, author, featured }: PostCardProps) {
   const openMedia = (index: number) => { answer('click'); router.push(`/post/${post.id}/media/${index}`); };
   const openReel = (index: number) => { answer('click'); router.push(`/video/${post.id}-${index}`); };
 
+  // An advert is bought for an answer, not for a look. The button says the same
+  // thing on every paid card and hands the reader a message already started, so
+  // the step from "somebody paid for me to see this" to "I asked them about it"
+  // is one tap — and that tap is the click the payer is billed for.
+  const askText = (post.text || '').trim()
+    ? t('promoAsk', { text: post.text.trim().slice(0, 80) })
+    : t('promoAskBare');
+  const askHref = `/messages/${author.username}?text=${encodeURIComponent(askText)}`;
+  const openAsk = () => {
+    answer('click');
+    router.push(me ? askHref : '/login');
+  };
+
   // Opening the sheet is not a share, and neither is opening another app — that
   // sheet can be cancelled with nothing sent. The counter moves only when the
   // reader sends it to a person, copies the link, or finishes the native share.
@@ -308,6 +321,15 @@ export default function PostCard({ post, author, featured }: PostCardProps) {
               )}
             </div>
           ))}
+        </div>
+      )}
+
+      {paid && !own && (
+        <div className="promo-cta" onClick={e => e.stopPropagation()}>
+          <button type="button" className="promo-cta-btn" onClick={openAsk}>
+            {IC.msg}
+            <span>{t('messageNow')}</span>
+          </button>
         </div>
       )}
 

@@ -2613,6 +2613,21 @@ a.trend-item:hover { text-decoration: none; }
 .promoted-chip svg { width: 14px; height: 14px; }
 .promoted-why { font-size: 10px; padding: 2px; }
 .promoted-pop { position: absolute; top: 24px; left: 0; max-width: 300px; padding: 12px; z-index: 15; background: var(--paper); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow-lg); }
+/* The answer an advert was bought for. It sits under the creative and above the
+   card's own buttons, full width and in brand colour, so it reads as the pitch
+   rather than as a fifth way to like the post. */
+.promo-cta { display: flex; padding: 10px 12px 2px; }
+.promo-cta-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  width: 100%; padding: 11px 16px; border: 0; border-radius: 10px; cursor: pointer;
+  background: var(--brand); color: var(--on-brand); font: inherit; font-size: 14px; font-weight: 750;
+  box-shadow: 0 3px 12px var(--brand-ring); transition: background .15s ease;
+}
+.promo-cta-btn:hover { background: var(--brand-d); }
+.promo-cta-btn svg { width: 17px; height: 17px; }
+@media (max-width: 768px) {
+  .promo-cta { padding: 8px 10px 0; }
+}
 
 /* A moderation warning, in the same unmistakable shape as an account ban. */
 .notice-banner { display: flex; flex-direction: column; gap: 8px; margin: 0 0 10px; }
@@ -4291,6 +4306,43 @@ body:has(.media-page) .reaction-tray {
 .reel-author:hover {
   text-decoration: underline;
 }
+
+/* A paid clip in the stack says what it is and offers the same one-tap answer
+   the feed card does — over the video, because a reel has no foot to put it in. */
+.reel-promo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.reel-promo-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .02em;
+  color: #ffd479;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.9);
+}
+.reel-promo-chip svg { width: 13px; height: 13px; }
+.reel-promo-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border: 0;
+  border-radius: 9999px;
+  cursor: pointer;
+  background: var(--brand);
+  color: var(--on-brand);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 800;
+  text-shadow: none;
+}
+.reel-promo-cta:hover { background: var(--brand-d); }
+.reel-promo-cta svg { width: 14px; height: 14px; }
 
 .reel-caption {
   margin: 6px 0 0;
@@ -6738,6 +6790,10 @@ a.wallet-sec-note:hover { color: var(--brand); text-decoration: underline; }
   .notif-view .header-sub { font-size: 12.5px; }
   .notif-view .notif-mark { padding: 8px; }
   .notif-view .notif-mark span { display: none; }
+  /* The row came back for the tick, and it brought this page's own mode switch
+     with it — a second one, right under the one the mobile top bar already
+     carries. The desktop half of that rule lives with the top bar. */
+  .notif-view .header-actions .icon-btn[aria-label*="mode" i] { display: none; }
 }
 .notif-list { padding: 4px 0 28px; }
 .notif-group-label {

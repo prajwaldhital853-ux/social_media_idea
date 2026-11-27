@@ -97,16 +97,26 @@ function ShareCard({ path, postId, index }: { path: string; postId: string; inde
  * One thread, addressed by the other person. It is the whole chat screen on
  * phones and the right pane of the desktop messenger, and the read receipt,
  * history paging and scroll anchoring have to behave the same in both.
+ *
+ * `seed` is a sentence the reader arrived with — an advert's "Message now"
+ * button writes the question so the first thing they do is send it, not invent
+ * it. It fills the composer; it never sends anything by itself.
  */
-export default function ChatThread({ other }: { other: User }) {
+export default function ChatThread({ other, seed }: { other: User; seed?: string }) {
   const router = useRouter();
   const { db, me, t, setDb, markThreadRead, sendMessage, serverMode } = useApp();
   const lang = db.lang;
-  const [text, setText] = useState('');
+  const [text, setText] = useState(seed || '');
   const [typing, setTyping] = useState(false);
   const threadRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const anchor = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (!seed) return;
+    setText(seed);
+    inputRef.current?.focus();
+  }, [seed]);
 
   const meId = me?.id;
   const otherId = other.id;

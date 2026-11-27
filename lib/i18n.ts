@@ -188,6 +188,11 @@ export const I18N = {
     whySee: 'Why am I seeing this?',
     hidePromo: 'Hide this promotion',
     promoHidden: 'Promotion hidden.',
+    // The one button every advert carries. A paid post that only offers a link to
+    // the author's profile sells reach and then makes the reader do the work.
+    messageNow: 'Message now',
+    promoAsk: 'I saw your post "{text}" — tell me more',
+    promoAskBare: 'I saw your promoted post — tell me more',
     reactorsTitle: 'Reactions',
     noReactions: 'No reactions yet.',
     like: 'Like',
@@ -763,6 +768,9 @@ export const I18N = {
     whySee: 'मैले यो किन देख्दै छु?',
     hidePromo: 'यो प्रोमोसन लुकाउनुहोस्',
     promoHidden: 'प्रोमोसन लुकाइयो।',
+    messageNow: 'अहिले सन्देश पठाउनुहोस्',
+    promoAsk: 'तपाईंको "{text}" पोस्ट मैले देखें — अझै भन्नुहोस्',
+    promoAskBare: 'तपाईंको प्रोमोट गरिएको पोस्ट मैले देखें — अझै भन्नुहोस्',
     reactorsTitle: 'प्रतिक्रियाहरू',
     noReactions: 'अहिलेसम्म प्रतिक्रिया छैन।',
     like: 'लाइक',

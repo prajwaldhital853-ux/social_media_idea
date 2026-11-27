@@ -6,7 +6,7 @@ import PromotionEditor from '@/components/PromotionEditor';
 import WalletShell, { StatusChip } from '@/components/WalletShell';
 import { useApp } from '@/lib/AppContext';
 import { promotionsFragment, useList } from '@/lib/lists';
-import { useWindowed } from '@/lib/useWindowed';
+import { PAGED_WINDOW, useWindowed } from '@/lib/useWindowed';
 import { ago } from '@/lib/utils';
 import { Promotion } from '@/lib/types';
 
@@ -40,7 +40,8 @@ export default function WalletPromotionsPage() {
     serverMode ? {
       hasMore: list.hasMore, loading: list.loading, load: list.loadMore,
       loaded: list.loaded, error: list.error, retry: list.reload,
-    } : undefined);
+    } : undefined,
+    PAGED_WINDOW);
   const promos = all.slice(0, limit);
   // A card names the thing it advertises. The caption usually arrives with the post
   // rows this screen never asked for, which is how a live campaign came to read as

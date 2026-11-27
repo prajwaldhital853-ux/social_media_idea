@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { StatusChip } from '@/components/WalletShell';
 import { useApp } from '@/lib/AppContext';
 import { coinRequestsFragment, useList, walletFragment } from '@/lib/lists';
-import { useWindowed } from '@/lib/useWindowed';
+import { PAGED_WINDOW, useWindowed } from '@/lib/useWindowed';
 import { ago } from '@/lib/utils';
 import { CoinRequest, LedgerEntry } from '@/lib/types';
 
@@ -47,16 +47,37 @@ function useRequestRows() {
 const day = (ts: number, lang: string) =>
   new Date(ts).toLocaleDateString(lang === 'ne' ? 'ne-NP' : 'en-GB', { day: '2-digit', month: 'short' });
 
+// Ten money rows at a time, which is what every other list in the app asks the
+// server for, so a page of the ledger is one round trip and one screen step.
+const WINDOW = 10;
+
+/**
+ * The seam at the foot of a wallet list: the skeleton while the next ten are on
+ * their way, and the marker that asks for them.
+ */
+function WalletSeam({ windowed }: { windowed: ReturnType<typeof useWindowed> }) {
+  return (
+    <>
+      {windowed.pending && windowed.hasMore && [0, 1].map(i => <i className="wallet-skel" key={`sk-${i}`} aria-hidden="true" />)}
+      {windowed.hasMore && <div ref={windowed.sentinel} className="feed-sentinel" aria-hidden="true" />}
+    </>
+  );
+}
+
 /**
  * Coin movements. A cap turns the same rows into the overview preview, which is
  * why the "view all" link lives here too — the list and its exit stay together.
+ * Both halves page: the preview is a section of a scrolling page, and a reader
+ * who wants the eleventh movement should be able to reach it without leaving.
  */
 export function LedgerRows({ cap, href }: { cap?: number; href?: string }) {
   const { db, t, serverMode } = useApp();
   const { rows, list } = useLedgerRows();
-  const windowed = useWindowed(rows.length, 12, db.lang === 'ne' ? 'ne' : 'en',
-    serverMode && !cap ? { hasMore: list.hasMore, loading: list.loading, load: list.loadMore } : undefined);
-  const shown = cap ? rows.slice(0, cap) : rows.slice(0, windowed.limit);
+  const page = cap || WINDOW;
+  const windowed = useWindowed(rows.length, page, db.lang === 'ne' ? 'ne' : 'en',
+    serverMode ? { hasMore: list.hasMore, loading: list.loading, load: list.loadMore } : undefined,
+    PAGED_WINDOW);
+  const shown = rows.slice(0, windowed.limit);
 
   if (shown.length === 0) {
     return (!serverMode || list.loaded)
@@ -79,7 +100,7 @@ export function LedgerRows({ cap, href }: { cap?: number; href?: string }) {
             </b>
           </div>
         ))}
-        {!cap && windowed.hasMore && <div ref={windowed.sentinel} className="feed-sentinel" aria-hidden="true" />}
+        <WalletSeam windowed={windowed} />
       </div>
       {cap && href && rows.length > cap && (
         <Link className="wallet-more" href={href}>{t('viewAll')} · {rows.length}</Link>
@@ -91,9 +112,11 @@ export function LedgerRows({ cap, href }: { cap?: number; href?: string }) {
 export function RequestRows({ cap, href }: { cap?: number; href?: string }) {
   const { db, t, serverMode } = useApp();
   const { rows, list } = useRequestRows();
-  const windowed = useWindowed(rows.length, 12, db.lang === 'ne' ? 'ne' : 'en',
-    serverMode && !cap ? { hasMore: list.hasMore, loading: list.loading, load: list.loadMore } : undefined);
-  const shown = cap ? rows.slice(0, cap) : rows.slice(0, windowed.limit);
+  const page = cap || WINDOW;
+  const windowed = useWindowed(rows.length, page, db.lang === 'ne' ? 'ne' : 'en',
+    serverMode ? { hasMore: list.hasMore, loading: list.loading, load: list.loadMore } : undefined,
+    PAGED_WINDOW);
+  const shown = rows.slice(0, windowed.limit);
 
   if (shown.length === 0) {
     return (!serverMode || list.loaded)
@@ -116,7 +139,7 @@ export function RequestRows({ cap, href }: { cap?: number; href?: string }) {
             {r.resubmitted && r.status === 'pending' && <span className="wallet-status resubmitted">{t('resubmitted')}</span>}
           </div>
         ))}
-        {!cap && windowed.hasMore && <div ref={windowed.sentinel} className="feed-sentinel" aria-hidden="true" />}
+        <WalletSeam windowed={windowed} />
       </div>
       {cap && href && rows.length > cap && (
         <Link className="wallet-more" href={href}>{t('viewAll')} · {rows.length}</Link>

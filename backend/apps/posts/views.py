@@ -313,6 +313,13 @@ def _feed_page(request):
     dial = None
     promos = []
     ascending = request.query_params.get('order') == 'oldest'
+    # The reels shelf is this same economy with one thing taken out: a moving
+    # picture. Filtering here rather than at the bare post list is what lets a
+    # paid clip be chosen, spaced, labelled and metered exactly as a paid photo
+    # post is — a shelf that read past this door would show adverts nobody
+    # placed and charge the payer for none of them.
+    media = (request.query_params.get('media') or '').strip()
+    shelf = media if media in ('video', 'image') else None
     if not following and not ascending:
         # On every page rather than only the first: the reach a package sells is
         # counted in people, and a reader who scrolls four pages and meets one
@@ -323,6 +330,8 @@ def _feed_page(request):
     promo_ids = [int(p.target_id) for p in promos]
     promo_by_post = {promo_id: promo for promo_id, promo in zip(promo_ids, promos)}
     qs = visible_posts(request.user)
+    if shelf:
+        qs = qs.filter(Exists(PostMedia.objects.filter(post=OuterRef('pk'), kind=shelf)))
     if following:
         # The Following tab is exactly the people the viewer chose; nobody gets
         # sponsored posts or strangers there, and an anonymous visitor gets nothing.
@@ -347,6 +356,13 @@ def _feed_page(request):
         found = {p.pk: p for p in visible_posts(request.user).filter(
             pk__in=promo_ids, status=Post.Status.LIVE
         )}
+        if shelf:
+            # A campaign bought for a photo post has no place in a stack of clips,
+            # and putting one there would spend a slot the payer was told they had.
+            carrying = set(PostMedia.objects.filter(
+                post_id__in=list(found), kind=shelf,
+            ).values_list('post_id', flat=True))
+            found = {pk: post for pk, post in found.items() if pk in carrying}
         served = [promo_by_post[post_id] for post_id in promo_ids if post_id in found]
         lead = PostSerializer([found[post_id] for post_id in promo_ids if post_id in found],
                               many=True, context={'request': request}).data

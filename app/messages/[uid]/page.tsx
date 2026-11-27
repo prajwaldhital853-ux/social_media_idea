@@ -1,13 +1,24 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { Suspense, useEffect, useMemo, useState } from 'react';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import AppShell from '@/components/AppShell';
 import ChatThread from '@/components/ChatThread';
 import ConversationList from '@/components/ConversationList';
 import { useApp } from '@/lib/AppContext';
 import { IC } from '@/lib/icons';
 import { User } from '@/lib/types';
+
+/**
+ * A thread opened from an advert's "Message now" carries the question the payer
+ * wants answered, so the reader starts a beat into the conversation rather than
+ * from a blank line. The sentence rides on the URL, which is what makes the
+ * button a normal link a phone can hand to another app.
+ */
+function SeededThread({ other }: { other: User }) {
+  const query = useSearchParams();
+  return <ChatThread other={other} seed={query.get('text') || undefined} />;
+}
 
 export default function ConversationPage() {
   const params = useParams();
@@ -61,7 +72,7 @@ export default function ConversationPage() {
         <button type="button" className="empty-state-cta" onClick={() => router.push('/messages')}>{t('seeAllMessages')}</button>
       </div>
     )
-    : <ChatThread other={other} />;
+    : <Suspense fallback={<div className="chat-thread" />}><SeededThread other={other} /></Suspense>;
 
   return <AppShell>
     <div className="inbox-view messenger">

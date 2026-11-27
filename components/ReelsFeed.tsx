@@ -37,6 +37,7 @@ export default function ReelsFeed({ initialKey }: { initialKey?: string }) {
   const {
     db, me, feature, toggleSave, isSaved, toggleFollow, isFollowing, serverMode,
     sharePost, mayShare, countView, blockUser, isBlocked, t, showToast,
+    activePromo, trackPromo,
   } = useApp();
   const [index, setIndex] = useState(0);
   const [commentsOpen, setCommentsOpen] = useState(false);
@@ -65,9 +66,15 @@ export default function ReelsFeed({ initialKey }: { initialKey?: string }) {
   // ahead of wherever the reader has scrolled to. It arrives in the endpoint's
   // own order — newest first — because sorting a person's reels is a question
   // about that person, and it belongs on their profile.
+  //
+  // It is read through the feed's own door rather than the bare post list
+  // because that is where a paid placement is settled: which campaign this
+  // reader is owed, how far behind the last one it sits, and what the payer is
+  // charged for showing it. A reel shelf that skipped that door would show
+  // adverts nobody placed and charge for none of them.
   const stream = useList(
     'reels',
-    { path: '/posts/', frag: postsFragment(me?.id || null) },
+    { path: '/feed/', frag: postsFragment(me?.id || null) },
     { media: 'video' },
     serverMode && feature('video'),
   );
@@ -256,6 +263,18 @@ export default function ReelsFeed({ initialKey }: { initialKey?: string }) {
               const following = isFollowing(slide.author.id);
               const own = me?.id === slide.author.id;
               const open = !!expanded[slide.key];
+              // The disclosure rides the row the server wrote, not only the campaign
+              // this cache happens to hold: a paid clip whose paperwork has not
+              // arrived yet is still something somebody bought.
+              const promo = activePromo('post', slide.post.id);
+              const paid = (!!promo || slide.post.promoted) && !own;
+              const askReel = () => {
+                if (promo && !own) void trackPromo(promo.id, 'click');
+                const seed = slide.post.text?.trim()
+                  ? t('promoAsk', { text: slide.post.text.trim().slice(0, 80) })
+                  : t('promoAskBare');
+                router.push(me ? `/messages/${slide.author.username}?text=${encodeURIComponent(seed)}` : '/login');
+              };
               return (
                 <div className="reel-slide" key={slide.key}>
                   <AutoVideo
@@ -362,6 +381,15 @@ export default function ReelsFeed({ initialKey }: { initialKey?: string }) {
                     </div>
                   </div>
                   <div className="reel-meta">
+                    {paid && (
+                      <div className="reel-promo">
+                        <span className="reel-promo-chip">{IC.chart}{t('promoted')}</span>
+                        <button type="button" className="reel-promo-cta" onClick={askReel}>
+                          {IC.msg}
+                          <span>{t('messageNow')}</span>
+                        </button>
+                      </div>
+                    )}
                     <Link href={`/u/${slide.author.username}`} className="reel-author">
                       {slide.author.name || slide.author.username}
                       {slide.author.verified && <VerifiedBadge size={14} />}
