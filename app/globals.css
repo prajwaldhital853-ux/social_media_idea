@@ -7031,6 +7031,12 @@ a.wallet-sec-note:hover { color: var(--brand); text-decoration: underline; }
   transition: background .15s ease, transform .15s ease;
 }
 .chat-wave:hover { background: var(--tint); transform: translateY(-1px); }
+.chat-draft-card {
+  flex-shrink: 0; display: flex; padding: 10px 12px 12px; background: var(--paper);
+  border-top: 1px solid var(--line);
+}
+.chat-draft-card + .chat-compose { border-top: 0; padding-top: 0; }
+.chat-link-card.draft { margin-top: 0; cursor: default; border: 1px solid var(--line); }
 .chat-compose {
   flex-shrink: 0; display: flex; align-items: center; gap: 8px;
   padding: 10px 12px; border-top: 1px solid var(--line); background: var(--paper);

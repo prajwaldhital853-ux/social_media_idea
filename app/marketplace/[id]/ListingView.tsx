@@ -112,7 +112,12 @@ export default function ListingPage() {
 
   const contact = () => {
     if (!me) { router.push('/login'); return; }
-    router.push(`/messages/${seller?.username || listing.uid}`);
+    // The thread opens with the question already asked and the offer named inside it,
+    // so the seller reads which of their listings this is about without a round trip,
+    // and the link carries the card with the photo under the message.
+    const link = `${window.location.origin}/marketplace/${listing.id}`;
+    const asked = `${t('listingAsk', { title: listing.title })} ${link}`;
+    router.push(`/messages/${seller?.username || listing.uid}?text=${encodeURIComponent(asked)}`);
   };
 
   const save = () => {

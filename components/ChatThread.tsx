@@ -20,19 +20,28 @@ function dayStart(ts: number) {
   return d.getTime();
 }
 
-/** A shared link is either the site's own post/reel or somewhere off-site. */
-function shareTarget(url: string): { path: string; postId: string; index: number } | null {
+/**
+ * A link the thread knows how to draw as a card: a post, a reel, or somebody's
+ * advert in the Marketplace. Anything else stays plain text.
+ */
+type LinkTarget =
+  | { kind: 'post'; path: string; postId: string; index: number }
+  | { kind: 'listing'; path: string; listingId: string };
+
+function shareTarget(url: string): LinkTarget | null {
   let path = '';
   try { path = new URL(url).pathname; } catch { return null; }
   const post = path.match(/^\/post\/([^/?#]+)/);
-  if (post) return { path, postId: decodeURIComponent(post[1]), index: 0 };
+  if (post) return { kind: 'post', path, postId: decodeURIComponent(post[1]), index: 0 };
   const reel = path.match(/^\/video\/([^/?#]+)/);
   if (reel) {
     const key = decodeURIComponent(reel[1]);
     const cut = key.lastIndexOf('-');
     const index = cut > 0 ? Number(key.slice(cut + 1)) : 0;
-    return { path, postId: cut > 0 ? key.slice(0, cut) : key, index: Number.isFinite(index) ? index : 0 };
+    return { kind: 'post', path, postId: cut > 0 ? key.slice(0, cut) : key, index: Number.isFinite(index) ? index : 0 };
   }
+  const offer = path.match(/^\/marketplace\/([^/?#]+)/);
+  if (offer) return { kind: 'listing', path, listingId: decodeURIComponent(offer[1]) };
   return null;
 }
 
@@ -54,43 +63,56 @@ function MessageText({ text }: { text: string }) {
 }
 
 /**
- * The card under a shared link. The post is usually already in the cache because
- * the reader was looking at the thread it was sent from; a person who opens the
- * chat cold pulls the row by id once, and keeps the plain link if it is gone.
+ * The card under a shared link. The row is usually already in the cache because the
+ * reader was looking at the page the link was copied from; a person who opens the
+ * chat cold pulls it by id once, and keeps the plain link if it is gone.
+ *
+ * `preview` is the same card sitting under the composer before anything is sent. It
+ * repeats what the text already says, so it is not announced twice to a screen reader
+ * and it is not a link a tapping thumb can follow away mid-sentence.
  */
-function ShareCard({ path, postId, index }: { path: string; postId: string; index: number }) {
+function ShareCard({ target, preview }: { target: LinkTarget; preview?: boolean }) {
   const { db, loadEntity } = useApp();
   const [asked, setAsked] = useState(false);
-  const post = db.posts.find(p => p.id === postId);
+  const postId = target.kind === 'post' ? target.postId : '';
+  const listingId = target.kind === 'listing' ? target.listingId : '';
+  const post = postId ? db.posts.find(p => p.id === postId) : undefined;
+  const listing = listingId ? db.listings.find(l => l.id === listingId) : undefined;
 
   useEffect(() => {
-    if (post || asked) return;
+    if (post || listing || asked) return;
     setAsked(true);
-    void loadEntity('post', postId);
-  }, [post, asked, postId, loadEntity]);
+    void loadEntity(target.kind, postId || listingId);
+  }, [post, listing, asked, target, postId, listingId, loadEntity]);
 
-  if (!post) return null;
-  const media = post.media[index] || post.media[0];
-  const art = media ? media.src || media.gen || '' : '';
-  const author = db.users.find(u => u.id === post.uid);
+  if (!post && !listing) return null;
+  const media = post ? post.media[target.kind === 'post' ? target.index : 0] || post.media[0] : undefined;
+  const shot = listing ? listing.media.find(m => m.type === 'image' && m.src) : undefined;
+  const art = listing ? (shot ? shot.src : '') : (media ? media.src || media.gen || '' : '');
+  const author = post ? db.users.find(u => u.id === post.uid) : undefined;
   const host = typeof window === 'undefined' ? '' : window.location.host;
-
-  return (
-    <Link href={path} className="chat-link-card">
+  const head = listing ? listing.title : (author ? author.name || author.username : 'Exposing');
+  const line = listing ? `NPR ${listing.price.toLocaleString('en-US')}` : (post ? post.text : '');
+  const card = (
+    <>
       <span className="chat-link-art">
         {art
           ? media?.type === 'video'
             ? <video src={art} muted playsInline preload="metadata" />
             : <img src={art} alt="" loading="lazy" />
-          : IC.video}
+          : listing ? IC.store : IC.video}
       </span>
       <span className="chat-link-copy">
-        <b>{author ? author.name || author.username : 'Exposing'}</b>
-        <small>{post.text}</small>
+        <b>{head}</b>
+        <small>{line}</small>
         <em>{host}</em>
       </span>
-    </Link>
+    </>
   );
+
+  return preview
+    ? <span className="chat-link-card draft" aria-hidden="true">{card}</span>
+    : <Link href={target.path} className="chat-link-card">{card}</Link>;
 }
 
 /**
@@ -336,13 +358,21 @@ export default function ChatThread({ other, seed }: { other: User; seed?: string
     if (typingFade.current) clearTimeout(typingFade.current);
   }, []);
 
+  // A draft that names a post, a reel or somebody's advert previews the card the sent
+  // message will carry, so the reader sees what the seller is about to be handed.
+  const draftLink = text.match(/https?:\/\/[^\s]+/);
+  const draft = draftLink ? shareTarget(draftLink[0]) : null;
+  const hasDraft = !!draft;
+
   // Only a new message — or a different conversation — pulls the reader to the
-  // foot of the thread; rows added above stay exactly where they were.
+  // foot of the thread; rows added above stay exactly where they were. The preview
+  // takes its height out of the same column, so a draft that gains or loses a card
+  // re-pins the foot instead of clipping the last row off the bottom.
   const newest = thread.length ? thread[thread.length - 1].id : '';
   useEffect(() => {
     const el = threadRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [newest, otherId]);
+  }, [newest, otherId, hasDraft]);
 
   const loadOlder = async () => {
     const el = threadRef.current;
@@ -446,7 +476,7 @@ export default function ChatThread({ other, seed }: { other: User; seed?: string
                 {!mine && <Avatar user={other} size={28} />}
                 <div className={`chat-bubble ${mine ? 'mine' : 'theirs'}`}>
                   <MessageText text={m.text} />
-                  {shared && <ShareCard path={shared.path} postId={shared.postId} index={shared.index} />}
+                  {shared && <ShareCard target={shared} />}
                   <span className="chat-meta">
                     {ago(m.ts, lang)}
                     {receipt && <span className={`chat-receipt ${receipt}`}>{receipt === 'sent' ? '✓' : '✓✓'}</span>}
@@ -457,6 +487,8 @@ export default function ChatThread({ other, seed }: { other: User; seed?: string
           );
         })}
       </div>
+
+      {draft && <div className="chat-draft-card"><ShareCard target={draft} preview/></div>}
 
       <form className="chat-compose" onSubmit={submit}>
         <input
