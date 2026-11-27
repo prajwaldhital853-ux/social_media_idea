@@ -6,12 +6,28 @@ per-account budget. Neither can afford to be picky about failure: a stream that
 cannot start is the client's problem to retry, not a page that must break.
 """
 
+import time
+import uuid
+
+from django.conf import settings
+
 from apps.accounts.auth import decode_token
 from apps.accounts.models import User
 
 # One process, one bookkeeping table. Multi-instance deploys move this into
 # Redis alongside the channel layer.
-_streams = {}
+#
+# A seat is a lease, not a count. A stream hands its seat back the moment its
+# body ends, but a body that never started — the browser hung up before the
+# first byte, so the generator was made and never run — has no finally block
+# left to run, and a plain counter would keep that seat for the account until
+# the process restarted. So every lease carries the hour it should have been
+# given back by, and the next acquire sweeps whatever is overdue.
+_leases = {}
+
+# A stream closes itself at SSE_MAX_LIFE; one still held past that plus a
+# breath of slack belongs to a body that is never coming back.
+GRACE = 15.0
 
 
 def stream_user(request):
@@ -32,22 +48,33 @@ def stream_user(request):
 
 
 def acquire(user_pk, limit):
-    """Take one of the account's stream slots, or say no if they are all held."""
-    if _streams.get(user_pk, 0) >= limit:
-        return False
-    _streams[user_pk] = _streams.get(user_pk, 0) + 1
-    return True
+    """Take one of the account's stream slots, or say no if they are all held.
+
+    The id is the receipt: hand it back to `release` when the body ends.
+    """
+    now = time.monotonic()
+    seats = _leases.get(user_pk)
+    if seats:
+        for stale in [ticket for ticket, due in seats.items() if due <= now]:
+            seats.pop(stale, None)
+        if len(seats) >= limit:
+            return ''
+    ticket = uuid.uuid4().hex[:12]
+    _leases.setdefault(user_pk, {})[ticket] = now + float(settings.SSE_MAX_LIFE) + GRACE
+    return ticket
 
 
-def release(user_pk):
-    open_now = _streams.get(user_pk, 1)
-    if open_now <= 1:
-        _streams.pop(user_pk, None)
-    else:
-        _streams[user_pk] = open_now - 1
+def release(user_pk, ticket):
+    """Give one named seat back. An unknown ticket is a stream already swept."""
+    seats = _leases.get(user_pk)
+    if not seats:
+        return
+    seats.pop(ticket, None)
+    if not seats:
+        _leases.pop(user_pk, None)
 
 
 def held(user_pk):
     """How many seats this account has filled — for a test that a closed
     stream really did give its seat back."""
-    return _streams.get(user_pk, 0)
+    return len(_leases.get(user_pk) or {})
