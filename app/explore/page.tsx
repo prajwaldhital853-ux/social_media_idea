@@ -10,6 +10,7 @@ import { useApp } from '@/lib/AppContext';
 import { canSeePost, privateIds } from '@/lib/utils';
 import { postsFragment, useList, usersFragment } from '@/lib/lists';
 import { IC } from '@/lib/icons';
+import { goBack } from '@/lib/navStack';
 
 function SearchResults() {
   const { db, me, serverMode, t } = useApp();
@@ -63,7 +64,7 @@ function SearchResults() {
   return <div className="search-view">
     <header className="detail-header search-detail-header">
       <div className="search-head-row">
-        <button className="icon-btn" type="button" aria-label="Back" onClick={() => window.history.length > 1 ? router.back() : router.push('/')}>{IC.back}</button>
+        <button className="icon-btn" type="button" aria-label="Back" onClick={() => goBack(router, '/')}>{IC.back}</button>
         <h1>Search</h1>
         <span className="detail-header-spacer"/>
       </div>

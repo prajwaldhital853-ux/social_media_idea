@@ -87,17 +87,18 @@ class FeedKeysetTests(TestCase):
         for i in range(12):
             Post.objects.create(author=self.author, text=f'p{i}', audience='public')
 
-    def test_discovery_page_shuffles_and_pages_stay_stable(self):
+    def test_for_you_is_newest_first_and_survives_a_reload(self):
         client = auth_client(self.viewer)
         page1 = client.get('/api/feed/')
         self.assertEqual(len(page1.data['results']), 10)
-        # For You deals the newest window in a fresh order on every read, so the
-        # rows a page holds are what is promised, not where they sit.
-        self.assertEqual({p['text'] for p in page1.data['results']}, {f'p{i}' for i in range(2, 12)})
+        # For You lists every public post newest first, and the order is the
+        # same on every read: a refresh or a reopen opens on the same screenful.
+        self.assertEqual([p['text'] for p in page1.data['results']],
+                         [f'p{i}' for i in range(11, 1, -1)])
         again = client.get('/api/feed/')
-        self.assertNotEqual([p['text'] for p in page1.data['results']],
-                            [p['text'] for p in again.data['results']],
-                            'two arrivals at For You opened on the same order')
+        self.assertEqual([p['text'] for p in page1.data['results']],
+                         [p['text'] for p in again.data['results']],
+                         'a reload moved the rows a reader was already reading')
         self.assertTrue(page1.data['has_more'])
         page2 = client.get('/api/feed/?cursor=' + page1.data['next_cursor'])
         self.assertEqual([p['text'] for p in page2.data['results']], ['p1', 'p0'])
@@ -106,6 +107,9 @@ class FeedKeysetTests(TestCase):
         self.assertEqual([p['id'] for p in page2b.data['results']], [p['id'] for p in page2.data['results']])
         self.assertFalse(page2b.data['has_more'])
         self.assertIsNone(page2b.data['next_cursor'])
+        fresh = client.get('/api/feed/')
+        self.assertEqual(fresh.data['results'][0]['text'], 'newer',
+                         'a post that arrived after the last visit takes the top')
 
     def test_following_tab_lists_only_people_you_follow(self):
         client = auth_client(self.viewer)

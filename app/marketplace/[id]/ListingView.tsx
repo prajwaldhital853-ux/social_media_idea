@@ -14,6 +14,7 @@ import { useApp } from '@/lib/AppContext';
 import { useRemoteRow } from '@/lib/useRemoteRow';
 import { api } from '@/lib/api';
 import { forgetLists } from '@/lib/lists';
+import { goBack } from '@/lib/navStack';
 import { IC } from '@/lib/icons';
 import NoticeBanner from '@/components/NoticeBanner';
 import { ago } from '@/lib/utils';
@@ -123,7 +124,7 @@ export default function ListingPage() {
     <AppShell>
       <div className="listing-page">
         <header className="detail-header">
-          <button type="button" className="icon-btn" aria-label={t('back')} onClick={() => window.history.length > 1 ? router.back() : router.push('/marketplace')}>{IC.back}</button>
+          <button type="button" className="icon-btn" aria-label={t('back')} onClick={() => goBack(router, '/marketplace')}>{IC.back}</button>
           <h1>{mine ? t('myListings') : t('marketplace')}</h1>
           <span className="detail-header-spacer" />
         </header>

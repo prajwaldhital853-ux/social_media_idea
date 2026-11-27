@@ -9,6 +9,7 @@ import { usersFragment, useList } from '@/lib/lists';
 import { localSuggestions } from '@/lib/suggest';
 import { User } from '@/lib/types';
 import { IC } from '@/lib/icons';
+import { goBack } from '@/lib/navStack';
 
 // Wider than the rail's thirty: See all is the whole roster the graph justifies,
 // and asking for it is what fills the cache the rail is already reading.
@@ -35,7 +36,7 @@ export default function SuggestedPeoplePage() {
             type="button"
             className="icon-btn"
             aria-label={t('back')}
-            onClick={() => window.history.length > 1 ? router.back() : router.push('/')}
+            onClick={() => goBack(router, '/')}
           >
             {IC.back}
           </button>

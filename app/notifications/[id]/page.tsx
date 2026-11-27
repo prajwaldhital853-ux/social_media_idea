@@ -7,6 +7,7 @@ import AppShell from '@/components/AppShell';
 import { useApp } from '@/lib/AppContext';
 import { api, API_ENABLED } from '@/lib/api';
 import { IC } from '@/lib/icons';
+import { goBack } from '@/lib/navStack';
 
 interface WarningDetail {
   id: string | number;
@@ -73,7 +74,7 @@ export default function WarningDetailPage() {
     <AppShell>
       <div className="warning-detail-page">
         <header className="detail-header">
-          <button type="button" className="icon-btn" aria-label={t('back')} onClick={() => router.back()}>
+          <button type="button" className="icon-btn" aria-label={t('back')} onClick={() => goBack(router, '/')}>
             {IC.back}
           </button>
           <h1>{t('warningDetail')}</h1>

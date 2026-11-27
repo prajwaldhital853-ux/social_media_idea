@@ -9,6 +9,7 @@ import { THEME_KEY, LANG_KEY, uid, ageFromDob, reactionRank } from './utils';
 import { I18N, TranslationKey } from './i18n';
 import { api, API_ENABLED, ApiError, onWakeChange } from './api';
 import { merge as applyFragment, Fragment } from './store';
+import { noteRoute } from './navStack';
 import {
   idOf, at, mapComment, mapFollow, mapMe, mapMessage, mapNotification, mapPerson, mapPost, mapPromotion,
   mapReport, mapSettings, mediaPayload, profilePatch, reactionsOfPost, toPostPayload, toProfilePayload,
@@ -259,6 +260,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     setDrawerOpen(false);
+    noteRoute(pathname);
   }, [pathname]);
 
   useEffect(() => {

@@ -77,9 +77,9 @@ export default function ReelsFeed({ initialKey }: { initialKey?: string }) {
     serverMode && feature('video'),
   );
 
-  // Every open of the reels page deals a fresh hand: page one is re-read when
-  // the reader arrives, and the server reshuffles that window per read. A cold
-  // load is already a first dealing, so only a return visit re-pulls here.
+  // The reels page re-reads page one when the reader returns, so a reel posted
+  // while they were away takes the top. A cold load is already a first read,
+  // so only a return visit re-pulls here.
   const restream = useRef(stream.reload);
   restream.current = stream.reload;
   const returned = useRef(false);

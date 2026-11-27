@@ -17,6 +17,7 @@ import { useWindowed } from '@/lib/useWindowed';
 import { canSeePost, privateIds, compact, ago, safeUrl } from '@/lib/utils';
 import { checkPhoto, profileImage } from '@/lib/mediaFile';
 import { IC } from '@/lib/icons';
+import { goBack } from '@/lib/navStack';
 import { Listing, Post, User } from '@/lib/types';
 
 export default function UserProfilePage() {
@@ -152,7 +153,7 @@ export default function UserProfilePage() {
     return (
       <AppShell>
         <header className="detail-header">
-          <button type="button" className="icon-btn" aria-label="Back" onClick={() => window.history.length > 1 ? router.back() : router.push('/')}>{IC.back}</button>
+          <button type="button" className="icon-btn" aria-label="Back" onClick={() => goBack(router, '/')}>{IC.back}</button>
           <h1>{t('profile')}</h1>
           <span className="detail-header-spacer" />
         </header>
@@ -281,7 +282,7 @@ export default function UserProfilePage() {
               onChange={e => { pickCover(e.target.files?.[0]); e.target.value = ''; }}
             />
           )}
-          <button type="button" className="icon-btn profile-back" aria-label="Back" onClick={() => window.history.length > 1 ? router.back() : router.push('/')}>{IC.back}</button>
+          <button type="button" className="icon-btn profile-back" aria-label="Back" onClick={() => goBack(router, '/')}>{IC.back}</button>
         </div>
 
         <div className="profile-head">

@@ -11,6 +11,7 @@ import { Media } from '@/lib/types';
 import { uid, fmtDur } from '@/lib/utils';
 import { mediaFromFile } from '@/lib/mediaFile';
 import { takeCreateDraft } from '@/lib/draftMedia';
+import { goBack } from '@/lib/navStack';
 
 const PLACES = ['Kathmandu', 'Pokhara', 'Lalitpur', 'Bhaktapur', 'Chitwan', 'Butwal', 'Dharan', 'Nepalgunj'];
 const MOODS = [
@@ -171,7 +172,7 @@ export default function CreatePostPage() {
     <AppShell>
       <div className="create-post-page">
         <header className="create-post-header">
-          <button type="button" className="icon-btn" aria-label="Back" onClick={() => router.back()}>{IC.back}</button>
+          <button type="button" className="icon-btn" aria-label="Back" onClick={() => goBack(router, '/')}>{IC.back}</button>
           <h1>{kind === 'reel' ? 'Create reel' : 'Create post'}</h1>
           <button type="button" className="post-btn-header" onClick={() => void publish(kind)} disabled={!canPost}>Post</button>
         </header>
