@@ -43,6 +43,18 @@ function remember(username: string) {
   try { localStorage.setItem(RECENT_KEY, JSON.stringify(next)); } catch { /* private mode */ }
 }
 
+/**
+ * Whether this browser is the one iOS family that drops a shared tab off the
+ * universal-link chain. An iPad running iPadOS 13 or newer asks to be read as a
+ * desktop Mac, and only the touch count tells them apart — which matters because it
+ * also decides whether there is a share sheet to open.
+ */
+function isIOS(): boolean {
+  const ua = typeof navigator === 'undefined' ? '' : navigator.userAgent;
+  if (/iPhone|iPad|iPod/i.test(ua)) return true;
+  return /Macintosh/i.test(ua) && typeof navigator.maxTouchPoints === 'number' && navigator.maxTouchPoints > 1;
+}
+
 export default function ShareDialog({ open, url, title, text, preview, onShared, onClose }: ShareDialogProps) {
   const { db, me, t, serverMode, sendMessage, showToast, merge } = useApp();
   const [query, setQuery] = useState('');
@@ -167,6 +179,47 @@ export default function ShareDialog({ open, url, title, text, preview, onShared,
     document.addEventListener('visibilitychange', onHide);
   };
 
+  // The system sheet is the one handoff iOS answers for every app at once, and the
+  // only one that carries the text the way an app's own link is meant to. It has to
+  // be asked for inside the tap: a share requested after an await has spent the user
+  // gesture and never opens. 'cancelled' is kept separate from 'none' on purpose — a
+  // sheet the reader closed shared nobody, and falling through to open an app after it
+  // would count a share they turned down.
+  const systemShare = async (): Promise<'shared' | 'cancelled' | 'none'> => {
+    const nav = navigator as Navigator & { share?: (data: ShareData) => Promise<void> };
+    if (typeof nav.share !== 'function') return 'none';
+    try {
+      await nav.share({ title, text: text || title, url });
+    } catch (err) {
+      return (err as Error)?.name === 'AbortError' ? 'cancelled' : 'none';
+    }
+    onShared();
+    onClose();
+    return 'shared';
+  };
+
+  // Android keeps the new tab it already used. iOS gets the sheet, and this tab when
+  // there is no sheet: a popup opened off the gesture chain is dropped before the
+  // universal link resolves, which is what left the app either closed or open with the
+  // text missing.
+  const handoff = async (href: string) => {
+    if (!isIOS()) {
+      openApp(href);
+      return;
+    }
+    if (await systemShare() !== 'none') return;
+    countOnLeave();
+    window.location.href = href;
+  };
+
+  // The copy starts inside the tap so the gesture is still live when the app opens,
+  // and its answer is a toast rather than a gate: a refused clipboard costs a paste,
+  // never the handoff.
+  const toClipboard = (key: 'messengerCopied' | 'instagramCopied') => {
+    const write = navigator.clipboard?.writeText(url) ?? Promise.reject(new Error('no clipboard'));
+    return write.then(() => showToast(t(key))).catch(() => { /* private mode */ });
+  };
+
   // Copying a link is not a share: nothing was sent to anyone, so the count
   // never moves for it.
   const copy = async () => {
@@ -182,7 +235,7 @@ export default function ShareDialog({ open, url, title, text, preview, onShared,
   // No web dialog exists for Messenger: a phone hands the link to the app's own
   // composer, and a desktop copies it and opens messenger.com to paste from.
   // Leaving for the app counts; cancelling before the app opens does not.
-  const shareMessenger = () => {
+  const shareMessenger = async () => {
     if (/Android/i.test(navigator.userAgent)) {
       const fallback = encodeURIComponent('https://www.messenger.com/');
       window.location.href = `intent://share/?link=${link}#Intent;package=com.facebook.orca;scheme=fb-messenger;S.browser_fallback_url=${fallback};end`;
@@ -190,14 +243,19 @@ export default function ShareDialog({ open, url, title, text, preview, onShared,
       onClose();
       return;
     }
-    if (/iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+    if (isIOS()) {
+      // The sheet is what Meta points a web page at; its own `fb-messenger://share`
+      // scheme has been unreliable on iOS for years. The link goes to the clipboard in
+      // the same breath so the composer — or the site, below — has something to paste.
+      if (await systemShare() === 'cancelled') return;
+      void toClipboard('messengerCopied');
       window.location.href = `fb-messenger://share/?link=${link}`;
-      // An iPhone without the app ignores the scheme; then the link is copied
-      // and messenger.com opens so the share still happens somewhere.
-      setTimeout(async () => {
+      // An iPhone without the app ignores the scheme, and the tab is still here. This
+      // navigation runs after the gesture is spent, so it goes in this tab: a new one
+      // is exactly what Safari blocks, which is how the share used to fail in silence.
+      setTimeout(() => {
         if (document.visibilityState !== 'visible') return;
-        try { await navigator.clipboard.writeText(url); showToast(t('messengerCopied')); } catch { /* clipboard refused */ }
-        window.open('https://www.messenger.com/', '_blank', 'noopener,noreferrer');
+        window.location.href = 'https://www.messenger.com/';
       }, 1200);
       countOnLeave();
       onClose();
@@ -212,6 +270,13 @@ export default function ShareDialog({ open, url, title, text, preview, onShared,
   // Instagram accepts no share from the web: the link goes to the clipboard
   // first, then the app (phone) or the site (desktop) opens for the paste.
   const shareInstagram = async () => {
+    if (isIOS()) {
+      // Both start in the same breath: a scheme launched after an awaited clipboard
+      // write has spent the gesture that lets the app open at all.
+      void toClipboard('instagramCopied');
+      await handoff('instagram://app');
+      return;
+    }
     try { await navigator.clipboard.writeText(url); showToast(t('instagramCopied')); } catch { /* clipboard refused; open anyway */ }
     if (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) {
       window.location.href = 'instagram://app';
@@ -228,12 +293,12 @@ export default function ShareDialog({ open, url, title, text, preview, onShared,
 
   const apps = [
     { key: 'copy', label: t('copyLink'), mark: <span className="share-mark">{IC.link}</span>, run: () => { void copy(); } },
-    { key: 'whatsapp', label: 'WhatsApp', mark: <span className="share-mark wa">{IC.phone}</span>, run: () => openApp(`https://wa.me/?text=${message}`) },
-    { key: 'facebook', label: 'Facebook', mark: <span className="share-mark fb">{IC.fb}</span>, run: () => openApp(`https://www.facebook.com/sharer/sharer.php?u=${link}`) },
-    { key: 'messenger', label: 'Messenger', mark: <span className="share-mark ms">{IC.msg}</span>, run: () => shareMessenger() },
+    { key: 'whatsapp', label: 'WhatsApp', mark: <span className="share-mark wa">{IC.phone}</span>, run: () => { void handoff(`https://wa.me/?text=${message}`); } },
+    { key: 'facebook', label: 'Facebook', mark: <span className="share-mark fb">{IC.fb}</span>, run: () => { void handoff(`https://www.facebook.com/sharer/sharer.php?u=${link}`); } },
+    { key: 'messenger', label: 'Messenger', mark: <span className="share-mark ms">{IC.msg}</span>, run: () => { void shareMessenger(); } },
     { key: 'instagram', label: 'Instagram', mark: <span className="share-mark ig">{IC.camera}</span>, run: () => { void shareInstagram(); } },
     { key: 'email', label: 'Email', mark: <span className="share-mark">{IC.send}</span>, run: () => openApp(`mailto:?subject=${subject}&body=${message}`) },
-    { key: 'x', label: 'X', mark: <span className="share-mark x">X</span>, run: () => openApp(`https://twitter.com/intent/tweet?text=${message}`) },
+    { key: 'x', label: 'X', mark: <span className="share-mark x">X</span>, run: () => { void handoff(`https://twitter.com/intent/tweet?text=${message}`); } },
   ];
 
   const people = found ?? (recentPeople.length ? recentPeople : following);
