@@ -9,6 +9,7 @@ import ThemeToggle from '@/components/ThemeToggle';
 import EditProfileModal from '@/components/EditProfileModal';
 import { useApp } from '@/lib/AppContext';
 import { api } from '@/lib/api';
+import { disablePush, enablePush, pushState, PushState } from '@/lib/push';
 import { mapPerson } from '@/lib/dto';
 import { User } from '@/lib/types';
 import { KEY } from '@/lib/utils';
@@ -18,6 +19,40 @@ export default function SettingsPage() {
   const { db, me, t, theme, toggleTheme, updateLang, setDb, showToast, showConfirm, logout, updateProfile, serverMode, ready, incomingRequests } = useApp();
   const [editing, setEditing] = useState(false);
   const [deleting, setDeleting] = useState(false);
+
+  /**
+   * Push is the browser's own permission, so this switch reads the browser and
+   * the click goes to the browser; the server only learns the address after the
+   * member has already said yes. Reading it from the account instead would keep
+   * a lit switch over a member who revoked the right in the address bar.
+   */
+  const [pushOn, setPushOn] = useState<PushState>('off');
+  const [pushBusy, setPushBusy] = useState(false);
+
+  useEffect(() => {
+    void pushState().then(setPushOn);
+  }, []);
+
+  const setPush = async (on: boolean) => {
+    if (pushBusy) return;
+    setPushBusy(true);
+    if (!on) {
+      await disablePush();
+      setPushOn('off');
+      setPushBusy(false);
+      return showToast(t('pushOffOk'));
+    }
+    const out = await enablePush();
+    setPushBusy(false);
+    if (!out.ok) {
+      // The operating system said no, which is the only answer that matters
+      // here — re-read it rather than arguing with what it shows.
+      setPushOn(await pushState());
+      return showToast(out.detail || t('pushBlocked'));
+    }
+    setPushOn('on');
+    showToast(t('pushOnOk'));
+  };
 
   if (!me) {
     return (
@@ -176,6 +211,15 @@ export default function SettingsPage() {
               <small>{t('emailAlertsSub')}</small>
             </span>
             <button type="button" role="switch" aria-checked={me.notifyFollowEmail !== false} aria-label={t('emailAlerts')} className={`switch ${me.notifyFollowEmail !== false ? 'on' : ''}`} onClick={() => setFlag('notifyFollowEmail', me.notifyFollowEmail === false)}>
+              <span className="switch-knob" />
+            </button>
+          </div>
+          <div className="settings-row">
+            <span className="settings-row-copy">
+              <b>{t('pushAlerts')}</b>
+              <small>{pushOn === 'blocked' ? t('pushBlockedSub') : t('pushAlertsSub')}</small>
+            </span>
+            <button type="button" role="switch" aria-checked={pushOn === 'on'} disabled={pushBusy || pushOn === 'unsupported'} aria-label={t('pushAlerts')} className={`switch ${pushOn === 'on' ? 'on' : ''}`} onClick={() => setPush(pushOn !== 'on')}>
               <span className="switch-knob" />
             </button>
           </div>

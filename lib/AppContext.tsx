@@ -16,6 +16,7 @@ import {
 } from './dto';
 import { bindListCache, coinRequestsFragment, dropListRow, forgetLists, inboxListDef, listingsFragment, notificationsFragment, promotionsFragment, postsFragment, pushListRow, refreshList, removeListRow, walletFragment } from './lists';
 import { emitLive, onLive } from './live';
+import { disablePush, pushSupported, syncPush } from './push';
 import { bumpNew } from './newCount';
 
 type Target = 'post' | 'comment' | 'media';
@@ -265,6 +266,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setDrawerOpen(false);
     noteRoute(pathname);
   }, [pathname]);
+
+  useEffect(() => {
+    // Whoever signs in owns this browser's address for as long as the seat
+    // lasts. The call is cheap when nothing is subscribed and does nothing at
+    // all when the member never allowed notifications.
+    if (!API_ENABLED || !db.meId) return;
+    void syncPush();
+  }, [db.meId]);
+
+  useEffect(() => {
+    // A tapped notification is steered through the open tab, and a worker
+    // cannot navigate a window it did not open — so the tab moves itself.
+    if (!pushSupported()) return;
+    const onMessage = (event: MessageEvent) => {
+      const url = (event.data as { url?: unknown } | null)?.url;
+      if (typeof url === 'string' && url.startsWith('/')) router.push(url);
+    };
+    navigator.serviceWorker.addEventListener('message', onMessage);
+    return () => navigator.serviceWorker.removeEventListener('message', onMessage);
+  }, [router]);
 
   useEffect(() => {
     setMounted(true);
@@ -876,6 +897,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setDrawerOpen(false);
     forgetLists();
     if (!API_ENABLED) return;
+    // Signing out is the end of this browser's claim on the account's news.
+    void disablePush();
     try {
       await api.post('/api/auth/logout/', {});
     } catch { /* the cookie is already cleared */ }

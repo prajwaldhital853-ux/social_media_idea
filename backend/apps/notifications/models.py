@@ -31,3 +31,28 @@ class Notification(models.Model):
 
     def __str__(self):
         return f'{self.kind} -> {self.recipient.username}'
+
+
+class PushSubscription(models.Model):
+    """One browser that asked to be woken while Exposing is not open in it.
+
+    The endpoint is an address at the browser's own push service, and the two
+    keys are that browser's half of the message encryption: a card sealed for
+    one device cannot be read by another, so nothing a member could not already
+    see on their own screen is kept here. A row that goes stale costs one
+    notification, not the account — the browser re-subscribes on the next visit.
+    """
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='push_subscriptions',
+    )
+    endpoint = models.CharField(max_length=512, unique=True)
+    p256dh = models.CharField(max_length=120)
+    auth = models.CharField(max_length=64)
+    # A push service that refuses one address over and over is an address that
+    # is gone. Counting the refusals is how the row stops being signed for.
+    fails = models.PositiveSmallIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f'push -> {self.user.username}'
