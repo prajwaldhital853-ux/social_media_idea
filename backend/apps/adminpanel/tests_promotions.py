@@ -415,9 +415,8 @@ class AlgorithmTests(PromoTestCase):
     def test_the_dials_the_contract_names_are_all_on_one_desk(self):
         out = self.desk.get(ALGORITHM_URL)
         self.assertEqual(out.status_code, 200)
-        self.assertEqual(sorted(out.data['weights']),
-                         ['algo_weight_comment', 'algo_weight_follow', 'algo_weight_like',
-                          'algo_weight_save', 'algo_weight_watch'])
+        self.assertEqual(sorted(out.data['weights']), sorted(promotions.WEIGHTS),
+                         'the desk must not report a dial the console cannot turn')
         self.assertEqual(sorted(out.data['caps']), ['daily', 'gap', 'repeat'])
         self.assertIs(out.data['global_pause'], False)
         self.assertEqual(out.data['running'], 1)

@@ -9,9 +9,9 @@ from apps.common.errors import throttle_text
 from apps.common.pagination import KeysetPagination
 from apps.common.rules import blocked_wording, post_limits_gate, rate, room, seat, write_gate
 from apps.follows.models import Block, Follow
-from apps.promotions.services import plan, serving
+from apps.promotions.services import plan, served_promos, serving
 
-from .models import Post, PostMedia
+from .models import Post, PostMedia, SharedPost
 from .serializers import PostSerializer
 
 # How far a signed-out reader may walk the feed, and how long a stranger's first
@@ -189,6 +189,11 @@ def share_post(request, pk):
     if not visible_posts(request.user).filter(pk=pk).exists():
         return Response({'detail': 'No such post.'}, status=status.HTTP_404_NOT_FOUND)
     Post.objects.filter(pk=pk).update(share_count=F('share_count') + 1)
+    # And the pair, for the desk that decides whose feed an advert lands in. A
+    # stranger has no pair to keep, so only a seated reader leaves a record.
+    if request.user.is_authenticated:
+        SharedPost.objects.bulk_create(
+            [SharedPost(user=request.user, post_id=pk)], ignore_conflicts=True)
     return Response({'share_count': Post.objects.filter(pk=pk).values_list('share_count', flat=True).first()})
 
 
@@ -214,6 +219,7 @@ def promo_card(promo):
         'country': promo.country, 'cities': list(promo.cities or []), 'package': promo.package,
         'budget': promo.budget, 'status': promo.status,
         'impressions': promo.impressions, 'clicks': promo.clicks,
+        'profile_visits': promo.profile_visits,
         'created_at': promo.created_at, 'starts_at': promo.starts_at, 'ends_at': promo.ends_at,
     }
 
@@ -245,13 +251,17 @@ def feed(request):
 
 
 def _feed_page(request):
-    cursor = request.query_params.get('cursor')
     following = bool(request.query_params.get('following'))
     # The sponsored slot belongs at the head of a newest-first page. On an
     # ascending walk it would sit above rows that are chronologically older.
     dial = None
     promos = []
-    if not (cursor or following or request.query_params.get('order') == 'oldest'):
+    ascending = request.query_params.get('order') == 'oldest'
+    if not following and not ascending:
+        # On every page rather than only the first: the reach a package sells is
+        # counted in people, and a reader who scrolls four pages and meets one
+        # campaign was sold a quarter of the run they bought. How many a single
+        # person is offered at all is the desk's daily cap, not this line.
         promos, dial = plan(request.user, KeysetPagination.page_size, target_type='post')
         promos = [p for p in promos if p.target_id.isdigit()]
     promo_ids = [int(p.target_id) for p in promos]
@@ -270,8 +280,19 @@ def _feed_page(request):
     paginator = KeysetPagination(anon_cap=guest_feed_rows())
     rows = paginator.paginate_queryset(qs, request)
     data = PostSerializer(rows, many=True, context={'request': request}).data
+    # A campaign that already took its paid slot from this reader today cannot take
+    # a second one, but its post is still sitting in the ordinary walk below. Marked
+    # as promoted there too, or the payer's advert turns up twice and only the copy
+    # nobody paid for wears the label.
+    spent = served_promos(request.user)
     for item in data:
-        item['promoted'] = False
+        promo = spent.get(str(item['id']))
+        if promo is None:
+            item['promoted'] = False
+            continue
+        item['promoted'] = True
+        item['promo_id'] = promo.pk
+        item['promo'] = promo_card(promo)
     if promo_ids:
         # The sponsored slot is still a post: a private author or a followers-only
         # ad must not reach a stranger because somebody paid for it.

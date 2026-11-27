@@ -77,6 +77,7 @@ interface AppContextType {
   updatePromotion: (id: string, patch: PromoTarget) => Promise<boolean>;
   activePromo: (targetType: 'post' | 'listing', targetId: string) => Promotion | undefined;
   promoEligible: (promo: Promotion) => boolean;
+  trackPromo: (promoId: string, kind: 'click' | 'profile') => void;
   updateLang: (lang: 'en' | 'ne') => void;
   login: (userId: string) => void;
   logout: () => Promise<void>;
@@ -1737,13 +1738,41 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const promoEligible = (promo: Promotion) => {
     const self = currentMe();
     if (!self) return true;
-    if (promo.country && self.country !== promo.country) return false;
-    // Naming cities is a wall, not a preference: anyone the site never placed in one
-    // of them is outside it, including the person who left the box blank.
+    // The server already chose who this card is for, and it is the lenient judge: a
+    // person who never typed an age or a town is not held to the box they left
+    // blank. Rebuilding that wall here only hid campaigns a reader had been served —
+    // and a paid card that never appears leaves its post to turn up further down the
+    // page as an ordinary one, which is how a promotion came to look like a timeline.
+    if (promo.country && self.country && self.country !== promo.country) return false;
+    // Naming cities stays the wall it is on the server: a payer who bought Kathmandu
+    // and Bhaktapur did not buy the person whose town the site never learned.
     const names = promo.cities || [];
     if (names.length && !names.some(c => c.toLowerCase() === (self.city || '').toLowerCase())) return false;
     const age = ageFromDob(self.dob);
-    return age >= promo.ageMin && age <= promo.ageMax;
+    return !age || (age >= promo.ageMin && age <= promo.ageMax);
+  };
+
+  /**
+   * A reader answered a paid card: they opened the post, or went looking for the
+   * person who bought it. The campaign's figures are what its ledger adds up to, so
+   * this is a report rather than a write, and the tap must never wait on it. A
+   * refused one — a run that ended while the tab was open — leaves a number a beat
+   * behind, which is not a thing the reader is owed an error for.
+   */
+  const trackPromo = (promoId: string, kind: 'click' | 'profile') => {
+    if (!promoId) return;
+    if (API_ENABLED) {
+      void api.post(`/api/promotions/${promoId}/track/`, { event: kind }).catch(() => undefined);
+      return;
+    }
+    setDb(prev => ({
+      ...prev,
+      promotions: prev.promotions.map(row => row.id !== promoId ? row : {
+        ...row,
+        clicks: kind === 'click' ? row.clicks + 1 : row.clicks,
+        profileVisits: kind === 'profile' ? (row.profileVisits || 0) + 1 : row.profileVisits,
+      }),
+    }));
   };
 
   const requestPromotion = async (targetType: 'post' | 'listing', targetId: string, cfg: PromoConfig): Promise<boolean> => {
@@ -1899,7 +1928,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         react, myReaction, reactionCount, reactionMix, reactionPeople, myPostReaction, toggleSave, isSaved, toggleListingSave, isListingSaved,
         sharePost, mayShare, countView, blockUser, unblockUser, isBlocked, blockedIds,
         notify, markAllRead, markRead, sendMessage, markThreadRead, addReport, logAudit,
-        requestPromotion, cancelPromotion, activePromo, promoEligible,
+        requestPromotion, cancelPromotion, activePromo, promoEligible, trackPromo,
         setPromotionStatus, updatePromotion,
         updateLang, login, logout, isAuthenticated,
         theme, toggleTheme,

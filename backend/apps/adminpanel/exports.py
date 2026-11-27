@@ -43,7 +43,8 @@ COLUMNS = {
                       'status', 'reviewed_at', 'decided_by', 'decision', 'decision_reason', 'proof_retained'],
     'coin_ledger': ['id', 'created_at', 'username', 'kind', 'coins', 'note'],
     'promotions': ['id', 'created_at', 'user_id', 'username', 'target_type', 'target_id', 'category', 'package',
-                   'status', 'budget_coins', 'impressions', 'clicks', 'ends_at', 'decided_by', 'decision'],
+                   'status', 'budget_coins', 'impressions', 'clicks', 'profile_visits', 'ends_at', 'decided_by',
+                   'decision'],
 }
 
 LABELS = {
@@ -174,7 +175,7 @@ def _promotions(since, until):
         yield [
             item.pk, _stamp(item.created_at), item.owner_id, item.owner.username, item.target_type,
             item.target_id, item.category, item.package, item.status, f'{item.budget:.2f}',
-            item.impressions, item.clicks, _stamp(item.ends_at), by, action,
+            item.impressions, item.clicks, item.profile_visits, _stamp(item.ends_at), by, action,
         ]
 
 

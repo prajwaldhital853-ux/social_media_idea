@@ -49,6 +49,35 @@ class Post(models.Model):
         return f'{self.author.username}: {self.text[:40]}'
 
 
+class SharedPost(models.Model):
+    """One person handing one post to somebody else.
+
+    `Post.share_count` is a tally that only goes up, which is fine for the number
+    under a card and useless for a ranking: it cannot say that *this* reader is the
+    kind who sends things out, so the reach desk would have to guess. A share is the
+    strongest signal on the site short of a follow — a person puts their own name
+    behind the link — so the paid queue wants it per pair, not pooled.
+    """
+
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='shared_posts')
+    post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name='shared_by')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['user', '-created_at'], name='shared_post_user_newest'),
+        ]
+        constraints = [
+            # The tally still counts a repeat share; this row only says the pair
+            # happened, so a second copy of it would be a duplicate, not news.
+            models.UniqueConstraint(fields=['user', 'post'], name='one_share_record_per_user_post'),
+        ]
+
+    def __str__(self):
+        return f'{self.user.username} shared {self.post_id}'
+
+
 class PostMedia(models.Model):
     class Kind(models.TextChoices):
         IMAGE = 'image', 'Image'

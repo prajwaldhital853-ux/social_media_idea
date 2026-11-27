@@ -24,9 +24,9 @@ import { AlgorithmDesk, ReachConfig, SettingLine } from '@/lib/types';
  */
 
 const ORDER = [
-  'algo_weight_like', 'algo_weight_comment', 'algo_weight_save', 'algo_weight_watch',
-  'algo_weight_follow', 'promo_weight_target', 'algo_relevance_floor', 'promo_daily_cap',
-  'promo_repeat_limit', 'promo_organic_gap',
+  'algo_weight_like', 'algo_weight_comment', 'algo_weight_save', 'algo_weight_share',
+  'algo_weight_watch', 'algo_weight_follow', 'promo_weight_target', 'algo_relevance_floor',
+  'promo_daily_cap', 'promo_repeat_limit', 'promo_organic_gap',
 ];
 
 const GROUPS: Record<string, string> = {
@@ -35,7 +35,9 @@ const GROUPS: Record<string, string> = {
   switch: 'The whole platform',
 };
 
-const groupOf = (key: string) => (key === 'promo_global_pause' ? 'switch' : ORDER.indexOf(key) < 6 ? 'weight' : 'gate');
+const isWeight = (key: string) => key.startsWith('algo_weight_') || key === 'promo_weight_target';
+
+const groupOf = (key: string) => (key === 'promo_global_pause' ? 'switch' : isWeight(key) ? 'weight' : 'gate');
 
 export default function AlgorithmScreen() {
   const { noteGate } = useSession();

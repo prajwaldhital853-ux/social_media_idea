@@ -53,7 +53,8 @@ export default function WalletPromotionsPage() {
               <div className="promo-figures">
                 <div><b>{p.impressions.toLocaleString('en-US')}</b><span>{t('impressions')}</span></div>
                 <div><b>{p.clicks.toLocaleString('en-US')}</b><span>{t('clicks')}</span></div>
-                <div><b>{pct(p.clicks, p.impressions)}</b><span>{t('ctr')}</span></div>
+                <div><b>{(p.profileVisits || 0).toLocaleString('en-US')}</b><span>{t('profileVisits')}</span></div>
+                <div><b>{pct(p.clicks, p.impressions)}</b><span>{t('openRate')}</span></div>
                 <div><b title={waiting ? t('notChargedYet') : undefined}>{p.coins}</b><span>{waiting ? t('notChargedYet') : t('spent')}</span></div>
               </div>
 

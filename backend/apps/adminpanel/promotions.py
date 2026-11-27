@@ -42,8 +42,8 @@ from .models import PromoReview
 
 # The ranking the feed reads. Shipped as the numbers the code used to hard-code, so
 # opening this desk changes nothing on the site until somebody turns a dial.
-WEIGHTS = ('algo_weight_like', 'algo_weight_comment', 'algo_weight_save', 'algo_weight_watch',
-           'algo_weight_follow')
+WEIGHTS = ('algo_weight_like', 'algo_weight_comment', 'algo_weight_save', 'algo_weight_share',
+           'algo_weight_watch', 'algo_weight_follow')
 ALGO_KEYS = WEIGHTS + ('promo_weight_target', 'algo_relevance_floor', 'promo_daily_cap',
                        'promo_repeat_limit', 'promo_organic_gap')
 SWITCH = 'promo_global_pause'
@@ -279,6 +279,7 @@ def row(promo, last=None, deep=False):
         'charged': promo.starts_at is not None,
         'impressions': promo.impressions,
         'clicks': promo.clicks,
+        'profile_visits': promo.profile_visits,
         # What the package promised against what the ledger has actually handed out.
         # A payer reading "up to 40,000 people" beside a campaign that reached 300 is
         # a conversation the desk should be able to have without opening a console.

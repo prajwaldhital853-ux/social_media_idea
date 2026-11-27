@@ -171,6 +171,7 @@ def sync(request):
                 'package': promo.package,
                 'impressions': promo.impressions,
                 'clicks': promo.clicks,
+                'profile_visits': promo.profile_visits,
                 'created_at': promo.created_at,
                 'starts_at': promo.starts_at,
                 'ends_at': promo.ends_at,

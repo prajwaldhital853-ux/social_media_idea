@@ -87,14 +87,22 @@ class PromotionTests(TestCase):
             feed = auth_client(user).get('/api/feed/')
             self.assertTrue(all(not p.get('promoted') for p in feed.data['results']))
 
-    def test_promo_only_on_first_page(self):
+    def test_a_paid_slot_is_spent_once_and_stays_labelled(self):
         self.promote()
         client = auth_client(self.match)
         page1 = client.get('/api/feed/')
         self.assertTrue(page1.data['results'][0]['promoted'])
         if page1.data['next_cursor']:
             page2 = client.get('/api/feed/?cursor=' + page1.data['next_cursor'])
-            self.assertTrue(all(not p.get('promoted') for p in page2.data['results']))
+            # The campaign had its one paid slot for this person today, so nothing
+            # paid rides below it. But its post is back in the ordinary walk, and it
+            # keeps its label there — an unlabelled copy is how a promotion ends up
+            # reading to its own payer as a chronological feed.
+            for row in page2.data['results']:
+                if row['id'] == self.post.pk:
+                    self.assertTrue(row['promoted'], 'a served campaign stays disclosed')
+                else:
+                    self.assertFalse(row['promoted'], 'and takes no second slot on the same day')
 
     def test_interest_ranking(self):
         engaged = make_user('promoengaged', date_of_birth='1998-04-12', country='Nepal')

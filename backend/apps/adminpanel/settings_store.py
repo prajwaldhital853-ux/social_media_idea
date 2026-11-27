@@ -170,6 +170,9 @@ DEFAULTS = {
     'algo_weight_comment': (4, 'int', 'Weight of a comment',
                             'Points a past comment on this category is worth.', 'promo'),
     'algo_weight_save': (5, 'int', 'Weight of a save', 'Points a saved post in this category is worth.', 'promo'),
+    'algo_weight_share': (6, 'int', 'Weight of a share',
+                          'Points a post this person sent to somebody else is worth. Rarer than a '
+                          'save and a stronger endorsement, so it sits beside the follow dial.', 'promo'),
     'algo_weight_watch': (1, 'int', 'Weight of a reel watched',
                          'Points a reel this person played is worth.', 'promo'),
     'algo_weight_follow': (6, 'int', 'Weight of following the payer',
@@ -177,8 +180,11 @@ DEFAULTS = {
     'promo_weight_target': (1, 'int', 'Weight of one audience match',
                             'Points for each of age band, country and city the payer asked for '
                             'that this person actually fits.', 'promo'),
-    'algo_relevance_floor': (2, 'int', 'Lowest score worth showing',
-                             'A campaign below this relevance is skipped instead of padded into the feed.',
+    'algo_relevance_floor': (2, 'int', 'Score that leads the paid queue',
+                             'A person scoring this or above is served the campaign ahead of everybody '
+                             'else. Below it they are still offered it — the reach a package promises is '
+                             'mostly strangers — but only after the readers who fit, and between those ads '
+                             'the better-received one goes first.',
                              'promo'),
     'promo_daily_cap': (2, 'int', 'Promotions per person per day',
                         'How often one payer may appear in a feed in a day.', 'promo'),

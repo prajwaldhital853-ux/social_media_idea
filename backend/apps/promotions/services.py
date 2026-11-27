@@ -5,9 +5,9 @@ here, out of what the platform knows about the person holding the feed — the a
 and the country they gave the site, the categories they keep coming back to,
 whether they already follow the payer, and what they did to this very post. Each
 of those is worth what the admin console says it is worth: the dials for likes,
-comments, saves, reel watches, follows and audience matching used to be typed into
-this file, which made "the Admin can change how reach is chosen" a sentence nobody
-could act on. They are rows now and this reads the rows.
+comments, saves, shares, reel watches, follows and audience matching used to be
+typed into this file, which made "the Admin can change how reach is chosen" a
+sentence nobody could act on. They are rows now and this reads the rows.
 
 Three rules hold the rest of it together. A person is not shown the same campaign
 twice in one day. A campaign stops being served once the impression ledger says it
@@ -22,7 +22,7 @@ from django.db.models import Count, F, Q
 from django.utils import timezone
 from django.utils.dateparse import parse_date
 
-from .models import Promotion, PromoImpression
+from .models import Promotion, PromoEvent, PromoImpression
 
 # The numbers the platform shipped with, so a feed still scores the same way on a
 # server where nobody has opened the desk and the settings row does not exist yet.
@@ -30,6 +30,7 @@ SHIPPED = {
     'algo_weight_like': 3,
     'algo_weight_comment': 4,
     'algo_weight_save': 5,
+    'algo_weight_share': 6,
     'algo_weight_watch': 1,
     'algo_weight_follow': 6,
     'promo_weight_target': 1,
@@ -68,7 +69,7 @@ def controls():
     return {
         'weights': {key: _whole(typed.get(key), SHIPPED[key]) for key in (
             'algo_weight_like', 'algo_weight_comment', 'algo_weight_save',
-            'algo_weight_watch', 'algo_weight_follow',
+            'algo_weight_share', 'algo_weight_watch', 'algo_weight_follow',
         )},
         'target': _whole(typed.get('promo_weight_target'), SHIPPED['promo_weight_target']),
         'floor': _whole(typed.get('algo_relevance_floor'), SHIPPED['algo_relevance_floor']),
@@ -180,6 +181,7 @@ class Affinity:
         if not name:
             return self.reels()
         if name not in self._categories:
+            from apps.posts.models import SharedPost
             from apps.reactions.models import Reaction
             from apps.saved.models import SavedPost
             post_ids = _category_ids(name)
@@ -193,10 +195,14 @@ class Affinity:
             saves = SavedPost.objects.filter(
                 user=self.user, post__category=name, created_at__gte=self.since,
             ).count()
+            shares = SharedPost.objects.filter(
+                user=self.user, post__category=name, created_at__gte=self.since,
+            ).count()
             self._categories[name] = (
                 likes * self.weights['algo_weight_like']
                 + comments * self.weights['algo_weight_comment']
                 + saves * self.weights['algo_weight_save']
+                + shares * self.weights['algo_weight_share']
                 + self.reels()
             )
         return self._categories[name]
@@ -222,13 +228,14 @@ class Affinity:
     def touch(self, promo):
         """What this person did to the very thing being promoted.
 
-        Someone who saved or argued under a post is not a spent lead — they are the
-        likeliest reader the platform can find, so the paid card goes to them and
-        the payer gets the engagement they bought rather than a stranger's scroll.
+        Someone who saved, sent out or argued under a post is not a spent lead — they
+        are the likeliest reader the platform can find, so the paid card goes to them
+        and the payer gets the engagement they bought rather than a stranger's scroll.
         """
         key = (promo.target_type, str(promo.target_id))
         if key not in self._touch:
             from apps.comments.models import Comment
+            from apps.posts.models import SharedPost
             from apps.reactions.models import Reaction
             from apps.saved.models import SavedPost
             pk = int(key[1]) if key[0] == 'post' and key[1].isdigit() else None
@@ -239,10 +246,12 @@ class Affinity:
                     user=self.user, target_type='post', target_id=key[1]).count()
                 comments = Comment.objects.filter(author=self.user, post_id=pk).count()
                 saves = SavedPost.objects.filter(user=self.user, post_id=pk).exists()
+                shares = SharedPost.objects.filter(user=self.user, post_id=pk).exists()
                 self._touch[key] = (
                     likes * self.weights['algo_weight_like']
                     + comments * self.weights['algo_weight_comment']
                     + (self.weights['algo_weight_save'] if saves else 0)
+                    + (self.weights['algo_weight_share'] if shares else 0)
                 )
         return self._touch[key]
 
@@ -293,6 +302,57 @@ def _shelf():
         return {}
 
 
+def ad_priors(promos, weights):
+    """What each advertised post has already earned, in the console's own points.
+
+    A reader with no history in this category leaves the platform nothing to order
+    two campaigns by, and that tie used to fall to who paid the most — which says
+    nothing about whether this stranger would stop scrolling at all. The ad's own
+    record does: a post people liked, argued under and shared is one they would stop
+    for again. Each of those spends the dial the desk already sets for it, so a
+    stranger's queue is ordered by the advert rather than by an empty history.
+    """
+    ids = [int(promo.target_id) for promo in promos
+           if promo.target_type == Promotion.Target.POST and str(promo.target_id or '').isdigit()]
+    if not ids:
+        return {}
+    from apps.posts.models import Post
+    by_post = {row['pk']: row for row in Post.objects.filter(pk__in=ids).values(
+        'pk', 'like_count', 'comment_count', 'share_count', 'views')}
+    out = {}
+    for promo in promos:
+        key = str(promo.target_id or '')
+        row = by_post.get(int(key)) if key.isdigit() else None
+        if row is None:
+            continue
+        out[promo.pk] = (
+            row['like_count'] * weights['algo_weight_like']
+            + row['comment_count'] * weights['algo_weight_comment']
+            + row['share_count'] * weights['algo_weight_share']
+            + row['views'] * weights['algo_weight_watch']
+        )
+    return out
+
+
+def served_promos(user, day=None):
+    """The campaigns this person was already handed today, by advertised post id.
+
+    A paid card takes one slot per campaign, so on the next page that post is back in
+    the ordinary walk — and an unlabelled copy of it reads as a chronological listing
+    of somebody's advert, which is the one thing a promotion should never look like.
+    The feed therefore marks those rows as promoted without spending a second slot.
+    """
+    if not user.is_authenticated:
+        return {}
+    rows = Promotion.objects.filter(
+        status=Promotion.Status.ACTIVE,
+        target_type=Promotion.Target.POST,
+        impression_rows__viewer=user,
+        impression_rows__day=day or timezone.now().date(),
+    ).distinct()
+    return {str(promo.target_id): promo for promo in rows if str(promo.target_id or '').isdigit()}
+
+
 def seen_today(user):
     """Campaigns this person was already handed today — the daily cap, in rows."""
     return set(PromoImpression.objects.filter(
@@ -323,8 +383,41 @@ def serving(user, promos, today=None):
     return written
 
 
+def answer(user, promo, kind, today=None):
+    """Write down that this person answered a paid card, and move its tally.
+
+    The same shape as `serving`, for the same reason: one row per person per campaign
+    per day, and the number on the campaign rises only when a row was really added.
+    An open rate the payer reads is therefore a rate between two things the ledger
+    can show happened, and a script that posts at the door a thousand times moves
+    nothing after the first answer.
+    """
+    if not user.is_authenticated or promo is None:
+        return False
+    day = today or timezone.now().date()
+    column = 'clicks' if kind == PromoEvent.Kind.CLICK else 'profile_visits'
+    try:
+        with db_atomic.atomic():
+            PromoEvent.objects.create(promotion=promo, viewer=user, day=day, kind=kind)
+            Promotion.objects.filter(pk=promo.pk).update(**{column: F(column) + 1})
+    except IntegrityError:
+        return False
+    return True
+
+
 def candidates(user, limit=2, target_type=None, tuned=None):
-    """The campaigns this person may be shown right now, most likely first."""
+    """The campaigns this person may be shown right now, most likely first.
+
+    Two tiers, because a payer buys both ends of the funnel. The named tier is the
+    audience the platform can point at: the people who liked, commented, saved,
+    shared or watched this kind of post lately, and the ones who already follow the
+    payer.
+    Behind it sits everyone inside the audience the payer bought who has no history
+    to score — and they used to be dropped, which left a campaign selling only to
+    people who had already bought. They are served now, ordered by what the ad has
+    earned rather than by the wallet that bought it, so the reach a package promises
+    is reach the platform actually delivers.
+    """
     dial = tuned or controls()
     if dial['paused'] or not user.is_authenticated:
         return []
@@ -354,7 +447,8 @@ def candidates(user, limit=2, target_type=None, tuned=None):
             viewer=user, promotion_id__in=[promo.pk for promo in promos],
         ).values('promotion_id').annotate(total=Count('id')):
             shown[row['promotion_id']] = row['total']
-    picked = []
+    priors = ad_priors(promos, dial['weights'])
+    named, strangers = [], []
     for promo in promos:
         if promo.pk in already:
             continue
@@ -365,13 +459,19 @@ def candidates(user, limit=2, target_type=None, tuned=None):
         if not audience_matches(promo, user):
             continue
         score = scores.score(promo, user)
-        if promo.owner_id != user.pk and score < dial['floor']:
-            continue
-        picked.append((-score, -float(promo.budget or 0), promo.created_at, promo))
+        prior = priors.get(promo.pk, 0)
+        # The same money and the same wait still break a tie, so one campaign
+        # cannot outwait the rest of the shelf.
+        wallet = (-float(promo.budget or 0), promo.created_at)
+        if promo.owner_id == user.pk or score >= dial['floor']:
+            named.append(((-score,) + wallet, promo))
+        else:
+            strangers.append(((-prior,) + wallet + (-score,), promo))
     # Equally likely people, equally willing payers: the bigger buy leads, and the
-    # older campaign leads inside that, so one campaign cannot outwait the rest.
-    picked.sort(key=lambda row: (row[0], row[1], row[2]))
-    return [row[3] for row in picked][:max(0, min(limit, room))]
+    # older campaign leads inside that. A named reader never waits behind a stranger.
+    for tier in (named, strangers):
+        tier.sort(key=lambda row: row[0])
+    return [promo for _, promo in (named + strangers)][:max(0, min(limit, room))]
 
 
 def slots(page_size, gap):

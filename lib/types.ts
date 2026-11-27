@@ -248,6 +248,8 @@ export interface Promotion {
   status: 'pending' | 'active' | 'paused' | 'ended' | 'rejected';
   impressions: number;
   clicks: number;
+  /** Readers the paid card walked to the payer's own page. */
+  profileVisits?: number;
 }
 
 export interface PromoPackage {

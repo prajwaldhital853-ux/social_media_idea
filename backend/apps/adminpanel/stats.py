@@ -338,9 +338,9 @@ def health(cutoffs, media=None):
 
 # --- promotion performance ---------------------------------------------------
 
-# The contract's nine metrics. Two have no event behind them anywhere in this
-# codebase, and the API says so per campaign instead of sending a number that
-# would be read as "zero people did it".
+# The contract's nine metrics. One has no event behind it anywhere in this codebase,
+# and the API says so per campaign instead of sending a number that would be read as
+# "zero people did it".
 METRIC_LABELS = (
     ('views', 'Views'),
     ('opens', 'Opens'),
@@ -353,7 +353,6 @@ METRIC_LABELS = (
     ('coins_spent', 'Coins spent'),
 )
 UNMEASURED = {
-    'profile_visits': 'Nothing in the app records a profile view, so there is no event to count.',
     'listing_messages': 'A message carries no listing id, so no campaign can be credited with it.',
 }
 
@@ -407,6 +406,9 @@ def promotion_row(promo, now):
         'metrics': {
             'views': promo.impressions,
             'opens': promo.clicks,
+            # The reader's own tap on the paid card, counted once per person per day
+            # against the same reach ledger that sold the impression.
+            'profile_visits': promo.profile_visits,
             'reactions': reactions,
             'comments': comments,
             'saves': saves,

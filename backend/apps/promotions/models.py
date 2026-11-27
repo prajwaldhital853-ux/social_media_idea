@@ -34,6 +34,10 @@ class Promotion(models.Model):
     status = models.CharField(max_length=10, choices=Status.choices, default=Status.DRAFT)
     impressions = models.PositiveIntegerField(default=0)
     clicks = models.PositiveIntegerField(default=0)
+    # How many people the paid card walked over to the payer's profile. For someone
+    # selling, that tap is closer to a sale than the ad view was, and until a reader's
+    # tap is written down the number simply does not exist.
+    profile_visits = models.PositiveIntegerField(default=0)
     # When the money was actually taken and the run actually began — approval, not
     # the order. A campaign that was never approved has no start and no bill.
     starts_at = models.DateTimeField(null=True, blank=True)
@@ -87,3 +91,40 @@ class PromoImpression(models.Model):
 
     def __str__(self):
         return f'Promo {self.promotion_id} shown to {self.viewer_id} on {self.day}'
+
+
+class PromoEvent(models.Model):
+    """One thing a reader did with a paid card, counted once a day per person.
+
+    The counters on the campaign are what these rows add up to, for the same reason
+    the impression ledger exists: an open rate a stranger could raise by POSTing to
+    an endpoint is not a number a payer can be shown. One row per person, per day,
+    per kind, so the rate answers "how many of the people you reached answered",
+    which is the question the package's promise was ever measured against.
+    """
+
+    class Kind(models.TextChoices):
+        CLICK = 'click', 'Opened the promoted post'
+        PROFILE = 'profile', 'Visited the payer'
+
+    promotion = models.ForeignKey(Promotion, on_delete=models.CASCADE, related_name='events')
+    viewer = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='promo_events',
+    )
+    kind = models.CharField(max_length=10, choices=Kind.choices, default=Kind.CLICK)
+    day = models.DateField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['promotion', 'viewer', 'day', 'kind'], name='promo_event_once_per_day',
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['promotion', '-created_at'], name='promo_event_by_campaign'),
+        ]
+
+    def __str__(self):
+        return f'Promo {self.promotion_id} {self.kind} by {self.viewer_id} on {self.day}'

@@ -97,7 +97,8 @@ function FeedFollow({ author }: { author: User }) {
 
 export default function PostCard({ post, author, featured }: PostCardProps) {
   const router = useRouter();
-  const { db, me, t, deletePost, toggleSave, isSaved, sharePost, mayShare, openComposer, activePromo, promoEligible, showToast, showConfirm, reactionCount } = useApp();
+  const { db, me, t, deletePost, toggleSave, isSaved, sharePost, mayShare, openComposer, activePromo,
+    promoEligible, trackPromo, showToast, showConfirm, reactionCount, serverMode } = useApp();
   const [menuOpen, setMenuOpen] = useState(false);
   const [showComments, setShowComments] = useState(false);
   const [reporting, setReporting] = useState(false);
@@ -108,6 +109,10 @@ export default function PostCard({ post, author, featured }: PostCardProps) {
   const warmed = useRef(false);
 
   const promo = activePromo('post', post.id);
+  // The disclosure comes from the server's own answer, not only from what this cache
+  // happens to hold: a card whose campaign row has not landed here yet is still a
+  // post somebody paid for, and a reader is owed the line over it either way.
+  const paid = !!promo || post.promoted;
   const own = me?.id === post.uid;
   const saved = isSaved(post.id);
 
@@ -125,11 +130,20 @@ export default function PostCard({ post, author, featured }: PostCardProps) {
     : db.reactions.filter(r => r.targetType === 'media' && r.targetId.startsWith(`${post.id}#m`)).length;
 
   if (promoHidden) return null;
-  if (promo && !own && !promoEligible(promo)) return null;
+  // Against a server the audience was settled before this row was ever written, and a
+  // post the reader is allowed to read is not taken back because a campaign's target
+  // moved under it — it loses the paid line, not the card. A demo build has no server
+  // to settle it, so the wall is played out here instead.
+  if (promo && !own && !serverMode && !promoEligible(promo)) return null;
 
-  const openPost = () => router.push(`/post/${post.id}`);
-  const openMedia = (index: number) => router.push(`/post/${post.id}/media/${index}`);
-  const openReel = (index: number) => router.push(`/video/${post.id}-${index}`);
+  /** A tap that leaves the feed for the thing somebody bought. Nobody waits on the tally. */
+  const answer = (kind: 'click' | 'profile') => {
+    if (promo && !own) void trackPromo(promo.id, kind);
+  };
+
+  const openPost = () => { answer('click'); router.push(`/post/${post.id}`); };
+  const openMedia = (index: number) => { answer('click'); router.push(`/post/${post.id}/media/${index}`); };
+  const openReel = (index: number) => { answer('click'); router.push(`/video/${post.id}-${index}`); };
 
   // Opening the sheet is not a share, and neither is opening another app — that
   // sheet can be cancelled with nothing sent. The counter moves only when the
@@ -191,13 +205,15 @@ export default function PostCard({ post, author, featured }: PostCardProps) {
 
   return (
     <article className={`post ${featured ? 'post-featured' : ''}`} onClick={onArticleClick} onPointerEnter={warmRoutes} onTouchStart={warmRoutes}>
-      {promo && (
+      {paid && (
         <div className="promoted-row">
           <span className="promoted-chip">{IC.chart}{t('promoted')}</span>
-          <button type="button" className="promoted-why" onClick={e => { e.stopPropagation(); setWhyOpen(v => !v); }}>
-            {t('whySee')}
-          </button>
-          {whyOpen && (
+          {promo && (
+            <button type="button" className="promoted-why" onClick={e => { e.stopPropagation(); setWhyOpen(v => !v); }}>
+              {t('whySee')}
+            </button>
+          )}
+          {whyOpen && promo && (
             <div className="promoted-pop" onClick={e => e.stopPropagation()}>
               <p>{me ? t('promoWhy') : t('promoWhyGuest')}</p>
               <p className="promoted-target">
@@ -210,12 +226,12 @@ export default function PostCard({ post, author, featured }: PostCardProps) {
       )}
 
       <div className="post-top">
-        <Link href={`/u/${author.username}`} className="post-avatar" onClick={e => e.stopPropagation()}>
+        <Link href={`/u/${author.username}`} className="post-avatar" onClick={e => { e.stopPropagation(); answer('profile'); }}>
           <Avatar user={author} size={40} />
         </Link>
         <div className="post-content">
           <div className="post-header">
-            <Link href={`/u/${author.username}`} className="post-name" onClick={e => e.stopPropagation()}>
+            <Link href={`/u/${author.username}`} className="post-name" onClick={e => { e.stopPropagation(); answer('profile'); }}>
               <span className="post-name-pencil" aria-hidden="true">{IC.edit}</span>
               {author.name || author.username}
             </Link>

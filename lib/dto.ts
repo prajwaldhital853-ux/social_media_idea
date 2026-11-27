@@ -280,6 +280,7 @@ export function mapPromotion(row: any): Promotion {
     status: row.status || 'pending',
     impressions: amount(row.impressions),
     clicks: amount(row.clicks),
+    profileVisits: amount(row.profile_visits),
   };
 }
 

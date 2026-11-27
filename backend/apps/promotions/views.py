@@ -1,6 +1,5 @@
 from decimal import Decimal
 
-from django.db.models import F
 from django.utils import timezone
 from rest_framework import serializers, status
 from rest_framework.decorators import api_view, permission_classes
@@ -11,11 +10,13 @@ from apps.adminpanel import rbac
 from apps.common.api import person
 from apps.common.config import package_by_id
 from apps.common.pagination import KeysetPagination
+from apps.common.rules import rate, seat
 from apps.marketplace.models import Listing
 from apps.posts.models import Post
 from apps.wallet.models import Wallet
 
-from .models import Promotion
+from . import services
+from .models import PromoImpression, Promotion, PromoEvent
 
 
 CITY_LIMIT = 12
@@ -51,10 +52,10 @@ class PromotionSerializer(serializers.ModelSerializer):
         model = Promotion
         fields = [
             'id', 'owner', 'owner_username', 'target_type', 'target_id', 'category', 'age_min', 'age_max',
-            'country', 'cities', 'budget', 'package', 'status', 'impressions', 'clicks',
+            'country', 'cities', 'budget', 'package', 'status', 'impressions', 'clicks', 'profile_visits',
             'created_at', 'starts_at', 'ends_at',
         ]
-        read_only_fields = ['id', 'owner', 'status', 'impressions', 'clicks',
+        read_only_fields = ['id', 'owner', 'status', 'impressions', 'clicks', 'profile_visits',
                             'created_at', 'starts_at', 'ends_at']
 
     def validate_cities(self, value):
@@ -132,24 +133,44 @@ def promotion_list(request):
 @api_view(['POST'])
 @permission_classes([IsAuthenticatedOrReadOnly])
 def promotion_track(request, pk):
-    """Count a click on a paid card.
+    """Count a reader who answered a paid card: opened it, or went looking for the payer.
 
-    An impression is no longer something a caller can report. The feed writes one
-    ledger row per person per day when it actually puts the card on the screen
-    (`services.serving`), and the counter on the campaign is what those rows add up
-    to — a reach number a stranger could POST to is not one a payer can be billed
-    against.
+    Neither number is something a caller can report. The feed writes one impression
+    row per person per day when it actually puts the card on the screen
+    (`services.serving`), and this writes the answer under the same rule — one row
+    per person, per campaign, per day, per kind — so the open rate a payer reads is a
+    rate between two counts the ledger can be shown to have happened, and a script
+    hammering this door moves nothing after the first honest answer.
+
+    Everything that does not qualify is answered with the campaign's real numbers and
+    no complaint. A tap from a stranger has no reach row to hang on, a card the run no
+    longer serves is not an advert any more, and none of that is the reader's error.
     """
     promo = Promotion.objects.filter(pk=pk).first()
     if not promo:
         return Response({'detail': 'No such promotion.'}, status=404)
+
+    def counted():
+        return {
+            'id': promo.pk, 'impressions': promo.impressions, 'clicks': promo.clicks,
+            'profile_visits': promo.profile_visits,
+        }
+
     event = request.data.get('event')
-    if event == 'click':
-        Promotion.objects.filter(pk=pk).update(clicks=F('clicks') + 1)
-    elif event != 'impression':
+    # A tab built before the ledger was written still reports the impression it used
+    # to be allowed to post. It is not wrong, it is just not the source any more.
+    if event == 'impression':
+        return Response(counted())
+    if event not in (PromoEvent.Kind.CLICK, PromoEvent.Kind.PROFILE):
         return Response({'detail': 'Unknown event.'}, status=400)
+    if not request.user.is_authenticated or promo.status != Promotion.Status.ACTIVE:
+        return Response(counted())
+    if not PromoImpression.objects.filter(promotion=promo, viewer=request.user).exists():
+        return Response(counted())
+    rate(f'promo-track:{seat(request)}', 'spam_view_per_minute', 60, 120)
+    services.answer(request.user, promo, event)
     promo.refresh_from_db()
-    return Response({'id': promo.pk, 'impressions': promo.impressions, 'clicks': promo.clicks})
+    return Response(counted())
 
 
 @api_view(['GET'])
