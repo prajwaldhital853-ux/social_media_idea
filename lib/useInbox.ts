@@ -9,17 +9,19 @@ export interface Conversation {
   other: User;
   last: Message | null;
   unread: number;
-  /** A mutual follow with no thread yet, from the band above the conversations. */
+  /** I follow them but we have never spoken — the band above the conversations. */
   suggested?: boolean;
 }
 
 /**
- * The inbox the messages screen and the top-bar popover both need: the mutual
- * follows you have not written to as one band on top, then one row per thread,
- * newest activity first.
+ * The inbox the messages screen and the top-bar popover both need: the people
+ * you follow but have not written to as one band on top, then one row per
+ * thread, newest activity first. The band is one-way — following someone puts
+ * them in your inbox; their inbox only learns of you when you send a message
+ * or they follow you back.
  */
 export function useInbox(enabled = true): { conversations: Conversation[]; inbox: ReturnType<typeof useList> } {
-  const { db, me, mutualIds, serverMode } = useApp();
+  const { db, me, followedIds, serverMode } = useApp();
 
   const inbox = useList(
     'inbox',
@@ -40,8 +42,8 @@ export function useInbox(enabled = true): { conversations: Conversation[]; inbox
         const current = last.get(otherId);
         if (!current || m.ts >= current.ts) last.set(otherId, m);
       }
-      // Two people who follow each other belong in the messages column whether or
-      // not they have spoken: the band on top is where a first hello starts. Only
+      // Everyone I follow belongs in the messages column whether or not they
+      // follow me back: the band on top is where a first hello starts. Only
       // once the real threads have arrived — before that it would sit above a
       // list that is about to appear on top of it.
       const talked = new Set(inbox.ids);
@@ -53,7 +55,7 @@ export function useInbox(enabled = true): { conversations: Conversation[]; inbox
         })
         .filter((c): c is Conversation => !!c);
       const fresh = inbox.loaded
-        ? mutualIds()
+        ? followedIds()
             .filter(id => !talked.has(id))
             .map(id => db.users.find(u => u.id === id))
             .filter((u): u is User => !!u)
@@ -77,7 +79,7 @@ export function useInbox(enabled = true): { conversations: Conversation[]; inbox
       msgs.sort((a, b) => a.ts - b.ts);
       out.push({ other, last: msgs[msgs.length - 1], unread: msgs.filter(m => m.to === me.id && !m.read).length });
     });
-    for (const id of mutualIds()) {
+    for (const id of followedIds()) {
       if (byOther.has(id)) continue;
       const other = db.users.find(u => u.id === id);
       if (other) out.push({ other, last: null, unread: 0, suggested: true });
@@ -85,7 +87,7 @@ export function useInbox(enabled = true): { conversations: Conversation[]; inbox
     // One order for both builds: the band above the threads, threads by activity.
     return out.sort((a, b) => Number(!!b.suggested) - Number(!!a.suggested)
       || (b.last?.ts ?? 0) - (a.last?.ts ?? 0) || a.other.name.localeCompare(b.other.name));
-  }, [db.messages, db.users, db.follows, me, inbox.ids, serverMode]);
+  }, [db.messages, db.users, db.follows, db.blocks, me, inbox.ids, serverMode]);
 
   return { conversations, inbox };
 }

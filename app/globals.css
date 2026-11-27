@@ -5924,6 +5924,23 @@ textarea {
   font-variant-numeric: tabular-nums;
 }
 
+.publish-dismiss {
+  margin-top: 10px;
+  padding: 8px 16px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.publish-dismiss:hover {
+  color: var(--ink);
+  border-color: var(--ink);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .chooser-overlay,
   .chooser-card,
