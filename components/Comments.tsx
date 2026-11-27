@@ -209,6 +209,9 @@ export default function Comments({ postId, onClose, mediaIndex }: { postId: stri
   const topLevelComments = serverMode
     ? fromServer
     : allComments.filter(c => !c.parentId).sort((a, b) => sort === 'newest' ? b.ts - a.ts : a.ts - b.ts);
+  // The cached lines this sheet could fill, replies left out because they hang
+  // under a row rather than taking one of their own.
+  const threaded = allComments.filter(c => !c.parentId).length;
   const { limit: commentLimit, pending: commentsPending, sentinel: commentsSentinel, hasMore: moreComments } = useWindowed(
     topLevelComments.length, 10, `${postId}|${mediaIndex}|${sort}`,
     serverMode ? {
@@ -513,7 +516,7 @@ export default function Comments({ postId, onClose, mediaIndex }: { postId: stri
             <option value="oldest">Oldest</option>
           </select>
         </label>
-        <span>{serverMode && !isMedia ? (db.posts.find(p => p.id === postId)?.comments ?? allComments.length) : allComments.length}</span>
+        <span>{serverMode && !isMedia ? (db.posts.find(p => p.id === postId)?.comments ?? threaded) : threaded}</span>
       </div>
       <div className="comments-list" ref={list}>
         {serverMode && stream.error ? (

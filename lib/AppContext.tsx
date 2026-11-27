@@ -1197,9 +1197,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const arrived = prev.comments.some(existing => existing.id === saved.id);
       const next = applyFragment(prev, { comments: [saved] });
       if (arrived) return next;
+      // The tally on the card is the number of lines its sheet can fill, so a
+      // reply under a comment or a word left on one photo adds no line to it.
+      const line = !saved.parentId && saved.mediaIndex === undefined;
       return {
         ...next,
-        posts: next.posts.map(p => (p.id === saved.pid ? { ...p, comments: (p.comments ?? 0) + 1 } : p)),
+        posts: next.posts.map(p => (p.id === saved.pid && line ? { ...p, comments: (p.comments ?? 0) + 1 } : p)),
       };
     });
     return saved;

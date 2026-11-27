@@ -3,6 +3,7 @@ from django.db.models import Count, F, Q
 from rest_framework import viewsets
 from rest_framework.permissions import BasePermission, IsAuthenticatedOrReadOnly, SAFE_METHODS
 
+from apps.common.api import thread_counts
 from apps.common.rules import blocked_wording, write_gate
 from apps.notifications.services import notify
 from apps.posts.models import Post
@@ -22,7 +23,10 @@ def _pulse_comments(post, *, row=None, deleted_ids=None, parent_id=None, author_
     from apps.common import pulse
     from apps.profiles.models import Profile
 
-    count = Post.objects.filter(pk=post.pk).values_list('comment_count', flat=True).first() or 0
+    # The number every card and sheet wears is the number of lines that sheet
+    # can fill, so a reply landing under its parent moves nothing a reader can
+    # count against the list in front of them.
+    count = thread_counts([post.pk]).get(str(post.pk), 0)
     event = {'post_id': str(post.pk), 'comments': count}
     pulse.to_user(post.author_id, 'comment', **event)
     room = post.audience == Post.Audience.PUBLIC and not Profile.objects.filter(
@@ -66,12 +70,18 @@ class CommentViewSet(viewsets.ModelViewSet):
         if parent:
             qs = qs.filter(parent_id=parent)
         media_index = self.request.query_params.get('media_index')
-        if media_index is not None and media_index != '':
+        on_media = media_index is not None and media_index != ''
+        if on_media:
             qs = qs.filter(media_index=media_index)
         # The comment stream pages over top-level comments only; replies are a
-        # separate keyset under their parent so one long thread cannot hide the rest.
+        # separate keyset under their parent so one long thread cannot hide the
+        # rest. A word left on one photo is a line of that picture's own thread,
+        # so the post's stream pages without it — otherwise the reader gets a
+        # slot in the page that renders as nothing.
         if self.request.query_params.get('top'):
             qs = qs.filter(parent__isnull=True)
+            if not on_media:
+                qs = qs.filter(media_index__isnull=True)
         return qs
 
     def create(self, request, *args, **kwargs):

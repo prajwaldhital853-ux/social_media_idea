@@ -163,7 +163,10 @@ export function mapPost(row: any): Post {
     activity: row.activity === 'profile' || row.activity === 'cover' ? row.activity : undefined,
     audience: row.audience === 'followers' ? 'followers' : 'public',
     likes: amount(row.like_count),
-    comments: amount(row.comment_count),
+    // The tally the comment sheet fills, not the engagement tally: a reply sits
+    // under its parent and a word on one photo sits in that picture, and a card
+    // that counted both read as a number with lines missing.
+    comments: amount(row.thread_count ?? row.comment_count),
     shares: amount(row.share_count),
     views: amount(row.views),
     reactionKinds: row.reaction_kinds || undefined,
