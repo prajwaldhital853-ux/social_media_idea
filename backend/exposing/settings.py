@@ -274,6 +274,18 @@ GOOGLE_CLIENT_ID = os.environ.get('GOOGLE_CLIENT_ID', '')
 # host, so this is the browser origin rather than the API's own.
 SITE_URL = (os.environ.get('EXPOSING_SITE_URL') or 'https://exposing.neptech.online').rstrip('/')
 
+# Web Push (VAPID). A pair generated once with `python manage.py pushkeys` and
+# kept here as raw base64url — no PEM, because an environment key cannot hold
+# newlines honestly. Both halves are needed to send; the public half alone is
+# what a browser asks its user about. Left blank, the platform quietly does no
+# pushing and the in-app bell carries every event on its own.
+VAPID_PUBLIC_KEY = (os.environ.get('VAPID_PUBLIC_KEY') or '').strip()
+VAPID_PRIVATE_KEY = (os.environ.get('VAPID_PRIVATE_KEY') or '').strip()
+# VAPID says who is writing, in an email address, and a push service will
+# quarantine mail from an address that goes nowhere. The support mailbox is the
+# one that a human reads.
+VAPID_CLAIMS_EMAIL = (os.environ.get('VAPID_CLAIMS_EMAIL') or 'support@exposing.app').strip()
+
 SECURE_CONTENT_TYPE_NOSNIFF = True
 SECURE_BROWSER_XSS_FILTER = True
 X_FRAME_OPTIONS = 'DENY'

@@ -27,7 +27,8 @@ from apps.messages.models import Message
 from apps.posts.models import Post
 from apps.posts.views import visible_posts
 
-from .models import Notification
+from . import push
+from .models import Notification, PushSubscription
 
 class NotificationSerializer(serializers.ModelSerializer):
     actor_username = serializers.CharField(source='actor.username', read_only=True)
@@ -368,3 +369,51 @@ async def notification_stream(request):
     # front of us) reads this header and skips gzipping the stream. A gzipped
     # event-stream stays open but its frames never parse in the browser.
     return response
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def push_config(request):
+    """What a browser needs before it asks its own user for permission.
+
+    The public half of the VAPID pair is the only thing that leaves the server:
+    it names us to the push service, and the private half never travels. A
+    member's browser should not spend a permission prompt on a platform that
+    has no keys configured, so `enabled` says so first.
+    """
+    return Response({'enabled': push.configured(), 'public_key': push.public_key()})
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def push_subscribe(request):
+    """File one browser. Sending the same endpoint again moves it to whoever is
+    signed in now, which is what a shared family machine does all day."""
+    endpoint = str(request.data.get('endpoint') or '')[:512]
+    keys = request.data.get('keys') or {}
+    p256dh = str(keys.get('p256dh') or '')[:120]
+    auth = str(keys.get('auth') or '')[:64]
+    # An endpoint is an address this server will POST to with a signed claim, so
+    # it is only ever taken from an HTTPS push service. Without that, a member
+    # could aim the platform's notifications at any host and any origin they own.
+    if not endpoint.startswith('https://') or not p256dh or not auth:
+        return Response({'detail': 'That browser subscription is not usable.'}, status=400)
+    row, _ = PushSubscription.objects.update_or_create(
+        endpoint=endpoint,
+        defaults={'user': request.user, 'p256dh': p256dh, 'auth': auth, 'fails': 0},
+    )
+    return Response({'subscribed': True, 'id': row.pk})
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def push_unsubscribe(request):
+    """Forget one browser, for the member who turns the switch off.
+
+    Scoped to the caller on purpose: the endpoint is the only handle the browser
+    has, and a guess must not be able to silence somebody else's phone.
+    """
+    endpoint = str(request.data.get('endpoint') or '')[:512]
+    if not endpoint:
+        return Response({'detail': 'No subscription was named.'}, status=400)
+    gone, _ = PushSubscription.objects.filter(endpoint=endpoint, user=request.user).delete()
+    return Response({'unsubscribed': gone})

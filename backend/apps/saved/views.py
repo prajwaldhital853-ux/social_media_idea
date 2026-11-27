@@ -9,7 +9,8 @@ from apps.common.pagination import KeysetPagination
 from apps.marketplace.models import Listing
 from apps.marketplace.views import ListingSerializer
 from apps.posts.serializers import PostSerializer
-from apps.posts.views import mark_promoted, visible_posts
+from apps.posts.views import visible_posts
+from apps.promotions.services import mark_promoted
 
 from .models import SavedListing, SavedPost
 

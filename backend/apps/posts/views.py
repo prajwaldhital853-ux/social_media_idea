@@ -9,7 +9,7 @@ from apps.common.errors import throttle_text
 from apps.common.pagination import KeysetPagination
 from apps.common.rules import blocked_wording, post_limits_gate, rate, room, seat, write_gate
 from apps.follows.models import Block, Follow
-from apps.promotions.services import live_campaigns, plan, serving
+from apps.promotions.services import mark_promoted, plan, place, promo_card, serving
 
 from .models import Post, PostMedia, SharedPost
 from .serializers import PostSerializer
@@ -245,41 +245,6 @@ def count_view(request, pk):
     return Response({'views': Post.objects.filter(pk=pk).values_list('views', flat=True).first()})
 
 
-def promo_card(promo):
-    return {
-        'id': promo.pk, 'owner': promo.owner_id, 'target_type': promo.target_type,
-        'target_id': promo.target_id, 'category': promo.category,
-        'age_min': promo.age_min, 'age_max': promo.age_max,
-        'country': promo.country, 'cities': list(promo.cities or []), 'package': promo.package,
-        'budget': promo.budget, 'status': promo.status,
-        'impressions': promo.impressions, 'clicks': promo.clicks,
-        'profile_visits': promo.profile_visits,
-        'created_at': promo.created_at, 'starts_at': promo.starts_at, 'ends_at': promo.ends_at,
-    }
-
-
-def mark_promoted(items):
-    """Say, row by row, which of these posts somebody is paying to put in front of people.
-
-    Every door that hands out posts goes through here, because a disclosure that only
-    exists on the feed is not a disclosure: the same advert read on the author's
-    profile, on the saved shelf or from a shared link looked like an ordinary post, and
-    the only copy wearing the label was the one the algorithm had placed. It cannot be
-    a per-reader answer either — the anonymous first page is one cached response handed
-    to every stranger — so what a paid post is made of is the same fact for everyone,
-    and the metering stays inside the slot the feed actually spent.
-    """
-    live = live_campaigns([item.get('id') for item in items])
-    for item in items:
-        promo = live.get(str(item.get('id')))
-        if promo is None:
-            item['promoted'] = False
-            continue
-        item['promoted'] = True
-        item['promo_id'] = promo.pk
-        item['promo'] = promo_card(promo)
-
-
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def feed(request):
@@ -370,25 +335,8 @@ def _feed_page(request):
             item['promoted'] = True
             item['promo_id'] = promo.pk
             item['promo'] = promo_card(promo)
-        # The gap the desk asked for is measured in ordinary posts, so a second
-        # paid card waits that many rows behind the first. A card that never gets
-        # its gap is not shown, and is not written to the ledger either: the reach
-        # a payer is charged for is the reach a person actually saw.
-        step = max(1, dial['gap']) if dial else 1
-        paid = list(zip(lead, served))
-        merged, since, shown = [], 0, []
-        if paid:
-            card, promo = paid.pop(0)
-            merged.append(card)
-            shown.append(promo)
-        for item in data:
-            if paid and since >= step:
-                card, promo = paid.pop(0)
-                merged.append(card)
-                shown.append(promo)
-                since = 0
-            merged.append(item)
-            since += 1
-        data = merged
+        # The gap the desk asked for is measured in ordinary posts, and only the
+        # cards that really got a row are written to the ledger.
+        data, shown = place(lead, served, data, dial['gap'])
         serving(request.user, shown)
     return paginator.get_paginated_response(data)

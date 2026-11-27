@@ -16,7 +16,7 @@ import { Listing } from '@/lib/types';
 
 export default function MarketplacePage() {
   const router = useRouter();
-  const { db, me, t, feature, activePromo, promoEligible, serverMode } = useApp();
+  const { db, me, t, feature, activePromo, promoEligible, trackPromo, serverMode } = useApp();
   const lang = db.lang;
   const [tab, setTab] = useState<'browse' | 'mine'>('browse');
   const [q, setQ] = useState('');
@@ -178,9 +178,18 @@ export default function MarketplacePage() {
             const seller = db.users.find(u => u.id === l.uid);
             const img = l.media.find(m => m.type === 'image' && m.src);
             const promo = activePromo('listing', l.id);
-            const boosted = promo && promoEligible(promo);
+            // Against a server the line comes from the row itself, so an advert whose
+            // campaign has not reached this cache yet is still disclosed as one.
+            const boosted = !!l.promoted || (!!promo && promoEligible(promo));
+            // The row knows which campaign bought it even when this reader's cache
+            // never saw that campaign, so the tap still lands on the payer's figures.
+            const promoId = promo?.id || l.promoId;
+            const open = () => {
+              if (promoId && me?.id !== l.uid) void trackPromo(promoId, 'click');
+              router.push(`/marketplace/${l.id}`);
+            };
             return (
-              <button type="button" key={l.id} className="market-card" onClick={() => router.push(`/marketplace/${l.id}`)}>
+              <button type="button" key={l.id} className="market-card" onClick={open}>
                 <span className="market-card-media">
                   {img ? <img src={img.src} alt={l.title} loading="lazy"/> : <span className="market-card-noimg">{IC.store}</span>}
                   {l.status === 'sold' && <span className="market-sold">{t('sold')}</span>}

@@ -1,7 +1,9 @@
+from django.db import transaction
 from django.utils import timezone
 
 from apps.common.emails import queue_event_email
 
+from . import push
 from .models import Notification
 
 # Only these events are worth an inbox message; the bell already holds the rest.
@@ -33,7 +35,20 @@ def notify(recipient, actor, kind, text, target_type='', target_id='', notice=No
         target_type=target_type, target_id=str(target_id), notice=notice,
     )
     _trim(recipient)
+    _wake(row)
     return row
+
+
+def _wake(row):
+    """Tell the browsers this member asked to be woken, once the row is real.
+
+    Held to the commit because a push fired straight after `create()` can lose
+    the race with an outer transaction that has not committed — or rolls back,
+    waking someone for an event that never happened. Off the request either way:
+    the push service is a third party on the path, and a member's message must
+    not wait on how long one HTTPS POST takes.
+    """
+    transaction.on_commit(lambda: push.queue(row.pk))
 
 
 def _trim(recipient):
@@ -61,6 +76,9 @@ def notify_latest(recipient, actor, kind, text, target_type='', target_id=''):
     now = timezone.now()
     Notification.objects.filter(pk=row.pk).update(text=text[:240], read_at=None, created_at=now)
     row.text, row.read_at, row.created_at = text[:240], None, now
+    # The re-stamp is the new message. One bell row per thread is also one push
+    # card on the device, replaced in place instead of piled up ten deep.
+    _wake(row)
     return row
 
 

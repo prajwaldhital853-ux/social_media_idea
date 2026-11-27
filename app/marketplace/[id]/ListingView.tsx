@@ -112,9 +112,14 @@ export default function ListingPage() {
 
   const contact = () => {
     if (!me) { router.push('/login'); return; }
-    // The campaign id rides along so a message written from an advertised listing is
-    // credited to the listing's own run, at the server's door rather than here.
-    router.push(`/messages/${seller?.username || listing.uid}${promo ? `?promo=${promo.id}` : ''}`);
+    // The thread opens with the question already asked and the offer named inside it,
+    // so the seller reads which of their listings this is about without a round trip,
+    // and the link carries the card with the photo under the message. The campaign id
+    // rides along beside it so a message written out of an advertised listing is
+    // credited to that listing's own run, at the server's door rather than here.
+    const link = `${window.location.origin}/marketplace/${listing.id}`;
+    const asked = `${t('listingAsk', { title: listing.title })} ${link}`;
+    router.push(`/messages/${seller?.username || listing.uid}?text=${encodeURIComponent(asked)}${promo ? `&promo=${promo.id}` : ''}`);
   };
 
   const save = () => {
@@ -140,7 +145,7 @@ export default function ListingPage() {
                 <span className="listing-photos-empty">{IC.store}</span>
               )}
               {listing.status === 'sold' && <span className="listing-sold-flag">{t('sold')}</span>}
-              {promo && listing.status === 'active' && <span className="listing-promoted-flag">{IC.chart}{t('promoted')}</span>}
+              {(promo || listing.promoted) && listing.status === 'active' && <span className="listing-promoted-flag">{IC.chart}{t('promoted')}</span>}
               {images.length > 1 && (
                 <div className="listing-photos-nav">
                   <button type="button" aria-label={t('back')} disabled={photo === 0} onClick={() => setPhoto(p => Math.max(0, p - 1))}>{IC.back}</button>
