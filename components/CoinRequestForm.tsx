@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import DemoQr from '@/components/DemoQr';
+import { useRequestRows } from '@/components/WalletLists';
 import { useApp } from '@/lib/AppContext';
 import { api, API_ENABLED } from '@/lib/api';
 import { mapCoinRequest } from '@/lib/dto';
@@ -26,12 +27,17 @@ export default function CoinRequestForm({ method }: { method: 'bank' | 'qr' }) {
   const [screenshot, setScreenshot] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const { rows } = useRequestRows();
 
   if (!me) return null;
 
   const price = db.settings.coinPrice;
   const floor = db.settings.minPurchase;
   const amount = coins * price;
+  // One order in the queue per person. The desk reads a receipt against the request it
+  // arrived with, so a second one while the first is unanswered only doubles what the
+  // seat has to judge — and an open ask for proof is settled on that request, not here.
+  const waiting = rows.find(r => r.status === 'pending');
   // The desk's floor decides which shortcuts are worth showing: a minimum of
   // 250 hides every preset under it instead of letting one be clicked and
   // bounced by the door.
@@ -71,6 +77,10 @@ export default function CoinRequestForm({ method }: { method: 'bank' | 'qr' }) {
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!reference.trim()) { setError(t('reference')); return; }
+    if (waiting) {
+      showToast(waiting.proofAsked ? t('coinProofFirst') : t('coinWaiting'));
+      return;
+    }
     if (API_ENABLED) {
       setBusy(true);
       try {

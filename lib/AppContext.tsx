@@ -79,6 +79,7 @@ interface AppContextType {
   setPromotionStatus: (id: string, action: 'pause' | 'resume') => Promise<void>;
   updatePromotion: (id: string, patch: PromoTarget) => Promise<boolean>;
   activePromo: (targetType: 'post' | 'listing', targetId: string) => Promotion | undefined;
+  openPromo: (targetType: 'post' | 'listing', targetId: string) => Promotion | undefined;
   promoEligible: (promo: Promotion) => boolean;
   trackPromo: (promoId: string, kind: 'click' | 'profile') => void;
   updateLang: (lang: 'en' | 'ne') => void;
@@ -1924,6 +1925,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
     db.promotions.find(p => p.targetType === targetType && p.targetId === targetId
       && p.status === 'active' && (!p.ends || p.ends > Date.now()));
 
+  /**
+   * The campaign a person's own post or advert is already under, whether the desk has
+   * approved it or not. `activePromo` is a reader looking at a paid card; this is the
+   * payer looking at the promote door. A refused or finished campaign is not here —
+   * that target can be bought again.
+   */
+  const openPromo = (targetType: 'post' | 'listing', targetId: string) =>
+    db.promotions.find(p => p.targetType === targetType && p.targetId === targetId
+      && (p.status === 'pending' || p.status === 'active' || p.status === 'paused')
+      && (!p.ends || p.ends > Date.now()));
+
   const promoEligible = (promo: Promotion) => {
     const self = currentMe();
     if (!self) return true;
@@ -2117,7 +2129,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         react, myReaction, reactionCount, reactionMix, reactionPeople, myPostReaction, toggleSave, isSaved, toggleListingSave, isListingSaved,
         sharePost, mayShare, countView, blockUser, unblockUser, isBlocked, blockedIds,
         notify, markAllRead, markRead, sendMessage, deleteConversation, markThreadRead, addReport, logAudit,
-        requestPromotion, cancelPromotion, activePromo, promoEligible, trackPromo,
+        requestPromotion, cancelPromotion, activePromo, openPromo, promoEligible, trackPromo,
         setPromotionStatus, updatePromotion,
         updateLang, login, logout, isAuthenticated,
         theme, toggleTheme,

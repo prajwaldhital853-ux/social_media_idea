@@ -27,7 +27,7 @@ function useLedgerRows() {
   }, [db.ledger, list.ids, me, serverMode]); // eslint-disable-line react-hooks/exhaustive-deps
 }
 
-function useRequestRows() {
+export function useRequestRows() {
   const { db, me, serverMode } = useApp();
   const list = useList(
     'coin-requests',

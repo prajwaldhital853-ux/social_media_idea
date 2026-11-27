@@ -371,6 +371,10 @@ export const I18N = {
     screenshot: 'Payment screenshot',
     submitRequest: 'Submit request',
     requestSent: 'Request sent. Admin will confirm your payment.',
+    coinWaiting: 'Your coin request is still waiting for the admin. Please wait for it to be approved '
+      + 'or refused before sending another request.',
+    coinProofFirst: 'The admin is waiting on a new screenshot for an open coin request. Send it from that '
+      + 'request before making another one.',
     method: 'Payment method',
     proofNeeded: 'The desk needs more proof of this payment before the coins can be credited.',
     proofAskTitle: 'More proof needed',
@@ -438,6 +442,8 @@ export const I18N = {
     rights: 'All rights reserved.',
     guestCta: 'Sign up to post, react and follow.',
     promoRequested: 'Promotion sent for approval. No Coins are taken until a moderator approves it.',
+    promoWaiting: 'This {what} is already waiting for approval. Please wait for the admin to approve '
+      + 'or refuse it before sending another request.',
     allAges: 'All ages',
     allLocations: 'All locations',
     cities: 'Cities',
@@ -978,6 +984,10 @@ export const I18N = {
     screenshot: 'भुक्तानी स्क्रिनसट',
     submitRequest: 'अनुरोध पठाउनुहोस्',
     requestSent: 'अनुरोध पठाइयो। एडमिनले भुक्तानी पुष्टि गर्नेछ।',
+    coinWaiting: 'तपाईंको coins अनुरोध अझै एडमिनको पर्खाइमा छ। स्वीकृत वा अस्वीकार नगरेसम्म अर्को अनुरोध '
+      + 'नपठाउनुहोस्।',
+    coinProofFirst: 'खुला coins अनुरोधमा एडमिनले नयाँ स्क्रिनसट पर्खिरहनुभएको छ। अर्को अनुरोध पठाउनुअघि '
+      + 'त्यही अनुरोधबाट प्रमाण पठाउनुहोस्।',
     method: 'भुक्तानी विधि',
     proofNeeded: 'coins जमा हुनुअघि यो भुक्तानीको थप प्रमाण चाहिएको छ।',
     proofAskTitle: 'थप प्रमाण चाहिएको छ',
@@ -1043,6 +1053,8 @@ export const I18N = {
     rights: 'सर्वाधिकार सुरक्षित।',
     guestCta: 'पोस्ट, रियाक्सन र फलो गर्न साइन अप गर्नुहोस्।',
     promoRequested: 'प्रोमोसन स्वीकृतिको लागि पठाइयो। मोडरेटरले स्वीकृत नगरेसम्म Coins काटिँदैन।',
+    promoWaiting: 'यो {what} पहिले नै स्वीकृतिको पर्खाइमा छ। एडमिनले स्वीकृत वा अस्वीकार नगरेसम्म अर्को '
+      + 'अनुरोध नपठाउनुहोस्।',
     allAges: 'सबै उमेर',
     allLocations: 'सबै स्थान',
     cities: 'सहरहरू',
