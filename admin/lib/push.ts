@@ -95,14 +95,25 @@ function filedKey(sub: PushSubscription): string {
   return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
-/** Whether the switch should read as on, read from the browser rather than the server. */
+/**
+ * Whether the switch should read as on — read from the browser, then confirmed
+ * by the server: one browser files one address for every seat living in it, so
+ * an address the browser can see may belong to whoever signed in last. A switch
+ * lit over an address that points elsewhere is a switch that lies twice.
+ */
 export async function pushState(): Promise<PushState> {
   if (!pushSupported()) return 'unsupported';
   if (Notification.permission === 'denied') return 'blocked';
   if (Notification.permission !== 'granted') return 'off';
   try {
-    return (await (await worker()).pushManager.getSubscription()) ? 'on' : 'off';
-  } catch {
+    const held = await (await worker()).pushManager.getSubscription();
+    if (!held) return 'off';
+    const config = await api<{ filed: boolean }>(
+      `${CONFIG}?endpoint=${encodeURIComponent(held.endpoint)}`,
+    );
+    return config.filed ? 'on' : 'off';
+  } catch (err) {
+    console.warn('[push] could not read the switch:', err);
     return 'off';
   }
 }
@@ -161,8 +172,17 @@ export async function enablePush(): Promise<{ ok: boolean; detail?: string }> {
     await api(SUBSCRIBE, { method: 'POST', body: { endpoint: sub.endpoint, keys: keysOf(sub) } });
     forget(window.sessionStorage, MUTED);
     return { ok: true };
-  } catch {
-    return { ok: false, detail: 'This browser would not take the address. Try again.' };
+  } catch (err) {
+    // A swallowed failure is why "the switch is lit but nothing arrives" could
+    // never be diagnosed: a refused subscribe left no trace anywhere.
+    console.warn('[push] could not file this browser:', err);
+    const refused = err instanceof DOMException && err.name === 'NotAllowedError';
+    return {
+      ok: false,
+      detail: refused
+        ? 'The browser or Windows refused it. Check the site permission in the address bar and the notification switch Windows holds for this browser.'
+        : 'This browser would not take the address. Try again.',
+    };
   }
 }
 

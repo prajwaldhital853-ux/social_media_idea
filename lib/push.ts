@@ -103,13 +103,25 @@ function filedKey(sub: PushSubscription): string {
  * in the address bar has turned push off whatever our database says, and a
  * switch that stays lit after that is a switch that lies.
  */
+/**
+ * Whether the switch should read as on.
+ *
+ * Read from the browser rather than the server — but also confirmed by it: one
+ * browser files one address for every account living in it, so an address the
+ * browser can see may belong to whoever signed in last. A switch lit over an
+ * address that points at somebody else is a switch that lies twice.
+ */
 export async function pushState(): Promise<PushState> {
   if (!pushSupported()) return 'unsupported';
   if (Notification.permission === 'denied') return 'blocked';
   if (Notification.permission !== 'granted') return 'off';
   try {
-    return (await (await worker()).pushManager.getSubscription()) ? 'on' : 'off';
-  } catch {
+    const held = await (await worker()).pushManager.getSubscription();
+    if (!held) return 'off';
+    const config = await api.get<{ filed: boolean }>(CONFIG, { endpoint: held.endpoint });
+    return config.filed ? 'on' : 'off';
+  } catch (err) {
+    console.warn('[push] could not read the switch:', err);
     return 'off';
   }
 }
@@ -169,8 +181,17 @@ export async function enablePush(): Promise<{ ok: boolean; detail?: string }> {
     await api.post(SUBSCRIBE, { endpoint: sub.endpoint, keys: keysOf(sub) });
     forget(window.sessionStorage, MUTED);
     return { ok: true };
-  } catch {
-    return { ok: false, detail: 'This browser would not take the address. Try again.' };
+  } catch (err) {
+    // Silent failures are the reason "the switch is on but nothing arrives"
+    // could never be diagnosed: a swallowed subscribe leaves no trace anywhere.
+    console.warn('[push] could not file this browser:', err);
+    const refused = err instanceof DOMException && err.name === 'NotAllowedError';
+    return {
+      ok: false,
+      detail: refused
+        ? 'The browser or Windows refused it. Check the site permission in the address bar and the notification switch Windows holds for this browser.'
+        : 'This browser would not take the address. Try again.',
+    };
   }
 }
 
