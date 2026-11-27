@@ -1,10 +1,12 @@
 'use client';
 
 import Link from 'next/link';
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Banner from '@/components/Banner';
 import ConsoleShell from '@/components/ConsoleShell';
 import { IC } from '@/lib/icons';
+import { PushState, disablePush, enablePush, pushState } from '@/lib/push';
 import { ago, stamp } from '@/lib/time';
 import { useSession } from '@/lib/session';
 import { PermissionEntry } from '@/lib/types';
@@ -15,9 +17,36 @@ const ROLE_TEXT: Record<string, string> = {
   moderator: 'Reports, content, listings, warning notices and user actions. Coins, payments and every staff screen appear only when they are granted.',
 };
 
+const PUSH_PILL: Record<PushState, { label: string; tone: string }> = {
+  on: { label: 'Wake this browser', tone: 'good' },
+  off: { label: 'Quiet', tone: 'mute' },
+  blocked: { label: 'Blocked by the browser', tone: 'warn' },
+  unsupported: { label: 'This browser cannot', tone: 'mute' },
+};
+
 export default function MePage() {
   const { session, can, signOut } = useSession();
   const router = useRouter();
+  const [push, setPush] = useState<PushState>('off');
+  const [pushBusy, setPushBusy] = useState(false);
+  const [banner, setBanner] = useState<{ kind: 'ok' | 'bad'; text: string } | null>(null);
+
+  useEffect(() => {
+    void pushState().then(setPush);
+  }, []);
+
+  const setAlerts = async (on: boolean) => {
+    setPushBusy(true);
+    const result = on ? await enablePush() : null;
+    if (!on) await disablePush();
+    setPush(await pushState());
+    setPushBusy(false);
+    if (result && !result.ok) setBanner({ kind: 'bad', text: result.detail || 'The browser refused.' });
+    else setBanner({
+      kind: 'ok',
+      text: on ? 'This browser will wake for the staff bell.' : 'This browser will stay quiet.',
+    });
+  };
 
   const groups = useMemo(() => {
     const entries = session?.permission_keys || [];
@@ -84,6 +113,46 @@ export default function MePage() {
           >
             {IC.logout}<span>Sign out of the console</span>
           </button>
+        </section>
+
+        <section className="panel">
+          <h2>Browser alerts</h2>
+          <dl className="facts">
+            <div>
+              <dt>This device</dt>
+              <dd>
+                <span className={`pill ${PUSH_PILL[push].tone}`}>
+                  {push === 'on' ? IC.check : IC.alert}
+                  <span>{PUSH_PILL[push].label}</span>
+                </span>
+              </dd>
+            </div>
+          </dl>
+
+          <p className="note">
+            A quiet card from your own browser when a report is filed, a payment proof waits on a
+            decision, or an alert fires — with the console closed, and with this tab never reopened.
+            It is the browser&rsquo;s own protocol, not an app: nothing leaves this machine except the
+            address your browser gives us, and only the sentence the staff bell already holds.
+            Switching it on asks the browser for permission once; refusing that ask is the browser&rsquo;s
+            answer, not ours, and this screen follows it.
+          </p>
+          <Banner banner={banner} />
+          <button
+            type="button"
+            className={push === 'on' ? 'btn ghost' : 'btn'}
+            disabled={pushBusy || push === 'unsupported' || push === 'blocked'}
+            onClick={() => setAlerts(push !== 'on')}
+          >
+            {IC.bell}
+            <span>{push === 'on' ? 'Switch alerts off' : 'Switch alerts on'}</span>
+          </button>
+          {push === 'blocked' && (
+            <p className="note">
+              Notifications are blocked for this address. Allow them from the lock icon in the address
+              bar, reload this screen, then switch it on.
+            </p>
+          )}
         </section>
 
         <section className="panel wide">

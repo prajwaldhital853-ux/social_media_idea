@@ -3,6 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { ReactNode } from 'react';
 import { api, ApiError } from './api';
+import { disablePush } from './push';
 import { Session, SignInChallenge, SignedIn } from './types';
 
 type Status = 'loading' | 'out' | 'in';
@@ -144,6 +145,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const signOut = useCallback(async () => {
     await api('admin/session/logout/', { method: 'POST', body: {} }).catch(() => undefined);
+    // The browser's address belongs to the seat that filed it. A console that
+    // signed out and still wakes for the next person's bell is a leak, not a
+    // convenience.
+    void disablePush();
     setSession(null);
     setStatus('out');
     setChallenge(null);
