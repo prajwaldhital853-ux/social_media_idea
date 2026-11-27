@@ -448,7 +448,7 @@ export default function ReelsFeed({ initialKey }: { initialKey?: string }) {
             subtitle: sharing.post.text.slice(0, 120),
             video: sharing.media.src || undefined,
           } : undefined}
-          onShared={() => { if (sharing) void sharePost(sharing.post.id); }}
+          onShared={(people) => { if (sharing) void sharePost(sharing.post.id, people); }}
           onClose={() => setSharing(null)}
         />
       </div>

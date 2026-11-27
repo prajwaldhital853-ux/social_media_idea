@@ -83,6 +83,10 @@ def _payload(row):
         # One card per conversation or per post, so the tenth message replaces
         # the ninth instead of stacking a pile on the same thread.
         'tag': f'{row.kind}:{row.target_type or "bell"}:{row.target_id or row.pk}'[:120],
+        # A tagged card that replaces another is silent unless it asks to be
+        # heard again, so without this the second message in a thread arrives as
+        # a ghost — the card swaps, no buzz.
+        'renotify': True,
         # The bell row's own page: it marks itself read, shows the warning or
         # comment it came from, and needs no route table kept in step with this.
         'url': f'/notifications/{row.pk}',

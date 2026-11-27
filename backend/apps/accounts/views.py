@@ -1,5 +1,6 @@
 import logging
 import random
+import uuid
 from datetime import date, timedelta
 
 from django.conf import settings
@@ -12,6 +13,7 @@ from django.db.models import Q
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes, authentication_classes
+from rest_framework.exceptions import AuthenticationFailed
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
@@ -87,6 +89,18 @@ def _device_id(request):
     return (request.data.get('device_id') or request.META.get('HTTP_X_DEVICE_ID') or '')[:80]
 
 
+def _issued_device(request):
+    """The id this browser will be remembered by, minted here when it arrived without one.
+
+    A phone whose storage Safari switched off sends nothing, and with no id there is
+    nothing to put on the trusted list — so every sign-in from it is a stranger's and
+    the email code never ends. Naming the browser at the door instead fixes it once:
+    the login response mirrors the id into a first-party cookie that outlives the
+    storage, and the next visit arrives already known.
+    """
+    return _device_id(request) or f'web-{uuid.uuid4().hex[:24]}'
+
+
 def _suspended(user):
     """The one answer every door gives a suspended account.
 
@@ -121,6 +135,47 @@ def _two_step(user):
     """New-device email codes, unless the owner turned trusted-device login off."""
     profile = getattr(user, 'profile', None)
     return bool(profile is None or profile.two_step)
+
+
+def _seat_device(request, user):
+    """The device id behind the refresh cookie this browser is holding right now.
+
+    A seat ends only when its owner signs out or the console locks the account, so a
+    row that is neither revoked nor expired is proof this is a browser the person
+    already signed in on. It is also the only proof that outlives WebKit: Safari
+    throws a week of quiet tabs out of storage, and the trusted-device id lived solely
+    there, so a returning owner met an email code at their own front door while the
+    HttpOnly cookie rode along untouched. What it costs is exact equivalence — a
+    stolen refresh cookie already is this browser.
+    """
+    token = request.COOKIES.get('exposing_refresh')
+    if not token:
+        return ''
+    try:
+        payload = decode_token(token, 'refresh')
+    except AuthenticationFailed:
+        return ''
+    if str(payload.get('sub')) != str(user.pk):
+        return ''
+    return RefreshSession.objects.filter(
+        jti=payload.get('jti'), user=user, revoked_at__isnull=True, expires_at__gt=timezone.now(),
+    ).values_list('device_id', flat=True).first() or ''
+
+
+def _trusted_device(request, user, device_id):
+    """Whether this browser signs in without a code, and the id to remember it by.
+
+    Two things carry the proof: the id the client has kept since it was last trusted,
+    and the seat it holds under an id the trust list already knows. When only the seat
+    speaks, the fresh id the browser just minted is adopted on the way out, so losing
+    storage once costs one code rather than one every visit.
+    """
+    if device_id and DeviceTrust.objects.filter(user=user, device_id=device_id).exists():
+        return True, device_id
+    seat = _seat_device(request, user)
+    if seat and DeviceTrust.objects.filter(user=user, device_id=seat).exists():
+        return True, device_id or seat
+    return False, device_id
 
 
 def _make_otp(user, purpose, device_id=''):
@@ -472,7 +527,7 @@ def login(request):
         # The verify re-hashed at the current work factor. An upgrade nobody
         # writes down is paid for again on every later sign-in.
         user.save(update_fields=['password'])
-    device_id = _device_id(request)
+    device_id = _issued_device(request)
     if not user.email_verified:
         # The password is right and the account is real; it was simply never
         # confirmed. Say which of the three it is, and hand back a live code with
@@ -482,11 +537,9 @@ def login(request):
             'detail': 'That email address is not verified yet. We sent a new code to it.',
             'email_not_verified': True, 'email_hint': user.email, **_otp_response(otp),
         }, status=status.HTTP_403_FORBIDDEN)
-    trusted = bool(device_id) and DeviceTrust.objects.filter(user=user, device_id=device_id).exists()
+    trusted, carried = _trusted_device(request, user, device_id)
     if trusted or not _two_step(user):
-        if device_id:
-            DeviceTrust.objects.filter(user=user, device_id=device_id).update(last_seen=timezone.now())
-        return _finish_login(request, user, device_id)
+        return _finish_login(request, user, carried)
     otp, _ = _make_otp(user, 'login', device_id)
     return Response({
         'detail': 'New device detected. Enter the code sent to your email to continue.',
@@ -858,7 +911,7 @@ def google(request):
     user = User.objects.filter(email__iexact=email).order_by('id').first()
     if user and (user.seeded or _is_staff_member(user)):
         return Response({'detail': 'This email address cannot be used.'}, status=400)
-    device_id = _device_id(request)
+    device_id = _issued_device(request)
     if user:
         if user.is_suspended:
             # The identity provider proved the address and nothing else: a
@@ -875,8 +928,9 @@ def google(request):
         if user.provider != 'google':
             user.provider = 'google'
             user.save(update_fields=['provider'])
-        if (device_id and DeviceTrust.objects.filter(user=user, device_id=device_id).exists()) or not _two_step(user):
-            return _finish_login(request, user, device_id)
+        trusted, carried = _trusted_device(request, user, device_id)
+        if trusted or not _two_step(user):
+            return _finish_login(request, user, carried)
         otp, _ = _make_otp(user, 'login', device_id)
         return Response({'new_device': True, 'email_hint': email, **_otp_response(otp)}, status=202)
     return Response({

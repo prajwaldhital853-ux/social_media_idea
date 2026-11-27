@@ -55,7 +55,7 @@ interface AppContextType {
   myPostReaction: (postId: string) => ReactionKind | null;
   toggleSave: (pid: string) => Promise<void>;
   isSaved: (pid: string) => boolean;
-  sharePost: (pid: string) => Promise<void>;
+  sharePost: (pid: string, people?: string[]) => Promise<void>;
   /** The share button asks this before it opens. Null means go ahead; a string is what to say. */
   mayShare: (pid: string) => Promise<string | null>;
   /** One reel watched. Fire-and-forget: a refused counter must never spoil playback. */
@@ -1605,15 +1605,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const sharePost = async (pid: string) => {
-    // The link has already left the app by the time this is called, so a refused
-    // POST is a lost tally and nothing the reader should be told about.
-    bumpTally(pid, 'shares', 1);
-    if (!API_ENABLED) return;
+  const sharePost = async (pid: string, people?: string[]) => {
+    if (!API_ENABLED) {
+      // A demo has no ledger to call a repeat, so the tally moves with the pick list.
+      bumpTally(pid, 'shares', people ? people.length : 1);
+      return;
+    }
+    // A link that left for another app is already out of the app's hands, so the
+    // number moves now and the server agrees on the next read. A share to named
+    // people is the other case: only a person this post never reached is news, so
+    // the tally waits for the answer rather than jumping and being clawed back.
+    if (!people) bumpTally(pid, 'shares', 1);
     try {
-      const data = await api.post<any>(`/api/posts/${pid}/share/`, {});
+      const data = await api.post<any>(`/api/posts/${pid}/share/`, people ? { with: people } : {});
       settleTally(pid, 'shares', data?.share_count);
-    } catch { /* counted locally; the server will agree on the next read */ }
+    } catch { /* the link left anyway; the next read settles the number */ }
   };
 
   const countView = async (pid: string) => {

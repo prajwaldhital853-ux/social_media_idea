@@ -7503,6 +7503,14 @@ button.admin-stat:hover { background: var(--brand-tint); transform: translateY(-
   .chat-bubble { max-width: 84%; }
   .chat-compose { padding: 8px 10px; }
 
+  /* A phone switches off every page header row, because the top bar owns the
+     title there. The marketplace row is the only place a listing can be filed
+     from, so it stays — and the subtitle gives up the line, and the page's own
+     mode switch gives up its spot, so the button never has to wrap away. */
+  .market-view .home-header-row { display: flex; padding: 8px 12px 4px; }
+  .market-view .header-sub { display: none; }
+  .market-view .header-actions .icon-btn[aria-label*="mode" i] { display: none; }
+
   .market-filters { padding: 10px 12px 2px; }
   .market-filters select { flex: 1; min-width: 130px; }
   .market-filters > input { flex: 1; width: auto; min-width: 90px; }

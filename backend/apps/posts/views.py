@@ -209,9 +209,13 @@ def share_post(request, pk):
     happened while the link quietly left. A POST is the record itself, and it is
     refused by the same ceiling, so the asking is a courtesy and not the rule.
 
-    The link is already out of the app's hands when the client reports it, so
-    this is a tally rather than a transaction: it can only ever go up, and a
-    visitor who shares the same post twice is counted twice.
+    The tally is the number of people this post had never been sent to before, not
+    the number of times the button was pressed. Sending it to three people is three
+    shares; sending it to the same person again is nothing new, so it moves no number
+    and adds no weight in the paid queue. A link handed to another app has no person
+    to name, so it is remembered once per post for the same reason. A stranger with
+    no seat has no pair to keep, and their share counts as it always did — there is
+    nothing here to call a repeat.
     """
     bucket = f'share:{seat(request)}'
     if request.method == 'GET':
@@ -222,13 +226,35 @@ def share_post(request, pk):
     rate(bucket, 'spam_share_per_minute', 60, 30)
     if not visible_posts(request.user).filter(pk=pk).exists():
         return Response({'detail': 'No such post.'}, status=status.HTTP_404_NOT_FOUND)
-    Post.objects.filter(pk=pk).update(share_count=F('share_count') + 1)
-    # And the pair, for the desk that decides whose feed an advert lands in. A
-    # stranger has no pair to keep, so only a seated reader leaves a record.
-    if request.user.is_authenticated:
+    created = _shared_record(request, pk)
+    if created:
+        Post.objects.filter(pk=pk).update(share_count=F('share_count') + created)
+    return Response({
+        'share_count': Post.objects.filter(pk=pk).values_list('share_count', flat=True).first(),
+        'counted': created,
+    })
+
+
+def _shared_record(request, pk):
+    """Write this share down and answer how much of it the platform had not seen."""
+    if not request.user.is_authenticated:
+        return 1
+    named = [int(x) for x in (request.data.get('with') or []) if str(x).isdigit()]
+    if named:
+        # One read and one write for a whole pick list: the rows that already exist
+        # are the ones that are not news, and the rest are counted as they land.
+        seen = set(SharedPost.objects.filter(
+            user=request.user, post_id=pk, with_user_id__in=named).values_list('with_user_id', flat=True))
+        fresh = [x for x in named if x not in seen]
         SharedPost.objects.bulk_create(
-            [SharedPost(user=request.user, post_id=pk)], ignore_conflicts=True)
-    return Response({'share_count': Post.objects.filter(pk=pk).values_list('share_count', flat=True).first()})
+            [SharedPost(user=request.user, post_id=pk, with_user_id=x) for x in fresh],
+            ignore_conflicts=True)
+        return len(fresh)
+    made = not SharedPost.objects.filter(
+        user=request.user, post_id=pk, with_user__isnull=True).exists()
+    if made:
+        SharedPost.objects.create(user=request.user, post_id=pk)
+    return 1 if made else 0
 
 
 @api_view(['POST'])
