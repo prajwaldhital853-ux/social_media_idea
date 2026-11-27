@@ -142,9 +142,11 @@ export default function ShareDialog({ open, url, title, text, preview, onShared,
     onClose();
   };
 
+  // Opening another app hands the link over but proves nothing: the share can
+  // be cancelled there with nothing sent, so it never moves the count. Only
+  // shares the site can see completed (in-app send, copy, native sheet done) do.
   const openApp = (href: string) => {
     window.open(href, '_blank', 'noopener,noreferrer');
-    onShared();
     onClose();
   };
 

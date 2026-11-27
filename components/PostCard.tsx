@@ -131,9 +131,10 @@ export default function PostCard({ post, author, featured }: PostCardProps) {
   const openMedia = (index: number) => router.push(`/post/${post.id}/media/${index}`);
   const openReel = (index: number) => router.push(`/video/${post.id}-${index}`);
 
-  // Opening the sheet is not a share; the counter moves only when the reader
-  // actually sends it to a person or hands the link to another app. The desk's
-  // ceiling is asked first, so a share past it stops at the button.
+  // Opening the sheet is not a share, and neither is opening another app — that
+  // sheet can be cancelled with nothing sent. The counter moves only when the
+  // reader sends it to a person, copies the link, or finishes the native share.
+  // The desk's ceiling is asked first, so a share past it stops at the button.
   const handleShare = async (e?: React.MouseEvent) => {
     e?.preventDefault();
     e?.stopPropagation();
