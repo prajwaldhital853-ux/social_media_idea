@@ -6812,16 +6812,15 @@ a.wallet-sec-note:hover { color: var(--brand); text-decoration: underline; }
   font: inherit; font-size: 14px;
 }
 .inbox-search:focus-within { box-shadow: 0 0 0 2px var(--brand-ring); }
-/* People who follow each other and have not spoken: a band above the threads,
-   labelled so it reads as a starting point rather than as a conversation. */
-.inbox-suggested { border-bottom: 6px solid var(--canvas); }
+/* People you follow but have never written to: a labelled band below the threads,
+   so a conversation that just took a message is the first thing the column shows. */
+.inbox-suggested { border-top: 6px solid var(--canvas); }
 .inbox-band-label {
   padding: 12px 16px 2px;
   font-size: 12.5px; font-weight: 800; letter-spacing: .02em;
   text-transform: uppercase; color: var(--muted);
 }
 .inbox-suggested .inbox-list { padding-bottom: 8px; }
-.inbox-suggested + .inbox-list { padding-top: 4px; }
 .inbox-list { display: flex; flex-direction: column; padding-bottom: 24px; }
 .inbox-row {
   display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;

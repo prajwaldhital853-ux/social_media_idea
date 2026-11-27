@@ -37,7 +37,8 @@ export default function ConversationList({ head, activeId }: ConversationListPro
     !needle || c.other.name.toLowerCase().includes(needle) || c.other.username.toLowerCase().includes(needle)
   );
   // The band is short on purpose: it is a starting point, and it has no history
-  // to page through. The threads below it window and paginate as before.
+  // to page through. The conversations above it — where a message that just
+  // landed belongs — window and paginate as before.
   const band = shown.filter(c => c.suggested).slice(0, BAND_ROWS);
   const threads = shown.filter(c => !c.suggested);
   const { limit, pending, sentinel, hasMore } = useWindowed(threads.length, 10, needle,
@@ -98,21 +99,6 @@ export default function ConversationList({ head, activeId }: ConversationListPro
         )
       ) : (
         <>
-          {band.length > 0 && (
-            <section className="inbox-suggested">
-              <h3 className="inbox-band-label">{t('mutualBand')}</h3>
-              <div className="inbox-list">
-                {band.map(c => (
-                  <ConversationRow
-                    key={c.other.id}
-                    c={c}
-                    active={c.other.id === activeId}
-                    onOpen={openThread}
-                  />
-                ))}
-              </div>
-            </section>
-          )}
           <div className="inbox-list">
             {threads.slice(0, limit).map(c => (
               <ConversationRow
@@ -129,6 +115,21 @@ export default function ConversationList({ head, activeId }: ConversationListPro
             )}
             {hasMore && <div ref={sentinel} className="feed-sentinel" aria-hidden="true" />}
           </div>
+          {band.length > 0 && (
+            <section className="inbox-suggested">
+              <h3 className="inbox-band-label">{t('mutualBand')}</h3>
+              <div className="inbox-list">
+                {band.map(c => (
+                  <ConversationRow
+                    key={c.other.id}
+                    c={c}
+                    active={c.other.id === activeId}
+                    onOpen={openThread}
+                  />
+                ))}
+              </div>
+            </section>
+          )}
         </>
       )}
 
