@@ -1,4 +1,4 @@
-import { api, ApiError } from './api';
+import { api } from './api';
 
 /**
  * Web Push for a staff seat.
@@ -19,32 +19,36 @@ const SW_PATH = '/sw.js';
 const CONFIG = 'admin/push/config/';
 const SUBSCRIBE = 'admin/push/subscribe/';
 const UNSUBSCRIBE = 'admin/push/unsubscribe/';
-// The ask is remembered per browser: Chrome shows its prompt a couple of times
-// and then refuses the origin outright for a console that keeps knocking.
+// The ask is remembered for the browsing session, not forever: a desktop Chrome
+// that dismissed the bubble once is still asked the next time the browser is
+// started. Chrome stops drawing a bubble for a site that is told no repeatedly,
+// so this cannot turn into nagging.
 const ASKED = 'exposing.console.asked';
-// And so is a switch the seat turned off by hand, which arrival must not undo.
+// A switch the seat turned off by hand is remembered the same way, so arrival
+// does not quietly undo it — and so the next start of the browser is default-on
+// again. The permanent answer is the operating system's.
 const MUTED = 'exposing.console.muted';
 
 export type PushState = 'on' | 'off' | 'blocked' | 'unsupported';
 
-/** The two flags live in storage that a private window can refuse to give. */
-function read(key: string): boolean {
+/** The flags live in storage a private window can refuse to give. */
+function read(store: Storage, key: string): boolean {
   try {
-    return window.localStorage.getItem(key) === '1';
+    return store.getItem(key) === '1';
   } catch {
     return false;
   }
 }
 
-function remember(key: string): void {
+function remember(store: Storage, key: string): void {
   try {
-    window.localStorage.setItem(key, '1');
+    store.setItem(key, '1');
   } catch { /* nothing kept, so the next load simply asks again */ }
 }
 
-function forget(key: string): void {
+function forget(store: Storage, key: string): void {
   try {
-    window.localStorage.removeItem(key);
+    store.removeItem(key);
   } catch { /* nothing kept in the first place */ }
 }
 
@@ -103,14 +107,6 @@ export async function pushState(): Promise<PushState> {
   }
 }
 
-async function hasAddress(): Promise<boolean> {
-  try {
-    return !!(await (await worker()).pushManager.getSubscription());
-  } catch {
-    return false;
-  }
-}
-
 /**
  * Chrome answers a permission call from a page nobody is looking at with a
  * refusal the seat never saw, so the arrival ask waits for the tab to come
@@ -163,7 +159,7 @@ export async function enablePush(): Promise<{ ok: boolean; detail?: string }> {
         applicationServerKey: asKey(config.public_key),
       });
     await api(SUBSCRIBE, { method: 'POST', body: { endpoint: sub.endpoint, keys: keysOf(sub) } });
-    forget(MUTED);
+    forget(window.sessionStorage, MUTED);
     return { ok: true };
   } catch {
     return { ok: false, detail: 'This browser would not take the address. Try again.' };
@@ -174,27 +170,49 @@ export async function enablePush(): Promise<{ ok: boolean; detail?: string }> {
  * Turn alerts on as soon as the console is open.
  *
  * A seat that already holds the right is re-filed and never re-asked, a seat
- * that was asked once is not asked again, and a browser whose switch was turned
- * off by hand stays off.
+ * that was asked in this session is not asked again, and a browser whose switch
+ * was turned off by hand stays off.
  */
 export async function autoPush(): Promise<PushState> {
   if (!pushSupported()) return 'unsupported';
   if (Notification.permission === 'denied') return 'blocked';
   if (Notification.permission === 'granted') {
-    if (read(MUTED)) return 'off';
-    await syncPush();
-    if (await hasAddress()) return 'on';
+    // Held already, including by a seat that allowed it from the address bar
+    // without touching this console. Taking the address rather than merely
+    // re-filing the old one is what repairs an address filed under a key that
+    // has since changed.
+    if (read(window.sessionStorage, MUTED)) return 'off';
     return (await enablePush()).ok ? 'on' : 'off';
   }
-  if (read(ASKED)) return 'off';
+  if (read(window.sessionStorage, ASKED)) return 'off';
   await untilVisible();
-  remember(ASKED);
+  remember(window.sessionStorage, ASKED);
   return (await enablePush()).ok ? 'on' : 'off';
+}
+
+/**
+ * Tell the worker which seat this tab holds.
+ *
+ * One browser runs one worker for every seat signed in on it, and a worker that
+ * is not told whose card it is drawing swallows a notice meant for the seat that
+ * is away because another seat's tab happens to be visible.
+ */
+export function announceSeat(username: string): void {
+  if (!pushSupported() || !username) return;
+  try {
+    navigator.serviceWorker.getRegistration().then((reg) => {
+      // A worker that is still starting takes the message too and keeps it
+      // through activation, which is the common case right after the address is
+      // taken for the first time.
+      const target = reg && (reg.active || reg.waiting || reg.installing);
+      if (target) target.postMessage({ user: username });
+    }).catch(() => { /* no worker yet, so nothing is filed either */ });
+  } catch { /* nothing to tell */ }
 }
 
 /** Remember that this browser was switched off by hand, so arrival leaves it be. */
 export function mutePush(): void {
-  remember(MUTED);
+  remember(window.localStorage, MUTED);
 }
 
 /** Silence this browser, here and at the server, in whichever order they work. */
@@ -208,25 +226,4 @@ export async function disablePush(): Promise<void> {
     } catch { /* the address is dropped below regardless; the server prunes it later */ }
     await sub.unsubscribe();
   } catch { /* nothing to undo */ }
-}
-
-/**
- * Re-file this browser under whoever is signed in now.
- *
- * A subscription outlives a session. Without this, the console that a second
- * staff member opens on the same machine would keep waking the person who left.
- */
-export async function syncPush(): Promise<void> {
-  if (!pushSupported() || Notification.permission !== 'granted') return;
-  try {
-    const sub = await (await worker()).pushManager.getSubscription();
-    if (!sub) return;
-    const keys = keysOf(sub);
-    if (!keys.p256dh || !keys.auth) return;
-    await api(SUBSCRIBE, { method: 'POST', body: { endpoint: sub.endpoint, keys } });
-  } catch (err) {
-    // A seat that cannot file its own browser keeps the tray, which is the
-    // whole product; push is the extra.
-    if (!(err instanceof ApiError)) throw err;
-  }
 }

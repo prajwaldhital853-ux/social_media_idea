@@ -7,7 +7,7 @@ import { crumbsFor, drawerFor, navFor, requires } from '@/lib/nav';
 import { IC } from '@/lib/icons';
 import { useBell } from '@/lib/bell';
 import { cameFrom, Stop, visit } from '@/lib/trail';
-import { autoPush } from '@/lib/push';
+import { announceSeat, autoPush } from '@/lib/push';
 import { useSession } from '@/lib/session';
 
 // Every screen renders its own shell, so switching screens rebuilds this drawer
@@ -98,8 +98,15 @@ export default function ConsoleShell({
   // signed out of one console and into another does not keep waking the person
   // who left — and a browser nobody has ever asked is asked as the console
   // opens, rather than by a seat that has to find the button on its own page.
+  // Each screen also names itself to the worker, because one browser runs one
+  // worker for every seat signed in on it.
   useEffect(() => {
-    if (status === 'in') void autoPush();
+    if (status !== 'in') return;
+    const seat = () => announceSeat(session?.user.username || '');
+    void autoPush().then(seat);
+    seat();
+    document.addEventListener('visibilitychange', seat);
+    return () => document.removeEventListener('visibilitychange', seat);
   }, [status, session?.user.username]);
 
   // The drawer row this screen sits under, a user's page is still the directory.

@@ -16,7 +16,7 @@ import {
 } from './dto';
 import { bindListCache, coinRequestsFragment, dropListRow, forgetLists, inboxListDef, listingsFragment, notificationsFragment, promotionsFragment, postsFragment, pushListRow, refreshList, removeListRow, walletFragment } from './lists';
 import { emitLive, onLive } from './live';
-import { autoPush, disablePush, pushSupported } from './push';
+import { announceSeat, autoPush, disablePush, pushSupported } from './push';
 import { bumpNew } from './newCount';
 
 type Target = 'post' | 'comment' | 'media';
@@ -303,7 +303,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // whenever the member finds the switch in Settings. Both calls do nothing at
     // all to a member who has already said no.
     if (!API_ENABLED || !db.meId) return;
-    void autoPush();
+    // The worker draws a card for the whole browser, so every tab has to say
+    // whose account it is holding — otherwise the tab that happens to be in
+    // front swallows the message meant for the member who is away.
+    const seat = () => {
+      const holder = dbRef.current.users.find(u => u.id === dbRef.current.meId);
+      if (holder) announceSeat(holder.username);
+    };
+    void autoPush().then(seat);
+    seat();
+    document.addEventListener('visibilitychange', seat);
+    return () => document.removeEventListener('visibilitychange', seat);
   }, [db.meId]);
 
   useEffect(() => {

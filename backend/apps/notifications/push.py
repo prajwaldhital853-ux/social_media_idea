@@ -109,6 +109,11 @@ def _payload(row):
         # The bell row's own page: it marks itself read, shows the warning or
         # comment it came from, and needs no route table kept in step with this.
         'url': f'/notifications/{row.pk}',
+        # Who the card is for. One browser runs one worker for every account
+        # signed in on it, and a worker that is not told whose card this is
+        # cannot tell a member who is already reading the site from somebody
+        # else's tab that happens to be in front.
+        'to': (row.recipient.username if row.recipient_id else '')[:64],
     }
 
 
@@ -123,6 +128,7 @@ def notice_card(notice):
         'tag': f'staff:{notice.kind}:{notice.pk}'[:120],
         'renotify': True,
         'url': notice.href or '/overview',
+        'to': (notice.recipient.username if notice.recipient_id else '')[:64],
     }
 
 
@@ -131,7 +137,7 @@ def _deliver(row_pk):
         # A thread must not inherit the request's connection: the request
         # returns and puts it back in the pool while this is still holding it.
         connections.close_all()
-        row = Notification.objects.select_related('actor').filter(pk=row_pk).first()
+        row = Notification.objects.select_related('actor', 'recipient').filter(pk=row_pk).first()
         if row is None or row.kind in QUIET:
             return
     except Exception:
