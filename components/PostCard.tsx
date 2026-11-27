@@ -326,6 +326,7 @@ export default function PostCard({ post, author, featured }: PostCardProps) {
 
       {paid && !own && (
         <div className="promo-cta" onClick={e => e.stopPropagation()}>
+          <p className="promo-cta-copy">{t('promoTagline')}</p>
           <button type="button" className="promo-cta-btn" onClick={openAsk}>
             {IC.msg}
             <span>{t('messageNow')}</span>

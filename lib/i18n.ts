@@ -191,8 +191,12 @@ export const I18N = {
     // The one button every advert carries. A paid post that only offers a link to
     // the author's profile sells reach and then makes the reader do the work.
     messageNow: 'Message now',
-    promoAsk: 'I saw your post "{text}" — tell me more',
-    promoAskBare: 'I saw your promoted post — tell me more',
+    // One line that fits every campaign, whether the advert sells a service or a
+    // second-hand bicycle: it promises nothing about the thing and only says
+    // where the answer to a question about it lives.
+    promoTagline: 'Have a question about this? Ask in the chat.',
+    promoAsk: 'I saw your post "{text}". Tell me more',
+    promoAskBare: 'I saw your promoted post. Tell me more',
     reactorsTitle: 'Reactions',
     noReactions: 'No reactions yet.',
     like: 'Like',
@@ -769,8 +773,9 @@ export const I18N = {
     hidePromo: 'यो प्रोमोसन लुकाउनुहोस्',
     promoHidden: 'प्रोमोसन लुकाइयो।',
     messageNow: 'अहिले सन्देश पठाउनुहोस्',
-    promoAsk: 'तपाईंको "{text}" पोस्ट मैले देखें — अझै भन्नुहोस्',
-    promoAskBare: 'तपाईंको प्रोमोट गरिएको पोस्ट मैले देखें — अझै भन्नुहोस्',
+    promoTagline: 'यसबारे प्रश्न छ? च्याटमा सोध्नुहोस्।',
+    promoAsk: 'तपाईंको "{text}" पोस्ट मैले देखें। अझै भन्नुहोस्',
+    promoAskBare: 'तपाईंको प्रोमोट गरिएको पोस्ट मैले देखें। अझै भन्नुहोस्',
     reactorsTitle: 'प्रतिक्रियाहरू',
     noReactions: 'अहिलेसम्म प्रतिक्रिया छैन।',
     like: 'लाइक',
