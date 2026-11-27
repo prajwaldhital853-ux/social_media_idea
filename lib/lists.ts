@@ -42,6 +42,8 @@ export interface ListState {
 const IDLE: ListState = { ids: [], cursor: null, loaded: false, done: false, loading: false, refreshing: false, error: null };
 
 const states = new Map<string, ListState>();
+/** When each list last answered page one, so a screen returning to it knows whether the answer is stale. */
+const pulledAt = new Map<string, number>();
 const listeners = new Set<() => void>();
 let apply: ((frag: Fragment) => void) | null = null;
 
@@ -76,7 +78,10 @@ function snapshot(key: string): ListState {
 
 export function forgetLists(prefix?: string): void {
   Array.from(states.keys()).forEach(key => {
-    if (!prefix || key === prefix || key.startsWith(`${prefix}?`)) states.delete(key);
+    if (!prefix || key === prefix || key.startsWith(`${prefix}?`)) {
+      states.delete(key);
+      pulledAt.delete(key);
+    }
   });
   emit();
 }
@@ -127,6 +132,9 @@ async function fetchPage(key: string, def: ListDef, query: Query | undefined, cu
       loading: false,
       refreshing: false,
     });
+    // Only a page-one answer settles the question of how fresh a screen is. A
+    // later page tells you nothing about whether the head of the list moved.
+    if (!cursor) pulledAt.set(key, Date.now());
   } catch (err: any) {
     const message = err?.message || 'Could not load this list.';
     // A rebuild emptied the rows on purpose, so a failed one puts back what the
@@ -161,6 +169,17 @@ function refreshAt(sk: string, def: ListDef, query: Query | undefined): Promise<
 /** Re-read page one and let the screen redraw itself: the rows on the way out are cleared first. */
 function rebuildAt(sk: string, def: ListDef, query: Query | undefined): Promise<void> {
   return fetchPage(sk, def, query, null, 'rebuild');
+}
+
+/**
+ * How long page one is worth showing again as it stands. A screen that mounts
+ * and unmounts inside a beat — a route swap, a drawer that opens the same list
+ * twice — is not a reader who has been away long enough to expect an answer.
+ */
+const STALE_AFTER = 1500;
+
+function isStale(sk: string): boolean {
+  return Date.now() - (pulledAt.get(sk) ?? 0) >= STALE_AFTER;
 }
 
 /**
@@ -295,6 +314,20 @@ export function useList(key: string, def: ListDef, query?: Query, enabled = true
       void loadAt(sk, defRef.current, queryRef.current);
     }
   }, [sk, enabled, state.loaded, state.done, state.ids.length]);
+
+  // Walking away and coming back is not a reload. The ids this list settled on
+  // live at module scope, so they outlive the screen that asked for them, and a
+  // reader who leaves for the messages and returns to Home meets the rows they
+  // left behind — a post that landed in between stays invisible until they pull
+  // by hand. So a screen that mounts onto an aged page one asks again, quietly:
+  // `refreshing` and not `loading` means the rows already on screen are kept
+  // until the answer replaces them, rather than trading places with a skeleton.
+  useEffect(() => {
+    if (!enabled) return;
+    const current = snapshot(sk);
+    if (!current.loaded || current.loading || current.refreshing || !isStale(sk)) return;
+    void refreshAt(sk, defRef.current, queryRef.current);
+  }, [sk, enabled]);
 
   return {
     ids: state.ids,
