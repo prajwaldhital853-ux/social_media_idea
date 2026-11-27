@@ -10,7 +10,7 @@ from rest_framework.response import Response
 from apps.accounts.models import User
 from apps.common.api import person
 from apps.common.pagination import KeysetPagination, decode_cursor
-from apps.follows.models import Follow
+from apps.follows.models import Block, Follow
 from apps.notifications.models import Notification
 from apps.notifications.services import notify_latest
 
@@ -111,8 +111,17 @@ def inbox(request):
     ids = [conversation.pk for conversation in rows]
     response = paginator.get_paginated_response(_inbox_cards(request, ids))
     if not request.query_params.get('cursor'):
+        # The band above the threads is everyone this reader follows and has not
+        # written to yet — one-way by design: following someone puts them in MY
+        # inbox, and they only see the thread once a message actually crosses.
+        # Blocks cut both ways, in either direction, and talked threads are
+        # already in the list below.
         mine = set(Follow.objects.filter(follower=request.user, status='accepted').values_list('followee_id', flat=True))
-        theirs = set(Follow.objects.filter(followee=request.user, status='accepted').values_list('follower_id', flat=True))
+        blocked = set(
+            Block.objects.filter(Q(blocker=request.user) | Q(blocked=request.user))
+            .values_list('blocker_id', 'blocked_id')
+        )
+        blocked_ids = {(b if a == request.user.pk else a) for a, b in blocked}
         mine_ids = Conversation.participants.through.objects.filter(
             user_id=request.user.pk,
         ).values_list('conversation_id', flat=True)
@@ -120,8 +129,9 @@ def inbox(request):
             Conversation.participants.through.objects.filter(conversation_id__in=mine_ids)
             .exclude(user_id=request.user.pk).values_list('user_id', flat=True)
         )
-        mutual_users = User.objects.filter(pk__in=(mine & theirs) - talked).select_related('profile')
-        response.data['mutuals'] = [{'user': person(u), 'mutual': True} for u in mutual_users]
+        band_users = User.objects.filter(pk__in=mine - talked - blocked_ids).select_related('profile')
+        theirs = set(Follow.objects.filter(followee=request.user, status='accepted').values_list('follower_id', flat=True))
+        response.data['mutuals'] = [{'user': person(u), 'mutual': u.pk in theirs} for u in band_users]
     return response
 
 

@@ -346,6 +346,12 @@ export interface Database {
   unread?: { notifications: number; messages: number };
   /** Server clock, used to price promotion windows and expiring locks. */
   serverTime?: number;
+  /**
+   * Live profile totals keyed by lowercase username. The server re-reads them
+   * on every profile visit; the seat's own writes move them between visits so
+   * the numbers answer without a refresh.
+   */
+  personStats?: Record<string, { posts: number; followers: number; following: number }>;
 }
 
 export type ThemeMode = 'light' | 'dark';

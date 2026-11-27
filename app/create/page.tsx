@@ -11,6 +11,7 @@ import { Media } from '@/lib/types';
 import { uid, fmtDur } from '@/lib/utils';
 import { mediaFromFile } from '@/lib/mediaFile';
 import { takeCreateDraft } from '@/lib/draftMedia';
+import { goBack } from '@/lib/navStack';
 
 const PLACES = ['Kathmandu', 'Pokhara', 'Lalitpur', 'Bhaktapur', 'Chitwan', 'Butwal', 'Dharan', 'Nepalgunj'];
 const MOODS = [
@@ -47,6 +48,11 @@ export default function CreatePostPage() {
   const [upload, setUpload] = useState<{ name: string; pct: number } | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  // The send can outlast anyone's patience, so the overlay hands back an escape
+  // after a few seconds. Dismissing keeps the draft and abandons the wait; if
+  // the send still lands, the toast says so instead of a page jump.
+  const [escapable, setEscapable] = useState(false);
+  const dismissedRef = useRef(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -123,7 +129,10 @@ export default function CreatePostPage() {
     }
     setPublishKind(kind);
     setError('');
+    dismissedRef.current = false;
+    setEscapable(false);
     setProgress(PUBLISHING);
+    const escapeTimer = window.setTimeout(() => setEscapable(true), 5000);
     try {
       await addPost({
         id: uid(),
@@ -137,6 +146,11 @@ export default function CreatePostPage() {
         mood: mood || undefined,
         place: place || undefined
       });
+      window.clearTimeout(escapeTimer);
+      if (dismissedRef.current) {
+        showToast(kind === 'reel' ? 'Reel published.' : 'Post published.');
+        return;
+      }
       setProgress(PUBLISHED);
       showToast(kind === 'reel' ? 'Reel published.' : 'Post published.');
       router.push('/');
@@ -144,6 +158,7 @@ export default function CreatePostPage() {
       // A post the server refused keeps its text and attachments on the screen.
       // What the site decided is not a fault in the form, so it arrives as the
       // same dark bar every other answer from the server arrives in.
+      window.clearTimeout(escapeTimer);
       setProgress(null);
       showToast(err instanceof Error ? err.message : 'Your post could not be published.');
     }
@@ -157,7 +172,7 @@ export default function CreatePostPage() {
     <AppShell>
       <div className="create-post-page">
         <header className="create-post-header">
-          <button type="button" className="icon-btn" aria-label="Back" onClick={() => router.back()}>{IC.back}</button>
+          <button type="button" className="icon-btn" aria-label="Back" onClick={() => goBack(router, '/')}>{IC.back}</button>
           <h1>{kind === 'reel' ? 'Create reel' : 'Create post'}</h1>
           <button type="button" className="post-btn-header" onClick={() => void publish(kind)} disabled={!canPost}>Post</button>
         </header>
@@ -375,6 +390,15 @@ export default function CreatePostPage() {
               </div>
               <b>Publishing your {publishKind === 'reel' ? 'reel' : 'post'}…</b>
               <small>{progress < 100 ? 'Sending to your feed' : 'Published'}</small>
+              {escapable && progress < PUBLISHED && (
+                <button
+                  type="button"
+                  className="publish-dismiss"
+                  onClick={() => { dismissedRef.current = true; setProgress(null); }}
+                >
+                  Keep editing — your draft stays here
+                </button>
+              )}
             </div>
           </div>,
           document.body

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useApp } from '@/lib/AppContext';
 import { useRemoteRow } from '@/lib/useRemoteRow';
 import { canSeePost, privateIds } from '@/lib/utils';
+import { goBack } from '@/lib/navStack';
 import { IC } from '@/lib/icons';
 import AutoVideo from './AutoVideo';
 import Comments from './Comments';
@@ -64,7 +65,7 @@ export default function MediaPage({ postId, initialIndex }: MediaPageProps) {
     const onKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
       if (target.closest('input, textarea, select, [contenteditable="true"], .comments-overlay, .reaction-tray')) return;
-      if (e.key === 'Escape') router.back();
+      if (e.key === 'Escape') goBack(router, `/post/${postId}`);
       if (e.key === 'ArrowRight' || e.key === 'ArrowDown') { e.preventDefault(); go(indexRef.current + 1); }
       if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') { e.preventDefault(); go(indexRef.current - 1); }
     };
@@ -114,7 +115,7 @@ export default function MediaPage({ postId, initialIndex }: MediaPageProps) {
   return (
     <div className="media-page">
       <div className="media-page-bar">
-        <button type="button" className="media-page-back" aria-label="Back to post" title="Back (Esc)" onClick={() => router.back()}>
+        <button type="button" className="media-page-back" aria-label="Back to post" title="Back (Esc)" onClick={() => goBack(router, `/post/${postId}`)}>
           {IC.back}
         </button>
         {available && media.length > 0 && <span className="media-page-count">{index + 1} / {media.length}</span>}

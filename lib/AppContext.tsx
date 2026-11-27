@@ -9,11 +9,12 @@ import { THEME_KEY, LANG_KEY, uid, ageFromDob, reactionRank } from './utils';
 import { I18N, TranslationKey } from './i18n';
 import { api, API_ENABLED, ApiError, onWakeChange } from './api';
 import { merge as applyFragment, Fragment } from './store';
+import { noteRoute } from './navStack';
 import {
   idOf, at, mapComment, mapFollow, mapMe, mapMessage, mapNotification, mapPerson, mapPost, mapPromotion,
   mapReport, mapSettings, mediaPayload, profilePatch, reactionsOfPost, toPostPayload, toProfilePayload,
 } from './dto';
-import { bindListCache, forgetLists, inboxListDef, listingsFragment, notificationsFragment, postsFragment, pushListRow, refreshList, walletFragment } from './lists';
+import { bindListCache, forgetLists, inboxListDef, listingsFragment, notificationsFragment, postsFragment, pushListRow, refreshList, removeListRow, walletFragment } from './lists';
 import { emitLive, onLive } from './live';
 
 type Target = 'post' | 'comment' | 'media';
@@ -42,6 +43,8 @@ interface AppContextType {
   /** Drop one accepted follower of mine, silently and without blocking. */
   removeFollower: (followerId: string) => Promise<void>;
   mutualIds: () => string[];
+  /** One-way inbox band: the accepted follows, minus blocks. */
+  followedIds: () => string[];
   react: (targetType: Target, targetId: string, kind: ReactionKind) => Promise<void>;
   myReaction: (targetType: Target, targetId: string) => ReactionKind | null;
   reactionCount: (targetType: Target, targetId: string) => number;
@@ -257,6 +260,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     setDrawerOpen(false);
+    noteRoute(pathname);
   }, [pathname]);
 
   useEffect(() => {
@@ -850,15 +854,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const row = await api.get<any>(`/api/profiles/${username}/`);
       const person = mapPerson(row);
       merge({ users: [person] });
-      return {
-        person,
-        stats: {
-          posts: Number(row.posts) || 0,
-          followers: Number(row.followers) || 0,
-          following: Number(row.following) || 0,
-        },
-        locked: !!row.locked,
+      const stats = {
+        posts: Number(row.posts) || 0,
+        followers: Number(row.followers) || 0,
+        following: Number(row.following) || 0,
       };
+      // The card's totals live here, so writes this seat makes between visits
+      // can move the number on screen without waiting on another round-trip.
+      setDb(prev => ({
+        ...prev,
+        personStats: { ...(prev.personStats || {}), [username.toLowerCase()]: stats },
+      }));
+      return { person, stats, locked: !!row.locked };
     } catch (err) {
       if (err instanceof ApiError && err.status === 404) return null;
       throw err;
@@ -925,6 +932,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
   };
 
+  /**
+   * The profile card reads its totals from this store, so a write this seat
+   * just made moves the number the visitor is looking at; the next profile
+   * visit re-reads the truth anyway. No entry means that card was never opened
+   * here, and the bump can wait for that visit.
+   */
+  const bumpStats = (username: string | undefined, field: 'posts' | 'followers' | 'following', delta: number) => {
+    if (!API_ENABLED || !username || !delta) return;
+    const key = username.toLowerCase();
+    setDb(prev => {
+      const cur = prev.personStats?.[key];
+      if (!cur) return prev;
+      return {
+        ...prev,
+        personStats: { ...prev.personStats!, [key]: { ...cur, [field]: Math.max(0, cur[field] + delta) } },
+      };
+    });
+  };
+
   const addPost = async (post: Post): Promise<Post> => {
     if (!API_ENABLED) {
       setDb(prev => ({ ...prev, posts: [post, ...prev.posts] }));
@@ -937,6 +963,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
       posts: [saved],
       reactions: reactionsOfPost(row, self ? self.id : saved.uid),
     });
+    // Every list this seat is already reading that could hold the new row gets
+    // the id at once — the feed and my profile move with the publish ring still
+    // on screen. Lists nobody is reading no-op, and the next visit re-pulls.
+    pushListRow('feed', undefined, saved.id);
+    pushListRow('feed', { following: 1 }, saved.id);
+    const mine = self?.username;
+    if (mine) {
+      pushListRow('profile-posts', { author: mine }, saved.id);
+      pushListRow('profile-photos', { author: mine, media: 'image' }, saved.id);
+      const reels = saved.media.some(m => m.type === 'video');
+      if (reels) {
+        pushListRow('profile-reels', { author: mine, media: 'video' }, saved.id);
+        pushListRow('profile-reels', { author: mine, media: 'video', order: 'views' }, saved.id);
+        pushListRow('profile-reels', { author: mine, media: 'video', order: 'oldest' }, saved.id);
+      }
+      bumpStats(mine, 'posts', 1);
+    }
     return { ...saved, kind: post.kind };
   };
 
@@ -965,6 +1008,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const deletePost = async (id: string) => {
     const snapshot = dbRef.current;
+    const gone = snapshot.posts.find(p => p.id === id);
+    const self = currentMe();
+    const mine = gone && self && gone.uid === self.id ? self.username : undefined;
     setDb(prev => ({
       ...prev,
       posts: prev.posts.filter(p => p.id !== id),
@@ -973,6 +1019,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
       saves: prev.saves.filter(s => s.pid !== id),
       reports: prev.reports.filter(r => !(r.type === 'post' && r.targetId === id))
     }));
+    if (mine) {
+      // The lists still reading my rows lose the id now, and the counter on my
+      // card follows; both come back with the snapshot if the server refuses.
+      removeListRow('feed', undefined, id);
+      removeListRow('feed', { following: 1 }, id);
+      removeListRow('profile-posts', { author: mine }, id);
+      removeListRow('profile-photos', { author: mine, media: 'image' }, id);
+      removeListRow('profile-reels', { author: mine, media: 'video' }, id);
+      removeListRow('profile-reels', { author: mine, media: 'video', order: 'views' }, id);
+      removeListRow('profile-reels', { author: mine, media: 'video', order: 'oldest' }, id);
+      bumpStats(mine, 'posts', -1);
+    }
     if (!API_ENABLED) return;
     try {
       await api.del(`/api/posts/${id}/`);
@@ -1054,6 +1112,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return db.follows.filter(f => f.following === self.id && f.status !== 'pending' && mine.has(f.follower)).map(f => f.follower);
   };
 
+  /**
+   * The one-way inbox band: everyone I follow, whether or not they follow me
+   * back. Following is the act that puts a person in MY inbox; their inbox only
+   * learns of me when a message actually crosses, or when they follow me too.
+   * People I have blocked stay out.
+   */
+  const followedIds = () => {
+    const self = currentMe();
+    if (!self) return [] as string[];
+    const blocks = new Set(db.blocks || []);
+    return db.follows
+      .filter(f => f.follower === self.id && f.status !== 'pending' && !blocks.has(f.following))
+      .map(f => f.following);
+  };
+
   const edgeOf = (followerId: string, followingId: string) =>
     dbRef.current.follows.find(f => f.follower === followerId && f.following === followingId);
 
@@ -1090,6 +1163,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
             return;
           }
         }
+        // Only an accepted edge was ever counted; withdrawing an ask moves no
+        // total on either card.
+        if (existing.status === 'accepted') {
+          bumpStats(self.username, 'following', -1);
+          bumpStats(username, 'followers', -1);
+        }
         if (existing.status === 'pending') {
           // Withdrawing the ask settles the other member's bell row server-side;
           // this reader's own counters are re-read so nothing waits on a visit
@@ -1107,6 +1186,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         try {
           const data = await api.post<any>('/api/follows/', { username });
           putEdge({ follower: self.id, following: targetId, ts: at(data?.created_at) || Date.now(), status: data?.status === 'pending' ? 'pending' : 'accepted' });
+          if (data?.status !== 'pending') {
+            bumpStats(self.username, 'following', 1);
+            bumpStats(username, 'followers', 1);
+          }
         } catch (err) {
           dropEdge(self.id, targetId);
           showToast(errText(err, 'Could not follow.'));
@@ -1142,6 +1225,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
         // The username rides along because the row id is only a snapshot: the
         // server answers the request that is actually standing between us.
         await api.post(`/api/follows/requests/${edge.rid}/${accept ? 'accept' : 'decline'}/`, { username: usernameOf(followerId) });
+        if (accept) {
+          // The ask became a counted edge on both cards the moment the server
+          // said yes; the screens already open move with it.
+          bumpStats(self.username, 'followers', 1);
+          bumpStats(usernameOf(followerId), 'following', 1);
+        }
       } catch (err) {
         if (err instanceof ApiError && err.status === 404) {
           dropEdge(followerId, self.id);
@@ -1178,6 +1267,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (API_ENABLED) {
       try {
         await api.del(`/api/follows/${username}/follower/`);
+        bumpStats(self.username, 'followers', -1);
       } catch (err) {
         putEdge(edge);
         showToast(errText(err, 'That follower could not be removed.'));
@@ -1805,7 +1895,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       value={{
         db, setDb, me, isAdmin, isStaff, t, feature,
         addPost, updatePost, deletePost, addComment, deleteComment,
-        toggleFollow, isFollowing, followState, requestFrom, incomingRequests, acceptRequest, declineRequest, removeFollower, mutualIds,
+        toggleFollow, isFollowing, followState, requestFrom, incomingRequests, acceptRequest, declineRequest, removeFollower, mutualIds, followedIds,
         react, myReaction, reactionCount, reactionMix, reactionPeople, myPostReaction, toggleSave, isSaved, toggleListingSave, isListingSaved,
         sharePost, mayShare, countView, blockUser, unblockUser, isBlocked, blockedIds,
         notify, markAllRead, markRead, sendMessage, markThreadRead, addReport, logAudit,

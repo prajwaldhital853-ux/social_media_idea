@@ -42,7 +42,7 @@ export default function Feed() {
 
   // Every arrival at Home is a fresh reading, not a replay of the ids the last
   // visit left behind: page one is re-read while the rows on screen stay put,
-  // and the server deals that page in a new order each time. A cold load is
+  // so a post that went live while they were away takes the top. A cold load is
   // already a first reading, so only a return visit re-pulls here.
   const refeed = useRef(feed.reload);
   refeed.current = feed.reload;

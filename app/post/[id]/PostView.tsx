@@ -7,6 +7,7 @@ import Comments from '@/components/Comments';
 import { useApp } from '@/lib/AppContext';
 import { canSeePost, privateIds } from '@/lib/utils';
 import { useRemoteRow } from '@/lib/useRemoteRow';
+import { goBack } from '@/lib/navStack';
 import { IC } from '@/lib/icons';
 
 export default function PostPage() {
@@ -27,7 +28,7 @@ export default function PostPage() {
           type="button"
           className="icon-btn"
           aria-label={t('back')}
-          onClick={() => window.history.length > 1 ? router.back() : router.push('/')}
+          onClick={() => goBack(router, '/')}
         >
           {IC.back}
         </button>

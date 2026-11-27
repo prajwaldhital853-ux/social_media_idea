@@ -17,6 +17,7 @@ import { useWindowed } from '@/lib/useWindowed';
 import { canSeePost, privateIds, compact, ago, safeUrl } from '@/lib/utils';
 import { checkPhoto, profileImage } from '@/lib/mediaFile';
 import { IC } from '@/lib/icons';
+import { goBack } from '@/lib/navStack';
 import { Listing, Post, User } from '@/lib/types';
 
 export default function UserProfilePage() {
@@ -33,8 +34,10 @@ export default function UserProfilePage() {
   const [coverBusy, setCoverBusy] = useState(false);
   const coverRef = useRef<HTMLInputElement>(null);
   // Only the profile row knows the true totals; a paginated list holds no more
-  // than the rows the visitor has already scrolled past.
-  const [stats, setStats] = useState<{ posts: number; followers: number; following: number } | null>(null);
+  // than the rows the visitor has already scrolled past. They live in the
+  // shared store, so a post this seat publishes or deletes from elsewhere moves
+  // the card the moment it lands instead of waiting on a refresh.
+  const stats = serverMode ? (db.personStats?.[username.toLowerCase()] ?? null) : null;
   const [personRead, setPersonRead] = useState(!serverMode);
 
   // The owner is the handle, not one id: a thin card that carries no id of its
@@ -78,7 +81,6 @@ export default function UserProfilePage() {
     let live = true;
     setPersonRead(false);
     loadPerson(username)
-      .then(read => { if (live && read) setStats(read.stats); })
       .catch(() => {})
       .finally(() => { if (live) setPersonRead(true); });
     return () => { live = false; };
@@ -87,7 +89,7 @@ export default function UserProfilePage() {
   // The pull at the shell re-reads the one number no list carries: the author's
   // real totals, which a paginated page of posts can only ever understate.
   usePull(
-    () => loadPerson(username).then(read => { if (read) setStats(read.stats); }),
+    () => { void loadPerson(username); },
     serverMode && !!username,
   );
 
@@ -151,7 +153,7 @@ export default function UserProfilePage() {
     return (
       <AppShell>
         <header className="detail-header">
-          <button type="button" className="icon-btn" aria-label="Back" onClick={() => window.history.length > 1 ? router.back() : router.push('/')}>{IC.back}</button>
+          <button type="button" className="icon-btn" aria-label="Back" onClick={() => goBack(router, '/')}>{IC.back}</button>
           <h1>{t('profile')}</h1>
           <span className="detail-header-spacer" />
         </header>
@@ -280,7 +282,7 @@ export default function UserProfilePage() {
               onChange={e => { pickCover(e.target.files?.[0]); e.target.value = ''; }}
             />
           )}
-          <button type="button" className="icon-btn profile-back" aria-label="Back" onClick={() => window.history.length > 1 ? router.back() : router.push('/')}>{IC.back}</button>
+          <button type="button" className="icon-btn profile-back" aria-label="Back" onClick={() => goBack(router, '/')}>{IC.back}</button>
         </div>
 
         <div className="profile-head">

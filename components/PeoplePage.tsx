@@ -10,6 +10,7 @@ import PeopleList from '@/components/PeopleList';
 import { useApp } from '@/lib/AppContext';
 import { usersFragment, useList, usePull } from '@/lib/lists';
 import { IC } from '@/lib/icons';
+import { goBack } from '@/lib/navStack';
 import { User } from '@/lib/types';
 
 export default function PeoplePage({ kind }: { kind: 'followers' | 'following' }) {
@@ -120,7 +121,7 @@ export default function PeoplePage({ kind }: { kind: 'followers' | 'following' }
     <AppShell>
       <div className="people-page">
         <header className="detail-header">
-          <button type="button" className="icon-btn" aria-label={t('back')} onClick={() => window.history.length > 1 ? router.back() : router.push(`/u/${user.username}`)}>{IC.back}</button>
+          <button type="button" className="icon-btn" aria-label={t('back')} onClick={() => goBack(router, `/u/${user.username}`)}>{IC.back}</button>
           <h1>{title}</h1>
           <span className="detail-header-spacer" />
         </header>
