@@ -77,6 +77,15 @@ def set_auth_cookies(response, user, device_id='', access_ttl=None):
         'exposing_csrf', uuid.uuid4().hex,
         max_age=int(REFRESH_TTL.total_seconds()), httponly=False, samesite='Lax', path='/', secure=secure,
     )
+    if device_id:
+        # The readable mirror of the id the browser keeps in localStorage. WebKit
+        # evicts that storage after a week of quiet and takes the id with it, which
+        # turned every returning owner into a new device; a cookie the server set
+        # lives exactly as long as the seat it belongs to.
+        response.set_cookie(
+            'exposing_device', device_id,
+            max_age=int(REFRESH_TTL.total_seconds()), httponly=False, samesite='Lax', path='/', secure=secure,
+        )
     return response
 
 
