@@ -104,6 +104,7 @@ export interface Media {
   dur?: number;
   blobId?: string;
   likes?: number;
+  comments?: number;
   reactionKinds?: Record<string, number>;
 }
 

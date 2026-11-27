@@ -125,7 +125,8 @@ export default function PostCard({ post, author, featured }: PostCardProps) {
     .sort((a, b) => b.ts - a.ts);
 
   /** The card counts comments before the panel is ever opened, so it reads the
-   *  server's aggregate when there is one and only falls back to cached rows. */
+   *  server's aggregate when there is one and only falls back to the cached
+   *  rows — a reply and a word left on a picture are comments too. */
   const commentCount = post.comments ?? comments.length;
 
   /** Media-level likes fold into the card count: server sums in API mode, reaction rows in demo. */

@@ -3,6 +3,7 @@ from django.db.models import Count, F, Q
 from rest_framework import viewsets
 from rest_framework.permissions import BasePermission, IsAuthenticatedOrReadOnly, SAFE_METHODS
 
+from apps.common.api import comment_totals, media_totals
 from apps.common.rules import blocked_wording, write_gate
 from apps.notifications.services import notify
 from apps.posts.models import Post
@@ -22,7 +23,12 @@ def _pulse_comments(post, *, row=None, deleted_ids=None, parent_id=None, author_
     from apps.common import pulse
     from apps.profiles.models import Profile
 
-    count = Post.objects.filter(pk=post.pk).values_list('comment_count', flat=True).first() or 0
+    # The tally every card and sheet wears is counted from the rows that are
+    # still up and reachable, so a comment leaving by any door moves the number
+    # with it. The stored column rides along with that read, so the desk and the
+    # ranking score stop disagreeing with what the site shows.
+    count = comment_totals([post.pk]).get(str(post.pk), 0)
+    Post.objects.filter(pk=post.pk).update(comment_count=count)
     event = {'post_id': str(post.pk), 'comments': count}
     pulse.to_user(post.author_id, 'comment', **event)
     room = post.audience == Post.Audience.PUBLIC and not Profile.objects.filter(
@@ -30,7 +36,10 @@ def _pulse_comments(post, *, row=None, deleted_ids=None, parent_id=None, author_
     if room:
         pulse.to_site('comment', **event)
 
-    detail = {**event, 'action': 'create' if row else 'delete'}
+    detail = {**event, 'action': 'create' if row else 'delete',
+              # Each picture of this post carries a number of its own, and the
+              # page a reader is standing on has to move with the same row.
+              'media_comments': media_totals([post.pk]).get(str(post.pk), {})}
     if row:
         detail.update(comment=row, comment_id=str(row['id']), author_id=row.get('author'))
     if deleted_ids:
@@ -66,10 +75,13 @@ class CommentViewSet(viewsets.ModelViewSet):
         if parent:
             qs = qs.filter(parent_id=parent)
         media_index = self.request.query_params.get('media_index')
-        if media_index is not None and media_index != '':
+        on_media = media_index is not None and media_index != ''
+        if on_media:
             qs = qs.filter(media_index=media_index)
         # The comment stream pages over top-level comments only; replies are a
-        # separate keyset under their parent so one long thread cannot hide the rest.
+        # separate keyset under their parent so one long thread cannot hide the
+        # rest. A word left on one picture is a comment on the post too, so the
+        # post's stream pages over it and the picture's own thread repeats it.
         if self.request.query_params.get('top'):
             qs = qs.filter(parent__isnull=True)
         return qs
@@ -95,7 +107,13 @@ class CommentViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         with transaction.atomic():
             Post.objects.select_for_update().get(pk=serializer.validated_data['post'].pk)
-            comment = serializer.save(author=self.request.user)
+            parent = serializer.validated_data.get('parent')
+            # A thread about one picture stays on that picture, whether the reader
+            # opened the picture or met its comment in the post's own list.
+            folded = ({'media_index': parent.media_index}
+                      if parent is not None and parent.media_index is not None
+                      and serializer.validated_data.get('media_index') is None else {})
+            comment = serializer.save(author=self.request.user, **folded)
             Post.objects.filter(pk=comment.post_id).update(comment_count=F('comment_count') + 1)
         post = comment.post
         if comment.parent_id:

@@ -68,6 +68,25 @@ def queue(row_pk):
     thread.start()
 
 
+def queue_card(recipient_id, payload):
+    """Write one finished card to every browser that seat has filed."""
+    if not configured() or not recipient_id:
+        return
+    thread = threading.Thread(target=_fan_out, args=(recipient_id, payload), daemon=True)
+    thread.start()
+
+
+def _fan_out(recipient_id, payload):
+    try:
+        # A thread must not inherit the request's connection: the request
+        # returns and puts it back in the pool while this is still holding it.
+        connections.close_all()
+        for sub in list(PushSubscription.objects.filter(user_id=recipient_id)):
+            _send(sub, payload)
+    except Exception:
+        logger.exception('Could not deliver a push notification')
+
+
 def _name(user):
     if user is None:
         return 'Exposing'
@@ -90,6 +109,26 @@ def _payload(row):
         # The bell row's own page: it marks itself read, shows the warning or
         # comment it came from, and needs no route table kept in step with this.
         'url': f'/notifications/{row.pk}',
+        # Who the card is for. One browser runs one worker for every account
+        # signed in on it, and a worker that is not told whose card this is
+        # cannot tell a member who is already reading the site from somebody
+        # else's tab that happens to be in front.
+        'to': (row.recipient.username if row.recipient_id else '')[:64],
+    }
+
+
+def notice_card(notice):
+    """The staff bell's own card. It lands on the console's desk, not on a page
+    only a member has, because the href was written with the notice."""
+    return {
+        'title': 'Exposing staff',
+        'body': (notice.text or 'Something needs a decision.')[:180],
+        # One card per notice, so a second report does not silently swallow the
+        # first one's card the way a shared tag would.
+        'tag': f'staff:{notice.kind}:{notice.pk}'[:120],
+        'renotify': True,
+        'url': notice.href or '/overview',
+        'to': (notice.recipient.username if notice.recipient_id else '')[:64],
     }
 
 
@@ -101,14 +140,10 @@ def _deliver(row_pk):
         row = Notification.objects.select_related('actor', 'recipient').filter(pk=row_pk).first()
         if row is None or row.kind in QUIET:
             return
-        subs = list(PushSubscription.objects.filter(user_id=row.recipient_id))
-        if not subs:
-            return
-        payload = _payload(row)
-        for sub in subs:
-            _send(sub, payload)
     except Exception:
         logger.exception('Could not deliver a push notification')
+        return
+    _fan_out(row.recipient_id, _payload(row))
 
 
 def _send(sub, payload):

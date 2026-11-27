@@ -273,3 +273,58 @@ def notice_map(kind, ids, request=None):
             'notification_id': notification_by_notice.get(row.pk),
         })
     return grouped
+
+
+def comment_totals(post_ids):
+    """Every comment each post still has to show, counted from the rows.
+
+    A reply is a comment the reader wrote, and so is a word left on one picture
+    of a multi-photo post, so both belong in the number the card wears even
+    though the thread hangs under its parent and the picture repeats the row in
+    its own list. One comment is one count wherever it is read.
+
+    A comment a rule took down keeps its own replies live, and nobody reaches
+    them because a thread opens from its parent, so those rows are not counted
+    either. Counting the live rows instead of trusting a stored tally also means
+    the number falls the moment a comment leaves — by its author, by a spam
+    rule, or by the desk.
+    """
+    from django.db.models import Count, Q
+
+    from apps.comments.models import Comment
+
+    keys = [pk for pk in post_ids if pk not in (None, '')]
+    if not keys:
+        return {}
+    rows = (Comment.objects
+            .filter(post_id__in=keys, status=Comment.Status.LIVE)
+            .filter(Q(parent__isnull=True) | Q(parent__status=Comment.Status.LIVE))
+            .values('post_id').annotate(n=Count('pk')))
+    return {str(row['post_id']): row['n'] for row in rows}
+
+
+def media_totals(post_ids):
+    """How many comments each picture of each post has, per post then position.
+
+    A word left on one picture is a comment on the post and on that picture, so
+    the picture's own button owes the reader the same truth the post's tally
+    carries — read from the rows, so it agrees before anyone has opened the
+    thread. A picture nobody answered is simply missing from the map, which
+    reads as zero.
+    """
+    from django.db.models import Count, Q
+
+    from apps.comments.models import Comment
+
+    keys = [pk for pk in post_ids if pk not in (None, '')]
+    if not keys:
+        return {}
+    rows = (Comment.objects
+            .filter(post_id__in=keys, status=Comment.Status.LIVE)
+            .exclude(media_index=None)
+            .filter(Q(parent__isnull=True) | Q(parent__status=Comment.Status.LIVE))
+            .values('post_id', 'media_index').annotate(n=Count('pk')))
+    per_post: dict = {}
+    for row in rows:
+        per_post.setdefault(str(row['post_id']), {})[str(row['media_index'])] = row['n']
+    return per_post

@@ -7,6 +7,7 @@ import { crumbsFor, drawerFor, navFor, requires } from '@/lib/nav';
 import { IC } from '@/lib/icons';
 import { useBell } from '@/lib/bell';
 import { cameFrom, Stop, visit } from '@/lib/trail';
+import { announceSeat, autoPush } from '@/lib/push';
 import { useSession } from '@/lib/session';
 
 // Every screen renders its own shell, so switching screens rebuilds this drawer
@@ -80,6 +81,33 @@ export default function ConsoleShell({
   useEffect(() => {
     if (status === 'out') router.replace('/login');
   }, [status, router]);
+
+  // A push card is drawn by the worker, which cannot navigate a window it did
+  // not open — so the screen moves itself when the worker tells it where to go.
+  useEffect(() => {
+    if (typeof navigator === 'undefined' || !navigator.serviceWorker) return;
+    const wake = (event: MessageEvent) => {
+      const url = event.data && event.data.url;
+      if (typeof url === 'string' && url.startsWith('/')) router.push(url);
+    };
+    navigator.serviceWorker.addEventListener('message', wake);
+    return () => navigator.serviceWorker.removeEventListener('message', wake);
+  }, [router]);
+
+  // Whoever is at the desk now owns this browser's address, so a seat that
+  // signed out of one console and into another does not keep waking the person
+  // who left — and a browser nobody has ever asked is asked as the console
+  // opens, rather than by a seat that has to find the button on its own page.
+  // Each screen also names itself to the worker, because one browser runs one
+  // worker for every seat signed in on it.
+  useEffect(() => {
+    if (status !== 'in') return;
+    const seat = () => announceSeat(session?.user.username || '');
+    void autoPush().then(seat);
+    seat();
+    document.addEventListener('visibilitychange', seat);
+    return () => document.removeEventListener('visibilitychange', seat);
+  }, [status, session?.user.username]);
 
   // The drawer row this screen sits under, a user's page is still the directory.
   const here = drawerFor(pathname);

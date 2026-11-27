@@ -256,7 +256,8 @@ export default function ReelsFeed({ initialKey }: { initialKey?: string }) {
         {feature('video') && slides.length > 0 ? (
           <div className="reels-scroll" ref={scrollRef} onScroll={onScroll}>
             {slides.map((slide, i) => {
-              const commentCount = slide.post.comments ?? db.comments.filter(c => c.pid === slide.post.id && c.status === 'live').length;
+              const commentCount = slide.post.comments
+                ?? db.comments.filter(c => c.pid === slide.post.id && c.status === 'live').length;
               const shareCount = slide.post.shares ?? 0;
               const saveCount = db.saves.filter(s => s.pid === slide.post.id).length;
               const saved = isSaved(slide.post.id);

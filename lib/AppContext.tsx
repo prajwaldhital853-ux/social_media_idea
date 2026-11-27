@@ -16,7 +16,7 @@ import {
 } from './dto';
 import { bindListCache, coinRequestsFragment, dropListRow, forgetLists, inboxListDef, listingsFragment, notificationsFragment, promotionsFragment, postsFragment, pushListRow, refreshList, removeListRow, walletFragment } from './lists';
 import { emitLive, onLive } from './live';
-import { disablePush, pushSupported, syncPush } from './push';
+import { announceSeat, autoPush, disablePush, pushSupported } from './push';
 import { bumpNew } from './newCount';
 
 type Target = 'post' | 'comment' | 'media';
@@ -234,6 +234,28 @@ function readTheme(): ThemeMode {
   return window.matchMedia('(min-width: 1024px)').matches ? 'dark' : 'light';
 }
 
+/**
+ * Move the number a post wears and the number each picture of it wears by the
+ * rows that just arrived or left. A word written on one picture counts on the
+ * post once and on that picture once, so both numbers have to follow the same
+ * rows without the post tally doubling.
+ */
+function moveTally(post: Post, rows: Comment[], delta: 1 | -1): Post {
+  const photos = new Map<number, number>();
+  rows.forEach(row => {
+    if (row.mediaIndex === undefined || row.mediaIndex === null) return;
+    photos.set(row.mediaIndex, (photos.get(row.mediaIndex) ?? 0) + 1);
+  });
+  return {
+    ...post,
+    comments: Math.max(0, (post.comments ?? 0) + delta * rows.length),
+    media: (post.media ?? []).map((m, i) => {
+      const n = photos.get(i);
+      return n ? { ...m, comments: Math.max(0, (m.comments ?? 0) + delta * n) } : m;
+    }),
+  };
+}
+
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 /**
@@ -293,11 +315,29 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [pathname]);
 
   useEffect(() => {
+    // The right belongs to the browser, not the seat, so a visitor is asked the
+    // moment the site opens instead of after they find a setting. A guest cannot
+    // file an address yet; the next effect does that once they have a session.
+    void autoPush();
+  }, []);
+
+  useEffect(() => {
     // Whoever signs in owns this browser's address for as long as the seat
-    // lasts. The call is cheap when nothing is subscribed and does nothing at
-    // all when the member never allowed notifications.
+    // lasts, and a browser that has never been asked is asked now rather than
+    // whenever the member finds the switch in Settings. Both calls do nothing at
+    // all to a member who has already said no.
     if (!API_ENABLED || !db.meId) return;
-    void syncPush();
+    // The worker draws a card for the whole browser, so every tab has to say
+    // whose account it is holding — otherwise the tab that happens to be in
+    // front swallows the message meant for the member who is away.
+    const seat = () => {
+      const holder = dbRef.current.users.find(u => u.id === dbRef.current.meId);
+      if (holder) announceSeat(holder.username);
+    };
+    void autoPush().then(seat);
+    seat();
+    document.addEventListener('visibilitychange', seat);
+    return () => document.removeEventListener('visibilitychange', seat);
   }, [db.meId]);
 
   useEffect(() => {
@@ -1229,9 +1269,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const arrived = prev.comments.some(existing => existing.id === saved.id);
       const next = applyFragment(prev, { comments: [saved] });
       if (arrived) return next;
+      // One comment, one count — whether it answers another comment or sits on
+      // one picture of a multi-picture post, and whichever list shows it first.
       return {
         ...next,
-        posts: next.posts.map(p => (p.id === saved.pid ? { ...p, comments: (p.comments ?? 0) + 1 } : p)),
+        posts: next.posts.map(p => (p.id === saved.pid ? moveTally(p, [saved], 1) : p)),
       };
     });
     return saved;
@@ -1239,12 +1281,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const deleteComment = async (id: string) => {
     const snapshot = dbRef.current;
-    setDb(prev => ({
-      ...prev,
-      comments: prev.comments.filter(c => c.id !== id && c.parentId !== id),
-      reactions: prev.reactions.filter(r => !(r.targetType === 'comment' && r.targetId === id)),
-      reports: prev.reports.filter(r => !(r.type === 'comment' && r.targetId === id))
-    }));
+    setDb(prev => {
+      // A comment takes its thread with it, so the tally moves by the rows that
+      // actually leave rather than by one.
+      const gone = prev.comments.filter(c => c.id === id || c.parentId === id);
+      const pid = gone[0]?.pid;
+      return {
+        ...prev,
+        comments: prev.comments.filter(c => c.id !== id && c.parentId !== id),
+        reactions: prev.reactions.filter(r => !(r.targetType === 'comment' && r.targetId === id)),
+        reports: prev.reports.filter(r => !(r.type === 'comment' && r.targetId === id)),
+        posts: pid
+          ? prev.posts.map(p => (p.id === pid ? moveTally(p, gone, -1) : p))
+          : prev.posts,
+      };
+    });
     if (!API_ENABLED) return;
     try {
       await api.del(`/api/comments/${id}/`);

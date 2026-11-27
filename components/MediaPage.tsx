@@ -139,7 +139,7 @@ export default function MediaPage({ postId, initialIndex }: MediaPageProps) {
                     onClick={() => setCommentsIndex(i)}
                   >
                     {IC.msg}
-                    <span>{db.comments.filter(c => c.pid === postId && c.mediaIndex === i && c.status === 'live').length || ''}</span>
+                    <span>{(item.comments ?? db.comments.filter(c => c.pid === postId && c.mediaIndex === i && c.status === 'live').length) || ''}</span>
                   </button>
                   <button type="button" className="action-btn" aria-label="Share this media" onClick={() => void share(i)}>
                     {IC.share}

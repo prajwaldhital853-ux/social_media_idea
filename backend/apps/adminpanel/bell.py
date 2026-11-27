@@ -20,6 +20,7 @@ from django.db.models.signals import post_save
 from django.utils import timezone
 
 from apps.moderation.models import Report
+from apps.notifications import push
 from apps.promotions.models import Promotion
 from apps.wallet.models import CoinRequest
 
@@ -75,9 +76,14 @@ def announce(kind, text, href, permission=''):
             continue
         if permission and permission not in held(seat):
             continue
-        StaffNotice.objects.create(
+        row = StaffNotice.objects.create(
             recipient=user, kind=kind, text=text[:200], href=href, route=route, permission=permission,
         )
+        # The tray is only half of a bell: a seat working with the console closed
+        # hears nothing at all unless its browser was told to wake up for it.
+        transaction.on_commit(lambda seat_pk=user.pk, notice=row: push.queue_card(
+            seat_pk, push.notice_card(notice),
+        ))
         _trim(user)
         told += 1
     if told:

@@ -25,6 +25,7 @@ from apps.common.stream import acquire, release, stream_user
 from apps.marketplace.models import Listing
 from apps.messages.models import Message
 from apps.posts.models import Post
+from .models import PushSubscription
 from apps.posts.views import visible_posts
 
 from . import push
@@ -380,8 +381,19 @@ def push_config(request):
     it names us to the push service, and the private half never travels. A
     member's browser should not spend a permission prompt on a platform that
     has no keys configured, so `enabled` says so first.
+
+    With `endpoint` in the query, `filed` answers the question a switch must
+    actually show: does the server hold *this* browser's address under the seat
+    signed in now? Chrome files one address per browser however many accounts
+    live in it, so a subscription the browser can see may belong to somebody
+    else — a switch that only asked the browser would stay lit over an address
+    the member away from this desk is receiving.
     """
-    return Response({'enabled': push.configured(), 'public_key': push.public_key()})
+    endpoint = str(request.query_params.get('endpoint') or '')[:512]
+    filed = False
+    if endpoint:
+        filed = PushSubscription.objects.filter(user=request.user, endpoint=endpoint).exists()
+    return Response({'enabled': push.configured(), 'public_key': push.public_key(), 'filed': filed})
 
 
 @api_view(['POST'])
