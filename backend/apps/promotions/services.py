@@ -237,10 +237,17 @@ class Affinity:
             from apps.comments.models import Comment
             from apps.posts.models import SharedPost
             from apps.reactions.models import Reaction
-            from apps.saved.models import SavedPost
-            pk = int(key[1]) if key[0] == 'post' and key[1].isdigit() else None
+            from apps.saved.models import SavedListing, SavedPost
+            pk = int(key[1]) if key[1].isdigit() else None
             if pk is None:
                 self._touch[key] = 0
+            elif promo.target_type == Promotion.Target.LISTING:
+                # An ad has no likes, comments or shares to earn, but the shelf a
+                # person put it on is the same statement about the same thing.
+                self._touch[key] = (
+                    self.weights['algo_weight_save']
+                    if SavedListing.objects.filter(user=self.user, listing_id=pk).exists() else 0
+                )
             else:
                 likes = Reaction.objects.filter(
                     user=self.user, target_type='post', target_id=key[1]).count()
@@ -334,25 +341,88 @@ def ad_priors(promos, weights):
     return out
 
 
-def live_campaigns(post_ids):
-    """Every campaign running right now against these posts, by advertised post id.
+def live_campaigns(target_ids, target_type=Promotion.Target.POST):
+    """Every campaign running right now against these rows, by advertised row id.
 
-    A paid post does not stop being an advert because it reached the second page, the
+    A paid row does not stop being an advert because it reached the second page, the
     author's own profile or a link opened from outside the app. The payer bought the
     reach and the reader is owed the line over the row wherever the platform hands it
-    to them, so this answers the disclosure question for any door that returns posts.
-    Metering stays where it was — a label spends no slot and writes no impression — so
-    an organic read of a promoted post cannot inflate the reach a package promised.
+    to them, so this answers the disclosure question for any door that returns posts
+    or listings. Metering stays where it was — a label spends no slot and writes no
+    impression — so an organic read of a promoted row cannot inflate the reach a
+    package promised.
     """
-    keys = [str(pk) for pk in post_ids if pk]
+    keys = [str(pk) for pk in target_ids if pk]
     if not keys:
         return {}
     rows = Promotion.objects.filter(
         status=Promotion.Status.ACTIVE,
-        target_type=Promotion.Target.POST,
+        target_type=target_type,
         target_id__in=keys,
     ).filter(Q(ends_at__isnull=True) | Q(ends_at__gt=timezone.now())).select_related('owner')
     return {str(promo.target_id): promo for promo in rows}
+
+
+def promo_card(promo):
+    """What a reader is told about the campaign behind the row they are looking at."""
+    return {
+        'id': promo.pk, 'owner': promo.owner_id, 'target_type': promo.target_type,
+        'target_id': promo.target_id, 'category': promo.category,
+        'age_min': promo.age_min, 'age_max': promo.age_max,
+        'country': promo.country, 'cities': list(promo.cities or []), 'package': promo.package,
+        'budget': promo.budget, 'status': promo.status,
+        'impressions': promo.impressions, 'clicks': promo.clicks,
+        'profile_visits': promo.profile_visits,
+        'created_at': promo.created_at, 'starts_at': promo.starts_at, 'ends_at': promo.ends_at,
+    }
+
+
+def mark_promoted(items, target_type=Promotion.Target.POST):
+    """Say, row by row, which of these rows somebody is paying to put in front of people.
+
+    Every door that hands out rows of one kind goes through here, because a disclosure
+    that only exists on the feed is not a disclosure: the same advert read on the
+    author's profile, on the saved shelf or from a shared link looked like an ordinary
+    post, and the only copy wearing the label was the one the algorithm had placed. It
+    cannot be a per-reader answer either — the anonymous first page is one cached
+    response handed to every stranger — so what a paid row is made of is the same fact
+    for everyone, and the metering stays inside the slot the feed actually spent.
+    """
+    live = live_campaigns([item.get('id') for item in items], target_type=target_type)
+    for item in items:
+        promo = live.get(str(item.get('id')))
+        if promo is None:
+            item['promoted'] = False
+            continue
+        item['promoted'] = True
+        item['promo_id'] = promo.pk
+        item['promo'] = promo_card(promo)
+
+
+def place(cards, promos, organic, gap):
+    """Interleave the paid cards into an ordinary page, and say which were placed.
+
+    The gap the desk asked for is measured in ordinary rows, so a second paid card
+    waits that many rows behind the first. A card that never gets its gap is not
+    shown, and is not written to the ledger either: the reach a payer is charged for
+    is the reach a person actually saw.
+    """
+    step = max(1, gap)
+    paid = list(zip(cards, promos))
+    merged, since, shown = [], 0, []
+    if paid:
+        card, promo = paid.pop(0)
+        merged.append(card)
+        shown.append(promo)
+    for item in organic:
+        if paid and since >= step:
+            card, promo = paid.pop(0)
+            merged.append(card)
+            shown.append(promo)
+            since = 0
+        merged.append(item)
+        since += 1
+    return merged, shown
 
 
 def target_labels(promos):

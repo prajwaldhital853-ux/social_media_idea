@@ -5,7 +5,10 @@ from rest_framework.permissions import AllowAny, BasePermission, IsAuthenticated
 from rest_framework.response import Response
 
 from apps.common.api import notice_map
+from apps.common.pagination import KeysetPagination
 from apps.common.rules import blocked_wording
+from apps.promotions.models import Promotion
+from apps.promotions.services import live_campaigns, plan, place, promo_card, serving
 
 from .models import Listing, ListingImage
 
@@ -21,6 +24,8 @@ class ListingListSerializer(serializers.ListSerializer):
     def to_representation(self, data):
         rows = list(data.all() if hasattr(data, 'all') else data)
         self.context['_listing_notices'] = notice_map('listing', [row.pk for row in rows], self.context.get('request'))
+        self.context['_listing_promos'] = live_campaigns(
+            [row.pk for row in rows], Promotion.Target.LISTING)
         return [self.child.to_representation(row) for row in rows]
 
 
@@ -29,13 +34,15 @@ class ListingSerializer(serializers.ModelSerializer):
     seller_name = serializers.CharField(source='seller.profile.display_name', read_only=True)
     images = ListingImageSerializer(many=True, required=False)
     notices = serializers.SerializerMethodField()
+    promoted = serializers.SerializerMethodField()
+    promo = serializers.SerializerMethodField()
 
     class Meta:
         model = Listing
         fields = [
             'id', 'seller', 'seller_username', 'seller_name', 'title', 'description',
             'price', 'currency', 'category', 'condition', 'location', 'image_url',
-            'status', 'created_at', 'images', 'notices',
+            'status', 'created_at', 'images', 'notices', 'promoted', 'promo',
         ]
         read_only_fields = ['id', 'seller', 'status', 'created_at']
         list_serializer_class = ListingListSerializer
@@ -45,6 +52,19 @@ class ListingSerializer(serializers.ModelSerializer):
         if '_listing_notices' not in self.context:
             self.context['_listing_notices'] = notice_map('listing', [obj.pk], self.context.get('request'))
         return self.context['_listing_notices'].get(str(obj.pk), [])
+
+    def campaign(self, obj):
+        """The ad bought on this offer, or None. One lookup for the whole page."""
+        if '_listing_promos' not in self.context:
+            self.context['_listing_promos'] = live_campaigns([obj.pk], Promotion.Target.LISTING)
+        return self.context['_listing_promos'].get(str(obj.pk))
+
+    def get_promoted(self, obj):
+        return self.campaign(obj) is not None
+
+    def get_promo(self, obj):
+        promo = self.campaign(obj)
+        return promo_card(promo) if promo else None
 
     def validate_price(self, value):
         if value < 1:
@@ -138,6 +158,38 @@ class ListingViewSet(viewsets.ModelViewSet):
             needle = params['q']
             qs = qs.filter(Q(title__icontains=needle) | Q(description__icontains=needle))
         return qs
+
+    def list(self, request, *args, **kwargs):
+        """The browse grid carries the paid slot; a shelf somebody searched does not.
+
+        Somebody's own offers, an archive walk and a word search are answers to a
+        question the reader asked, and an advert for something else is not what they
+        asked for. A category or price filter stays eligible: the ad is looked up
+        through the very same walk, so a campaign outside the window the reader set
+        is simply never placed and never charged.
+        """
+        asked = any(request.query_params.get(name) for name in ('seller', 'mine', 'status', 'q'))
+        promos, dial = ([], None) if asked else plan(
+            request.user, KeysetPagination.page_size, target_type='listing')
+        promos = [p for p in promos if str(p.target_id or '').isdigit()]
+        ids = [int(p.target_id) for p in promos]
+        shelf = self.filter_queryset(self.get_queryset())
+        qs = shelf.exclude(pk__in=ids) if ids else shelf
+        page = self.paginate_queryset(qs)
+        data = self.get_serializer(page, many=True).data
+        if not ids:
+            return self.get_paginated_response(data)
+        # A paid card is still an offer: sold, taken down, or outside the price and
+        # category window the reader asked for means they never see it, so the ledger
+        # never counts it either.
+        by_promo = {int(p.target_id): p for p in promos}
+        found = {row.pk: row for row in shelf.filter(
+            pk__in=ids, status=Listing.Status.ACTIVE)}
+        served = [by_promo[i] for i in ids if i in found]
+        cards = self.get_serializer([found[i] for i in ids if i in found], many=True).data
+        data, shown = place(cards, served, data, dial['gap'])
+        serving(request.user, shown)
+        return self.get_paginated_response(data)
 
     def perform_create(self, serializer):
         listing = serializer.save(seller=self.request.user)

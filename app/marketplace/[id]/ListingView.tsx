@@ -138,7 +138,7 @@ export default function ListingPage() {
                 <span className="listing-photos-empty">{IC.store}</span>
               )}
               {listing.status === 'sold' && <span className="listing-sold-flag">{t('sold')}</span>}
-              {promo && listing.status === 'active' && <span className="listing-promoted-flag">{IC.chart}{t('promoted')}</span>}
+              {(promo || listing.promoted) && listing.status === 'active' && <span className="listing-promoted-flag">{IC.chart}{t('promoted')}</span>}
               {images.length > 1 && (
                 <div className="listing-photos-nav">
                   <button type="button" aria-label={t('back')} disabled={photo === 0} onClick={() => setPhoto(p => Math.max(0, p - 1))}>{IC.back}</button>

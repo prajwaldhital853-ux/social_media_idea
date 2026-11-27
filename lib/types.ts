@@ -195,6 +195,10 @@ export interface Listing {
   status: 'active' | 'sold' | 'hidden' | 'removed';
   /** What staff have said publicly about this listing, newest first. */
   notices?: Notice[];
+  /** The server's own answer: this offer is somebody's paid advert. */
+  promoted?: boolean;
+  /** Which campaign bought this row, so a tap on the card has something to count against. */
+  promoId?: string;
   condition?: string;
   sellerName?: string;
   sellerUsername?: string;

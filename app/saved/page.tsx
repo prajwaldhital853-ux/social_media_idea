@@ -107,6 +107,9 @@ export default function SavedPage() {
                       <span className="market-card-media">
                         {img ? <img src={img.src} alt={l.title} loading="lazy" /> : <span className="market-card-noimg">{IC.store}</span>}
                         {l.status === 'sold' && <span className="market-sold">{t('sold')}</span>}
+                        {l.promoted && l.status === 'active' && (
+                          <span className="market-promoted">{IC.chart}{t('promoted')}</span>
+                        )}
                       </span>
                       <span className="market-card-body">
                         <b className="market-card-price">NPR {l.price.toLocaleString('en-US')}</b>

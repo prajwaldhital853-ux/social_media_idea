@@ -203,6 +203,8 @@ export function mapListing(row: any): Listing {
     media: images.length ? images : row.image_url ? [{ type: 'image' as const, src: mediaUrl(row.image_url) }] : [],
     ts: at(row.created_at),
     status: row.status || 'active',
+    promoted: !!row.promoted,
+    promoId: row.promo ? idOf(row.promo.id) : undefined,
     notices: mapNotices(row.notices),
     condition: row.condition || '',
     sellerName: row.seller_name || undefined,
