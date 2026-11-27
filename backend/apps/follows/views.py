@@ -27,6 +27,17 @@ def _settle_asks(recipient, asker):
     ).update(read_at=timezone.now())
 
 
+def _push_stats(*users):
+    """Absolute follower/following counts for each account touched, on their own
+    wire. Numbers only — never who moved them or why — so an open profile page
+    moves the moment an edge does, on both sides of it."""
+    from apps.common import pulse
+    for user in users:
+        pulse.to_user(user.pk, 'person_stats', username=user.username,
+                      followers=Follow.objects.filter(followee=user, status=Follow.Status.ACCEPTED).count(),
+                      following=Follow.objects.filter(follower=user, status=Follow.Status.ACCEPTED).count())
+
+
 class FollowUserSerializer(serializers.ModelSerializer):
     name = serializers.CharField(source='profile.display_name', read_only=True)
     avatar_url = serializers.CharField(source='profile.avatar_url', read_only=True)
@@ -79,6 +90,11 @@ def follow(request):
         verb = 'requested to follow you' if private else 'started following you'
         notify(target, request.user, kind, f'{request.user.username} {verb}.', 'user', request.user.pk)
         email_activity(target, request.user, kind)
+        if edge.status == Follow.Status.ACCEPTED:
+            try:
+                _push_stats(target, request.user)
+            except Exception:  # noqa: BLE001 - the edge is saved; the wire is a courtesy
+                pass
     # Approval is one-way and explicit: following somebody who asked to follow
     # me does not answer their request. They stay pending until I confirm, so
     # two private accounts reach a mutual follow by two separate decisions.
@@ -95,6 +111,11 @@ def unfollow(request, username):
     # the bell that carried it stops counting too.
     if edge is not None and edge.status == Follow.Status.PENDING:
         _settle_asks(target, request.user)
+    if deleted and edge is not None and edge.status == Follow.Status.ACCEPTED:
+        try:
+            _push_stats(target, request.user)
+        except Exception:  # noqa: BLE001 - the edge is gone; the wire is a courtesy
+            pass
     # Same reasoning as a repeat follow: an edge already gone is a stale client,
     # not a failure, and a 404 here bounces an honest unfollow tap into a toast.
     return Response({'detail': 'Removed.' if deleted else 'Nothing to remove.', 'removed': bool(deleted)})
@@ -107,7 +128,15 @@ def remove_follower(request, username):
     are not told, and my own follow of them is untouched — they simply have to
     ask again to get back in."""
     target = get_object_or_404(User, username=username)
+    was_accepted = Follow.objects.filter(
+        follower=target, followee=request.user, status=Follow.Status.ACCEPTED
+    ).exists()
     deleted, _ = Follow.objects.filter(follower=target, followee=request.user).delete()
+    if deleted and was_accepted:
+        try:
+            _push_stats(target, request.user)
+        except Exception:  # noqa: BLE001 - the edge is gone; the wire is a courtesy
+            pass
     return Response({'detail': 'Removed.' if deleted else 'Nothing to remove.', 'removed': bool(deleted)})
 
 
@@ -122,9 +151,14 @@ def block(request):
     edge, created = Block.objects.get_or_create(blocker=request.user, blocked=target)
     # A block that left the follow edges standing would keep showing the blocked
     # person under Following, and keep the blocker visible in their followers.
-    Follow.objects.filter(
+    severed = Follow.objects.filter(
         Q(follower=request.user, followee=target) | Q(follower=target, followee=request.user)
-    ).delete()
+    ).delete()[0]
+    if severed:
+        try:
+            _push_stats(target, request.user)
+        except Exception:  # noqa: BLE001 - the block stands; the wire is a courtesy
+            pass
     return Response(
         {'status': 'blocked', 'created': created},
         status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
@@ -188,6 +222,10 @@ def request_action(request, pk, action):
         edge.status = Follow.Status.ACCEPTED
         edge.save(update_fields=['status'])
         notify(edge.follower, request.user, 'follow_accept', f'{request.user.username} accepted your follow request.', 'user', request.user.pk)
+        try:
+            _push_stats(edge.follower, request.user)
+        except Exception:  # noqa: BLE001 - the edge is saved; the wire is a courtesy
+            pass
         return Response({'status': 'accepted'})
     edge.delete()
     return Response({'status': 'declined'})

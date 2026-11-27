@@ -142,19 +142,35 @@ export default function ShareDialog({ open, url, title, text, preview, onShared,
     onClose();
   };
 
-  // Opening another app hands the link over but proves nothing: the share can
-  // be cancelled there with nothing sent, so it never moves the count. Only
-  // shares the site can see completed (in-app send, copy, native sheet done) do.
-  const openApp = (href: string) => {
+  // Opening another app hands the link over but proves nothing decided on this
+  // page: the count moves only when the handoff actually happened — the tab
+  // losing visibility means the reader left for the app they chose, and
+  // staying here means the share was cancelled before anything was sent.
+  const openApp = (href: string, countOnHandoff = true) => {
     window.open(href, '_blank', 'noopener,noreferrer');
+    if (countOnHandoff) countOnLeave();
     onClose();
   };
 
+  const countOnLeave = () => {
+    if (document.visibilityState === 'hidden') { onShared(); return; }
+    const onHide = () => {
+      if (document.visibilityState === 'hidden') { onShared(); cleanup(); }
+    };
+    const cleanup = () => {
+      document.removeEventListener('visibilitychange', onHide);
+      clearTimeout(giveUp);
+    };
+    const giveUp = setTimeout(cleanup, 8000);
+    document.addEventListener('visibilitychange', onHide);
+  };
+
+  // Copying a link is not a share: nothing was sent to anyone, so the count
+  // never moves for it.
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(url);
       showToast(t('linkCopied'));
-      onShared();
       onClose();
     } catch {
       showToast(url);
@@ -163,11 +179,12 @@ export default function ShareDialog({ open, url, title, text, preview, onShared,
 
   // No web dialog exists for Messenger: a phone hands the link to the app's own
   // composer, and a desktop copies it and opens messenger.com to paste from.
+  // Leaving for the app counts; cancelling before the app opens does not.
   const shareMessenger = () => {
     if (/Android/i.test(navigator.userAgent)) {
       const fallback = encodeURIComponent('https://www.messenger.com/');
       window.location.href = `intent://share/?link=${link}#Intent;package=com.facebook.orca;scheme=fb-messenger;S.browser_fallback_url=${fallback};end`;
-      onShared();
+      countOnLeave();
       onClose();
       return;
     }
@@ -180,7 +197,7 @@ export default function ShareDialog({ open, url, title, text, preview, onShared,
         try { await navigator.clipboard.writeText(url); showToast(t('messengerCopied')); } catch { /* clipboard refused */ }
         window.open('https://www.messenger.com/', '_blank', 'noopener,noreferrer');
       }, 1200);
-      onShared();
+      countOnLeave();
       onClose();
       return;
     }
@@ -194,8 +211,13 @@ export default function ShareDialog({ open, url, title, text, preview, onShared,
   // first, then the app (phone) or the site (desktop) opens for the paste.
   const shareInstagram = async () => {
     try { await navigator.clipboard.writeText(url); showToast(t('instagramCopied')); } catch { /* clipboard refused; open anyway */ }
-    if (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) window.location.href = 'instagram://app';
-    else openApp('https://www.instagram.com/');
+    if (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+      window.location.href = 'instagram://app';
+      countOnLeave();
+      onClose();
+    } else {
+      openApp('https://www.instagram.com/');
+    }
   };
 
   const message = encodeURIComponent(`${text || title} ${url}`);

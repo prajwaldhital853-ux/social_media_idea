@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import AppShell from '@/components/AppShell';
 import Avatar from '@/components/Avatar';
@@ -8,6 +8,9 @@ import VerifiedBadge from '@/components/VerifiedBadge';
 import ThemeToggle from '@/components/ThemeToggle';
 import EditProfileModal from '@/components/EditProfileModal';
 import { useApp } from '@/lib/AppContext';
+import { api } from '@/lib/api';
+import { mapPerson } from '@/lib/dto';
+import { User } from '@/lib/types';
 import { KEY } from '@/lib/utils';
 import { IC } from '@/lib/icons';
 
@@ -184,6 +187,8 @@ export default function SettingsPage() {
           </nav>
         </section>
 
+        <BlockedPeople />
+
         <section className="settings-card settings-danger">
           <h2>{t('dangerZone')}</h2>
           <div className="settings-row">
@@ -215,11 +220,74 @@ export default function SettingsPage() {
 }
 
 /**
+ * The account's closed doors: everyone this seat blocked, each with the one
+ * tap that reopens the door. The server owns the list — it is the same truth
+ * the block rules enforce — so it is read fresh rather than reconstructed from
+ * the session cache, which only ever holds a slice of people.
+ */
+function BlockedPeople() {
+  const { db, me, serverMode, t, unblockUser, showToast, setDb } = useApp();
+  const [rows, setRows] = useState<any[] | null>(null);
+
+  const read = () => {
+    if (!serverMode) {
+      setRows((db.blocks || []).map(id => db.users.find(u => u.id === id)).filter(Boolean));
+      return;
+    }
+    api.get<any>('/api/follows/blocked/')
+      .then(data => {
+        setRows(data.results || []);
+        // The cards land in the cache so Unblock has a username to act on even
+        // for a person this session never met.
+        const people: User[] = (data.results || []).map(mapPerson);
+        setDb(prev => ({
+          ...prev,
+          users: [...prev.users.filter(u => !people.some((p: User) => p.id === u.id)), ...people],
+        }));
+      })
+      .catch(() => setRows([]));
+  };
+
+  useEffect(() => { if (me) read(); }, [me?.id, serverMode]);
+
+  if (!me || !rows) return null;
+
+  return (
+    <section className="settings-card">
+      <h2>{t('blockedPeople')}</h2>
+      {rows.length === 0 ? (
+        <p className="settings-hint">{t('blockedNone')}</p>
+      ) : (
+        <div className="settings-blocked">
+          {rows.map(u => (
+            <div className="settings-blocked-row" key={u.id ?? u.username}>
+              <Avatar user={mapPerson(u)} size={40} />
+              <span className="settings-account-meta">
+                <b>{u.name || u.username}{u.verified && <VerifiedBadge size={15} />}</b>
+                <small>@{u.username}</small>
+              </span>
+              <button
+                type="button"
+                className="ghost-btn"
+                onClick={() => {
+                  void unblockUser(String(u.id)).then(() => read());
+                }}
+              >
+                {t('unblock')}
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+/**
  * Two steps stand between a curious tap and a deleted account: the word the
  * reader has to type, and a code the server mails to the address on file.
  */
-function DeleteAccountModal({ onClose }: { onClose: () => void }) {
-  const { me, t, serverMode, showToast, requestAccountDeletion, confirmAccountDeletion } = useApp();
+function DeleteAccountModal({ onClose }: { onClose: () => void }) {  const { me, t, serverMode, showToast, requestAccountDeletion, confirmAccountDeletion } = useApp();
   const [word, setWord] = useState('');
   const [step, setStep] = useState<'word' | 'code'>('word');
   const [challenge, setChallenge] = useState<number>(0);

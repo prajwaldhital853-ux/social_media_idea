@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useApp } from '@/lib/AppContext';
+import { useNewCount } from '@/lib/newCount';
 import { IC } from '@/lib/icons';
 import ThemeToggle from './ThemeToggle';
 import BrandLogo from './BrandLogo';
@@ -16,6 +17,8 @@ export default function MobileNav({ barOnly = false }: { barOnly?: boolean }) {
   const inChat = /^\/messages\/[^/]+/.test(pathname);
   const [compactPost, setCompactPost] = useState(false);
   const unread = db.unread ? db.unread.notifications : (me ? db.notifications.filter(n => n.uid === me.id && !n.read).length : 0);
+  const feedNew = useNewCount('feed');
+  const reelsNew = useNewCount('reels');
 
   useEffect(() => {
     let lastY = Math.max(0, window.scrollY);
@@ -41,17 +44,27 @@ export default function MobileNav({ barOnly = false }: { barOnly?: boolean }) {
     { href: profileHref, label: t('profile'), icon: IC.user, self: true },
   ];
 
+  // The +N counters ride the Home and Video icons: red while new work exists,
+  // zeroed by opening the page it counts.
+  const badgeFor = (href: string) => (
+    href === '/' && feedNew > 0 ? feedNew : href === '/video' && reelsNew > 0 ? reelsNew : 0
+  );
+
   if (focusedPage || inChat) return null;
+
+  const renderTabs = () => tabs.map(tab => {
+    const active = tab.href === '/' ? pathname === '/' : tab.self ? pathname === profileHref : pathname.startsWith(tab.href);
+    const fresh = badgeFor(tab.href);
+    return <Link key={tab.href} href={tab.href} aria-label={tab.label} aria-current={active ? 'page' : undefined} title={tab.label} className={`mnav-tab ${active ? 'active' : ''}`}>
+      {tab.icon}
+      {fresh > 0 && <span className="mnav-new">{fresh > 99 ? '99+' : `+${fresh}`}</span>}
+    </Link>;
+  });
 
   if (barOnly) {
     return (
       <nav className="mobile-nav" aria-label="Primary mobile navigation">
-        {tabs.map(tab => {
-          const active = tab.href === '/' ? pathname === '/' : tab.self ? pathname === profileHref : pathname.startsWith(tab.href);
-          return <Link key={tab.href} href={tab.href} aria-label={tab.label} aria-current={active ? 'page' : undefined} title={tab.label} className={`mnav-tab ${active ? 'active' : ''}`}>
-            {tab.icon}
-          </Link>;
-        })}
+        {renderTabs()}
       </nav>
     );
   }
@@ -81,12 +94,7 @@ export default function MobileNav({ barOnly = false }: { barOnly?: boolean }) {
       </button>}
 
       <nav className="mobile-nav" aria-label="Primary mobile navigation">
-        {tabs.map(tab => {
-          const active = tab.href === '/' ? pathname === '/' : tab.self ? pathname === profileHref : pathname.startsWith(tab.href);
-          return <Link key={tab.href} href={tab.href} aria-label={tab.label} aria-current={active ? 'page' : undefined} title={tab.label} className={`mnav-tab ${active ? 'active' : ''}`}>
-            {tab.icon}
-          </Link>;
-        })}
+        {renderTabs()}
       </nav>
     </>
   );

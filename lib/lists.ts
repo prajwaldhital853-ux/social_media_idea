@@ -275,6 +275,25 @@ export function removeListRow(key: string, query: Query | undefined, id: string)
   set(sk, { ids: state.ids.filter(row => row !== id) });
 }
 
+/**
+ * The server just deleted an entity whose id may be cached by any number of
+ * lists: a profile page, a feed, a saved shelf. Rather than each screen knowing
+ * where the row might live, this walks every list and drops the id wherever it
+ * sits — lists only hold ids, so the matching row disappears from every screen
+ * reading them.
+ */
+export function dropListRow(id: string): void {
+  if (!id) return;
+  let touched = false;
+  states.forEach((state, sk) => {
+    if (state.loaded && state.ids.includes(id)) {
+      states.set(sk, { ...state, ids: state.ids.filter(row => row !== id) });
+      touched = true;
+    }
+  });
+  if (touched) emit();
+}
+
 export function useList(key: string, def: ListDef, query?: Query, enabled = true) {
   const sk = stateKey(key, query);
   const defRef = useRef(def);

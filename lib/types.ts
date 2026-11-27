@@ -327,7 +327,7 @@ export interface Database {
   posts: Post[];
   comments: Comment[];
   follows: Follow[];
-  /** User ids the signed-in account has blocked. */
+  /** User ids this seat has blocked, plus the ids of seats that blocked it — the pair is closed from both sides. */
   blocks?: string[];
   reactions: Reaction[];
   saves: Save[];
@@ -354,6 +354,8 @@ export interface Database {
    * the numbers answer without a refresh.
    */
   personStats?: Record<string, { posts: number; followers: number; following: number }>;
+  /** User ids whose threads this seat deleted from its inbox; a new message from them puts the thread back. */
+  hiddenConversations?: string[];
 }
 
 export type ThemeMode = 'light' | 'dark';

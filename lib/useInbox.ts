@@ -42,11 +42,12 @@ export function useInbox(enabled = true): { conversations: Conversation[]; inbox
         const current = last.get(otherId);
         if (!current || m.ts >= current.ts) last.set(otherId, m);
       }
-      // Everyone I follow belongs in the messages column whether or not they
-      // follow me back: the band on top is where a first hello starts. Only
-      // once the real threads have arrived — before that it would sit above a
-      // list that is about to appear on top of it.
       const talked = new Set(inbox.ids);
+      // The server's list already left blocked pairs and threads I deleted out;
+      // the band has to agree with it, or a followed person the server skipped
+      // would resurface as a suggestion above the threads.
+      const hidden = new Set(db.hiddenConversations || []);
+      const blocked = new Set(db.blocks || []);
       const rows = inbox.ids
         .map(id => {
           const other = db.users.find(u => u.id === id);
@@ -62,7 +63,7 @@ export function useInbox(enabled = true): { conversations: Conversation[]; inbox
         .sort((a, b) => (b.last?.ts ?? 0) - (a.last?.ts ?? 0));
       const fresh = inbox.loaded
         ? followedIds()
-            .filter(id => !talked.has(id))
+            .filter(id => !talked.has(id) && !hidden.has(id) && !blocked.has(id))
             .map(id => db.users.find(u => u.id === id))
             .filter((u): u is User => !!u)
             .map(other => ({ other, last: null, unread: 0, suggested: true }))
@@ -82,6 +83,7 @@ export function useInbox(enabled = true): { conversations: Conversation[]; inbox
     byOther.forEach((msgs, otherId) => {
       const other = db.users.find(u => u.id === otherId);
       if (!other) return;
+      if ((db.blocks || []).includes(otherId)) return;
       msgs.sort((a, b) => a.ts - b.ts);
       out.push({ other, last: msgs[msgs.length - 1], unread: msgs.filter(m => m.to === me.id && !m.read).length });
     });
@@ -93,7 +95,7 @@ export function useInbox(enabled = true): { conversations: Conversation[]; inbox
     // One order for both builds: the band above the threads, threads by activity.
     return out.sort((a, b) => Number(!!b.suggested) - Number(!!a.suggested)
       || (b.last?.ts ?? 0) - (a.last?.ts ?? 0) || a.other.name.localeCompare(b.other.name));
-  }, [db.messages, db.users, db.follows, db.blocks, me, inbox.ids, serverMode]);
+  }, [db.messages, db.users, db.follows, db.blocks, db.hiddenConversations, me, inbox.ids, serverMode]);
 
   return { conversations, inbox };
 }
