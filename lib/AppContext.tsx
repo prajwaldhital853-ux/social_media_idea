@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback, ReactNode, Dispatch, SetStateAction } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { Database, Follow, User, Post, Comment, ThemeMode, ReactionKind, NotificationKind, FeatureFlags, Promotion, Message, CoinRequest } from './types';
+import { Database, Follow, User, Post, Comment, ThemeMode, ReactionKind, NotificationKind, FeatureFlags, Promotion, Message, CoinRequest, Notice } from './types';
 import { getDb, save, emptyDb } from './storage';
 import { hydrateVideoSrcs } from './videoStore';
 import { THEME_KEY, LANG_KEY, uid, ageFromDob, reactionRank } from './utils';
@@ -235,6 +235,30 @@ function readTheme(): ThemeMode {
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
+
+/**
+ * Take one withdrawn notice out of the cached rows it stood on.
+ *
+ * The console's retraction frame names the target and the notice and nothing else,
+ * so the drop is keyed on both: a post and a comment can share a number, and a row
+ * can carry two notices when only one of them was taken down. A row that ends with
+ * nothing to say goes back to no banner at all, which is the shape a card the server
+ * never spoke about arrives with.
+ */
+function dropNotice(db: Database, target: string, id: string, notice: string): Database {
+  const strip = <T extends { id: string; notices?: Notice[] }>(rows: T[]): T[] => {
+    if (!rows.some(row => row.id === id && row.notices?.some(n => n.id === notice))) return rows;
+    return rows.map(row => {
+      if (row.id !== id || !row.notices?.some(n => n.id === notice)) return row;
+      const left = row.notices.filter(n => n.id !== notice);
+      return { ...row, notices: left.length ? left : undefined };
+    });
+  };
+  if (target === 'comment') return { ...db, comments: strip(db.comments) };
+  if (target === 'listing') return { ...db, listings: strip(db.listings) };
+  if (target === 'user') return { ...db, users: strip(db.users) };
+  return { ...db, posts: strip(db.posts) };
+}
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const pathname = usePathname();
@@ -580,6 +604,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       } else if (p.kind === 'warning') {
         void pullBadges();
         void pullSession();
+      } else if (p.kind === 'notice_gone') {
+        // The console took a public notice down. The email and the bell line say so
+        // already; this is the frame that takes the banner off the card it was
+        // standing on, so the site stops contradicting the retraction it announced.
+        const id = String(p.id || '');
+        const notice = String(p.notice || '');
+        if (!id || !notice) return;
+        setDb(prev => dropNotice(prev, String(p.target || ''), id, notice));
       } else if (p.kind === 'post_new') {
         // The badge counts arrivals from someone else's pen; my own publish is
         // already on screen and asks for no counter.
