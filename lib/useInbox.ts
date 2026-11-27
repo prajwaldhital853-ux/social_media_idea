@@ -51,7 +51,13 @@ export function useInbox(enabled = true): { conversations: Conversation[]; inbox
           const message = last.get(id) || null;
           return other ? { other, last: message, unread: message?.unread ?? 0 } : null;
         })
-        .filter((c): c is Conversation => !!c);
+        .filter((c): c is Conversation => !!c)
+        // Newest activity decides who sits at the head, and the cache already
+        // holds that moment for every row the column read. Waiting for the
+        // server's order instead means a thread only moves when something
+        // re-pulls it — and the one wire that always lands a message first, the
+        // open thread, suppresses the bell that would have asked.
+        .sort((a, b) => (b.last?.ts ?? 0) - (a.last?.ts ?? 0));
       const fresh = inbox.loaded
         ? mutualIds()
             .filter(id => !talked.has(id))
