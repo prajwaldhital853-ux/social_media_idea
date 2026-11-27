@@ -46,6 +46,15 @@ function card(title: string, description: string, path: string, images: string[]
 
 const abs = (src?: string | null): string => (!src ? '' : /^https?:/i.test(src) ? src : `${SITE_URL}${src}`);
 
+const stills = (row: any): string[] =>
+  (row.media || [])
+    .filter((m: any) => m.kind !== 'video' && (m.url || m.file))
+    .map((m: any) => abs(m.url || m.file));
+
+/** A clip has no stored cover frame, so the next best face to put on a shared
+ *  card is the author's own avatar rather than the site's generic banner. */
+const face = (row: any): string => abs(row.author_avatar_url);
+
 export async function postMetadata(id: string): Promise<Metadata> {
   const row = await read(`/api/posts/${id}/`);
   const path = `/post/${id}`;
@@ -53,13 +62,36 @@ export async function postMetadata(id: string): Promise<Metadata> {
   const who = clip(row.author_name || row.author_username, 60);
   const where = row.place ? ` at ${clip(row.place, 40)}` : '';
   const title = `${who}${where} — Exposing`;
-  const pictures = (row.media || []).filter((m: any) => m.kind !== 'video').map((m: any) => abs(m.url || m.file));
+  const pictures = stills(row);
   const video = (row.media || []).find((m: any) => m.kind === 'video');
   return card(
     clip(title, 90),
     clip(row.text) || (video ? 'Watch this clip on Exposing.' : 'See this photo on Exposing.'),
     path,
-    pictures.length ? pictures : video ? [abs(video.thumbnail_url)] : [],
+    pictures.length ? pictures : face(row) ? [face(row)] : [],
+    'article',
+  );
+}
+
+const slot = (index: number): number => (Number.isFinite(index) && index > 0 ? Math.trunc(index) : 0);
+
+/** `/post/<id>/media/<n>`: the page the photo viewer's share button hands over, so
+ *  the card carries the slide on screen rather than whatever the post starts with. */
+export async function mediaMetadata(id: string, index: number): Promise<Metadata> {
+  const row = await read(`/api/posts/${id}/`);
+  const n = slot(index);
+  const path = `/post/${id}/media/${n}`;
+  if (!row) return card('Photo on Exposing', DESCRIPTION, path, [], 'article');
+  const who = clip(row.author_name || row.author_username, 60);
+  const items = (row.media || []).filter((m: any) => m.url || m.file);
+  const shown = items[n];
+  const still = shown && shown.kind !== 'video' ? abs(shown.url || shown.file) : '';
+  const album = items.length > 1 ? ` (${n + 1}/${items.length})` : '';
+  return card(
+    clip(`${who}${album} — Photo on Exposing`, 90),
+    clip(row.text) || (still ? 'See this photo on Exposing.' : 'Watch this clip on Exposing.'),
+    path,
+    [still || stills(row)[0] || face(row)],
     'article',
   );
 }
@@ -73,8 +105,7 @@ export async function reelMetadata(key: string): Promise<Metadata> {
   if (!row) return card('Reel on Exposing', DESCRIPTION, path, [], 'article');
   const who = clip(row.author_name || row.author_username, 50);
   const video = (row.media || []).find((m: any) => m.kind === 'video');
-  const picture = (row.media || []).find((m: any) => m.kind !== 'video' && (m.url || m.file));
-  const images = video?.thumbnail_url ? [abs(video.thumbnail_url)] : picture ? [abs(picture.url || picture.file)] : [];
+  const images = [abs(video?.thumbnail_url), ...stills(row), face(row)].filter(Boolean);
   return card(
     clip(`${who} — Reel on Exposing`, 90),
     clip(row.text) || 'Watch this clip on Exposing.',
