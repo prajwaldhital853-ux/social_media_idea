@@ -56,8 +56,11 @@ export default function Feed() {
 
   // A post that went live while this page was open is counted on the nav icon
   // below instead of a pill here — opening or refreshing this page is what
-  // zeroes that counter, so the arrival and the looking are paired.
-  useEffect(() => { clearNew('feed'); }, [tab]);
+  // zeroes that counter, so the arrival and the looking are paired. Keyed on the
+  // reading rather than on the tab, because a pull-and-release is a looking too:
+  // the newest rows are on screen the moment it answers, and a badge that outlives
+  // them claims news the reader has already read.
+  useEffect(() => { clearNew('feed'); }, [tab, feed.pulled]);
 
   // A phone's back button hands this page back from the browser's own snapshot
   // without remounting anything, so the re-pull rides on pageshow instead.
