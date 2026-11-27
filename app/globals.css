@@ -1432,7 +1432,14 @@ a:focus:not(:focus-visible) {
 /* Modal */
 .modal-overlay {
   position: fixed;
-  inset: 0;
+  left: 0;
+  right: 0;
+  /* iOS keeps the layout viewport full height when the keyboard opens, so a
+     sheet centred in it buries its own save button behind the keys and the
+     page cannot be dragged. The band a reader can actually reach is the
+     visual viewport — the same one the comments sheet anchors to. */
+  top: var(--visible-top, 0px);
+  height: var(--visible-height, 100%);
   background: rgba(91, 112, 131, 0.4);
   display: flex;
   align-items: center;
@@ -1452,8 +1459,13 @@ a:focus:not(:focus-visible) {
   border-radius: 16px;
   max-width: 600px;
   width: 90%;
-  max-height: 90vh;
+  /* A share of the overlay, not of the viewport: the overlay is the band above
+     the keyboard, so a long form becomes its own scroll instead of a sheet
+     whose last field — and its button — sit under the keys. On a desktop the
+     two are the same number. */
+  max-height: 90%;
   overflow-y: auto;
+  overscroll-behavior: contain;
   animation: scaleIn 0.2s ease;
 }
 
@@ -8736,7 +8748,7 @@ html { overscroll-behavior-y: none; }
 
 .share-sheet {
   width: min(560px, 100%);
-  max-height: min(780px, calc(100dvh - 32px));
+  max-height: min(780px, calc(var(--visible-height, 100dvh) - 32px));
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -9052,7 +9064,7 @@ html { overscroll-behavior-y: none; }
   .share-overlay { padding: 10px 8px calc(10px + env(safe-area-inset-bottom)); align-items: end; }
   .share-sheet {
     width: 100%;
-    max-height: calc(100dvh - 16px);
+    max-height: calc(var(--visible-height, 100dvh) - 16px);
     border-radius: 20px;
     padding: 10px 12px 12px;
     gap: 10px;
