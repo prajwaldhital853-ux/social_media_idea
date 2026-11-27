@@ -14,6 +14,11 @@ import { api, ApiError } from './api';
  */
 
 const SW_PATH = '/sw.js';
+// Under `admin/`, not `notifications/`: a seat that holds a job is read as
+// nobody at every member door, so the console files its browser at its own.
+const CONFIG = 'admin/push/config/';
+const SUBSCRIBE = 'admin/push/subscribe/';
+const UNSUBSCRIBE = 'admin/push/unsubscribe/';
 
 export type PushState = 'on' | 'off' | 'blocked' | 'unsupported';
 
@@ -86,7 +91,7 @@ export async function enablePush(): Promise<{ ok: boolean; detail?: string }> {
   const permission = await Notification.requestPermission();
   if (permission !== 'granted') return { ok: false, detail: 'Notifications were not allowed.' };
 
-  const config = await api<{ enabled: boolean; public_key: string }>('notifications/push/config/');
+  const config = await api<{ enabled: boolean; public_key: string }>(CONFIG);
   if (!config.enabled || !config.public_key) {
     return { ok: false, detail: 'Push is not switched on at Exposing yet.' };
   }
@@ -102,7 +107,7 @@ export async function enablePush(): Promise<{ ok: boolean; detail?: string }> {
       userVisibleOnly: true,
       applicationServerKey: asKey(config.public_key),
     });
-  await api('notifications/push/subscribe/', {
+  await api(SUBSCRIBE, {
     method: 'POST',
     body: { endpoint: sub.endpoint, keys: keysOf(sub) },
   });
@@ -116,7 +121,7 @@ export async function disablePush(): Promise<void> {
     const sub = await (await worker()).pushManager.getSubscription();
     if (!sub) return;
     try {
-      await api('notifications/push/unsubscribe/', { method: 'POST', body: { endpoint: sub.endpoint } });
+      await api(UNSUBSCRIBE, { method: 'POST', body: { endpoint: sub.endpoint } });
     } catch { /* the address is dropped below regardless; the server prunes it later */ }
     await sub.unsubscribe();
   } catch { /* nothing to undo */ }
@@ -135,7 +140,7 @@ export async function syncPush(): Promise<void> {
     if (!sub) return;
     const keys = keysOf(sub);
     if (!keys.p256dh || !keys.auth) return;
-    await api('notifications/push/subscribe/', { method: 'POST', body: { endpoint: sub.endpoint, keys } });
+    await api(SUBSCRIBE, { method: 'POST', body: { endpoint: sub.endpoint, keys } });
   } catch (err) {
     // A seat that cannot file its own browser keeps the tray, which is the
     // whole product; push is the extra.
