@@ -14,7 +14,7 @@ from apps.follows.models import Block, Follow
 from apps.notifications.models import Notification
 from apps.notifications.services import notify_latest
 
-from .models import Conversation, Message
+from .models import Conversation, ConversationHide, Message
 from .consumer import broadcast_message, broadcast_read
 from .presence import is_watching, note_typing
 
@@ -103,7 +103,19 @@ def _get_or_create_conversation(user, other):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def inbox(request):
-    qs = Conversation.objects.filter(participants=request.user).exclude(last_message_at__isnull=True)
+    # A thread somebody blocked out of their inbox — either direction of a block,
+    # or their own Delete Conversation — is not a row they asked to keep seeing.
+    hidden = ConversationHide.objects.filter(user=request.user).values_list('conversation_id', flat=True)
+    blocked_others = {
+        blocked if blocker == request.user.pk else blocker
+        for blocker, blocked in Block.objects.filter(
+            Q(blocker=request.user) | Q(blocked=request.user)
+        ).values_list('blocker_id', 'blocked_id')
+    }
+    qs = (Conversation.objects.filter(participants=request.user)
+          .exclude(last_message_at__isnull=True)
+          .exclude(pk__in=hidden)
+          .exclude(participants__id__in=blocked_others))
     # An inbox walks by the last message, not by when the thread was opened:
     # the conversation you typed in a second ago belongs at the top.
     paginator = KeysetPagination('last_message_at')
@@ -147,10 +159,19 @@ def thread(request, username):
             return Response({'detail': 'Message text is required.'}, status=400)
         if len(text) > 2000:
             return Response({'detail': 'Message too long (2000 characters max).'}, status=400)
+        if Block.objects.filter(
+            Q(blocker=request.user, blocked=other) | Q(blocker=other, blocked=request.user)
+        ).exists():
+            # A block is a closed door in both directions: an open thread window
+            # does not keep it ajar.
+            return Response({'detail': 'You cannot message this account.'}, status=403)
         conversation = _get_or_create_conversation(request.user, other)
         with transaction.atomic():
             message = Message.objects.create(conversation=conversation, sender=request.user, text=text)
             Conversation.objects.filter(pk=conversation.pk).update(last_message_at=message.created_at)
+            # A message that crosses puts the thread back into an inbox it was
+            # deleted from — for both ends of it.
+            ConversationHide.objects.filter(conversation=conversation).delete()
         # A bell for a message the reader is watching happen is a second ping for
         # one event, and the one they did not ask for. Only whoever is away gets
         # told; whoever is here already sees the bubble land.
@@ -200,6 +221,24 @@ def mark_read(request, username):
     if count:
         broadcast_read(request.user.pk, [request.user.pk, other.pk], count)
     return Response({'read': count, 'notifications': notifications})
+
+
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated])
+def delete_conversation(request, username):
+    """Take one thread out of MY inbox only. The other participant keeps theirs
+    untouched — deleting is not retracting what was said — and a message from
+    them later puts the thread back, because an inbox that permanently swallowed
+    new mail from someone would be a silent block instead of a delete."""
+    other = get_object_or_404(User, username=username)
+    conversation = Conversation.objects.filter(participants=request.user).filter(participants=other).first()
+    if not conversation:
+        return Response({'detail': 'Conversation deleted.'})
+    ConversationHide.objects.get_or_create(conversation=conversation, user=request.user)
+    Notification.objects.filter(
+        recipient=request.user, actor=other, kind='message', read_at__isnull=True,
+    ).update(read_at=timezone.now())
+    return Response({'detail': 'Conversation deleted.'})
 
 
 @api_view(['POST'])

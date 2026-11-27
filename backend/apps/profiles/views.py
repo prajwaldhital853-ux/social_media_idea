@@ -10,7 +10,7 @@ from rest_framework.response import Response
 from apps.accounts.models import User
 from apps.common.api import notice_map, person
 from apps.common.pagination import KeysetPagination
-from apps.follows.models import Follow
+from apps.follows.models import Block, Follow
 from apps.follows.suggest import suggested_accounts
 from apps.posts.services import announce_profile_change
 from apps.posts.views import visible_posts
@@ -173,6 +173,17 @@ def user_search(request):
             Q(username__icontains=query) | Q(first_name__icontains=query)
             | Q(last_name__icontains=query) | Q(profile__display_name__icontains=query)
         )
+    if request.user.is_authenticated:
+        # A closed door is invisible from both sides: neither person in a block
+        # pair finds the other in search, no matter who holds the block.
+        blocked_pairs = Block.objects.filter(
+            Q(blocker=request.user) | Q(blocked=request.user)
+        )
+        blocked_ids = set(
+            blocked_pairs.values_list('blocked_id', flat=True)
+        ) | set(blocked_pairs.values_list('blocker_id', flat=True))
+        blocked_ids.discard(request.user.pk)
+        qs = qs.exclude(pk__in=blocked_ids)
     paginator = KeysetPagination()
     rows = paginator.paginate_queryset(qs, request)
     edges = {}

@@ -98,7 +98,7 @@ function FeedFollow({ author }: { author: User }) {
 export default function PostCard({ post, author, featured }: PostCardProps) {
   const router = useRouter();
   const { db, me, t, deletePost, toggleSave, isSaved, sharePost, mayShare, openComposer, activePromo,
-    promoEligible, trackPromo, showToast, showConfirm, reactionCount, serverMode } = useApp();
+    promoEligible, trackPromo, showToast, showConfirm, reactionCount, serverMode, blockUser, unblockUser, isBlocked } = useApp();
   const [menuOpen, setMenuOpen] = useState(false);
   const [showComments, setShowComments] = useState(false);
   const [reporting, setReporting] = useState(false);
@@ -158,13 +158,10 @@ export default function PostCard({ post, author, featured }: PostCardProps) {
   };
 
   const copyShareLink = async () => {
-    const refused = await mayShare(post.id);
-    if (refused) { showToast(refused); return; }
     const url = `${window.location.origin}/post/${post.id}`;
     try {
       await navigator.clipboard.writeText(url);
       showToast(t('linkCopied'));
-      void sharePost(post.id);
     } catch {
       showToast(url);
     }
@@ -268,6 +265,8 @@ export default function PostCard({ post, author, featured }: PostCardProps) {
                   {own && menuItem(t('del'), () => showConfirm(t('confirmDelete'), () => deletePost(post.id)), true)}
                   {!own && me && menuItem(t('report'), () => setReporting(true))}
                   {!own && !me && menuItem(t('report'), () => router.push('/login'))}
+                  {!own && me && !isBlocked(author.id) && menuItem(t('block'), () => void blockUser(author.id), true)}
+                  {!own && me && isBlocked(author.id) && menuItem(t('unblock'), () => void unblockUser(author.id))}
                 </div>
               )}
             </div>

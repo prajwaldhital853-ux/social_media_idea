@@ -14,6 +14,22 @@ class Conversation(models.Model):
         return f'Conversation {self.pk}'
 
 
+class ConversationHide(models.Model):
+    """One participant's decision that a thread stops appearing in their inbox.
+
+    The row is theirs alone: the other member keeps the thread, and a message
+    that later crosses in either direction puts it back — a delete here is a
+    tidy-up, not an erasure of anybody's history."""
+
+    conversation = models.ForeignKey(Conversation, on_delete=models.CASCADE, related_name='hides')
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='conversation_hides')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['conversation', 'user'], name='one_hide_per_participant')]
+        indexes = [models.Index(fields=['user'], name='conversation_hide_user')]
+
+
 class Message(models.Model):
     conversation = models.ForeignKey(Conversation, on_delete=models.CASCADE, related_name='messages')
     sender = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='sent_messages')

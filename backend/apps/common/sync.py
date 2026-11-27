@@ -14,7 +14,7 @@ from rest_framework.response import Response
 from apps.accounts.models import User
 from apps.follows.models import Block, Follow
 from apps.follows.suggest import suggested_accounts
-from apps.messages.models import Message
+from apps.messages.models import ConversationHide, Message
 from apps.notifications.models import Notification
 from apps.promotions.models import Promotion
 from apps.promotions.services import target_labels
@@ -123,9 +123,20 @@ def sync(request):
     ]
     graph_ids = {edge.follower_id for edge in edges} | {edge.followee_id for edge in edges}
 
-    # Both sides of every block the viewer is party to: the client only needs
-    # its own side, since that is the list it can lift.
-    my_blocks = list(Block.objects.filter(blocker=user).values_list('blocked_id', flat=True)[:EDGE_LIMIT])
+    # Both sides of every block the viewer is party to. The pair is closed in
+    # both directions — I do not see them and they do not see me — so the client
+    # needs both lists to hold the door shut wherever it renders content.
+    block_rows = list(Block.objects.filter(Q(blocker=user) | Q(blocked=user)).values_list('blocker_id', 'blocked_id')[:EDGE_LIMIT])
+    my_blocks = [b if a == user.pk else a for a, b in block_rows]
+
+    # Threads this reader deleted, carried as the other person's id — the same
+    # shape the inbox list uses — so the suggested band above the threads agrees
+    # with the list it sits on.
+    hidden_chats = []
+    for hide in ConversationHide.objects.filter(user=user).select_related('conversation'):
+        other = hide.conversation.participants.exclude(pk=user.pk).first()
+        if other:
+            hidden_chats.append(other.pk)
 
     suggestion_rows = []
     for row, mutuals in suggested_accounts(user, limit=SUGGEST_LIMIT):
@@ -156,6 +167,7 @@ def sync(request):
         'suggestions': suggestion_rows,
         'follows': edge_rows,
         'blocks': my_blocks,
+        'hidden_chats': hidden_chats,
         'saves': {'posts': saves, 'listings': listing_saves},
         'promotions': [
             {

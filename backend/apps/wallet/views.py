@@ -190,4 +190,10 @@ def coin_request_review(request, pk, action):
             obj.user, action='reject', coins=obj.coins, amount=obj.amount,
             request_id=obj.pk, reference=obj.reference,
         )
+    try:
+        from apps.common import pulse
+        pulse.to_user(obj.user.pk, 'coin_decision', status=obj.status, coins=obj.coins,
+                      balance=wallet.balance if action == 'approve' else None)
+    except Exception:  # noqa: BLE001 - the decision is saved; the wire is a courtesy
+        pass
     return Response(CoinRequestSerializer(obj).data)

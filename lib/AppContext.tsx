@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback, ReactNode, Dispatch, SetStateAction } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { Database, Follow, User, Post, Comment, ThemeMode, ReactionKind, NotificationKind, FeatureFlags, Promotion, Message } from './types';
+import { Database, Follow, User, Post, Comment, ThemeMode, ReactionKind, NotificationKind, FeatureFlags, Promotion, Message, CoinRequest } from './types';
 import { getDb, save, emptyDb } from './storage';
 import { hydrateVideoSrcs } from './videoStore';
 import { THEME_KEY, LANG_KEY, uid, ageFromDob, reactionRank } from './utils';
@@ -14,8 +14,9 @@ import {
   idOf, at, mapComment, mapFollow, mapMe, mapMessage, mapNotification, mapPerson, mapPost, mapPromotion,
   mapReport, mapSettings, mediaPayload, profilePatch, reactionsOfPost, toPostPayload, toProfilePayload,
 } from './dto';
-import { bindListCache, coinRequestsFragment, forgetLists, inboxListDef, listingsFragment, notificationsFragment, promotionsFragment, postsFragment, pushListRow, refreshList, removeListRow, walletFragment } from './lists';
+import { bindListCache, coinRequestsFragment, dropListRow, forgetLists, inboxListDef, listingsFragment, notificationsFragment, promotionsFragment, postsFragment, pushListRow, refreshList, removeListRow, walletFragment } from './lists';
 import { emitLive, onLive } from './live';
+import { bumpNew } from './newCount';
 
 type Target = 'post' | 'comment' | 'media';
 
@@ -68,6 +69,7 @@ interface AppContextType {
   markAllRead: () => Promise<void>;
   markRead: (id: string) => Promise<void>;
   sendMessage: (to: string, text: string) => Promise<void>;
+  deleteConversation: (to: string) => Promise<boolean>;
   markThreadRead: (username: string, opts?: { force?: boolean }) => Promise<void>;
   addReport: (type: 'post' | 'comment' | 'listing' | 'profile', targetId: string, reason: string, note: string) => Promise<void>;
   logAudit: (action: string, target: string, reason: string) => void;
@@ -372,6 +374,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }),
       meId: self.id,
       blocks: (payload.blocks || []).map(idOf),
+      hiddenConversations: (payload.hidden_chats || []).map(idOf),
       settings: mapSettings(payload.config || prev.settings),
       unread: payload.unread,
       serverTime: serverNow,
@@ -547,7 +550,83 @@ export function AppProvider({ children }: { children: ReactNode }) {
         void pullBadges();
         void pullSession();
       } else if (p.kind === 'post_new') {
-        emitLive(p);
+        // The badge counts arrivals from someone else's pen; my own publish is
+        // already on screen and asks for no counter.
+        if (!(p.author && currentMe()?.username === p.author)) {
+          bumpNew(p.video ? 'reels' : 'feed');
+          emitLive(p);
+        }
+      } else if (p.kind === 'post_gone') {
+        // The author deleted it somewhere else: every list this seat holds loses
+        // the row, and the cache under it goes with the id, so no screen can
+        // keep showing a card the server no longer serves.
+        const id = String(p.id || '');
+        if (!id) return;
+        dropListRow(id);
+        setDb(prev => ({
+          ...prev,
+          posts: prev.posts.filter(x => x.id !== id),
+          comments: prev.comments.filter(c => c.pid !== id),
+          reactions: prev.reactions.filter(r => !(r.targetId === id || r.targetId.startsWith(`${id}#m`))),
+          saves: prev.saves.filter(s => s.pid !== id),
+        }));
+        bumpStats(typeof p.author === 'string' ? p.author : undefined, 'posts', -1);
+      } else if (p.kind === 'post_changed') {
+        // An edit on another device or by the author's own hand: only a row this
+        // seat is already holding is worth one refetch, read through the same
+        // visibility-checked detail door the post page uses.
+        const id = String(p.id || '');
+        if (!id || !dbRef.current.posts.some(x => x.id === id)) return;
+        api.get<any>(`/api/posts/${id}/`)
+          .then(row => merge(postsFragment(currentMe()?.id || null)([row])))
+          .catch(() => undefined);
+      } else if (p.kind === 'listing_new') {
+        // Someone listed something: the marketplace page re-reads page one so a
+        // fresh row lands at the top without a reload.
+        void refreshList('market', { path: '/marketplace/', frag: listingsFragment });
+      } else if (p.kind === 'listing_changed') {
+        const id = String(p.id || '');
+        if (!id || !dbRef.current.listings.some(x => x.id === id)) return;
+        api.get<any>(`/api/marketplace/${id}/`)
+          .then(row => merge(listingsFragment([row])))
+          .catch(() => undefined);
+      } else if (p.kind === 'listing_gone') {
+        const id = String(p.id || '');
+        if (!id) return;
+        dropListRow(id);
+        setDb(prev => ({
+          ...prev,
+          listings: prev.listings.filter(x => x.id !== id),
+          listingSaves: (prev.listingSaves || []).filter(s => s.lid !== id),
+        }));
+      } else if (p.kind === 'person_stats') {
+        // Absolute counts, never deltas: whoever last touched the edge sends
+        // the whole truth, so a repeated frame cannot double-count.
+        const key = String(p.username || '').toLowerCase();
+        if (!key) return;
+        setDb(prev => {
+          const cur = prev.personStats?.[key] || { posts: 0, followers: 0, following: 0 };
+          return {
+            ...prev,
+            personStats: {
+              ...(prev.personStats || {}),
+              [key]: {
+                posts: cur.posts,
+                followers: Number(p.followers ?? cur.followers),
+                following: Number(p.following ?? cur.following),
+              },
+            },
+          };
+        });
+      } else if (p.kind === 'coin_decision') {
+        const id = String(p.id || '');
+        if (!id) return;
+        setDb(prev => ({
+          ...prev,
+          coinRequests: prev.coinRequests.map(r => (r.id === id ? { ...r, status: String(p.status || r.status) as CoinRequest['status'] } : r)),
+        }));
+        void refreshList('coin-requests', { path: '/wallet/requests/list/', frag: coinRequestsFragment });
+        void refreshList('wallet', { path: '/wallet/', frag: walletFragment(selfId) });
       }
     };
 
@@ -1453,8 +1532,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setDb(prev => ({ ...prev, saves: saved ? mine(prev) : [...mine(prev), { uid: self.id, pid, ts: Date.now() }] }));
     if (API_ENABLED) {
       try {
-        if (saved) await api.del(`/api/saved/posts/${pid}/`);
-        else await api.post('/api/saved/posts/', { post: pid });
+        if (saved) {
+          await api.del(`/api/saved/posts/${pid}/`);
+          // Un-saving takes the row off the saved shelf this seat is reading,
+          // not just out of the cache beneath it.
+          removeListRow('saved-posts', undefined, pid);
+        } else await api.post('/api/saved/posts/', { post: pid });
       } catch (err) {
         setDb(prev => ({ ...prev, saves: saved ? [...mine(prev), { uid: self.id, pid, ts: Date.now() }] : mine(prev) }));
         showToast(errText(err, 'Could not save.'));
@@ -1572,8 +1655,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setDb(prev => ({ ...prev, listingSaves: saved ? mine(prev) : [...mine(prev), { uid: self.id, lid, ts: Date.now() }] }));
     if (API_ENABLED) {
       try {
-        if (saved) await api.del(`/api/saved/listings/${lid}/`);
-        else await api.post('/api/saved/listings/', { listing: lid });
+        if (saved) {
+          await api.del(`/api/saved/listings/${lid}/`);
+          removeListRow('saved-listings', undefined, lid);
+        } else await api.post('/api/saved/listings/', { listing: lid });
       } catch (err) {
         setDb(prev => ({ ...prev, listingSaves: saved ? [...mine(prev), { uid: self.id, lid, ts: Date.now() }] : mine(prev) }));
         showToast(errText(err, 'Could not save.'));
@@ -1676,6 +1761,41 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } catch (err) {
       setDb(prev => ({ ...prev, messages: prev.messages.filter(m => m.id !== optimistic.id) }));
       showToast(errText(err, 'Message not sent.'));
+    }
+  };
+
+  /**
+   * Deleting a conversation is my side only: the row leaves my inbox at once,
+   * the other member keeps theirs, and the hidden id is remembered locally so a
+   * followed person does not resurface as a suggested row. Their next message
+   * puts the thread back — that is the server's rule, and the bell that
+   * announces it re-adds the row the same way a first message does.
+   */
+  const deleteConversation = async (to: string): Promise<boolean> => {
+    const self = currentMe();
+    if (!self) return false;
+    const before = dbRef.current.messages;
+    setDb(prev => ({
+      ...prev,
+      messages: prev.messages.filter(m => !((m.from === self.id && m.to === to) || (m.from === to && m.to === self.id))),
+      hiddenConversations: [...(prev.hiddenConversations || []).filter(id => id !== to), to],
+      notifications: prev.notifications.filter(n => !(
+        n.kind === 'message' && n.actor === to && (n.uid === self.id || !n.uid)
+      )),
+    }));
+    removeListRow('inbox', undefined, to);
+    if (!API_ENABLED) return true;
+    const username = usernameOf(to);
+    if (!username) return false;
+    try {
+      await api.del(`/api/messages/${username}/conversation/`);
+      void pullBadges();
+      return true;
+    } catch (err) {
+      setDb(prev => ({ ...prev, messages: before, hiddenConversations: (prev.hiddenConversations || []).filter(id => id !== to) }));
+      showToast(errText(err, 'Could not delete the conversation.'));
+      void refreshList('inbox', inboxListDef(self.id));
+      return false;
     }
   };
 
@@ -1959,7 +2079,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         toggleFollow, isFollowing, followState, requestFrom, incomingRequests, acceptRequest, declineRequest, removeFollower, mutualIds, followedIds,
         react, myReaction, reactionCount, reactionMix, reactionPeople, myPostReaction, toggleSave, isSaved, toggleListingSave, isListingSaved,
         sharePost, mayShare, countView, blockUser, unblockUser, isBlocked, blockedIds,
-        notify, markAllRead, markRead, sendMessage, markThreadRead, addReport, logAudit,
+        notify, markAllRead, markRead, sendMessage, deleteConversation, markThreadRead, addReport, logAudit,
         requestPromotion, cancelPromotion, activePromo, promoEligible, trackPromo,
         setPromotionStatus, updatePromotion,
         updateLang, login, logout, isAuthenticated,

@@ -23,7 +23,7 @@ import { Listing, Post, User } from '@/lib/types';
 export default function UserProfilePage() {
   const params = useParams();
   const router = useRouter();
-  const { db, me, t, isFollowing, followState, toggleFollow, showToast, serverMode, loadPerson, ready, updateProfile, openCreateChooser } = useApp();
+  const { db, me, t, isFollowing, followState, toggleFollow, showToast, serverMode, loadPerson, ready, updateProfile, openCreateChooser, blockUser, unblockUser, isBlocked } = useApp();
   const username = String(params.username || '');
   const user = db.users.find(u => u.username.toLowerCase() === username.toLowerCase());
   const [tab, setTab] = useState<'posts' | 'reels' | 'photos' | 'about' | 'listings'>('posts');
@@ -32,6 +32,7 @@ export default function UserProfilePage() {
   const [zoom, setZoom] = useState<{ src: string; caption: string } | null>(null);
   const [crop, setCrop] = useState<string | null>(null);
   const [coverBusy, setCoverBusy] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
   const coverRef = useRef<HTMLInputElement>(null);
   // Only the profile row knows the true totals; a paginated list holds no more
   // than the rows the visitor has already scrolled past. They live in the
@@ -328,6 +329,24 @@ export default function UserProfilePage() {
               </button>
             )}
             <button type="button" className="icon-btn" aria-label={t('share')} title={t('share')} onClick={() => void shareProfile()}>{IC.share}</button>
+            {!own && who && (
+              <div className="post-menu-wrap">
+                <button type="button" className="icon-btn" aria-label="More" onClick={() => setMoreOpen(v => !v)}>{IC.dots}</button>
+                {moreOpen && (
+                  <div className="post-menu profile-menu" onClick={e => e.stopPropagation()}>
+                    {isBlocked(user.id) ? (
+                      <button type="button" className="post-menu-item" onClick={() => { setMoreOpen(false); void unblockUser(user.id); }}>
+                        {t('unblock')}
+                      </button>
+                    ) : (
+                      <button type="button" className="post-menu-item danger" onClick={() => { setMoreOpen(false); void blockUser(user.id); }}>
+                        {t('block')}
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           <NoticeBanner notices={user.notices} full/>

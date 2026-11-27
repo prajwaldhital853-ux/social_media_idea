@@ -140,7 +140,29 @@ class ListingViewSet(viewsets.ModelViewSet):
         return qs
 
     def perform_create(self, serializer):
-        serializer.save(seller=self.request.user)
+        listing = serializer.save(seller=self.request.user)
+        try:
+            from apps.common import pulse
+            pulse.to_site('listing_new', id=str(listing.pk), seller=listing.seller.username)
+        except Exception:  # noqa: BLE001 - the ad is live; the wire is a courtesy
+            pass
+
+    def perform_update(self, serializer):
+        listing = serializer.save()
+        try:
+            from apps.common import pulse
+            pulse.to_site('listing_changed', id=str(listing.pk), seller=listing.seller.username)
+        except Exception:  # noqa: BLE001 - the edit is saved; the wire is a courtesy
+            pass
+
+    def perform_destroy(self, instance):
+        listing_id, seller = str(instance.pk), instance.seller.username
+        instance.delete()
+        try:
+            from apps.common import pulse
+            pulse.to_site('listing_gone', id=listing_id, seller=seller)
+        except Exception:  # noqa: BLE001 - the row is gone; the wire is a courtesy
+            pass
 
 
 @api_view(['GET'])
@@ -184,4 +206,9 @@ def set_status(request, pk, action):
     else:
         return Response({'detail': 'Invalid transition.'}, status=400)
     listing.save(update_fields=['status'])
+    try:
+        from apps.common import pulse
+        pulse.to_site('listing_changed', id=str(listing.pk), seller=listing.seller.username)
+    except Exception:  # noqa: BLE001 - the status is saved; the wire is a courtesy
+        pass
     return Response(ListingSerializer(listing).data)

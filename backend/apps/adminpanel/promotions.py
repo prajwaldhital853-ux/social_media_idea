@@ -443,6 +443,10 @@ def decide(promo, actor, action, reason='', choice=''):
         pulse.to_user(promo.owner_id, 'promotion', id=str(promo.pk), status=promo.status,
                       starts_at=promo.starts_at, ends_at=promo.ends_at)
         pulse.to_staff('promotion', id=str(promo.pk), status=promo.status)
+        if taken or refund:
+            balance = Wallet.objects.filter(user_id=promo.owner_id).values_list('balance', flat=True).first()
+            if balance is not None:
+                pulse.to_user(promo.owner_id, 'coins', balance=balance)
     except Exception:  # noqa: BLE001 - the wire is a courtesy, the decision is already made
         pass
     money = (f'{_coins(taken)} coins taken on approval' if taken

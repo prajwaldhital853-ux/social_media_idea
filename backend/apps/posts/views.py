@@ -165,6 +165,26 @@ class PostViewSet(viewsets.ModelViewSet):
             except Exception:  # noqa: BLE001 - the wire is a courtesy, the post is already live
                 pass
 
+    def perform_update(self, serializer):
+        instance = serializer.save()
+        # An edit is announced by id only: each open tab that holds the row
+        # re-reads it through the visibility-checked detail door itself.
+        try:
+            from apps.common import pulse
+            pulse.to_site('post_changed', id=str(instance.pk), author=instance.author.username)
+        except Exception:  # noqa: BLE001 - the edit is saved; the wire is a courtesy
+            pass
+
+    def perform_destroy(self, instance):
+        post_id, author = str(instance.pk), instance.author.username
+        instance.delete()
+        try:
+            from apps.common import pulse
+            pulse.to_site('post_gone', id=post_id, author=author)
+            pulse.to_staff('post_gone', id=post_id, author=author)
+        except Exception:  # noqa: BLE001 - the row is gone; the wire is a courtesy
+            pass
+
     @property
     def paginator(self):
         """`order=views` sorts on a count instead of a timestamp, so that shelf
