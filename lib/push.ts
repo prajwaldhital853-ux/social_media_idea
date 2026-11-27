@@ -50,6 +50,21 @@ function keysOf(sub: PushSubscription) {
 }
 
 /**
+ * Which key the browser's address was filed under.
+ *
+ * The subscription carries the server's public key as DER, whose last 65 bytes
+ * are the raw point we handed it — base64url'd the same way `pushkeys` prints.
+ */
+function filedKey(sub: PushSubscription): string {
+  const der = sub.options.applicationServerKey;
+  if (!der) return '';
+  let bin = '';
+  const raw = new Uint8Array(der).slice(-65);
+  for (let i = 0; i < raw.length; i += 1) bin += String.fromCharCode(raw[i]);
+  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+/**
  * Whether the switch should read as on.
  *
  * Read from the browser rather than the server: a member who revokes the right
@@ -87,11 +102,17 @@ export async function enablePush(): Promise<{ ok: boolean; detail?: string }> {
     return { ok: false, detail: 'Push is not switched on at Exposing yet.' };
   }
   const reg = await worker();
-  const sub = (await reg.pushManager.getSubscription())
-    || (await reg.pushManager.subscribe({
+  const held = await reg.pushManager.getSubscription();
+  // An address filed under a key we no longer hold is a dead one — the push
+  // service shrugs at every card sealed for the new half. Throw it and re-take.
+  const keeps = held !== null && filedKey(held) === config.public_key;
+  if (held && !keeps) await held.unsubscribe();
+  const sub = keeps
+    ? held!
+    : await reg.pushManager.subscribe({
       userVisibleOnly: true,
       applicationServerKey: asKey(config.public_key),
-    }));
+    });
   const keys = keysOf(sub);
   await api.post(SUBSCRIBE, { endpoint: sub.endpoint, keys });
   return { ok: true };

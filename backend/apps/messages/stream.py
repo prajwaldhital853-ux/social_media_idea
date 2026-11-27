@@ -81,7 +81,7 @@ def _tick(user, other, since_ts, since_pk, reached, seen, typed_at):
     return events, since_ts, since_pk, my_reached or reached, my_seen or seen, typed_at
 
 
-async def _thread_events(user, other, since_ts, since_pk, interval, max_life):
+async def _thread_events(user, other, since_ts, since_pk, interval, max_life, lease=''):
     deadline = time.monotonic() + max_life
     reached = seen = typed_at = None
     # The socket's group is also this stream's doorbell: whoever writes a row
@@ -114,7 +114,7 @@ async def _thread_events(user, other, since_ts, since_pk, interval, max_life):
                 yield ': keepalive\n\n'
     finally:
         stop_watching(user.pk, other.pk)
-        release(user.pk)
+        release(user.pk, lease)
         try:
             await layer.group_discard(group, channel)
         except Exception:  # noqa: BLE001 - a loop already on its way out cannot be argued with
@@ -144,14 +144,15 @@ async def thread_stream(request, username):
         if parsed:
             since_ts, since_pk = parsed, int(pk or 0) if pk.isdigit() else 0
 
-    if not acquire(user.pk, settings.SSE_STREAMS_PER_USER):
+    lease = acquire(user.pk, settings.SSE_STREAMS_PER_USER)
+    if not lease:
         return JsonResponse(
             {'detail': 'Too many live streams for this account. Close a tab and try again.'}, status=429,
         )
 
     response = StreamingHttpResponse(
         _thread_events(user, other, since_ts, since_pk,
-                       settings.CHAT_SSE_INTERVAL, settings.SSE_MAX_LIFE),
+                       settings.CHAT_SSE_INTERVAL, settings.SSE_MAX_LIFE, lease),
         content_type='text/event-stream',
     )
     response['Cache-Control'] = 'no-cache, no-transform'

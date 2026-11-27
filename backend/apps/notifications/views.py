@@ -235,7 +235,7 @@ def _staff_allowed(permissions, frame):
     return kind == 'audit'
 
 
-async def _notification_events(user_pk, since_ts, interval, max_life, since_pk=0, post_id=None, staff=False):
+async def _notification_events(user_pk, since_ts, interval, max_life, since_pk=0, post_id=None, staff=False, lease=''):
     deadline = time.monotonic() + max_life
     # A stream opened without a cursor starts from "now" — everything earlier
     # is already on the page from the mount fetch. The baseline is captured
@@ -307,7 +307,7 @@ async def _notification_events(user_pk, since_ts, interval, max_life, since_pk=0
             if not rows and not landed:
                 yield ': keepalive\n\n'
     finally:
-        release(user_pk)
+        release(user_pk, lease)
         drainer.cancel()
         for group in groups:
             try:
@@ -353,13 +353,14 @@ async def notification_stream(request):
             except ValueError:
                 since_ts = None
 
-    if not acquire(user.pk, settings.SSE_STREAMS_PER_USER):
+    lease = acquire(user.pk, settings.SSE_STREAMS_PER_USER)
+    if not lease:
         return JsonResponse({'detail': 'Too many live streams for this account. Close a tab and try again.'}, status=429)
 
     response = StreamingHttpResponse(
         _notification_events(
             user.pk, since_ts, settings.SSE_INTERVAL, settings.SSE_MAX_LIFE, since_pk,
-            post_id=post_id, staff=staff_mode,
+            post_id=post_id, staff=staff_mode, lease=lease,
         ),
         content_type='text/event-stream',
     )
