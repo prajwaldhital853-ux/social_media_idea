@@ -301,10 +301,13 @@ const avatarPreview = await d.$eval('.edit-avatar-row img', el => el.getAttribut
 ok('the avatar preview comes from the stored file', avatarPreview.includes(avatarFile), avatarPreview);
 await setNative(d, '.edit-profile-modal textarea', bioMarker);
 await d.evaluate(() => {
-  const el = document.querySelector('.edit-profile-modal input[type=date]');
-  if (!el) return;
-  Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set.call(el, '');
-  el.dispatchEvent(new Event('input', { bubbles: true }));
+  const clear = label => {
+    const el = document.querySelector(`.edit-profile-modal .dp [aria-label="${label}"]`);
+    if (!el) return;
+    Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set.call(el, '');
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+  };
+  ['Day', 'Month', 'Year'].forEach(clear);
 });
 // Save stays disabled until the upload settles; clicking it early is a silent no-op.
 await d.waitForFunction(() => {
