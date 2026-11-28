@@ -68,11 +68,16 @@ class PromoImpression(models.Model):
     """One paid card one person was actually shown, on the day it happened.
 
     `Promotion.impressions` is a tally, and a tally cannot answer the two
-    questions the reach controls ask: has this person already had this campaign
-    today, and has this campaign spent the audience its package promised. Each
-    serve writes one row here, and the counter on the campaign is what these rows
-    add up to — so a number a payer was charged for is a number that can be shown
-    to have happened.
+    questions the reach controls ask: how many of this campaign's cards this
+    person has already been handed today, and has this campaign spent the
+    audience its package promised. Each serve writes one row here, and the
+    counter on the campaign is what these rows add up to — so a number a payer
+    was charged for is a number that can be shown to have happened.
+
+    `slot` is which showing of the day the row records. One person may be handed
+    the same campaign several times a day — the desk's repeat dial says how many
+    — and each of those showings is its own row, so the daily count for a pair
+    is what the slots add up to rather than a row that had to be reused.
     """
 
     promotion = models.ForeignKey(Promotion, on_delete=models.CASCADE, related_name='impression_rows')
@@ -80,15 +85,17 @@ class PromoImpression(models.Model):
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='promo_impressions',
     )
     day = models.DateField()
+    slot = models.PositiveSmallIntegerField(default=1)
     served_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         ordering = ['-served_at']
         constraints = [
-            # One campaign reaches one person once a day: a second showing on the
-            # same day is the repeat the desk sets a limit on, not reach.
+            # The pair's showings for one day each sit in their own numbered seat,
+            # so a race between two of the reader's own pages cannot write the same
+            # showing twice — and no page can hand out more seats than it counted.
             models.UniqueConstraint(
-                fields=['promotion', 'viewer', 'day'], name='promo_once_per_person_per_day',
+                fields=['promotion', 'viewer', 'day', 'slot'], name='promo_showing_seat_per_day',
             ),
         ]
         indexes = [
@@ -97,7 +104,7 @@ class PromoImpression(models.Model):
         ]
 
     def __str__(self):
-        return f'Promo {self.promotion_id} shown to {self.viewer_id} on {self.day}'
+        return f'Promo {self.promotion_id} shown to {self.viewer_id} on {self.day} (showing {self.slot})'
 
 
 class PromoEvent(models.Model):

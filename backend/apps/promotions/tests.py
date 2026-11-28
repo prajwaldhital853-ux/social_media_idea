@@ -6,7 +6,7 @@ from django.utils import timezone
 
 from apps.common.testutils import auth_client, make_user
 from apps.posts.models import Post
-from apps.promotions.models import Promotion
+from apps.promotions.models import Promotion, PromoImpression
 from apps.promotions.services import audience_matches, interest_score, promoted_for
 from apps.reactions.models import Reaction
 from apps.saved.models import SavedPost
@@ -78,31 +78,69 @@ class PromotionTests(TestCase):
         self.assertFalse(audience_matches(promo, self.match))
 
     def test_feed_targets_only_matching_users(self):
+        for i in range(6):
+            Post.objects.create(author=self.owner, text=f'filler {i}', audience='public')
         self.promote()
         feed_match = auth_client(self.match).get('/api/feed/')
-        lead = feed_match.data['results'][0]
-        self.assertTrue(lead['promoted'])
-        self.assertEqual(lead['id'], self.post.pk)
+        rows = feed_match.data['results']
+        # The card waits out the gap the desk set, so the page opens with ordinary
+        # posts and the advert takes its place in the middle of the walk.
+        self.assertFalse(rows[0].get('promoted'))
+        paid_at = next(i for i, r in enumerate(rows) if r.get('promoted'))
+        self.assertEqual(paid_at, 4, 'the card lands mid-feed, not over the page')
+        self.assertEqual(rows[paid_at]['id'], self.post.pk)
+        self.assertEqual(PromoImpression.objects.filter(viewer=self.match).count(), 1)
+        # The audience buys placement and metering, not the label: someone outside
+        # it meets the post in the ordinary walk still wearing its disclosure, but
+        # nothing was written against their name.
         for user in (self.old, self.foreign):
             feed = auth_client(user).get('/api/feed/')
-            self.assertTrue(all(not p.get('promoted') for p in feed.data['results']))
+            self.assertEqual([r['id'] for r in feed.data['results'] if r.get('promoted')],
+                             [self.post.pk], 'the label follows the row for everyone')
+            self.assertEqual(PromoImpression.objects.filter(viewer=user).count(), 0,
+                             'no paid slot was metered to someone the campaign does not fit')
 
-    def test_a_paid_slot_is_spent_once_and_stays_labelled(self):
+    def test_a_campaign_meets_a_person_until_the_daily_cap_is_spent(self):
+        for i in range(21):
+            Post.objects.create(author=self.owner, text=f'filler {i}', audience='public')
         self.promote()
         client = auth_client(self.match)
-        page1 = client.get('/api/feed/')
-        self.assertTrue(page1.data['results'][0]['promoted'])
-        if page1.data['next_cursor']:
-            page2 = client.get('/api/feed/?cursor=' + page1.data['next_cursor'])
-            # The campaign had its one paid slot for this person today, so nothing
-            # paid rides below it. But its post is back in the ordinary walk, and it
-            # keeps its label there — an unlabelled copy is how a promotion ends up
-            # reading to its own payer as a chronological feed.
-            for row in page2.data['results']:
-                if row['id'] == self.post.pk:
-                    self.assertTrue(row['promoted'], 'a served campaign stays disclosed')
-                else:
-                    self.assertFalse(row['promoted'], 'and takes no second slot on the same day')
+        # The desk's daily cap is two showings, so the campaign holds a paid card on
+        # this person's first two pages — the same advert, mid-feed again — and then
+        # its seats for today are spent.
+        first = client.get('/api/feed/')
+        self.assertEqual([r['id'] for r in first.data['results'] if r.get('promoted')], [self.post.pk])
+        second = client.get('/api/feed/?cursor=' + first.data['next_cursor'])
+        self.assertEqual([r['id'] for r in second.data['results'] if r.get('promoted')], [self.post.pk])
+        self.assertEqual(PromoImpression.objects.filter(viewer=self.match).count(), 2)
+        # Cap spent: no more paid cards. The post sinks back into the ordinary walk
+        # and keeps its label there — an unlabelled copy is how a promotion ends up
+        # reading to its own payer as a chronological feed.
+        third = client.get('/api/feed/?cursor=' + second.data['next_cursor'])
+        walk = [r for r in third.data['results'] if r['id'] == self.post.pk]
+        self.assertTrue(walk and walk[0]['promoted'], 'a served campaign stays disclosed')
+        self.assertFalse(any(r.get('promoted') and r['id'] != self.post.pk
+                             for r in third.data['results']))
+        self.assertEqual(PromoImpression.objects.filter(viewer=self.match).count(), 2)
+
+    def test_the_repeat_dial_ends_one_campaign_while_the_day_has_room(self):
+        from apps.adminpanel import settings_store
+        from apps.promotions.services import candidates
+        settings_store.write(None, {'promo_repeat_limit': 1, 'promo_daily_cap': 5})
+        for i in range(20):
+            Post.objects.create(author=self.owner, text=f'filler {i}', audience='public')
+        self.promote()
+        client = auth_client(self.match)
+        first = client.get('/api/feed/')
+        self.assertEqual([r['id'] for r in first.data['results'] if r.get('promoted')], [self.post.pk])
+        # One showing of this campaign per person per day, by the desk's dial, even
+        # though the day's overall cap still has room for another page of cards.
+        second = client.get('/api/feed/?cursor=' + first.data['next_cursor'])
+        self.assertEqual([r for r in second.data['results'] if r.get('promoted')], [],
+                         'the dial, not the day, spent this campaign')
+        self.assertEqual(PromoImpression.objects.filter(viewer=self.match).count(), 1)
+        self.assertLess(PromoImpression.objects.filter(
+            viewer=self.match, day=timezone.now().date()).count(), 5)
 
     def test_interest_ranking(self):
         engaged = make_user('promoengaged', date_of_birth='1998-04-12', country='Nepal')
@@ -110,7 +148,9 @@ class PromotionTests(TestCase):
             p = Post.objects.create(author=self.owner, text=f'outdoors {i}', audience='public', category='Outdoors')
             Reaction.objects.create(user=engaged, target_type='post', target_id=str(p.pk), kind='like')
             SavedPost.objects.create(user=engaged, post=p)
-        low = self.promote(category='Travel', budget=50)
+        low = self.promote(target_id=str(Post.objects.create(
+            author=self.owner, text='travel spot', audience='public', category='Travel').pk),
+            category='Travel', budget=50)
         high = self.promote(category='Outdoors', budget=50)
         self.assertEqual(low.status_code, 201)
         self.assertEqual(high.status_code, 201)

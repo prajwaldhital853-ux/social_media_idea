@@ -9,10 +9,11 @@ comments, saves, shares, reel watches, follows and audience matching used to be
 typed into this file, which made "the Admin can change how reach is chosen" a
 sentence nobody could act on. They are rows now and this reads the rows.
 
-Three rules hold the rest of it together. A person is not shown the same campaign
-twice in one day. A campaign stops being served once the impression ledger says it
-has reached as far as its package promised. And what a payer is charged against is
-the ledger's own count, never a number a client POSTs.
+Three rules hold the rest of it together. One person is handed the same campaign
+only as many times in a day as the desk's repeat dial allows. A campaign stops
+being served once the impression ledger says it has reached as far as its package
+promised. And what a payer is charged against is the ledger's own count, never a
+number a client POSTs.
 """
 
 from datetime import timedelta
@@ -417,18 +418,14 @@ def mark_promoted(items, target_type=Promotion.Target.POST):
 def place(cards, promos, organic, gap):
     """Interleave the paid cards into an ordinary page, and say which were placed.
 
-    The gap the desk asked for is measured in ordinary rows, so a second paid card
-    waits that many rows behind the first. A card that never gets its gap is not
-    shown, and is not written to the ledger either: the reach a payer is charged for
-    is the reach a person actually saw.
+    Every paid card waits `gap` ordinary rows before it takes its place, so a
+    campaign sits in the middle of what the reader came for instead of over it.
+    A card that never gets its gap is not shown, and is not written to the ledger
+    either: the reach a payer is charged for is the reach a person actually saw.
     """
     step = max(1, gap)
     paid = list(zip(cards, promos))
     merged, since, shown = [], 0, []
-    if paid:
-        card, promo = paid.pop(0)
-        merged.append(card)
-        shown.append(promo)
     for item in organic:
         if paid and since >= step:
             card, promo = paid.pop(0)
@@ -467,19 +464,13 @@ def target_labels(promos):
     return out
 
 
-def seen_today(user):
-    """Campaigns this person was already handed today — the daily cap, in rows."""
-    return set(PromoImpression.objects.filter(
-        viewer=user, day=timezone.now().date(),
-    ).values_list('promotion_id', flat=True))
-
-
 def serving(user, promos, today=None):
     """Write down what the page showed, and move the counter with it.
 
-    One row per campaign per person per day, and the campaign's own tally only
-    ever goes up when a row was really added — so the number a payer is charged
-    against is the number the ledger can be read back to.
+    Each showing of a campaign to a person takes the next seat of that pair's day
+    (`PromoImpression.slot`), and the campaign's own tally only ever goes up when a
+    row was really added — so the number a payer is charged against is the number
+    the ledger can be read back to.
 
     The frame to the payer rides on `on_commit`, for the reason every other pulse in
     the platform does: a tab must never be told a number the transaction has not
@@ -493,12 +484,13 @@ def serving(user, promos, today=None):
     for promo in promos:
         try:
             with db_atomic.atomic():
-                PromoImpression.objects.create(promotion=promo, viewer=user, day=day)
+                taken = PromoImpression.objects.filter(promotion=promo, viewer=user, day=day).count()
+                PromoImpression.objects.create(promotion=promo, viewer=user, day=day, slot=taken + 1)
                 Promotion.objects.filter(pk=promo.pk).update(impressions=F('impressions') + 1)
                 db_atomic.on_commit(lambda pk=promo.pk: report_to_owner(pk))
                 told.append(promo)
         except IntegrityError:
-            # Another page of theirs got there first; a duplicate is not reach.
+            # Another page of theirs took the same seat first; a duplicate is not reach.
             continue
     return len(told)
 
@@ -668,10 +660,11 @@ def candidates(user, limit=2, target_type=None, tuned=None):
     promos = list(running)
     if not promos:
         return []
-    already = seen_today(user)
-    # The daily cap is what one person may be handed in a day, so the ones they
-    # already saw today are spent before this page asks for more.
-    room = max(0, dial['daily'] - len(already))
+    # The daily cap counts showings, not campaigns: someone who met two campaigns
+    # three times each has spent six of the day's seats. A campaign they already saw
+    # stays eligible until its own repeat dial is spent for today.
+    handed = PromoImpression.objects.filter(viewer=user, day=timezone.now().date())
+    room = max(0, dial['daily'] - handed.count())
     shelf = _shelf()
     promised = {promo.pk: int((shelf.get(str(promo.package or '')) or {}).get('reach_max') or 0)
                 for promo in promos}
@@ -682,15 +675,13 @@ def candidates(user, limit=2, target_type=None, tuned=None):
     # every authenticated feed page.
     shown = {}
     if dial['repeat']:
-        for row in PromoImpression.objects.filter(
-            viewer=user, promotion_id__in=[promo.pk for promo in promos],
+        for row in handed.filter(
+            promotion_id__in=[promo.pk for promo in promos],
         ).values('promotion_id').annotate(total=Count('id')):
             shown[row['promotion_id']] = row['total']
     priors = ad_priors(promos, dial['weights'])
     named, strangers = [], []
     for promo in promos:
-        if promo.pk in already:
-            continue
         if dial['repeat'] and shown.get(promo.pk, 0) >= dial['repeat']:
             continue
         if promised[promo.pk] and reached.get(promo.pk, 0) >= promised[promo.pk]:

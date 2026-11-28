@@ -299,8 +299,9 @@ def feed(request):
 
 def _feed_page(request):
     following = bool(request.query_params.get('following'))
-    # The sponsored slot belongs at the head of a newest-first page. On an
-    # ascending walk it would sit above rows that are chronologically older.
+    # Paid cards wait for the gap the desk set, then drop into the middle of the
+    # page: the reader meets the advert among the posts they came for, not over
+    # them.
     dial = None
     promos = []
     ascending = request.query_params.get('order') == 'oldest'
@@ -336,10 +337,10 @@ def _feed_page(request):
     paginator = KeysetPagination(anon_cap=guest_feed_rows())
     rows = paginator.paginate_queryset(qs, request)
     data = PostSerializer(rows, many=True, context={'request': request}).data
-    # A campaign that already took its paid slot from this reader today cannot take
-    # a second one, but its post is still sitting in the ordinary walk below. Marked
-    # as promoted there too, or the payer's advert turns up twice and only the copy
-    # nobody paid for wears the label.
+    # A campaign may meet this reader several times today, up to the repeat dial,
+    # and until then it holds its paid card. Once the day's seats are spent its post
+    # sinks back into the ordinary walk below, marked as promoted there too, or the
+    # payer's advert turns up twice and only the copy nobody paid for wears the label.
     mark_promoted(data)
     if promo_ids:
         # The sponsored slot is still a post: a private author or a followers-only
