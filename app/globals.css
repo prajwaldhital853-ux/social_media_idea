@@ -6746,8 +6746,10 @@ a.wallet-sec-note:hover { color: var(--brand); text-decoration: underline; }
 .wallet-entry-side {
   display: flex; flex-direction: column; align-items: flex-end; gap: 6px; flex-shrink: 0;
 }
-/* An open refund gets no badge of its own, the row already says Approved and the
-   lock line says the rest. What the desk decides does arrive as one: paid, or refused. */
+/* The purchase keeps its own badge and the ask is read beside it: what the desk has
+   to answer is a different fact from what the money already did. */
+.wallet-status.refund_requested { color: var(--amber-ink); }
+.wallet-status.refund_requested::before { background: var(--amber); }
 .wallet-status.refunded { color: var(--muted); }
 .wallet-status.refunded::before { background: var(--line-strong, #c9ccd1); }
 .wallet-status.refund_refused { color: var(--red); }
@@ -6764,6 +6766,8 @@ a.wallet-sec-note:hover { color: var(--brand); text-decoration: underline; }
 .refund-ask.shut { border-color: var(--line); color: var(--muted); }
 .refund-ask.shut:hover { background: var(--paper); }
 .wallet-entry-hint { font-style: italic; }
+/* The rule that costs money if it is ignored is said in red, not in italics. */
+.wallet-entry-warn { color: var(--red) !important; font-style: italic; }
 .wallet-entry-lock { color: var(--amber-ink) !important; font-weight: 650; }
 /* A door that has closed, said in the row's own voice rather than as an error:
    nobody did anything wrong, the coins were simply spent or held elsewhere. */

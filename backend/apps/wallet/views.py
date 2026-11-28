@@ -50,6 +50,19 @@ def _promo_pending(user):
     return Promotion.objects.filter(owner=user, status=Promotion.Status.PENDING).exists()
 
 
+def _open_refunds(user):
+    """The ids of this person's purchases whose refund ask the desk has not answered.
+
+    One ask at a time, the same rule the promotion queue runs on. A seat settles a
+    refund against a batch it can still see whole, and two asks open at once are two
+    locks nobody can untangle in the right order.
+    """
+    return set(CoinRequest.objects.filter(
+        user=user, refund_requested_at__isnull=False,
+        refunded_at__isnull=True, refund_refused_at__isnull=True,
+    ).values_list('pk', flat=True))
+
+
 class TransactionSerializer(serializers.ModelSerializer):
     class Meta:
         model = Transaction
@@ -133,6 +146,7 @@ def coin_request_list(request):
     # One read for the whole page, not one per row: only an approved purchase has a
     # door that could still open, so a wallet of settled history costs nothing here.
     promo_open = any(row.status == CoinRequest.Status.APPROVED for row in rows) and _promo_pending(request.user)
+    open_refunds = _open_refunds(request.user)
     for row, item in zip(rows, data):
         review = asks.get(row.pk)
         item['proof_asked'] = review is not None
@@ -140,13 +154,16 @@ def coin_request_list(request):
         item['resubmitted'] = row.resubmitted_at is not None
         lot = lots.get(row.pk)
         spent = lot is not None and not lot.untouched
+        # One ask is the whole queue, so an open ask on any other purchase closes the
+        # door on this one too.
+        other_open = bool(open_refunds - {row.pk})
         # The button's whole rule lives here, on the row: a purchase is refundable
         # while it is approved, nobody has asked yet, and not one coin of its batch has
         # been spent. Once a coin is gone the answer never comes back to yes.
         item['refundable'] = bool(
             row.status == CoinRequest.Status.APPROVED and row.refund_requested_at is None
             and row.refunded_at is None and row.refund_refused_at is None
-            and lot is not None and lot.untouched and not promo_open
+            and lot is not None and lot.untouched and not promo_open and not other_open
         )
         item['refund_requested'] = row.refund_requested_at is not None
         item['refunded'] = row.refunded_at is not None
@@ -161,6 +178,9 @@ def coin_request_list(request):
         item['refund_promo_pending'] = bool(promo_open and row.status == CoinRequest.Status.APPROVED
                                             and row.refund_requested_at is None
                                             and row.refunded_at is None and row.refund_refused_at is None)
+        item['refund_other_open'] = bool(other_open and row.status == CoinRequest.Status.APPROVED
+                                         and row.refund_requested_at is None
+                                         and row.refunded_at is None and row.refund_refused_at is None)
         item['locked_coins'] = str(lot.held) if lot is not None else '0'
     return paginator.get_paginated_response(data)
 
@@ -188,6 +208,11 @@ def coin_refund_request(request, pk):
     if len(screenshot) > 200 or len(reference) > 80 or len(reason) > 240:
         return Response({'detail': 'That is too long to record.'}, status=400)
     with transaction.atomic():
+        # One ask is the whole queue, so the queue is read under lock: every purchase
+        # of this wallet is taken in the same order on every tap, which is what stops
+        # two requests filed at the same moment from both seeing an empty queue.
+        list(CoinRequest.objects.select_for_update().filter(user=request.user)
+             .order_by('pk').values_list('pk', flat=True))
         req = CoinRequest.objects.select_for_update().filter(pk=pk, user=request.user).first()
         if req is None:
             return Response({'detail': 'No coin request of yours has that id.'}, status=404)
@@ -207,6 +232,15 @@ def coin_refund_request(request, pk):
         lot = CoinLot.objects.select_for_update().filter(request=req).first()
         if req.refund_requested_at is not None or (lot is not None and lot.held > 0):
             return Response({'detail': 'A refund for this purchase is already with the desk.'}, status=409)
+        waiting = (CoinRequest.objects.filter(user=request.user, refund_requested_at__isnull=False,
+                                             refunded_at__isnull=True, refund_refused_at__isnull=True)
+                   .exclude(pk=req.pk).order_by('-refund_requested_at').first())
+        if waiting is not None:
+            return Response(
+                {'detail': f'Purchase #{waiting.pk} already has a refund request waiting for the desk. '
+                           'Wait for it to be settled before asking for another one.'},
+                status=409,
+            )
         # Two queues, one wallet. A campaign that is still waiting on approval has not
         # been charged yet, so refunding underneath it would give back coins the desk is
         # about to take.

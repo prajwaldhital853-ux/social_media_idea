@@ -363,6 +363,7 @@ export function mapCoinRequest(row: any): CoinRequest {
     refundRefused: !!row.refund_refused,
     refundSpent: !!row.refund_spent,
     refundPromoPending: !!row.refund_promo_pending,
+    refundOtherOpen: !!row.refund_other_open,
     locked: Math.round(Number(row.locked_coins) || 0),
   };
 }

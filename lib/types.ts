@@ -232,6 +232,8 @@ export interface CoinRequest {
   refundSpent?: boolean;
   /** A promotion order is still with the desk, so no refund can be filed on top of it. */
   refundPromoPending?: boolean;
+  /** Another purchase already holds the one refund ask this wallet is allowed. */
+  refundOtherOpen?: boolean;
   /** Coins of this purchase the lock is holding. */
   locked?: number;
 }

@@ -52,9 +52,10 @@ def coin_queue(request):
     # A refund the buyer filed is the same shape of work as a receipt nobody has
     # credited: money is sitting on the counter waiting for a person to decide it. Both
     # belong in the desk's opening view, so this chip means "unanswered" rather than
-    # naming one column of the status field.
+    # naming one column of the status field. An ask counts only while neither answer
+    # has been stamped on it; a paid or refused refund is settled work.
     owed = Q(status=CoinRequest.Status.APPROVED, refund_requested_at__isnull=False,
-             refunded_at__isnull=False, refund_refused_at__isnull=False)
+             refunded_at__isnull=True, refund_refused_at__isnull=True)
     if status == CoinRequest.Status.PENDING:
         qs = qs.filter(Q(status=CoinRequest.Status.PENDING) | owed)
     elif status and status != 'all':

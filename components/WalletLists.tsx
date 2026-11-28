@@ -133,6 +133,9 @@ export function RequestRows({ cap, href }: { cap?: number; href?: string }) {
     serverMode ? { hasMore: list.hasMore, loading: list.loading, load: list.loadMore } : undefined,
     PAGED_WINDOW);
   const shown = rows.slice(0, windowed.limit);
+  // One ask is the whole queue. The server says so row by row, and a demo build has
+  // no server, so the rows on screen answer for themselves.
+  const queueOpen = rows.some(x => !!x.refundRequested && !x.refunded && !x.refundRefused);
 
   if (shown.length === 0) {
     return (!serverMode || list.loaded)
@@ -148,15 +151,17 @@ export function RequestRows({ cap, href }: { cap?: number; href?: string }) {
           // that batch was spent. A demo build has no lots, so an approved purchase
           // is refundable until an ask is filed or one is turned down.
           const settled = !!r.refunded || !!r.refundRefused;
-          const askable = r.refundable ?? (r.status === 'approved' && !r.refundRequested && !settled);
+          const askable = (r.refundable ?? (r.status === 'approved' && !r.refundRequested && !settled))
+            && !queueOpen;
           // The desk answers whether an ask fits those coins, but a member who cannot
           // see the door has no way to learn the rule exists. So the button stays on
           // every approved purchase and names the reason when it is turned away.
           const closable = r.status === 'approved' && !r.refundRequested && !settled;
           const shut = r.refundPromoPending ? t('refundPromoPending')
+            : (r.refundOtherOpen ?? queueOpen) ? t('refundOneAtATime')
             : r.refundSpent ? t('refundSpent') : t('refundClosed');
-          // The ask itself gets no second badge: the row already says Approved, and
-          // the money it froze is written out under it instead.
+          // An ask the desk has not answered is said twice: as the chip beside the
+          // purchase it holds, and as the money it froze written out under it.
           const owed = !!r.refundRequested && !settled;
           return (
             <div className="wallet-entry" key={r.id}>
@@ -172,13 +177,14 @@ export function RequestRows({ cap, href }: { cap?: number; href?: string }) {
                 )}
                 {r.refundSpent && <small className="wallet-entry-shut">{t('refundSpent')}</small>}
                 {r.refundPromoPending && <small className="wallet-entry-shut">{t('refundPromoPending')}</small>}
-                {askable && <small className="wallet-entry-hint">{t('refundSpent')}</small>}
+                {askable && <small className="wallet-entry-warn">{t('refundSpent')}</small>}
                 {r.refundRefused && (
                   <small className="wallet-entry-shut">{t('refundRefusedNote')}</small>
                 )}
               </span>
               <span className="wallet-entry-side">
                 <StatusChip status={r.refundRefused && r.status === 'approved' ? 'refund_refused' : r.status} />
+                {owed && <span className="wallet-status refund_requested">{t('refundRequestedBadge')}</span>}
                 {r.resubmitted && r.status === 'pending' && <span className="wallet-status resubmitted">{t('resubmitted')}</span>}
                 {closable && (
                   <button

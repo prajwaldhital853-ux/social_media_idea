@@ -409,6 +409,9 @@ export const I18N = {
     refundPromoPending: 'You have a promotion request pending so you cannot ask for refund.',
     refundRefusedNote: 'The desk turned this refund down, those coins are spendable again.',
     refundClosed: 'This purchase is not open for a refund right now.',
+    refundRequestedBadge: 'Refund Requested',
+    refundOneAtATime: 'You already have a refund request waiting for the desk. '
+      + 'Wait for it to be settled before asking for another one.',
     coinRange: 'Enter between {n} and {m} coins.',
     sending: 'Sending...',
     impressions: 'Impressions',
@@ -1059,6 +1062,8 @@ export const I18N = {
     refundPromoPending: 'तपाईंको promotion अनुरोध बाँकी छ, अहिले refund माग्न मिल्दैन।',
     refundRefusedNote: 'एडमिनले यो refund अस्वीकृत गरे, ती coins फेरि खर्च गर्न मल्छन्।',
     refundClosed: 'यो खरिद अहिले refund को लागि खुला छैन।',
+    refundRequestedBadge: 'Refund माग गरिएको',
+    refundOneAtATime: 'तपाईंको एउटा refund अनुरोध एडमिनको पर्खाइमा छ। त्यो फिर्ता हुनुअघि अर्को माग नगर्नुहोस्।',
     coinRange: '{n} देखि {m} coins को बीचमा लेख्नुहोस्।',
     sending: 'पठाउँदै...',
     impressions: 'इम्प्रेसन',
