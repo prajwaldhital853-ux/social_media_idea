@@ -68,17 +68,18 @@ function WalletSeam({ windowed }: { windowed: ReturnType<typeof useWindowed> }) 
 /**
  * Coin movements. A cap turns the same rows into the overview preview, which is
  * why the "view all" link lives here too — the list and its exit stay together.
- * Both halves page: the preview is a section of a scrolling page, and a reader
- * who wants the eleventh movement should be able to reach it without leaving.
+ * `fixed` holds that preview to the newest few with "view all" as the only way
+ * on, because a summary section is not a second list to scroll through; left off,
+ * the same rows page on scroll for the page that carries all of them.
  */
-export function LedgerRows({ cap, href }: { cap?: number; href?: string }) {
+export function LedgerRows({ cap, href, fixed }: { cap?: number; href?: string; fixed?: boolean }) {
   const { db, t, serverMode } = useApp();
   const { rows, list } = useLedgerRows();
   const page = cap || WINDOW;
   const windowed = useWindowed(rows.length, page, db.lang === 'ne' ? 'ne' : 'en',
     serverMode ? { hasMore: list.hasMore, loading: list.loading, load: list.loadMore } : undefined,
     PAGED_WINDOW);
-  const shown = rows.slice(0, windowed.limit);
+  const shown = fixed && cap ? rows.slice(0, cap) : rows.slice(0, windowed.limit);
 
   if (shown.length === 0) {
     return (!serverMode || list.loaded)
@@ -101,7 +102,7 @@ export function LedgerRows({ cap, href }: { cap?: number; href?: string }) {
             </b>
           </div>
         ))}
-        <WalletSeam windowed={windowed} />
+        {!fixed && <WalletSeam windowed={windowed} />}
       </div>
       {cap && href && rows.length > cap && (
         <Link className="wallet-more" href={href}>{t('viewAll')} · {rows.length}</Link>
