@@ -110,7 +110,12 @@ export function LedgerRows({ cap, href }: { cap?: number; href?: string }) {
   );
 }
 
-export function RequestRows({ cap, href }: { cap?: number; href?: string }) {
+/**
+ * Coin purchases. A cap turns the same rows into the overview preview, and `fixed`
+ * holds that preview to the newest few with "view all" as the only way on: a
+ * summary section is not a second list to scroll through.
+ */
+export function RequestRows({ cap, href, fixed }: { cap?: number; href?: string; fixed?: boolean }) {
   const { db, t, serverMode, showToast } = useApp();
   const { rows, list } = useRequestRows();
   const [refund, setRefund] = useState<CoinRequest | null>(null);
@@ -132,7 +137,7 @@ export function RequestRows({ cap, href }: { cap?: number; href?: string }) {
   const windowed = useWindowed(rows.length, page, db.lang === 'ne' ? 'ne' : 'en',
     serverMode ? { hasMore: list.hasMore, loading: list.loading, load: list.loadMore } : undefined,
     PAGED_WINDOW);
-  const shown = rows.slice(0, windowed.limit);
+  const shown = fixed && cap ? rows.slice(0, cap) : rows.slice(0, windowed.limit);
   // One ask is the whole queue. The server says so row by row, and a demo build has
   // no server, so the rows on screen answer for themselves.
   const queueOpen = rows.some(x => !!x.refundRequested && !x.refunded && !x.refundRefused);
@@ -199,7 +204,7 @@ export function RequestRows({ cap, href }: { cap?: number; href?: string }) {
             </div>
           );
         })}
-        <WalletSeam windowed={windowed} />
+        {!fixed && <WalletSeam windowed={windowed} />}
       </div>
       {cap && href && rows.length > cap && (
         <Link className="wallet-more" href={href}>{t('viewAll')} · {rows.length}</Link>

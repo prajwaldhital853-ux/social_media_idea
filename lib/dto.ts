@@ -143,7 +143,7 @@ export function mapMedia(m: any): Media {
  * rather than an empty array, so a card the server said nothing about keeps the
  * shape it had and prints no banner.
  */
-function mapNotices(rows: any): Notice[] | undefined {
+export function mapNotices(rows: any): Notice[] | undefined {
   if (!Array.isArray(rows) || rows.length === 0) return undefined;
   return rows.map((n: any) => ({
     id: idOf(n.id), text: n.text || '', reason: n.reason || undefined,

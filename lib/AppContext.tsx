@@ -11,7 +11,7 @@ import { api, API_ENABLED, ApiError, onWakeChange } from './api';
 import { merge as applyFragment, Fragment } from './store';
 import { noteRoute } from './navStack';
 import {
-  idOf, at, mapComment, mapFollow, mapMe, mapMessage, mapNotification, mapPerson, mapPost, mapPromotion,
+  idOf, at, mapComment, mapFollow, mapMe, mapMessage, mapNotices, mapNotification, mapPerson, mapPost, mapPromotion,
   mapReport, mapSettings, mediaPayload, profilePatch, reactionsOfPost, toPostPayload, toProfilePayload,
 } from './dto';
 import { bindListCache, coinRequestsFragment, dropListRow, forgetLists, inboxListDef, listingsFragment, notificationsFragment, promotionsFragment, postsFragment, pushListRow, refreshList, removeListRow, walletFragment } from './lists';
@@ -281,6 +281,27 @@ function dropNotice(db: Database, target: string, id: string, notice: string): D
   if (target === 'listing') return { ...db, listings: strip(db.listings) };
   if (target === 'user') return { ...db, users: strip(db.users) };
   return { ...db, posts: strip(db.posts) };
+}
+
+/**
+ * Put one notice the desk has just written onto the cached row it stands on.
+ *
+ * The mirror of the drop above, and it follows the same reading order: the newest
+ * sentence is the one the banner shows first. A row that already carries it is left
+ * alone, so a frame delivered twice cannot double the warning it just wrote.
+ */
+function putNotice(db: Database, target: string, id: string, notice: Notice): Database {
+  const add = <T extends { id: string; notices?: Notice[] }>(rows: T[]): T[] => {
+    if (!rows.some(row => row.id === id)) return rows;
+    return rows.map(row => {
+      if (row.id !== id || row.notices?.some(n => n.id === notice.id)) return row;
+      return { ...row, notices: [notice, ...(row.notices || [])] };
+    });
+  };
+  if (target === 'comment') return { ...db, comments: add(db.comments) };
+  if (target === 'listing') return { ...db, listings: add(db.listings) };
+  if (target === 'user') return { ...db, users: add(db.users) };
+  return { ...db, posts: add(db.posts) };
 }
 
 export function AppProvider({ children }: { children: ReactNode }) {
@@ -645,6 +666,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
       } else if (p.kind === 'warning') {
         void pullBadges();
         void pullSession();
+      } else if (p.kind === 'notice_new') {
+        // The desk wrote a sentence over content this seat may already be looking at.
+        // The frame carries the words because the banner under the card needs them,
+        // and it reaches only the seats allowed to read them: a public notice goes to
+        // the site, a private one down the single account it was written for.
+        const id = String(p.id || '');
+        const written = mapNotices([p.notice]);
+        if (!id || !written || !written.length) return;
+        setDb(prev => putNotice(prev, String(p.target || ''), id, written[0]));
+        if (p.about && currentMe()?.username === p.about) void pullBadges();
       } else if (p.kind === 'notice_gone') {
         // The console took a public notice down. The email and the bell line say so
         // already; this is the frame that takes the banner off the card it was

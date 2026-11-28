@@ -11,6 +11,9 @@ import { ago } from '@/lib/utils';
 import { Promotion } from '@/lib/types';
 
 const WINDOW = 10;
+// The overview is a summary, so the purchases it shows are the newest five and the
+// way onward is the page that holds all of them.
+const REQUEST_PREVIEW = 5;
 
 export default function WalletOverviewPage() {
   const { db, me, t, serverMode } = useApp();
@@ -122,7 +125,7 @@ export default function WalletOverviewPage() {
           <h2>{t('pendingRequests')}</h2>
           <Link href="/wallet/requests" className="wallet-sec-note">{t('viewAll')}</Link>
         </div>
-        <RequestRows cap={WINDOW} href="/wallet/requests" />
+        <RequestRows cap={REQUEST_PREVIEW} href="/wallet/requests" fixed />
       </section>
 
       <section className="wallet-sec">

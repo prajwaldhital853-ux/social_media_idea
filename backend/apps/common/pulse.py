@@ -48,3 +48,38 @@ def to_post(post_pk, kind, **fields):
 def to_staff(kind, **fields):
     """Console seats. Operational ids and counts only, never private content."""
     _send('staff', {'kind': kind, **fields})
+
+
+def notice_landed(notice):
+    """Push a notice the desk just wrote onto the cards that must show it.
+
+    The banner under a suspended post quotes the sentence, so unlike every other
+    frame here this one carries words — which is why it is routed by audience
+    instead of sprayed. A public notice belongs in front of everyone reading that
+    content; a private one is a note to a single account about its own page, and
+    only that account's wire sees it. A seat that misses the frame still learns
+    the same thing on its next read, so this stays a courtesy.
+    """
+    from apps.adminpanel.models import PublicNotice
+
+    about = getattr(notice, 'about', None)
+    if about is None:
+        return
+    private = notice.audience == PublicNotice.Audience.PRIVATE
+    fields = {
+        'target': notice.target_type,
+        'id': str(notice.target_id),
+        'about': about.username,
+        'notice': {
+            'id': notice.pk,
+            'text': notice.text,
+            'reason': notice.reason,
+            'by': notice.actor.username if notice.actor else 'staff',
+            'at': notice.created_at,
+            'private': private,
+        },
+    }
+    if private:
+        to_user(about.pk, 'notice_new', **fields)
+    else:
+        to_site('notice_new', **fields)
