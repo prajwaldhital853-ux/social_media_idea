@@ -7,7 +7,7 @@ from rest_framework.response import Response
 
 from apps.adminpanel import bell, rbac, settings_store
 from apps.adminpanel.journal import record
-from apps.common.emails import queue_coin_decision_email, queue_coin_request_email
+from apps.common.emails import queue_coin_decision_email, queue_coin_request_email, queue_refund_request_email
 from apps.common.pagination import KeysetPagination
 from apps.notifications.services import notify
 
@@ -274,6 +274,10 @@ def coin_refund_request(request, pk):
     )
     record(request.user, 'coins_refund_ask', f'coin_request:{req.pk}',
            f'{req.coins} coins locked, {reason or "no reason given"}')
+    # The letter is the half of this promise the wallet screen cannot make: the wait
+    # the member is owed, and every rule the ask was measured against. Queued off the
+    # request, like every other letter, so a silent provider never stalls the ask.
+    queue_refund_request_email(req, locked=lot.held)
     wallet, _ = Wallet.objects.get_or_create(user=request.user)
     try:
         from apps.common import pulse
