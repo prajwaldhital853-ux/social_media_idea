@@ -16,7 +16,8 @@ import { Listing } from '@/lib/types';
 
 export default function MarketplacePage() {
   const router = useRouter();
-  const { db, me, t, feature, activePromo, promoEligible, trackPromo, serverMode } = useApp();
+  const { db, me, t, featureLock, activePromo, promoEligible, trackPromo, serverMode } = useApp();
+  const off = featureLock('marketplace');
   const lang = db.lang;
   const [tab, setTab] = useState<'browse' | 'mine'>('browse');
   const [q, setQ] = useState('');
@@ -43,7 +44,7 @@ export default function MarketplacePage() {
       min: min === '' ? undefined : min,
       max: max === '' ? undefined : max,
     },
-    serverMode && feature('marketplace'),
+    serverMode,
   );
 
   const listings = useMemo(() => {
@@ -85,25 +86,6 @@ export default function MarketplacePage() {
       loaded: market.loaded, error: market.error, retry: market.reload,
     } : undefined);
 
-  if (!feature('marketplace')) {
-    return <AppShell>
-      <header className="header home-header">
-        <div className="home-header-row">
-          <div className="home-header-copy">
-            <h1 className="header-title">{t('marketplace')}</h1>
-            <p className="header-sub">{t('marketSub')}</p>
-          </div>
-          <div className="header-actions"><ThemeToggle compact/></div>
-        </div>
-      </header>
-      <div className="empty-state">
-        <span className="empty-state-icon">{IC.store}</span>
-        <h2>{t('marketOff')}</h2>
-        <button type="button" className="empty-state-cta" onClick={() => router.push('/')}>{t('backFeed')}</button>
-      </div>
-    </AppShell>;
-  }
-
   return <AppShell>
     <div className="market-view">
       <header className="header home-header">
@@ -114,7 +96,7 @@ export default function MarketplacePage() {
           </div>
           <div className="header-actions">
             {me && (
-              <button type="button" className="ghost-btn" onClick={() => setCreating(true)}>
+              <button type="button" className={`ghost-btn${off ? ' f-off' : ''}`} onClick={() => setCreating(true)} {...(off ? off.props : {})}>
                 {IC.plus}<span>{t('createListing')}</span>
               </button>
             )}
@@ -122,6 +104,8 @@ export default function MarketplacePage() {
           </div>
         </div>
       </header>
+
+      {off && <p className="feature-off-note">{off.msg}</p>}
 
       {me && (
         <div className="tabs market-tabs">
@@ -167,7 +151,7 @@ export default function MarketplacePage() {
           {filtersOn ? (
             <button type="button" className="empty-state-cta" onClick={clearFilters}>{t('clearFilters')}</button>
           ) : me ? (
-            <button type="button" className="empty-state-cta" onClick={() => setCreating(true)}>{t('createListing')}</button>
+            <button type="button" className={`empty-state-cta${off ? ' f-off' : ''}`} onClick={() => setCreating(true)} {...(off ? off.props : {})}>{t('createListing')}</button>
           ) : (
             <button type="button" className="empty-state-cta" onClick={() => router.push('/login')}>{t('signIn')}</button>
           )}

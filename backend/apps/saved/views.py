@@ -5,6 +5,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from apps.common.features import notice as feature_notice
 from apps.common.pagination import KeysetPagination
 from apps.marketplace.models import Listing
 from apps.marketplace.views import ListingSerializer
@@ -53,6 +54,12 @@ def unsave_post(request, post_id):
 @permission_classes([IsAuthenticated])
 def saved_listings(request):
     if request.method == 'POST':
+        # Saving an offer is the marketplace being used, so a closed one says so here
+        # rather than quietly filing a bookmark nobody can act on again later. Dropping
+        # one you already made stays open: that is tidying, not buying.
+        refused = feature_notice('marketplace')
+        if refused:
+            return refused
         listing = get_object_or_404(Listing, pk=request.data.get('listing'))
         try:
             with transaction.atomic():

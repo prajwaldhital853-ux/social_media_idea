@@ -11,6 +11,7 @@ from apps.adminpanel import rbac
 from apps.common.api import person
 from apps.common.config import package_by_id
 from apps.common.emails import queue_promotion_request_email
+from apps.common.features import notice as feature_notice
 from apps.common.pagination import KeysetPagination
 from apps.common.rules import rate, seat
 from apps.marketplace.models import Listing
@@ -111,6 +112,9 @@ def _rows(promos):
 @permission_classes([IsAuthenticated])
 def promotion_list(request):
     if request.method == 'POST':
+        refused = feature_notice('promotion')
+        if refused:
+            return refused
         serializer = PromotionSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data

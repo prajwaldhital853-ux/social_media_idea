@@ -35,10 +35,11 @@ const RATES = [0.5, 1, 1.5, 2];
 export default function ReelsFeed({ initialKey }: { initialKey?: string }) {
   const router = useRouter();
   const {
-    db, me, feature, toggleSave, isSaved, toggleFollow, isFollowing, serverMode,
+    db, me, featureLock, toggleSave, isSaved, toggleFollow, isFollowing, serverMode,
     sharePost, mayShare, countView, blockUser, isBlocked, t, showToast,
     activePromo, trackPromo,
   } = useApp();
+  const videoOff = featureLock('video');
   const [index, setIndex] = useState(0);
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
@@ -76,7 +77,7 @@ export default function ReelsFeed({ initialKey }: { initialKey?: string }) {
     'reels',
     { path: '/feed/', frag: postsFragment(me?.id || null) },
     { media: 'video' },
-    serverMode && feature('video'),
+    serverMode,
   );
 
   // The reels page re-reads page one when the reader returns, so a reel posted
@@ -253,7 +254,8 @@ export default function ReelsFeed({ initialKey }: { initialKey?: string }) {
           </button>
           <span className="reel-title">Reels</span>
         </div>
-        {feature('video') && slides.length > 0 ? (
+        {videoOff && <p className="feature-off-note reel-off-note">{videoOff.msg}</p>}
+        {slides.length > 0 ? (
           <div className="reels-scroll" ref={scrollRef} onScroll={onScroll}>
             {slides.map((slide, i) => {
               const commentCount = slide.post.comments
@@ -432,7 +434,7 @@ export default function ReelsFeed({ initialKey }: { initialKey?: string }) {
           <p className="reels-empty">
             {serverMode && stream.error
               ? <>{stream.error} <button type="button" className="ghost-btn" onClick={() => void stream.reload()}>Try again</button></>
-              : feature('video') ? 'No reels yet. Publish a video to see it here.' : 'Video is currently unavailable.'}
+              : videoOff ? videoOff.msg : 'No reels yet. Publish a video to see it here.'}
           </p>
         )}
         {commentsOpen && current && <Comments postId={current.post.id} onClose={() => setCommentsOpen(false)} />}

@@ -13,7 +13,8 @@ import { useBackClose, closeLayerWithoutBack } from '@/lib/useBackClose';
 const MAX_VIDEOS = 3;
 
 export default function CreateChooser() {
-  const { createChooserOpen, closeCreateChooser, me, showToast } = useApp();
+  const { createChooserOpen, closeCreateChooser, me, showToast, featureLock } = useApp();
+  const videoOff = featureLock('video');
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [pct, setPct] = useState(0);
@@ -57,9 +58,9 @@ export default function CreateChooser() {
             <span className="chooser-copy"><b>Post</b><small>Share a thought or a photo</small></span>
             <span className="chooser-plus" aria-hidden="true">{IC.plus}</span>
           </button>
-          <button type="button" disabled={busy} onClick={() => fileRef.current?.click()}>
+          <button type="button" disabled={busy} onClick={() => fileRef.current?.click()} className={videoOff ? 'f-off' : ''} {...(videoOff ? videoOff.props : {})}>
             <span className="chooser-icon reel">{IC.video}</span>
-            <span className="chooser-copy"><b>Reel</b><small>Choose a video or photo</small></span>
+            <span className="chooser-copy"><b>Reel</b><small>{videoOff ? videoOff.msg : 'Choose a video or photo'}</small></span>
             <span className="chooser-plus" aria-hidden="true">{IC.plus}</span>
           </button>
         </div>

@@ -9,6 +9,7 @@ from rest_framework.response import Response
 
 from apps.accounts.models import User
 from apps.common.api import person
+from apps.common.features import notice as feature_notice
 from apps.common.pagination import KeysetPagination, decode_cursor
 from apps.follows.models import Block, Follow
 from apps.notifications.models import Notification
@@ -154,6 +155,13 @@ def thread(request, username):
     if other.pk == request.user.pk:
         return Response({'detail': 'You cannot message yourself.'}, status=400)
     if request.method == 'POST':
+        # A closed door answers before anything is read or written, so a message that
+        # never could have been sent costs no row and no notification. Reading a thread
+        # is not blocked: what somebody already wrote you is not un-sent by a switch,
+        # and a person who loses their answers has nothing left to come back to.
+        refused = feature_notice('messages')
+        if refused:
+            return refused
         text = (request.data.get('text') or '').strip()
         if not text:
             return Response({'detail': 'Message text is required.'}, status=400)
@@ -260,6 +268,9 @@ def typing(request, username):
     app, and it is deliberately cheap: one cache write, no row, no fan-out.
     """
     other = get_object_or_404(User, username=username)
+    if feature_notice('messages'):
+        # Nothing to answer and nothing to keep, so the answer is only ever "stop".
+        return Response({'ok': True})
     if other.pk != request.user.pk:
         note_typing(request.user.pk, other.pk)
     return Response({'ok': True})

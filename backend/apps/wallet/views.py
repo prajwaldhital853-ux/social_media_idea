@@ -8,6 +8,7 @@ from rest_framework.response import Response
 from apps.adminpanel import bell, rbac, settings_store
 from apps.adminpanel.journal import record
 from apps.common.emails import queue_coin_decision_email, queue_coin_request_email, queue_refund_request_email
+from apps.common.features import closed, notice as feature_notice
 from apps.common.pagination import KeysetPagination
 from apps.notifications.services import notify
 
@@ -97,7 +98,13 @@ def wallet_detail(request):
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
+@closed('wallet')
 def coin_request_create(request):
+    """Filing a purchase is the wallet being used, so a closed desk answers it here.
+
+    What is already filed is untouched: a request the member paid for before the door
+    shut still waits for its answer, and the seat can still give one.
+    """
     serializer = CoinRequestSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
     if serializer.validated_data['coins'] < 1:
@@ -309,6 +316,9 @@ def coin_proof_resubmit(request, pk):
             'reason': ask.reason if ask else '',
             'asked_at': ask.created_at if ask else None,
         })
+    refused = feature_notice('wallet')
+    if refused:
+        return refused
     if req.status != CoinRequest.Status.PENDING:
         return Response(
             {'detail': f'That request was already {req.status}. There is nothing to add to it.'},

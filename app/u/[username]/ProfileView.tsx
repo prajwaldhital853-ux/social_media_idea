@@ -23,7 +23,8 @@ import { Listing, Post, User } from '@/lib/types';
 export default function UserProfilePage() {
   const params = useParams();
   const router = useRouter();
-  const { db, me, t, isFollowing, followState, toggleFollow, showToast, serverMode, loadPerson, ready, updateProfile, openCreateChooser, blockUser, unblockUser, isBlocked } = useApp();
+  const { db, me, t, isFollowing, followState, toggleFollow, showToast, serverMode, loadPerson, ready, updateProfile, openCreateChooser, blockUser, unblockUser, isBlocked, featureLock } = useApp();
+  const chatOff = featureLock('messages');
   const username = String(params.username || '');
   const user = db.users.find(u => u.username.toLowerCase() === username.toLowerCase());
   const [tab, setTab] = useState<'posts' | 'reels' | 'photos' | 'about' | 'listings'>('posts');
@@ -318,7 +319,7 @@ export default function UserProfilePage() {
                 >
                   {fState === 'following' ? t('unfollow') : fState === 'pending' ? t('requested') : user.private ? t('requestFollow') : followsMe ? t('followBack') : t('follow')}
                 </button>
-                <button type="button" className="ghost-btn" onClick={() => needSession(() => router.push(`/messages/${user.username}`))}>
+                <button type="button" className={`ghost-btn${chatOff ? ' f-off' : ''}`} onClick={() => needSession(() => router.push(`/messages/${user.username}`))} {...(chatOff ? chatOff.props : {})}>
                   {IC.msg}<span>{t('message')}</span>
                 </button>
               </>

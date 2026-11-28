@@ -42,8 +42,9 @@ export function StatusChip({ status }: { status: string }) {
  */
 export default function WalletShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const { db, me, t, ready } = useApp();
+  const { db, me, t, ready, featureLock } = useApp();
   const price = db.settings.coinPrice;
+  const walletOff = featureLock('wallet');
 
   if (!me) {
     return (
@@ -87,6 +88,7 @@ export default function WalletShell({ children }: { children: ReactNode }) {
             </Link>
           ))}
         </nav>
+        {walletOff && <p className="feature-off-note">{walletOff.msg}</p>}
       </header>
       <div className="wallet-body">{children}</div>
     </AppShell>

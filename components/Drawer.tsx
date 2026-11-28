@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useApp } from '@/lib/AppContext';
+import type { FeatureName } from '@/lib/AppContext';
 import { useBackClose, closeLayerWithoutBack } from '@/lib/useBackClose';
 import Avatar from './Avatar';
 import BrandLogo from './BrandLogo';
@@ -10,7 +11,7 @@ import ThemeToggle from './ThemeToggle';
 import { IC } from '@/lib/icons';
 
 export default function Drawer() {
-  const { me, logout, drawerOpen, closeDrawer, db, updateLang, t, feature } = useApp();
+  const { me, logout, drawerOpen, closeDrawer, db, updateLang, t, featureLock } = useApp();
 
   useBackClose(drawerOpen, closeDrawer);
   const navigateClose = () => { closeLayerWithoutBack(); closeDrawer(); };
@@ -20,13 +21,13 @@ export default function Drawer() {
     return () => document.body.classList.remove('noscroll');
   }, [drawerOpen]);
 
-  const links = [
+  const links: { href: string; label: string; icon: ReactNode; gate?: FeatureName }[] = [
     ...(me ? [{ href: `/u/${me.username}`, label: t('profile'), icon: IC.user }] : []),
-    { href: '/messages', label: t('messages'), icon: IC.msg },
+    { href: '/messages', label: t('messages'), icon: IC.msg, gate: 'messages' },
     { href: '/saved', label: t('saved'), icon: IC.bookmark },
-    { href: '/wallet', label: t('wallet'), icon: IC.wallet },
-    ...(feature('video') ? [{ href: '/video', label: t('video'), icon: IC.video }] : []),
-    ...(feature('marketplace') ? [{ href: '/marketplace', label: t('marketplace'), icon: IC.store }] : []),
+    { href: '/wallet', label: t('wallet'), icon: IC.wallet, gate: 'wallet' },
+    { href: '/video', label: t('video'), icon: IC.video, gate: 'video' },
+    { href: '/marketplace', label: t('marketplace'), icon: IC.store, gate: 'marketplace' },
     { href: '/settings', label: t('settings'), icon: IC.gear }
   ];
 
@@ -59,12 +60,21 @@ export default function Drawer() {
         )}
 
         <nav className="drawer-nav">
-          {links.map(item => (
-            <Link key={item.href} href={item.href} className="drawer-link" onClick={navigateClose}>
-              {item.icon}
-              <span>{item.label}</span>
-            </Link>
-          ))}
+          {links.map(item => {
+            const lock = item.gate ? featureLock(item.gate) : null;
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`drawer-link${lock ? ' f-off' : ''}`}
+                onClick={navigateClose}
+                {...(lock ? lock.props : {})}
+              >
+                {item.icon}
+                <span>{item.label}</span>
+              </Link>
+            );
+          })}
         </nav>
 
         <div className="drawer-footer">

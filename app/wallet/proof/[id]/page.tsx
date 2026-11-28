@@ -35,7 +35,8 @@ interface Ask {
 export default function CoinProofResubmitPage() {
   const params = useParams();
   const router = useRouter();
-  const { db, me, ready, t, showToast, showConfirm } = useApp();
+  const { db, me, ready, t, showToast, showConfirm, featureLock } = useApp();
+  const walletOff = featureLock('wallet');
   const id = String(params.id || '');
   const [ask, setAsk] = useState<Ask | null>(null);
   const [error, setError] = useState('');
@@ -102,6 +103,7 @@ export default function CoinProofResubmitPage() {
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     if (busy) return;
+    if (walletOff) { showToast(walletOff.msg); return; }
     if (!screenshot) {
       setError(t('proofShotRequired'));
       return;
@@ -176,7 +178,9 @@ export default function CoinProofResubmitPage() {
 
               {error && <p className="wallet-error">{error}</p>}
 
-              <button type="submit" className="wallet-submit" disabled={busy}>
+              {walletOff && <p className="feature-off-note">{walletOff.msg}</p>}
+
+              <button type="submit" className={`wallet-submit${walletOff ? ' f-off' : ''}`} disabled={busy} {...(walletOff ? walletOff.props : {})}>
                 {t('uploadProof')}
               </button>
             </form>

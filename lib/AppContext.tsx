@@ -21,6 +21,27 @@ import { bumpNew } from './newCount';
 
 type Target = 'post' | 'comment' | 'media';
 
+/** The doors the Admin can shut, and what the member is told when one is shut. */
+const OFF_KEYS = {
+  marketplace: 'off_marketplace',
+  video: 'off_video',
+  wallet: 'off_wallet',
+  messages: 'off_messages',
+  promotion: 'off_promotion',
+} as const;
+
+export type FeatureName = keyof typeof OFF_KEYS;
+
+export interface FeatureLock {
+  msg: string;
+  /** Spread onto the control, last: it stays visible, stops working, and says why. */
+  props: {
+    'aria-disabled'?: true;
+    title?: string;
+    onClick?: (event: { preventDefault(): void; stopPropagation(): void }) => void;
+  };
+}
+
 interface AppContextType {
   db: Database;
   setDb: Dispatch<SetStateAction<Database>>;
@@ -29,6 +50,8 @@ interface AppContextType {
   isStaff: () => boolean;
   t: (key: TranslationKey, vars?: Record<string, string | number>) => string;
   feature: (key: keyof FeatureFlags) => boolean;
+  /** Null when the feature is open; a message and the props that grey the control when not. */
+  featureLock: (key: FeatureName) => FeatureLock | null;
   addPost: (post: Post) => Promise<Post>;
   updatePost: (id: string, updates: Partial<Post>) => Promise<void>;
   deletePost: (id: string) => Promise<void>;
@@ -432,6 +455,32 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (last && last.msg === msg && Date.now() - last.at < 4500) return;
     lastToastRef.current = { msg, at: Date.now() };
     setToast(msg);
+  };
+
+  /**
+   * A feature the Admin closed stays on the page. Removing it would leave a hole
+   * in the chrome and teach nothing; a greyed control that answers "the admin
+   * turned this off" is the same shape with the bite taken out. The server refuses
+   * the write too, so this is courtesy, not the lock. A console edit of
+   * `db.settings` gets a toast and a 409.
+   */
+  const featureLock = (key: FeatureName): FeatureLock | null => {
+    // Only an explicit `false` closes a door. A settings blob cached before a
+    // switch existed must not grey the feature out for the people holding it.
+    if (db.settings.features[key] !== false) return null;
+    const msg = t(OFF_KEYS[key]);
+    return {
+      msg,
+      props: {
+        'aria-disabled': true,
+        title: msg,
+        onClick: (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          showToast(msg);
+        },
+      },
+    };
   };
 
   /**
@@ -2287,7 +2336,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   return (
     <AppContext.Provider
       value={{
-        db, setDb, me, isAdmin, isStaff, t, feature,
+        db, setDb, me, isAdmin, isStaff, t, feature, featureLock,
         addPost, updatePost, deletePost, addComment, deleteComment,
         toggleFollow, isFollowing, followState, requestFrom, incomingRequests, acceptRequest, declineRequest, removeFollower, mutualIds, followedIds,
         react, myReaction, reactionCount, reactionMix, reactionPeople, myPostReaction, toggleSave, isSaved, toggleListingSave, isListingSaved,

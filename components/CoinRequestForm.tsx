@@ -21,7 +21,8 @@ const CEILING = 10000;
  * proof of payment stay in one place.
  */
 export default function CoinRequestForm({ method }: { method: 'bank' | 'qr' }) {
-  const { db, me, t, setDb, merge, showToast, showConfirm } = useApp();
+  const { db, me, t, setDb, merge, showToast, showConfirm, featureLock } = useApp();
+  const walletOff = featureLock('wallet');
   const router = useRouter();
   const [coins, setCoins] = useState(100);
   // The floor is a rule for the order, not for the typing. Clamping on every
@@ -141,6 +142,7 @@ export default function CoinRequestForm({ method }: { method: 'bank' | 'qr' }) {
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     if (busy) return;
+    if (walletOff) { showToast(walletOff.msg); return; }
     const picked = Math.round(Number(coinsText) || 0);
     if (picked < floor || picked > CEILING) {
       applyCoins(Math.max(floor, Math.min(CEILING, picked)));
@@ -254,7 +256,9 @@ export default function CoinRequestForm({ method }: { method: 'bank' | 'qr' }) {
 
       {error && <p className="wallet-error">{error}</p>}
 
-      <button type="submit" className="wallet-submit" disabled={busy}>
+      {walletOff && <p className="feature-off-note">{walletOff.msg}</p>}
+
+      <button type="submit" className={`wallet-submit${walletOff ? ' f-off' : ''}`} disabled={busy} {...(walletOff ? walletOff.props : {})}>
         {t('submitRequest')} · {coins} {t('coins')}
       </button>
     </form>

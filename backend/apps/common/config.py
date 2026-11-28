@@ -108,11 +108,25 @@ def wording():
 
 
 def features():
+    """Which doors are open, as the member app reads them.
+
+    These were constants, which made "the admin can turn the marketplace off" a
+    deploy. They are the five rows on the console's features desk now, and the same
+    answer the endpoints enforce: a greyed button and a refused request come from one
+    source, so a stale tab cannot show a door the server has already shut.
+    """
     google = bool(getattr(settings, 'GOOGLE_CLIENT_ID', ''))
+    try:
+        from apps.common import features as switches
+        open_doors = switches.state()
+    except Exception:  # noqa: BLE001 - no settings table yet means every door is open
+        open_doors = {}
     return {
-        'video': True,
-        'marketplace': True,
-        'promotion': True,
+        'video': open_doors.get('video', True),
+        'marketplace': open_doors.get('marketplace', True),
+        'promotion': open_doors.get('promotion', True),
+        'wallet': open_doors.get('wallet', True),
+        'messages': open_doors.get('messages', True),
         'googleLogin': google,
         'facebookLogin': os.environ.get('FACEBOOK_APP_ID', '') != '',
         'appleLogin': os.environ.get('APPLE_CLIENT_ID', '') != '',

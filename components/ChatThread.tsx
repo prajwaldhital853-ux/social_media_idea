@@ -129,7 +129,8 @@ function ShareCard({ target, preview }: { target: LinkTarget; preview?: boolean 
  */
 export default function ChatThread({ other, seed, promo }: { other: User; seed?: string; promo?: string }) {
   const router = useRouter();
-  const { db, me, t, setDb, markThreadRead, sendMessage, serverMode } = useApp();
+  const { db, me, t, setDb, markThreadRead, sendMessage, serverMode, featureLock, showToast } = useApp();
+  const chatOff = featureLock('messages');
   const lang = db.lang;
   const [text, setText] = useState(seed || '');
   const [typing, setTyping] = useState(false);
@@ -391,6 +392,7 @@ export default function ChatThread({ other, seed, promo }: { other: User; seed?:
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!me || !text.trim()) return;
+    if (chatOff) { showToast(chatOff.msg); return; }
     void sendMessage(other.id, text, promo);
     setText('');
     inputRef.current?.focus();
@@ -493,17 +495,25 @@ export default function ChatThread({ other, seed, promo }: { other: User; seed?:
 
       {draft && <div className="chat-draft-card"><ShareCard target={draft} preview/></div>}
 
-      <form className="chat-compose" onSubmit={submit}>
+      <form className={`chat-compose${chatOff ? ' f-off' : ''}`} onSubmit={submit}>
         <input
           ref={inputRef}
           value={text}
           onChange={e => { setText(e.target.value); noteTyping(); }}
-          placeholder={t('typeMessage')}
+          placeholder={chatOff ? chatOff.msg : t('typeMessage')}
           aria-label={t('typeMessage')}
+          title={chatOff ? chatOff.msg : undefined}
+          readOnly={!!chatOff}
           maxLength={2000}
           autoComplete="off"
         />
-        <button type="submit" className="chat-send" disabled={!text.trim()} aria-label={t('send')}>{IC.send}</button>
+        <button
+          type="submit"
+          className={`chat-send${chatOff ? ' f-off' : ''}`}
+          disabled={chatOff ? false : !text.trim()}
+          aria-label={t('send')}
+          {...(chatOff ? chatOff.props : {})}
+        >{IC.send}</button>
       </form>
       {typing && (
         <div className="chat-typing" aria-hidden="true">
