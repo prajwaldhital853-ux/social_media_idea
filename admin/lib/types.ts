@@ -799,6 +799,18 @@ export interface SettingLine {
   at: string | null;
 }
 
+/** One row of the features desk: a settings line, the door it owns, and whether that door is open. */
+export interface FeatureLine extends SettingLine {
+  feature: 'marketplace' | 'video' | 'wallet' | 'messages' | 'promotion';
+  on: boolean;
+}
+
+export interface FeaturesDesk {
+  lines: FeatureLine[];
+  live: Partial<Record<FeatureLine['feature'], boolean>>;
+  can_write: boolean;
+}
+
 export interface CoinDesk {
   lines: SettingLine[];
   pricing: CoinPricing;

@@ -1,8 +1,8 @@
 from django.urls import path
 
-from . import (views_alerts, views_audit, views_bell, views_coins, views_export, views_limits, views_overview,
-               views_people, views_promotions, views_review, views_safety, views_session, views_staff,
-               views_welcome)
+from . import (views_alerts, views_audit, views_bell, views_coins, views_export, views_features, views_limits,
+               views_overview, views_people, views_promotions, views_review, views_safety, views_session,
+               views_staff, views_welcome)
 
 urlpatterns = [
     path('admin/session/', views_session.admin_session),
@@ -97,4 +97,6 @@ urlpatterns = [
     # Contract 6.10: the size of one post, and the open door the composer reads it from.
     path('admin/limits/', views_limits.limits_desk),
     path('limits/config/', views_limits.limits_config),
+    # Which doors of the site are open at all: five switches, enforced at the endpoints.
+    path('admin/features/', views_features.features_desk),
 ]

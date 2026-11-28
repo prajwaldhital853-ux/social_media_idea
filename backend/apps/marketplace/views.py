@@ -5,6 +5,7 @@ from rest_framework.permissions import AllowAny, BasePermission, IsAuthenticated
 from rest_framework.response import Response
 
 from apps.common.api import notice_map
+from apps.common.features import notice as feature_notice
 from apps.common.pagination import KeysetPagination
 from apps.common.rules import blocked_wording
 from apps.promotions.models import Promotion
@@ -110,7 +111,14 @@ class ListingViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticatedOrReadOnly, IsSellerOrReadOnly]
 
     def create(self, request, *args, **kwargs):
-        """A listing naming something the console forbids is answered, not saved."""
+        """A listing naming something the console forbids is answered, not saved.
+
+        The closed marketplace is answered first: a greyed "sell" button is the app's
+        half of the rule, and this is the half a hand-written request cannot skip.
+        """
+        refused = feature_notice('marketplace')
+        if refused:
+            return refused
         refused = blocked_wording(request, 'listing')
         if refused:
             return refused
@@ -118,10 +126,20 @@ class ListingViewSet(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         """So is an edit that puts the wording back in afterwards."""
+        refused = feature_notice('marketplace')
+        if refused:
+            return refused
         refused = blocked_wording(request, 'listing')
         if refused:
             return refused
         return super().update(request, *args, **kwargs)
+
+    def destroy(self, request, *args, **kwargs):
+        """Taking your own ad down is still using the marketplace, so it waits too."""
+        refused = feature_notice('marketplace')
+        if refused:
+            return refused
+        return super().destroy(request, *args, **kwargs)
 
     def get_queryset(self):
         qs = Listing.objects.select_related('seller__profile').prefetch_related('images')
@@ -251,6 +269,9 @@ def categories(request):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def set_status(request, pk, action):
+    refused = feature_notice('marketplace')
+    if refused:
+        return refused
     listing = Listing.objects.filter(pk=pk, seller=request.user).first()
     if not listing:
         return Response({'detail': 'Not your listing.'}, status=404)

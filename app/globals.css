@@ -9368,3 +9368,47 @@ html { overscroll-behavior-y: none; }
 }
 
 .comment-bubble p { white-space: pre-wrap; overflow-wrap: anywhere; }
+
+/* ---------- Feature doors the Admin shuts ----------
+   A closed feature keeps its row, its icon and its words and loses its bite.
+   Removing the entry left a hole in the rail and taught the reader nothing; a
+   dimmed control that answers with the reason is the same page with the sharp
+   part taken out. The server refuses the write too, so a member who strips the
+   class in dev tools still gets the refusal back as a toast. */
+.f-off {
+  opacity: .45;
+  cursor: not-allowed;
+}
+.f-off:hover,
+.f-off:focus-visible,
+.f-off.active {
+  background: transparent;
+}
+.f-off svg { filter: grayscale(1); }
+.chat-compose.f-off input { cursor: not-allowed; }
+
+.feature-off-note {
+  margin: 0 0 12px;
+  padding: 9px 12px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+/* The reel frame is one full-bleed column with its header floating over it, so
+   the note floats too rather than shortening the player. */
+.reel-off-note {
+  position: absolute;
+  top: 58px;
+  left: 12px;
+  right: 12px;
+  z-index: 3;
+  margin: 0;
+  background: rgba(10, 12, 15, .72);
+  border-color: rgba(255, 255, 255, .18);
+  color: #f2f3f4;
+  text-align: center;
+}

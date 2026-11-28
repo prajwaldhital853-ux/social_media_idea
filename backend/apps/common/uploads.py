@@ -11,6 +11,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from .features import notice as feature_notice
 from .media import save_upload
 
 MAX_BYTES = 150 * 1024 * 1024
@@ -43,6 +44,13 @@ def upload(request):
     kind = _kind(upload.content_type or '')
     if not kind:
         return Response({'detail': 'Only JPEG, PNG, WebP, GIF, AVIF, MP4, WebM or MOV files are allowed.'}, status=400)
+    if kind == 'video':
+        # The composer hides the reel choice when the desk closes it, and this is the
+        # same answer for a client that never got that message. A photo still uploads:
+        # the door that shut was the moving-picture one, not attaching anything.
+        refused = feature_notice('video')
+        if refused:
+            return refused
     if upload.size > MAX_BYTES:
         return Response({'detail': 'File is larger than 150 MB.'}, status=400)
 

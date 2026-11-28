@@ -1,18 +1,21 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useApp } from '@/lib/AppContext';
+import type { FeatureName } from '@/lib/AppContext';
 import { useNewCount } from '@/lib/newCount';
 import { IC } from '@/lib/icons';
 import ThemeToggle from './ThemeToggle';
 import BrandLogo from './BrandLogo';
 
+type Tab = { href: string; label: string; icon: ReactNode; self: boolean; gate?: FeatureName };
+
 export default function MobileNav({ barOnly = false }: { barOnly?: boolean }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { me, db, openDrawer, t, feature, openCreateChooser } = useApp();
+  const { me, db, openDrawer, t, featureLock, openCreateChooser } = useApp();
   const focusedPage = pathname.startsWith('/post/') || pathname === '/explore' || pathname === '/create';
   const inChat = /^\/messages\/[^/]+/.test(pathname);
   const [compactPost, setCompactPost] = useState(false);
@@ -34,13 +37,13 @@ export default function MobileNav({ barOnly = false }: { barOnly?: boolean }) {
   }, [pathname]);
 
   const profileHref = me ? `/u/${me.username}` : '/login';
-  const tabs = [
+  const tabs: Tab[] = [
     { href: '/', label: t('home'), icon: IC.home, self: false },
-    ...(feature('video') ? [{ href: '/video', label: t('video'), icon: IC.video, self: false }] : []),
-    { href: '/messages', label: 'Chat', icon: IC.msg, self: false },
-    ...(feature('marketplace') ? [{ href: '/marketplace', label: t('marketplace'), icon: IC.store, self: false }] : []),
+    { href: '/video', label: t('video'), icon: IC.video, self: false, gate: 'video' },
+    { href: '/messages', label: 'Chat', icon: IC.msg, self: false, gate: 'messages' },
+    { href: '/marketplace', label: t('marketplace'), icon: IC.store, self: false, gate: 'marketplace' },
     // The tab is the profile itself. Routing it through /profile rendered an
-    // empty page for a beat and then replaced it, which read as a refresh.
+    // empty page and then replaced it, which read as a refresh.
     { href: profileHref, label: t('profile'), icon: IC.user, self: true },
   ];
 
@@ -55,9 +58,11 @@ export default function MobileNav({ barOnly = false }: { barOnly?: boolean }) {
   const renderTabs = () => tabs.map(tab => {
     const active = tab.href === '/' ? pathname === '/' : tab.self ? pathname === profileHref : pathname.startsWith(tab.href);
     const fresh = badgeFor(tab.href);
-    return <Link key={tab.href} href={tab.href} aria-label={tab.label} aria-current={active ? 'page' : undefined} title={tab.label} className={`mnav-tab ${active ? 'active' : ''}`}>
+    const lock = tab.gate ? featureLock(tab.gate) : null;
+    return <Link key={tab.href} href={tab.href} aria-label={tab.label} aria-current={active ? 'page' : undefined} title={lock ? lock.msg : tab.label}
+      className={`mnav-tab ${active ? 'active' : ''}${lock ? ' f-off' : ''}`} {...(lock ? lock.props : {})}>
       {tab.icon}
-      {fresh > 0 && <span className="mnav-new">{fresh > 99 ? '99+' : `+${fresh}`}</span>}
+      {fresh > 0 && !lock && <span className="mnav-new">{fresh > 99 ? '99+' : `+${fresh}`}</span>}
     </Link>;
   });
 

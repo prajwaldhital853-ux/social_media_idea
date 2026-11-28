@@ -398,6 +398,8 @@ export function mapSettings(config: any): Settings {
     features: {
       video: config.features?.video !== false,
       marketplace: config.features?.marketplace !== false,
+      wallet: config.features?.wallet !== false,
+      messages: config.features?.messages !== false,
       promotion: config.features?.promotion !== false,
       googleLogin: !!config.features?.googleLogin,
       facebookLogin: !!config.features?.facebookLogin,

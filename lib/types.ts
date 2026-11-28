@@ -321,6 +321,8 @@ export interface Audit {
 export interface FeatureFlags {
   video: boolean;
   marketplace: boolean;
+  wallet: boolean;
+  messages: boolean;
   promotion: boolean;
   googleLogin: boolean;
   facebookLogin: boolean;

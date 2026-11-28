@@ -62,6 +62,7 @@ CATALOG = (
     ('platform_settings', 'Platform settings', 'platform', (ADMIN,)),
     ('welcome_text', 'Welcome message, tagline, contacts', 'platform', (ADMIN,)),
     ('post_limits', 'Default post limits', 'platform', (ADMIN,)),
+    ('site_features', 'Turn marketplace, video, wallet, messages or promotions off', 'platform', (ADMIN,)),
     ('categories', 'Marketplace categories', 'platform', (ADMIN,)),
     ('blocked_words', 'Prohibited items and blocked words', 'platform', (ADMIN,)),
     ('staff_view', 'Staff roster', 'staff', (ADMIN,)),

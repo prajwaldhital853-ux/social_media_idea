@@ -377,7 +377,10 @@ export function defaultSettings(): Settings {
     bankName: 'Nepal Bank Ltd',
     bankAccount: '0120-4455-8891',
     bankHolder: 'Exposing Pvt Ltd',
-    features: { video: true, marketplace: true, promotion: true, googleLogin: true, facebookLogin: true, appleLogin: false },
+    features: {
+      video: true, marketplace: true, wallet: true, messages: true, promotion: true,
+      googleLogin: true, facebookLogin: true, appleLogin: false,
+    },
     packages: [
       { id: 'pk_starter', name: 'Starter', coins: 100, days: 3, reach: 'Up to 3,000 people' },
       { id: 'pk_growth', name: 'Growth', coins: 300, days: 7, reach: 'Up to 12,000 people' },
