@@ -7,7 +7,7 @@ from rest_framework.response import Response
 
 from apps.adminpanel import rbac, settings_store
 from apps.adminpanel.journal import record
-from apps.common.emails import queue_coin_decision_email
+from apps.common.emails import queue_coin_decision_email, queue_coin_request_email
 from apps.common.pagination import KeysetPagination
 from apps.notifications.services import notify
 
@@ -97,6 +97,9 @@ def coin_request_create(request):
     if floor and serializer.validated_data['coins'] < floor:
         return Response({'detail': f'The smallest purchase is {floor} coins.'}, status=400)
     obj = serializer.save(user=request.user)
+    # The seat that clears purchases is not sitting in the desk watching it fill, so
+    # the letter is what tells them money arrived today.
+    queue_coin_request_email(obj)
     return Response(CoinRequestSerializer(obj).data, status=status.HTTP_201_CREATED)
 
 

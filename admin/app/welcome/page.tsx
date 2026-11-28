@@ -8,15 +8,16 @@ import { api } from '@/lib/api';
 import { IC } from '@/lib/icons';
 import { ago } from '@/lib/time';
 import { useSession } from '@/lib/session';
-import { WelcomeDesk, WelcomeLine, WelcomeMail } from '@/lib/types';
+import { WelcomeDesk, WelcomeLine } from '@/lib/types';
 
 const ADDRESS = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 const LINK = /^https?:\/\/[^\s@]+\.[^\s@]{2,}$/i;
-// The two boxes that steer where the platform's own letters go. They are written
+// The boxes that steer where the platform's own letters go. They are written
 // beside the mail status rather than among the sentences a visitor reads.
-const MAIL_FIELDS = ['report_inbox', 'console_url'];
+const MAIL_FIELDS = ['report_inbox', 'request_inbox', 'console_url'];
 const MAIL_PLACEHOLDERS: Record<string, string> = {
   report_inbox: 'complaints@example.com',
+  request_inbox: 'payments@example.com',
   console_url: 'https://admin.exposing.app',
 };
 
@@ -27,8 +28,6 @@ export default function WelcomePage() {
   const [draft, setDraft] = useState<Record<string, string>>({});
   const [banner, setBanner] = useState<{ kind: 'ok' | 'bad'; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
-  const [to, setTo] = useState('');
-  const [sending, setSending] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -78,32 +77,15 @@ export default function WelcomePage() {
     }
   };
 
-  const sendTest = async () => {
-    const address = to.trim().toLowerCase();
-    if (!ADDRESS.test(address)) {
-      setBanner({ kind: 'bad', text: 'Write the address the test letter goes to.' });
-      return;
-    }
-    setSending(true);
-    setBanner(null);
-    try {
-      const out = await api<{ detail: string; mail?: WelcomeMail }>('admin/welcome/mail-test/', {
-        method: 'POST', body: { to: address },
-      });
-      if (out.mail) setDesk(current => (current ? { ...current, mail: out.mail } : current));
-      setBanner({ kind: 'ok', text: out.detail });
-    } catch (err) {
-      // A refused letter is the answer this button exists for, so it is shown whole.
-      setBanner({ kind: 'bad', text: (err as Error).message });
-    } finally {
-      setSending(false);
-    }
-  };
-
   const saveMail = async () => {
     const address = mailOf('report_inbox').trim();
     if (address && !ADDRESS.test(address)) {
       setBanner({ kind: 'bad', text: 'Write a whole email address, or leave the complaints box empty to keep reports inside the console.' });
+      return;
+    }
+    const requests = mailOf('request_inbox').trim();
+    if (requests && !ADDRESS.test(requests)) {
+      setBanner({ kind: 'bad', text: 'The requests inbox needs a whole email address, or leave it empty and a coin or promotion order goes to the complaints inbox.' });
       return;
     }
     const door = mailOf('console_url').trim();
@@ -114,9 +96,10 @@ export default function WelcomePage() {
     const moved = mailLines.filter(item => mailOf(item.field).trim() !== (item.value ?? ''));
     const sure = await confirm({
       title: moved.length === 1 ? `Change the ${moved[0].label.toLowerCase()}?` : 'Change where the console posts?',
-      body: 'These two decide where the platform letters go: complaints are copied to the inbox as '
-        + 'they arrive, and a new staff seat is mailed its sign-in, its password and the link it opens. '
-        + 'Both take effect on the next letter the platform posts.',
+      body: 'These decide where the platform letters go: complaints are copied to the inbox as '
+        + 'they arrive, a coin purchase and a promotion order are mailed to the requests inbox the '
+        + 'moment a member files them, and a new staff seat is mailed its sign-in, its password and '
+        + 'the link it opens. All of them take effect on the next letter the platform posts.',
       confirmLabel: 'Save the mail settings',
       tone: 'amber',
     });
@@ -259,8 +242,8 @@ export default function WelcomePage() {
                 <p>
                   A coin receipt, a promotion decision, a warning, a complaint, a new staff seat and
                   a first letter are each also an email. This is what those letters pass through, and
-                  where two of them are told to go, read off the server rather than guessed from an
-                  inbox that stays quiet.
+                  where the platform's own copies are told to go, read off the server rather than
+                  guessed from an inbox that stays quiet.
                 </p>
               </div>
             </div>
@@ -302,7 +285,7 @@ export default function WelcomePage() {
                     </span>
                     <input
                       name={item.field}
-                      type={item.field === 'report_inbox' ? 'email' : 'text'}
+                      type={item.field.endsWith('inbox') ? 'email' : 'text'}
                       maxLength={item.limit} autoComplete="off" spellCheck={false}
                       value={mailOf(item.field)}
                       placeholder={MAIL_PLACEHOLDERS[item.field] || item.default}
@@ -340,32 +323,6 @@ export default function WelcomePage() {
                 </div>
               </>
             )}
-
-            <label className="field" data-mail="to">
-              <span>Send a test letter to</span>
-              <input
-                name="mailtest" value={to} autoComplete="off" placeholder="you@example.com"
-                onChange={event => setTo(event.target.value)}
-              />
-              <em className="welcome-who">
-                It is posted through the provider named above and comes back with that
-                provider’s own answer, so the check takes a few seconds and proves more than this
-                screen can.
-              </em>
-            </label>
-
-            <div className="ask-actions">
-              <button
-                type="button" className={`btn primary${sending ? ' spinning' : ''}`}
-                disabled={sending || !ADDRESS.test(to.trim().toLowerCase())}
-                title={ADDRESS.test(to.trim().toLowerCase())
-                  ? 'Post one real letter and report the answer'
-                  : 'An address first'}
-                onClick={sendTest}
-              >
-                {IC.check}<span>{sending ? 'Sending…' : 'Send the test letter'}</span>
-              </button>
-            </div>
           </section>
         </div>
       )}

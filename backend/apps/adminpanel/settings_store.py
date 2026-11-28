@@ -232,6 +232,12 @@ DEFAULTS = {
     'report_inbox': ('', 'str', 'Complaints inbox',
                      'A copy of every report is mailed here as it arrives. Empty keeps complaints '
                      'inside the console queue.', 'platform'),
+    # A coin purchase and a promotion order are money arriving, and the person who
+    # clears them is not always the person who reads complaints. Empty falls back to
+    # the complaints box so a deployment that filled one box is not silently mute.
+    'request_inbox': ('', 'str', 'Requests inbox',
+                      'A coin purchase and a promotion order are mailed here as they arrive. '
+                      'Empty sends them to the complaints inbox.', 'platform'),
     # The console is deployed apart from the member site, so a letter that invites
     # somebody to sign in cannot guess its address. It is a setting for the same
     # reason the Client asked for the complaints inbox: a domain can move, and a
