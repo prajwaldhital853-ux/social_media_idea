@@ -245,14 +245,16 @@ def settle(req, actor, reason=''):
                                        'so this cannot be paid from the desk. Ask the buyer to file the request again.'}
             coins_back = lot.held
             # The hold is released before the debit: `apply()` refuses to spend a locked
-            # coin, and the coin this settlement returns is exactly the locked one.
+            # coin, and the coin this settlement returns is exactly the locked one. The
+            # batch is not written down here, it is named to `apply()` and closed there,
+            # because a debit that also eats the oldest free lot spends a second purchase
+            # that nobody ever touched.
             lot.held = Decimal('0')
-            lot.remaining = max(Decimal('0'), lot.remaining - coins_back)
-            lot.save(update_fields=['held', 'remaining'])
+            lot.save(update_fields=['held'])
             wallet, _ = Wallet.objects.get_or_create(user=req.user)
             entry = apply(wallet.pk, Transaction.Kind.DEBIT, coins_back,
                           f'Coin purchase {req.pk} refunded',
-                          actor=actor, ref=f'coin_refund:{req.pk}')
+                          actor=actor, ref=f'coin_refund:{req.pk}', from_lot=lot.pk)
             wallet.refresh_from_db()
             req.status = CoinRequest.Status.REFUNDED
             req.refunded_at = timezone.now()

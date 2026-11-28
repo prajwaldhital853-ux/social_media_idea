@@ -153,8 +153,14 @@ class DeletedWalletRecord(models.Model):
         return f'{self.username} ({self.archived_at:%Y-%m-%d})'
 
 
-def apply(wallet_id, kind, amount, note='', actor=None, ref=''):
-    """Atomic balance change + ledger row. Raises ValueError on overdraft."""
+def apply(wallet_id, kind, amount, note='', actor=None, ref='', from_lot=None):
+    """Atomic balance change + ledger row. Raises ValueError on overdraft.
+
+    `from_lot` names the batch a debit is drawn from. A settled refund pays back one
+    purchase's own coins, so it must take them off that lot and nowhere else; left to
+    pick the oldest free lot, it eats a second purchase's coins on top of the ones it
+    already closed and shuts the refund door on somebody who never spent a coin.
+    """
     amount = Decimal(amount)
     if amount <= 0:
         raise ValueError('Amount must be positive.')
@@ -175,7 +181,7 @@ def apply(wallet_id, kind, amount, note='', actor=None, ref=''):
                 )
         Wallet.objects.filter(pk=wallet.pk).update(balance=F('balance') + delta)
         if kind == Transaction.Kind.DEBIT:
-            _consume(lots, amount)
+            _consume(lots, amount, only=from_lot)
         row = Transaction.objects.create(wallet=wallet, kind=kind, amount=amount,
                                          note=note[:200], actor=actor, ref=str(ref or '')[:80])
     _pulse_balance(wallet.user_id, wallet.pk)
@@ -192,17 +198,23 @@ def _whole(value):
     return int(number) if number == number.to_integral_value() else number
 
 
-def _consume(lots, amount):
+def _consume(lots, amount, only=None):
     """Eat the oldest coins that no refund has its hand on.
 
     The order is the whole point: a purchase stays refundable only while it is
     untouched, so a buyer who spends anything spends their oldest coins first and
     the batch they might want back is the one left intact.
+
+    `only` narrows the eating to one batch, which is what a refund settlement needs:
+    those coins already left the wallet, and drawing the same number again off the
+    oldest free lot would spend somebody else's purchase twice over.
     """
     left = amount
     for lot in lots:
         if left <= 0:
             return
+        if only is not None and lot.pk != only:
+            continue
         free = lot.remaining - lot.held
         if free <= 0:
             continue
