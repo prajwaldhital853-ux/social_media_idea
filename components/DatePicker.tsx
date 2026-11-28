@@ -25,6 +25,12 @@ const parts = (value: string) => {
 };
 
 type Segment = 'd' | 'm' | 'y';
+type Pane = 'day' | 'month' | 'year';
+
+// Measured so the sheet is placed where it fits before it is drawn: a birthday
+// box sits low on a phone, and a sheet that runs off the bottom is unusable.
+const SHEET_WIDTH = 322;
+const SHEET_HEIGHT: Record<Pane, number> = { day: 356, month: 236, year: 336 };
 
 type Props = {
   value: string;
@@ -52,8 +58,8 @@ export default function DatePicker({ value, onChange, max, min, register, classN
   const [m, setM] = useState(seed.m);
   const [y, setY] = useState(seed.y);
   const [typed, setTyped] = useState<Segment | ''>('');
-  const [pane, setPane] = useState<'' | 'day' | 'month' | 'year'>('');
-  const [place, setPlace] = useState({ top: 0, left: 0 });
+  const [pane, setPane] = useState<'' | Pane>('');
+  const [place, setPlace] = useState({ top: 0, left: 0, width: SHEET_WIDTH });
   const [view, setView] = useState(() => {
     const now = new Date();
     return { y: Number(seed.y) || now.getFullYear(), m: Number(seed.m) || now.getMonth() + 1 };
@@ -66,6 +72,21 @@ export default function DatePicker({ value, onChange, max, min, register, classN
   const written = useRef(value);
   const emit = useRef(onChange);
   emit.current = onChange;
+
+  // The sheet is placed against the box it belongs to, flipped above it when the
+  // bottom of the screen has no room, and narrowed to the screen when the phone is
+  // smaller than the sheet.
+  const anchor = (which: Pane) => {
+    const rect = box.current?.getBoundingClientRect();
+    if (!rect) return;
+    const width = Math.min(SHEET_WIDTH, window.innerWidth - 16);
+    const height = SHEET_HEIGHT[which];
+    const gap = 8;
+    let top = rect.bottom + gap;
+    if (top + height > window.innerHeight - gap) top = rect.top - height - gap;
+    if (top < gap) top = Math.max(gap, window.innerHeight - height - gap);
+    setPlace({ top, left: Math.min(window.innerWidth - width - gap, Math.max(gap, rect.left)), width });
+  };
 
   useEffect(() => {
     if (value === written.current) return;
@@ -103,18 +124,25 @@ export default function DatePicker({ value, onChange, max, min, register, classN
       setPane('');
     };
     const keys = (event: KeyboardEvent) => { if (event.key === 'Escape') setPane(''); };
-    // The sheet sits where it was measured, so anything that moves the page
-    // behind it closes it instead of leaving it floating.
-    const drift = () => setPane('');
+    // A phone puts its keyboard away the moment a thumb lands on the sheet, which
+    // moves the page and every measurement taken from it. Closing on that movement
+    // is what made the calendar vanish under a touch before it could be read, so it
+    // re-anchors where it stands instead of going away.
+    let raf = 0;
+    const move = () => {
+      if (raf) return;
+      raf = requestAnimationFrame(() => { raf = 0; anchor(pane); });
+    };
     document.addEventListener('pointerdown', away, true);
     document.addEventListener('keydown', keys);
-    window.addEventListener('scroll', drift, true);
-    window.addEventListener('resize', drift);
+    window.addEventListener('scroll', move, true);
+    window.addEventListener('resize', move);
     return () => {
+      cancelAnimationFrame(raf);
       document.removeEventListener('pointerdown', away, true);
       document.removeEventListener('keydown', keys);
-      window.removeEventListener('scroll', drift, true);
-      window.removeEventListener('resize', drift);
+      window.removeEventListener('scroll', move, true);
+      window.removeEventListener('resize', move);
     };
   }, [pane]);
 
@@ -170,18 +198,9 @@ export default function DatePicker({ value, onChange, max, min, register, classN
     return true;
   };
 
-  const toggle = (next: 'day' | 'month' | 'year') => {
+  const toggle = (next: Pane) => {
     if (pane === next) { setPane(''); return; }
-    const rect = box.current?.getBoundingClientRect();
-    if (rect) {
-      const height = next === 'year' ? 286 : 300;
-      const width = 268;
-      const below = rect.bottom + 6;
-      setPlace({
-        top: below + height > window.innerHeight ? Math.max(8, rect.top - height - 6) : below,
-        left: Math.min(window.innerWidth - width - 8, Math.max(8, rect.left)),
-      });
-    }
+    anchor(next);
     setPane(next);
   };
 
@@ -276,7 +295,7 @@ export default function DatePicker({ value, onChange, max, min, register, classN
       </div>
 
       {pane && (
-        <div className="dp-pop" ref={pop} style={{ top: place.top, left: place.left }} role="dialog" aria-label="Choose a date">
+        <div className="dp-pop" ref={pop} style={{ top: place.top, left: place.left, width: place.width }} role="dialog" aria-label="Choose a date">
           {pane === 'day' && (
             <>
               <div className="dp-head">
