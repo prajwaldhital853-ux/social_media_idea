@@ -1233,6 +1233,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const deletePost = async (id: string) => {
+    // Asked before anything is torn out of the lists: a row still under a campaign
+    // belongs to the reach somebody paid for, and the server refuses it too. Saying
+    // it here is what saves the card from vanishing and springing back a round-trip
+    // later, and it is the same answer the demo mode has no server to be told by.
+    if (openPromo('post', id)) {
+      showToast(t('promoDeleteHold'));
+      return;
+    }
     const snapshot = dbRef.current;
     const gone = snapshot.posts.find(p => p.id === id);
     const self = currentMe();

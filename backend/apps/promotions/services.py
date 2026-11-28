@@ -355,6 +355,24 @@ def ad_priors(promos, weights):
     return out
 
 
+# The campaign states that still hold the row they advertise: an order the desk has
+# not read, a run that is spending, and one the payer stopped without closing. A
+# refused or finished campaign asks nothing of the row, so it keeps nothing back.
+HELD = (Promotion.Status.PENDING, Promotion.Status.ACTIVE, Promotion.Status.PAUSED)
+
+
+def hold_on_target(target_id, target_type=Promotion.Target.POST):
+    """The campaign that still owns this row, or nothing.
+
+    The author's own delete doors ask this before they erase: a post that vanishes
+    under an open campaign leaves a paid advert pointing at a row nobody can open,
+    and a promise the payer paid reach for that can no longer be kept.
+    """
+    return Promotion.objects.filter(
+        target_type=target_type, target_id=str(target_id), status__in=HELD,
+    ).filter(Q(ends_at__isnull=True) | Q(ends_at__gt=timezone.now())).order_by('-created_at').first()
+
+
 def live_campaigns(target_ids, target_type=Promotion.Target.POST):
     """Every campaign running right now against these rows, by advertised row id.
 

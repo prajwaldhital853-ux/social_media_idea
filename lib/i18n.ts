@@ -488,6 +488,8 @@ export const I18N = {
     promoWhyGuest: 'This post is promoted by its author with Coins. Sign in to see only promotions matched to your age and location.',
     cancelPromo: 'Cancel request',
     promoCancelled: 'Promotion cancelled. Any Coins it had not used are returned.',
+    promoDeleteHold: 'This post is under a promotion, or its promotion request is still waiting '
+      + 'for approval. End the promotion first, then delete the post.',
     about: 'About',
     media: 'Media',
     reels: 'Reels',
@@ -1136,6 +1138,8 @@ export const I18N = {
     promoWhyGuest: 'यो पोस्ट यसका लेखकले Coins मार्फत प्रोमोट गरेका हुन्। आफ्नो उमेर र स्थानअनुसारका प्रोमोसन मात्र हेर्न साइन इन गर्नुहोस्।',
     cancelPromo: 'अनुरोध रद्द गर्नुहोस्',
     promoCancelled: 'अनुरोध रद्द भयो। Coins फिर्ता।',
+    promoDeleteHold: 'यो पोस्ट promotion अन्तर्गत छ, वा यसको promotion अनुरोध अझै स्वीकृतिको पर्खाइमा '
+      + 'छ। पहिले promotion अन्त्य गर्नुहोस्, त्यसपछि यो पोस्ट मेट्नुहोस्।',
     about: 'परिचय',
     media: 'मिडिया',
     reels: 'रिलहरू',

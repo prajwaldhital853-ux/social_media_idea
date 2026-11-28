@@ -9,7 +9,7 @@ from apps.common.errors import throttle_text
 from apps.common.pagination import KeysetPagination
 from apps.common.rules import blocked_wording, post_limits_gate, rate, room, seat, write_gate
 from apps.follows.models import Block, Follow
-from apps.promotions.services import mark_promoted, plan, place, promo_card, serving
+from apps.promotions.services import hold_on_target, mark_promoted, plan, place, promo_card, serving
 
 from .models import Post, PostMedia, SharedPost
 from .serializers import PostSerializer
@@ -20,6 +20,11 @@ from .serializers import PostSerializer
 # only for a request that arrives while the desk cannot be read.
 ANON_FEED_ROWS = 30
 FEED_CACHE_SECONDS = 15
+
+# What the delete door says when a campaign still owns the row. The same sentence
+# sits in the app's own wording table, so a change has to be made in both.
+PROMO_HOLD = ('This post is under a promotion, or its promotion request is still waiting for '
+              'approval. End the promotion first, then delete the post.')
 
 
 def guest_feed_rows():
@@ -174,6 +179,19 @@ class PostViewSet(viewsets.ModelViewSet):
             pulse.to_site('post_changed', id=str(instance.pk), author=instance.author.username)
         except Exception:  # noqa: BLE001 - the edit is saved; the wire is a courtesy
             pass
+
+    def destroy(self, request, *args, **kwargs):
+        """A post with coins still behind it is not the author's to erase quietly.
+
+        The payer bought reach for this exact row; deleting it underneath the run
+        leaves an advert that opens nothing and a bill that cannot be shown to have
+        delivered. Ending the campaign is one tap on their own promotions page, and
+        after that the delete door is theirs again.
+        """
+        post = self.get_object()
+        if hold_on_target(post.pk):
+            return Response({'detail': PROMO_HOLD}, status=status.HTTP_409_CONFLICT)
+        return super().destroy(request, *args, **kwargs)
 
     def perform_destroy(self, instance):
         post_id, author = str(instance.pk), instance.author.username
