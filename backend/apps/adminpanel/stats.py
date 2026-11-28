@@ -104,11 +104,17 @@ def _daily(queryset, since, field='created_at', amount=None):
     return out
 
 
-def _rate_tile(tile_id, label, href, model, field, cutoffs):
-    def counted(since):
-        return model.objects.filter(**{f'{field}__gte': since}).count()
+def _rate_tile(tile_id, label, href, model, field, cutoffs, base=None):
+    # `base` is the pile this card counts, and it has to be the pile the member
+    # site can actually show. A card that also counts the rows the site hides
+    # reads as two platforms disagreeing, and the seat spends the next ten
+    # minutes looking for the listings that are not there.
+    base = model.objects.all() if base is None else base
 
-    windowed = model.objects.filter(**{f'{field}__gte': cutoffs['series']})
+    def counted(since):
+        return base.filter(**{f'{field}__gte': since}).count()
+
+    windowed = base.filter(**{f'{field}__gte': cutoffs['series']})
     return {
         'id': tile_id,
         'kind': 'rate',
@@ -117,8 +123,8 @@ def _rate_tile(tile_id, label, href, model, field, cutoffs):
         'today': counted(cutoffs['today']),
         'week': counted(cutoffs['week']),
         'month': counted(cutoffs['month']),
-        'total': model.objects.count(),
-        'windows': _windows(model.objects.all(), cutoffs, field),
+        'total': base.count(),
+        'windows': _windows(base, cutoffs, field),
         'series': _daily(windowed, cutoffs['series'], field),
     }
 
@@ -281,7 +287,8 @@ def tiles(cutoffs, media=None):
         _rate_tile('new_users', 'New accounts', '/users', User, 'date_joined', cutoffs),
         _rate_tile('posts', 'Posts created', '/content', Post, 'created_at', cutoffs),
         _rate_tile('comments', 'Comments created', '/content', Comment, 'created_at', cutoffs),
-        _rate_tile('listings', 'Listings created', '/listings', Listing, 'created_at', cutoffs),
+        _rate_tile('listings', 'Listings created', '/listings', Listing, 'created_at', cutoffs,
+                   base=Listing.objects.exclude(status=Listing.Status.REMOVED)),
         _open_reports(cutoffs),
         _coin_requests(cutoffs),
         _promotions(cutoffs),
