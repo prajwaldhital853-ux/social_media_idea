@@ -1,6 +1,7 @@
 'use client';
 
 import { createPortal } from 'react-dom';
+import { useState } from 'react';
 import { useApp } from '@/lib/AppContext';
 import { useBackClose } from '@/lib/useBackClose';
 import PromoteForm from './PromoteForm';
@@ -15,6 +16,7 @@ interface PromoteModalProps {
 
 export default function PromoteModal({ targetType, targetId, defaultCategory, onClose }: PromoteModalProps) {
   const { t, db, requestPromotion, showConfirm } = useApp();
+  const [sending, setSending] = useState(false);
   useBackClose(true, onClose);
   // The composer's toggle label was this sheet's title on both doors, so a seller
   // promoting an advert was told it was a post.
@@ -34,10 +36,18 @@ export default function PromoteModal({ targetType, targetId, defaultCategory, on
             targetType={targetType}
             defaultCategory={defaultCategory}
             confirmLabel={t('promote')}
+            sending={sending}
             onConfirm={cfg => {
               const pack = db.settings.packages.find(p => p.id === cfg.packageId);
               showConfirm(t('promoteSpendConfirm', { n: pack?.coins ?? 0 }), async () => {
-                if (await requestPromotion(targetType, targetId, cfg)) onClose();
+                // The sheet stays open with its button turned until the desk answers: a
+                // tap that shows nothing is a tap that gets made twice.
+                setSending(true);
+                try {
+                  if (await requestPromotion(targetType, targetId, cfg)) onClose();
+                } finally {
+                  setSending(false);
+                }
               });
             }}
           />

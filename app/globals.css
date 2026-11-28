@@ -2763,6 +2763,13 @@ a.trend-item:hover { text-decoration: none; }
 .promote-total { display: inline-flex; gap: 4px; align-items: center; }
 .promote-submit, .report-submit { padding: 10px; border-radius: 8px; background: var(--brand); color: white; }
 .promote-submit:disabled { opacity: .5; cursor: not-allowed; }
+/* An order on the wire is shown on the wire: the button keeps its words, stays
+   lit, and turns a ring until the desk answers. */
+.promote-submit.sending { opacity: 1; cursor: progress; }
+.promote-submit .btn-spin {
+  display: inline-block; vertical-align: -3px; margin-left: 8px;
+  border-color: rgba(255, 255, 255, .4); border-top-color: #fff;
+}
 .promote-modal-body, .report-form { padding: 16px; }
 .report-option { display: flex; gap: 10px; padding: 10px 0; font-size: 14px; }
 .report-submit { width: 100%; margin-top: 10px; }
@@ -6751,6 +6758,10 @@ a.wallet-sec-note:hover { color: var(--brand); text-decoration: underline; }
   text-transform: uppercase; cursor: pointer; white-space: nowrap;
 }
 .refund-ask:hover { background: var(--brand-tint); }
+/* A closed door still gets the button: the member is allowed to ask and be told
+   why not, instead of hunting for a control that vanished from the row. */
+.refund-ask.shut { border-color: var(--line); color: var(--muted); }
+.refund-ask.shut:hover { background: var(--paper); }
 .wallet-entry-hint { font-style: italic; }
 .wallet-entry-lock { color: var(--amber-ink) !important; font-weight: 650; }
 /* A door that has closed, said in the row's own voice rather than as an error:

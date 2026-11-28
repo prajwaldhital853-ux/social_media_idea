@@ -340,8 +340,11 @@ def coin_request_review(request, pk, action):
         )
     try:
         from apps.common import pulse
-        pulse.to_user(obj.user.pk, 'coin_decision', status=obj.status, coins=obj.coins,
-                      balance=wallet.balance if action == 'approve' else None)
+        # The id is the whole frame: the member's wallet reads it to find the row whose
+        # badge just turned over, and a frame without one is dropped on the floor.
+        pulse.to_user(obj.user.pk, 'coin_decision', id=str(obj.pk), status=obj.status,
+                      coins=obj.coins, balance=wallet.balance if action == 'approve' else None)
+        pulse.to_staff('coin_request', id=str(obj.pk), status=obj.status)
     except Exception:  # noqa: BLE001 - the decision is saved; the wire is a courtesy
         pass
     return Response(CoinRequestSerializer(obj).data)

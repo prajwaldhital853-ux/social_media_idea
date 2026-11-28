@@ -1,11 +1,11 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import RefundForm from '@/components/RefundForm';
 import { StatusChip } from '@/components/WalletShell';
 import { useApp } from '@/lib/AppContext';
-import { coinRequestsFragment, useList, walletFragment } from '@/lib/lists';
+import { coinRequestsFragment, refreshList, useList, walletFragment } from '@/lib/lists';
 import { PAGED_WINDOW, useWindowed } from '@/lib/useWindowed';
 import { ago } from '@/lib/utils';
 import { CoinRequest, LedgerEntry } from '@/lib/types';
@@ -111,9 +111,23 @@ export function LedgerRows({ cap, href }: { cap?: number; href?: string }) {
 }
 
 export function RequestRows({ cap, href }: { cap?: number; href?: string }) {
-  const { db, t, serverMode } = useApp();
+  const { db, t, serverMode, showToast } = useApp();
   const { rows, list } = useRequestRows();
   const [refund, setRefund] = useState<CoinRequest | null>(null);
+  // A decision the desk makes while this page is open should turn the badge over on
+  // its own. The bell stream is the fast path, but a worker that buffers it away must
+  // not also cost the member the answer, so while a row still waits on the desk the
+  // list is quietly re-read from a visible tab.
+  const waitingOnDesk = rows.some(r => r.status === 'pending'
+    || (!!r.refundRequested && !r.refunded && !r.refundRefused));
+  useEffect(() => {
+    if (!serverMode || !waitingOnDesk) return;
+    const timer = setInterval(() => {
+      if (document.visibilityState !== 'visible') return;
+      void refreshList('coin-requests', { path: '/wallet/requests/list/', frag: coinRequestsFragment });
+    }, 7000);
+    return () => clearInterval(timer);
+  }, [serverMode, waitingOnDesk]);
   const page = cap || WINDOW;
   const windowed = useWindowed(rows.length, page, db.lang === 'ne' ? 'ne' : 'en',
     serverMode ? { hasMore: list.hasMore, loading: list.loading, load: list.loadMore } : undefined,
@@ -135,6 +149,12 @@ export function RequestRows({ cap, href }: { cap?: number; href?: string }) {
           // is refundable until an ask is filed or one is turned down.
           const settled = !!r.refunded || !!r.refundRefused;
           const askable = r.refundable ?? (r.status === 'approved' && !r.refundRequested && !settled);
+          // The desk answers whether an ask fits those coins, but a member who cannot
+          // see the door has no way to learn the rule exists. So the button stays on
+          // every approved purchase and names the reason when it is turned away.
+          const closable = r.status === 'approved' && !r.refundRequested && !settled;
+          const shut = r.refundPromoPending ? t('refundPromoPending')
+            : r.refundSpent ? t('refundSpent') : t('refundClosed');
           // The ask itself gets no second badge: the row already says Approved, and
           // the money it froze is written out under it instead.
           const owed = !!r.refundRequested && !settled;
@@ -152,6 +172,7 @@ export function RequestRows({ cap, href }: { cap?: number; href?: string }) {
                 )}
                 {r.refundSpent && <small className="wallet-entry-shut">{t('refundSpent')}</small>}
                 {r.refundPromoPending && <small className="wallet-entry-shut">{t('refundPromoPending')}</small>}
+                {askable && <small className="wallet-entry-hint">{t('refundSpent')}</small>}
                 {r.refundRefused && (
                   <small className="wallet-entry-shut">{t('refundRefusedNote')}</small>
                 )}
@@ -159,8 +180,14 @@ export function RequestRows({ cap, href }: { cap?: number; href?: string }) {
               <span className="wallet-entry-side">
                 <StatusChip status={r.refundRefused && r.status === 'approved' ? 'refund_refused' : r.status} />
                 {r.resubmitted && r.status === 'pending' && <span className="wallet-status resubmitted">{t('resubmitted')}</span>}
-                {askable && (
-                  <button type="button" className="refund-ask" onClick={() => setRefund(r)}>{t('refundRequest')}</button>
+                {closable && (
+                  <button
+                    type="button"
+                    className={`refund-ask ${askable ? '' : 'shut'}`}
+                    onClick={() => { if (askable) setRefund(r); else showToast(shut); }}
+                  >
+                    {t('refundRequest')}
+                  </button>
                 )}
               </span>
             </div>

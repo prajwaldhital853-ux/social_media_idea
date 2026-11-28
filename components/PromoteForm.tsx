@@ -11,13 +11,15 @@ interface PromoteFormProps {
   targetType: 'post' | 'listing';
   defaultCategory?: string;
   confirmLabel: string;
+  /** The order is on the wire: the button says so instead of waiting in silence. */
+  sending?: boolean;
   onConfirm: (cfg: PromoConfig) => void;
 }
 
 /** The two boxes are ages, so they are only ever judged as a pair. */
 const ageOf = (text: string, fallback: number) => Math.max(13, Math.min(100, Math.round(Number(text) || fallback)));
 
-export default function PromoteForm({ targetType, defaultCategory, confirmLabel, onConfirm }: PromoteFormProps) {
+export default function PromoteForm({ targetType, defaultCategory, confirmLabel, sending, onConfirm }: PromoteFormProps) {
   const { db, me, t } = useApp();
   const packages = db.settings.packages;
   const categories = targetType === 'listing' ? db.settings.categories : POST_TOPICS;
@@ -50,7 +52,7 @@ export default function PromoteForm({ targetType, defaultCategory, confirmLabel,
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!pk || !enough) return;
+    if (!pk || !enough || sending) return;
     const lo = allAges ? 13 : ageOf(ageMin, 18);
     const hi = Math.max(allAges ? 99 : ageOf(ageMax, 40), lo);
     onConfirm({
@@ -141,8 +143,9 @@ export default function PromoteForm({ targetType, defaultCategory, confirmLabel,
         </p>
       )}
 
-      <button type="submit" className="promote-submit" disabled={!enough || !pk}>
-        {confirmLabel}
+      <button type="submit" className={`promote-submit ${sending ? 'sending' : ''}`} disabled={!enough || !pk || sending}>
+        {sending ? t('sending') : confirmLabel}
+        {sending && <i className="btn-spin" aria-hidden="true" />}
       </button>
     </form>
   );
