@@ -84,6 +84,11 @@ class CoinRequest(models.Model):
     refund_screenshot_url = models.URLField(blank=True)
     refund_reason = models.CharField(max_length=240, blank=True)
     refunded_at = models.DateTimeField(null=True, blank=True)
+    # The desk read the ask and said no. The coins come off the lock, the purchase
+    # stays approved, and this stamp is what turns the buyer's badge from "waiting"
+    # into the answer without a sixth status that means the same thing twice.
+    refund_refused_at = models.DateTimeField(null=True, blank=True)
+    refund_refuse_reason = models.CharField(max_length=240, blank=True)
 
     class Meta:
         ordering = ['-created_at']

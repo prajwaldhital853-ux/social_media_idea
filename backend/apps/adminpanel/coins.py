@@ -50,6 +50,7 @@ ACTION_LABELS = {
     CoinReview.Action.REJECT: 'Rejected',
     CoinReview.Action.PROOF: 'Waiting on more proof',
     CoinReview.Action.PAID: 'Refund approved',
+    CoinReview.Action.REFUSED: 'Refund refused',
 }
 # (setting key, the field the desk posts, the shape of the box)
 PRICING_KEYS = ('coin_price', 'coin_min_purchase', 'coin_bank_name', 'coin_bank_account',
@@ -125,7 +126,7 @@ def row(req, review):
     # The refund chapter of the same purchase. Only read for a row that has one, so
     # the queue page costs nothing extra while nobody is asking for money back.
     out['refund'] = None
-    if req.refund_requested_at or req.refunded_at:
+    if req.refund_requested_at or req.refunded_at or req.refund_refused_at:
         lot = getattr(req, 'lot', None)
         out['refund'] = {
             'requested_at': req.refund_requested_at.isoformat() if req.refund_requested_at else None,
@@ -134,6 +135,8 @@ def row(req, review):
             'has_proof': bool(req.refund_screenshot_url),
             'coins': str(lot.held) if lot is not None else None,
             'paid_at': req.refunded_at.isoformat() if req.refunded_at else None,
+            'refused_at': req.refund_refused_at.isoformat() if req.refund_refused_at else None,
+            'refused_reason': req.refund_refuse_reason,
         }
     return out
 
@@ -207,6 +210,12 @@ def decide(req, actor, action, reason=''):
             balance=(wallet.balance if action == 'approve' else None),
             request_id=req.pk, reference=req.reference, reason=reason,
         )
+    # The badge on the member's own row and the pile on the console's screen both move
+    # the instant this verdict is written. A seat that has to press refresh to see its
+    # own click land is a seat that clicks twice.
+    pulse.to_user(req.user.pk, 'coin_decision', id=str(req.pk), status=req.status,
+                  coins=req.coins, balance=body['balance'])
+    pulse.to_staff('coin_request', id=str(req.pk), status=req.status)
     return 200, {'detail': _said(action, req, entry), 'request': row(req, review),
                  'asks': asks(req.pk), 'mail': _mail_note(action), **body}
 
@@ -276,6 +285,65 @@ def settle(req, actor, reason=''):
         'asks': asks(req.pk),
         'mail': _mail_note('paid'),
         'coins_taken': _whole(coins_back),
+        'balance': str(wallet.balance),
+    }
+
+
+def refuse(req, actor, reason=''):
+    """Turn a refund ask down. The coins go back into the wallet's reach, nothing else moves.
+
+    The desk is allowed to say no: a purchase paid through a third-party wallet, an ask
+    filed weeks after approval, a receipt that belongs to somebody else. What is not
+    allowed is a silent no, so the sentence is compulsory, the buyer's badge changes to
+    match it, and the lock comes off before the door closes. A refusal is not a second
+    purchase, so the request keeps its approved standing and its ledger row untouched.
+    """
+    reason = str(reason or '').strip()
+    if not reason:
+        return 400, {'detail': 'Write why the refund is being turned down. The buyer is shown this sentence.'}
+    if req.refund_refused_at is not None:
+        return 409, {'detail': 'That refund was already refused. Nothing moved again.'}
+    if req.refunded_at is not None:
+        return 409, {'detail': 'That refund was already paid. A paid refund cannot be refused after the fact.'}
+    if req.status != CoinRequest.Status.APPROVED or req.refund_requested_at is None:
+        return 409, {'detail': 'Nobody is waiting on a refund for this purchase, so there is nothing to refuse.'}
+    coins_back = Decimal('0')
+    with transaction.atomic():
+        req = CoinRequest.objects.select_for_update().get(pk=req.pk)
+        if req.refund_refused_at is not None:
+            return 409, {'detail': 'That refund was already refused. Nothing moved again.'}
+        lot = CoinLot.objects.select_for_update().filter(request=req).first()
+        coins_back = lot.held if lot is not None else Decimal('0')
+        if lot is not None and lot.held > 0:
+            lot.held = Decimal('0')
+            lot.save(update_fields=['held'])
+        req.refund_refused_at = timezone.now()
+        req.refund_refuse_reason = reason[:240]
+        req.reviewed_at = req.refund_refused_at
+        req.save(update_fields=['refund_refused_at', 'refund_refuse_reason', 'reviewed_at'])
+        review = CoinReview(request=req, actor=actor, action=CoinReview.Action.REFUSED,
+                           reason=reason[:240], coins_credited=0)
+        review.save()
+    wallet, _ = Wallet.objects.get_or_create(user=req.user)
+    say = f'Your refund request for purchase #{req.pk} was refused: {reason}'
+    notify(req.user, actor, 'coins', say[:240], 'wallet', req.pk)
+    record(actor, 'coins_refund_refused', f'coin_request:{req.pk}',
+           f'{_whole(coins_back)} coins unlocked, refund refused: {reason}')
+    queue_coin_decision_email(
+        req.user, action='refused', coins=req.coins, amount=req.amount,
+        balance=wallet.balance, request_id=req.pk,
+        reference=req.refund_reference or req.reference, reason=reason,
+    )
+    pulse.to_user(req.user.pk, 'coin_decision', id=str(req.pk), status=req.status,
+                  coins=req.coins, balance=str(wallet.balance), refund='refused')
+    pulse.to_staff('coin_request', id=str(req.pk), status=req.status)
+    return 200, {
+        'detail': (f'Refund refused. {_whole(coins_back)} coins were released back to '
+                   f'@{req.user.username}, nothing was taken from the wallet.'),
+        'request': row(req, review),
+        'asks': asks(req.pk),
+        'mail': _mail_note('refused'),
+        'coins_released': _whole(coins_back),
         'balance': str(wallet.balance),
     }
 

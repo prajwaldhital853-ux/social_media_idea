@@ -138,7 +138,7 @@ export default function MePage() {
 
           <p className="note">
             A quiet card from your own browser when a report is filed, a payment proof waits on a
-            decision, or an alert fires — with the console closed, and with this tab never reopened.
+            decision, or an alert fires, with the console closed, and with this tab never reopened.
             It is the browser&rsquo;s own protocol, not an app: nothing leaves this machine except the
             address your browser gives us, and only the sentence the staff bell already holds.
             Switching it on asks the browser for permission once; refusing that ask is the browser&rsquo;s

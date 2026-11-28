@@ -132,8 +132,12 @@ export function RequestRows({ cap, href }: { cap?: number; href?: string }) {
         {shown.map(r => {
           // The desk answers this question, because only it knows whether a coin of
           // that batch was spent. A demo build has no lots, so an approved purchase
-          // is refundable until the ask is made.
-          const askable = r.refundable ?? (r.status === 'approved' && !r.refundRequested && !r.refunded);
+          // is refundable until an ask is filed or one is turned down.
+          const settled = !!r.refunded || !!r.refundRefused;
+          const askable = r.refundable ?? (r.status === 'approved' && !r.refundRequested && !settled);
+          // The ask itself gets no second badge: the row already says Approved, and
+          // the money it froze is written out under it instead.
+          const owed = !!r.refundRequested && !settled;
           return (
             <div className="wallet-entry" key={r.id}>
               <span className="wallet-entry-day">{day(r.ts, db.lang)}</span>
@@ -143,14 +147,18 @@ export function RequestRows({ cap, href }: { cap?: number; href?: string }) {
                 {r.note && <small className="wallet-entry-note">{r.note}</small>}
                 {r.status === 'pending' && <small className="wallet-entry-remind">{t('coinOneAtATime')}</small>}
                 {r.status === 'pending' && <small className="wallet-entry-hint">{t('refundNotice')}</small>}
-                {!!r.locked && r.status !== 'refunded' && (
+                {owed && !!r.locked && (
                   <small className="wallet-entry-lock">{t('refundLocked', { n: r.locked })}</small>
+                )}
+                {r.refundSpent && <small className="wallet-entry-shut">{t('refundSpent')}</small>}
+                {r.refundPromoPending && <small className="wallet-entry-shut">{t('refundPromoPending')}</small>}
+                {r.refundRefused && (
+                  <small className="wallet-entry-shut">{t('refundRefusedNote')}</small>
                 )}
               </span>
               <span className="wallet-entry-side">
-                <StatusChip status={r.status} />
+                <StatusChip status={r.refundRefused && r.status === 'approved' ? 'refund_refused' : r.status} />
                 {r.resubmitted && r.status === 'pending' && <span className="wallet-status resubmitted">{t('resubmitted')}</span>}
-                {r.refundRequested && <span className="wallet-status refunding">{t('refundRequested')}</span>}
                 {askable && (
                   <button type="button" className="refund-ask" onClick={() => setRefund(r)}>{t('refundRequest')}</button>
                 )}

@@ -41,7 +41,7 @@ export default function AdminPromos() {
         ? { ...x, status: 'active' as const, coins: cost, starts: now, ends }
         : x),
       users: prev.users.map(u => u.id === p.uid ? { ...u, coins: u.coins - cost } : u),
-      ledger: [{ id: uid(), uid: p.uid, delta: -cost, kind: 'spend' as const, note: `Promotion ${p.id} — ${pk?.name ?? p.packageId} approved`, ts: now }, ...prev.ledger],
+      ledger: [{ id: uid(), uid: p.uid, delta: -cost, kind: 'spend' as const, note: `Promotion ${p.id}, ${pk?.name ?? p.packageId} approved`, ts: now }, ...prev.ledger],
     }));
     notify(p.uid, 'promotion', t('promoActivated'), '/wallet');
     logAudit('activate_promotion', p.id, `${cost} coins taken on approval`);
@@ -54,7 +54,7 @@ export default function AdminPromos() {
       promotions: prev.promotions.map(x => x.id === p.id ? { ...x, status: 'rejected' as const } : x),
     }));
     notify(p.uid, 'promotion', t('promoRejected'), '/wallet');
-    logAudit('reject_promotion', p.id, 'refused before it ran — no coins taken');
+    logAudit('reject_promotion', p.id, 'refused before it ran, no coins taken');
     showToast(t('promoRejected'));
   };
 

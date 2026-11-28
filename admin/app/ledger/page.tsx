@@ -312,7 +312,7 @@ function Entry({ row }: { row: LedgerRow }) {
         <td data-label="Staff / reference" className="dim">
           {row.staff && <span className="entry-staff" title="The seat that moved the coins">@{row.staff}</span>}
           {row.ref && <span className="entry-ref" title="What the money was for">{row.ref}</span>}
-          {!row.staff && !row.ref && <span>—</span>}
+          {!row.staff && !row.ref && <span>-</span>}
         </td>
         <td data-label="Written" className="dim" title={stamp(row.created_at)}>{ago(row.created_at)}</td>
         <td data-label="Wallet now" className="num strong" title={`The wallet’s own number as this screen reads it: ${row.currency}`}>

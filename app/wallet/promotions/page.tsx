@@ -11,15 +11,15 @@ import { ago } from '@/lib/utils';
 import { Promotion } from '@/lib/types';
 
 const pct = (clicks: number, impressions: number) =>
-  impressions > 0 ? `${Math.round((clicks / impressions) * 1000) / 10}%` : '—';
+  impressions > 0 ? `${Math.round((clicks / impressions) * 1000) / 10}%` : '-';
 
 // A rate the server could not divide has no number yet, and a dash is the honest
 // thing to sit in its place: a 0 here would read as "nobody answered".
 const num = (value?: number | null, suffix = '') =>
-  value === null || value === undefined ? '—' : `${value}${suffix}`;
+  value === null || value === undefined ? '-' : `${value}${suffix}`;
 
 const cnt = (value?: number | null) =>
-  value === null || value === undefined ? '—' : value.toLocaleString('en-US');
+  value === null || value === undefined ? '-' : value.toLocaleString('en-US');
 
 type QualityKey = 'qualityAbove' | 'qualityAverage' | 'qualityBelow' | 'qualitySoon';
 
@@ -118,7 +118,7 @@ export default function WalletPromotionsPage() {
                   <dd>{p.editedAt ? ago(p.editedAt, db.lang) : t('neverEdited')}</dd>
                 </div>
                 <div><dt>{t('package')}</dt><dd>{pack(p)}</dd></div>
-                <div><dt>{t('category')}</dt><dd>{p.category || '—'}</dd></div>
+                <div><dt>{t('category')}</dt><dd>{p.category || '-'}</dd></div>
                 <div><dt>{t('targetAge')}</dt><dd>{t('ageRange', { min: p.ageMin, max: p.ageMax })}</dd></div>
                 <div>
                   <dt>{t('targetLocation')}</dt>
@@ -131,7 +131,7 @@ export default function WalletPromotionsPage() {
                 <div>
                   <dt>{t('endsIn')}</dt>
                   <dd>{waiting || !p.ends
-                    ? '—'
+                    ? '-'
                     : p.status === 'active'
                       ? t('daysLeft', { n: left })
                       : new Date(p.ends).toLocaleDateString(db.lang === 'ne' ? 'ne-NP' : 'en-GB', { day: 'numeric', month: 'short' })}</dd>
@@ -140,8 +140,16 @@ export default function WalletPromotionsPage() {
 
               <div className="promo-actions">
                 {(open || waiting) && <button type="button" className="wallet-button" onClick={() => setEditing(p)}>{t('editTargeting')}</button>}
-                {p.status === 'active' && <button type="button" className="wallet-quiet" onClick={() => void setPromotionStatus(p.id, 'pause')}>{t('pause')}</button>}
-                {p.status === 'paused' && <button type="button" className="wallet-quiet" onClick={() => void setPromotionStatus(p.id, 'resume')}>{t('resume')}</button>}
+                {p.status === 'active' && (
+                  <button type="button" className="wallet-quiet" onClick={() => showConfirm(t('pauseConfirm'), () => void setPromotionStatus(p.id, 'pause'))}>
+                    {t('pause')}
+                  </button>
+                )}
+                {p.status === 'paused' && (
+                  <button type="button" className="wallet-quiet" onClick={() => showConfirm(t('resumeConfirm'), () => void setPromotionStatus(p.id, 'resume'))}>
+                    {t('resume')}
+                  </button>
+                )}
                 {open && (
                   <button
                     type="button"
@@ -152,7 +160,13 @@ export default function WalletPromotionsPage() {
                   </button>
                 )}
                 {waiting && (
-                  <button type="button" className="wallet-quiet danger" onClick={() => void cancelPromotion(p.id)}>{t('cancelPromo')}</button>
+                  <button
+                    type="button"
+                    className="wallet-quiet danger"
+                    onClick={() => showConfirm(t('cancelPromoConfirm'), () => void cancelPromotion(p.id))}
+                  >
+                    {t('cancelPromo')}
+                  </button>
                 )}
               </div>
             </article>

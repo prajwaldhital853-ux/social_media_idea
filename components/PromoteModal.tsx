@@ -14,7 +14,7 @@ interface PromoteModalProps {
 }
 
 export default function PromoteModal({ targetType, targetId, defaultCategory, onClose }: PromoteModalProps) {
-  const { t, requestPromotion } = useApp();
+  const { t, db, requestPromotion, showConfirm } = useApp();
   useBackClose(true, onClose);
   // The composer's toggle label was this sheet's title on both doors, so a seller
   // promoting an advert was told it was a post.
@@ -34,8 +34,11 @@ export default function PromoteModal({ targetType, targetId, defaultCategory, on
             targetType={targetType}
             defaultCategory={defaultCategory}
             confirmLabel={t('promote')}
-            onConfirm={async cfg => {
-              if (await requestPromotion(targetType, targetId, cfg)) onClose();
+            onConfirm={cfg => {
+              const pack = db.settings.packages.find(p => p.id === cfg.packageId);
+              showConfirm(t('promoteSpendConfirm', { n: pack?.coins ?? 0 }), async () => {
+                if (await requestPromotion(targetType, targetId, cfg)) onClose();
+              });
             }}
           />
         </div>

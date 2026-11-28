@@ -101,7 +101,7 @@ export default function CreatePostPage() {
     try {
       for (const file of Array.from(files)) {
         const video = file.type.startsWith('video/');
-        if (video && next.filter(m => m.type === 'video').length >= limits.videoCount) throw new Error(`Up to ${limits.videoCount} videos per post — remove a clip first.`);
+        if (video && next.filter(m => m.type === 'video').length >= limits.videoCount) throw new Error(`Up to ${limits.videoCount} videos per post, remove a clip first.`);
         if (!video && next.filter(m => m.type === 'image').length >= limits.photoCount) throw new Error(`You can attach up to ${limits.photoCount} photos.`);
         setUpload({ name: file.name, pct: 0 });
         next.push(await mediaFromFile(file, (sent, total) => {
@@ -396,7 +396,7 @@ export default function CreatePostPage() {
                   className="publish-dismiss"
                   onClick={() => { dismissedRef.current = true; setProgress(null); }}
                 >
-                  Keep editing — your draft stays here
+                  Keep editing, your draft stays here
                 </button>
               )}
             </div>

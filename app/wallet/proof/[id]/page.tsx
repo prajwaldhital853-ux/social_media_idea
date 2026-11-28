@@ -35,7 +35,7 @@ interface Ask {
 export default function CoinProofResubmitPage() {
   const params = useParams();
   const router = useRouter();
-  const { db, me, ready, t, showToast } = useApp();
+  const { db, me, ready, t, showToast, showConfirm } = useApp();
   const id = String(params.id || '');
   const [ask, setAsk] = useState<Ask | null>(null);
   const [error, setError] = useState('');
@@ -80,12 +80,7 @@ export default function CoinProofResubmitPage() {
     }
   };
 
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!screenshot) {
-      setError(t('proofShotRequired'));
-      return;
-    }
+  const send = async () => {
     setBusy(true);
     try {
       await api.post(`/api/wallet/requests/${id}/proof/`, {
@@ -102,6 +97,16 @@ export default function CoinProofResubmitPage() {
       setError(err instanceof Error ? err.message : 'The proof could not be sent.');
       setBusy(false);
     }
+  };
+
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (busy) return;
+    if (!screenshot) {
+      setError(t('proofShotRequired'));
+      return;
+    }
+    showConfirm(t('proofSendConfirm'), () => { void send(); });
   };
 
   const row = ask?.request;

@@ -147,7 +147,7 @@ export function seed(): Database {
     },
     {
       id: 'p14', uid: 'u10',
-      text: 'Night market in Thamel — steam, neon, and a really good sel roti stand.',
+      text: 'Night market in Thamel, steam, neon, and a really good sel roti stand.',
       media: [
         { type: 'image' as const, src: 'https://images.unsplash.com/photo-1534274988757-a28bf1a57c17?w=1200&q=80' },
         { type: 'image' as const, src: 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=1200&q=80' },

@@ -21,7 +21,7 @@ const stamp = (ts: number, lang: string) =>
  * abandoned halfway would otherwise leave money frozen with no record of why.
  */
 export default function RefundForm({ request, onClose }: { request: CoinRequest; onClose: () => void }) {
-  const { t, db, setDb, merge, showToast } = useApp();
+  const { t, db, setDb, merge, showToast, showConfirm } = useApp();
   const [shot, setShot] = useState('');
   const [reference, setReference] = useState(request.reference || '');
   const [reason, setReason] = useState('');
@@ -48,18 +48,22 @@ export default function RefundForm({ request, onClose }: { request: CoinRequest;
     }
   };
 
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (busy) return;
-    if (!shot) { setError(t('refundNeedsProof')); return; }
-    if (!reason.trim()) { setError(t('refundNeedsReason')); return; }
+  const send = async () => {
     if (API_ENABLED) {
       setBusy(true);
       try {
         const out = await api.post<any>(`/api/wallet/requests/${request.id}/refund-request/`, {
           screenshot_url: shot, reference: reference.trim(), reason: reason.trim(),
         });
-        merge({ coinRequests: [mapCoinRequest(out.request || out)] });
+        // The row the server hands back is the request, not the wallet list's
+        // shape: the refund flags are added by the list endpoint. Say what just
+        // became true here so the badge flips before the re-read lands.
+        merge({
+          coinRequests: [{
+            ...mapCoinRequest(out.request || out),
+            refundRequested: true, refundable: false, locked: request.coins,
+          }],
+        });
         refreshList('coin-requests', { path: '/wallet/requests/list/', frag: coinRequestsFragment });
         showToast(t('refundSent'));
         onClose();
@@ -79,8 +83,19 @@ export default function RefundForm({ request, onClose }: { request: CoinRequest;
     onClose();
   };
 
+  // Submitting this freezes real money, so the bar at the foot of the screen asks
+  // once before the request leaves the device. The sheet stays open underneath:
+  // a half-filled form is not something a mis-tap should throw away.
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (busy) return;
+    if (!shot) { setError(t('refundNeedsProof')); return; }
+    if (!reason.trim()) { setError(t('refundNeedsReason')); return; }
+    showConfirm(t('refundConfirm', { n: request.coins }), () => { void send(); });
+  };
+
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay refund-overlay" onClick={onClose}>
       <form
         className="modal-content refund-modal"
         onClick={e => e.stopPropagation()}

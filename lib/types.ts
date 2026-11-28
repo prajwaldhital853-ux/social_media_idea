@@ -226,6 +226,12 @@ export interface CoinRequest {
   /** The buyer asked, and those coins are locked until the desk settles it. */
   refundRequested?: boolean;
   refunded?: boolean;
+  /** The desk read the ask and turned it down, so the badge says so. */
+  refundRefused?: boolean;
+  /** A coin of this batch was spent, which closes the refund door for good. */
+  refundSpent?: boolean;
+  /** A promotion order is still with the desk, so no refund can be filed on top of it. */
+  refundPromoPending?: boolean;
   /** Coins of this purchase the lock is holding. */
   locked?: number;
 }

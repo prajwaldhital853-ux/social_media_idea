@@ -30,7 +30,7 @@ export default function CoinRequestPage({ params }: { params: { id: string } }) 
   const [detail, setDetail] = useState<CoinDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [banner, setBanner] = useState<{ kind: 'ok' | 'bad'; text: string } | null>(null);
-  const [verb, setVerb] = useState<'reject' | 'proof' | null>(null);
+  const [verb, setVerb] = useState<'reject' | 'proof' | 'refused' | null>(null);
   const [reason, setReason] = useState('');
   const [proof, setProof] = useState<{ which: 'payment' | 'refund'; link: ProofLink } | null>(null);
   const [closed, setClosed] = useState<Record<string, boolean>>({});
@@ -87,7 +87,7 @@ export default function CoinRequestPage({ params }: { params: { id: string } }) 
     }
   };
 
-  const submit = async (which: 'approve' | 'reject' | 'proof' | 'paid') => {
+  const submit = async (which: 'approve' | 'reject' | 'proof' | 'paid' | 'refused') => {
     const sure = await confirm({
       title: which === 'approve'
         ? `Credit ${detail?.request.coins} coins to @${detail?.request.card.username}?`
@@ -95,22 +95,28 @@ export default function CoinRequestPage({ params }: { params: { id: string } }) 
           ? 'Reject this payment request?'
           : which === 'paid'
             ? `Mark the refund on purchase #${params.id} as paid?`
-            : 'Ask this person for a better receipt?',
+            : which === 'refused'
+              ? 'Turn this refund request down?'
+              : 'Ask this person for a better receipt?',
       body: which === 'approve'
         ? 'Real rupees have already reached the account, so the coins go into their wallet now. There is no undo here, a mistake is corrected with a new ledger row.'
         : which === 'reject'
           ? 'The request is refused and they are sent your reason. Nothing is credited.'
           : which === 'paid'
-            ? `Only press this after the rupees left the platform's own bank session — nothing is re-checked, the payment was verified when the purchase was approved. This releases the ${detail?.request.refund?.coins ?? 'locked'} locked coins, writes a debit that cannot be edited, and emails the person.`
-            : 'The request stays open and they are told what else you need.',
+            ? `Only press this after the rupees left the platform's own bank session, nothing is re-checked, the payment was verified when the purchase was approved. This releases the ${detail?.request.refund?.coins ?? 'locked'} locked coins, writes a debit that cannot be edited, and emails the person.`
+            : which === 'refused'
+              ? `Nothing is taken from the wallet. The ${detail?.request.refund?.coins ?? 'locked'} coins go back in reach, the purchase keeps its approved standing, and the person is sent your sentence as the answer.`
+              : 'The request stays open and they are told what else you need.',
       confirmLabel: which === 'approve'
         ? `Credit ${detail?.request.coins} coins`
         : which === 'reject'
           ? 'Reject'
           : which === 'paid'
             ? 'Refund approved'
-            : 'Ask for more proof',
-      tone: which === 'approve' ? 'primary' : which === 'reject' ? 'danger' : which === 'paid' ? 'danger' : 'primary',
+            : which === 'refused'
+              ? 'Refuse the refund'
+              : 'Ask for more proof',
+      tone: which === 'approve' ? 'primary' : which === 'reject' ? 'danger' : which === 'paid' ? 'danger' : which === 'refused' ? 'danger' : 'primary',
     });
     if (!sure) return;
     setWorking(true);
@@ -137,10 +143,10 @@ export default function CoinRequestPage({ params }: { params: { id: string } }) 
   const row = detail?.request;
   const standing = row ? (STANDINGS[row.status] || { tone: 'mute', label: row.status_label }) : null;
   const refund = row?.refund || null;
-  // The ask is open until the seat says the rupees went back. This is the only
-  // money door here that moves nothing: the payment was verified at approval, so
-  // what is recorded is that the desk handed the money over by hand.
-  const openRefund = !!row && row.status === 'approved' && !!refund && !refund.paid_at;
+  // The ask is open until the seat answers it one way or the other. This is the only
+  // money door here that moves nothing on a yes: the payment was verified at approval,
+  // so what is recorded is that the desk handed the money over by hand.
+  const openRefund = !!row && row.status === 'approved' && !!refund && !refund.paid_at && !refund.refused_at;
 
   return (
     <ConsoleShell
@@ -242,8 +248,13 @@ export default function CoinRequestPage({ params }: { params: { id: string } }) 
                     <span>Standing</span>
                     <b>{refund.paid_at
                       ? <span className="pill mute" title={stamp(refund.paid_at)}>Paid {ago(refund.paid_at)}</span>
-                      : <span className="pill warn">Waiting for the money to leave</span>}</b>
+                      : refund.refused_at
+                        ? <span className="pill dead" title={stamp(refund.refused_at)}>Refused {ago(refund.refused_at)}</span>
+                        : <span className="pill warn">Waiting for the money to leave</span>}</b>
                   </li>
+                  {!!refund.refused_at && (
+                    <li><span>Why it was turned down</span><b>{refund.refused_reason || 'no sentence was written'}</b></li>
+                  )}
                 </ul>
                 {refund.has_proof ? (
                   proof?.which === 'refund' && !closed.refund ? (
@@ -279,7 +290,9 @@ export default function CoinRequestPage({ params }: { params: { id: string } }) 
                           ? 'Rejected'
                           : ask.action === 'paid'
                             ? 'Refund approved'
-                            : 'Credited'}</b>
+                            : ask.action === 'refused'
+                              ? 'Refund refused'
+                              : 'Credited'}</b>
                       <span>{ask.reason || 'no sentence was written'}</span>
                       <em>{ask.by ? `@${ask.by}` : 'system'} {ago(ask.at)}</em>
                     </li>
@@ -341,9 +354,15 @@ export default function CoinRequestPage({ params }: { params: { id: string } }) 
                   title={`Record the hand-paid refund and take ${refund.coins} coins back`}>
                   {IC.check}<span>Refund approved</span>
                 </button>
+                <button type="button" className="btn danger outline tiny" data-verb="refused"
+                  disabled={working || verb === 'refused'}
+                  onClick={() => { setVerb(verb === 'refused' ? null : 'refused'); setReason(''); }}
+                  title="Turn the ask down and put those coins back in their reach">
+                  {IC.x}<span>Refund refused</span>
+                </button>
                 <p className="note">
                   {IC.coin}
-                  <span>{refund.coins} coins stay locked to this purchase until you press this — they
+                  <span>{refund.coins} coins stay locked to this purchase until you press one of these, they
                     cannot be spent or spent on a campaign while the ask is open. Nothing here pays the
                     rupees, it only records that your bank session already did.</span>
                 </p>
@@ -351,19 +370,34 @@ export default function CoinRequestPage({ params }: { params: { id: string } }) 
             ) : (
               <p className="note row">
                 {IC.lock}
-                <span>A refund is waiting to be marked paid. Settling one is not on your seat.</span>
+                <span>A refund is waiting to be settled. Doing that is not on your seat.</span>
               </p>
             ))}
 
-            {verb && row.status === 'pending' && review && (
+            {refund?.refused_at && (
+              <p className="note row" data-refund-done>
+                {IC.x}
+                <span>This refund was refused {ago(refund.refused_at)}
+                  {refund.refused_reason ? `, said: ${refund.refused_reason}` : ''}. The coins are spendable
+                  again and the buyer was told.</span>
+              </p>
+            )}
+
+            {verb && review && (verb === 'refused' ? openRefund : row.status === 'pending') && (
               <div className="ask">
                 <label className="field">
-                  <span>{verb === 'reject' ? 'Why the money is not being credited, they are sent this' : 'What more you need from them'}</span>
+                  <span>{verb === 'reject'
+                    ? 'Why the money is not being credited, they are sent this'
+                    : verb === 'refused'
+                      ? 'Why the refund is being turned down, they are sent this'
+                      : 'What more you need from them'}</span>
                   <textarea
                     rows={2} name="reason" maxLength={240} value={reason} autoFocus
                     placeholder={verb === 'reject'
                       ? 'e.g. the reference does not match this amount'
-                      : 'e.g. the right-hand edge of the receipt is cut off'}
+                      : verb === 'refused'
+                        ? 'e.g. the rupees went back at the counter last week'
+                        : 'e.g. the right-hand edge of the receipt is cut off'}
                     onChange={event => setReason(event.target.value)}
                   />
                 </label>
@@ -372,7 +406,9 @@ export default function CoinRequestPage({ params }: { params: { id: string } }) 
                     type="button" className="btn primary tiny" disabled={working || !reason.trim()}
                     onClick={() => submit(verb)}
                   >
-                    {IC.go}<span>{working ? 'Working…' : `Confirm, ${verb === 'reject' ? 'Reject' : 'Ask for more proof'}`}</span>
+                    {IC.go}<span>{working
+                      ? 'Working…'
+                      : `Confirm, ${verb === 'reject' ? 'Reject' : verb === 'refused' ? 'Refuse the refund' : 'Ask for more proof'}`}</span>
                   </button>
                   <button type="button" className="btn ghost tiny" disabled={working}
                     onClick={() => { setVerb(null); setReason(''); }}>

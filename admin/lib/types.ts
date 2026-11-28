@@ -697,9 +697,11 @@ export interface CoinAsk {
     has_proof: boolean;
     coins: string | null;
     paid_at: string | null;
+    refused_at: string | null;
+    refused_reason: string;
   } | null;
   review?: {
-    action: 'approve' | 'reject' | 'proof' | 'paid';
+    action: 'approve' | 'reject' | 'proof' | 'paid' | 'refused';
     label: string;
     reason: string;
     coins_credited: number;

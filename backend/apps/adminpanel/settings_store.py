@@ -14,7 +14,7 @@ from .models import AdminSetting
 DEFAULTS = {
     'alert_report_pile': (3, 'int', 'Reports before content is pulled',
                           'How many different people have to report one thing before the platform hides it by '
-                          'itself — a post, a comment or a marketplace listing. At 1 the first report pulls it, '
+                          'itself (a post, a comment or a marketplace listing). At 1 the first report pulls it, '
                           'and it stays hidden until a person reviews it. The switch below turns the whole rule off.',
                           'safety'),
     'alert_report_age_hours': (24, 'int', 'A report may sit unanswered for (hours)',
@@ -182,8 +182,8 @@ DEFAULTS = {
                             'that this person actually fits.', 'promo'),
     'algo_relevance_floor': (2, 'int', 'Score that leads the paid queue',
                              'A person scoring this or above is served the campaign ahead of everybody '
-                             'else. Below it they are still offered it — the reach a package promises is '
-                             'mostly strangers — but only after the readers who fit, and between those ads '
+                             'else. Below it they are still offered it (the reach a package promises is '
+                             'mostly strangers) but only after the readers who fit, and between those ads '
                              'the better-received one goes first.',
                              'promo'),
     'promo_daily_cap': (2, 'int', 'Promotions per person per day',

@@ -27,8 +27,8 @@ export default function CreateChooser() {
     const next: Media[] = [];
     try {
       for (const file of Array.from(files)) {
-        if (!file.type.startsWith('video/')) throw new Error('Reels need a video — choose a video file.');
-        if (next.length >= MAX_VIDEOS) throw new Error(`Up to ${MAX_VIDEOS} videos per reel — pick fewer clips.`);
+        if (!file.type.startsWith('video/')) throw new Error('Reels need a video, choose a video file.');
+        if (next.length >= MAX_VIDEOS) throw new Error(`Up to ${MAX_VIDEOS} videos per reel, pick fewer clips.`);
         next.push(await mediaFromFile(file, (sent, total) => setPct(total > 0 ? Math.min(99, Math.round((sent / total) * 100)) : 0)));
       }
       setCreateDraft({ media: next, kind: 'reel' });

@@ -50,7 +50,7 @@ function ManageUser({ user, onClose }: { user: User; onClose: () => void }) {
     const until = d.days ? Date.now() + d.days * DAY : null;
     setDb(prev => ({ ...prev, users: prev.users.map(u => u.id === live.id ? { ...u, susp: { until, reason } } : u) }));
     notify(live.id, 'warning', `${t('suspNotice')} ${reason}`, '/notifications');
-    logAudit('suspend_user', live.id, `${t(d.key)} — ${reason}`);
+    logAudit('suspend_user', live.id, `${t(d.key)}, ${reason}`);
     setSuspReason('');
     showToast(t('savedOk'));
   };

@@ -49,7 +49,7 @@ export default function PrivacyPage() {
         },
         {
           h: 'Security',
-          paras: ['Accounts can enable two-step verification in Settings. Staff actions are recorded in an audit log. In demo mode there is no password check — any password signs you in — so do not reuse real credentials or store real personal data in the demo.']
+          paras: ['Accounts can enable two-step verification in Settings. Staff actions are recorded in an audit log. In demo mode there is no password check, any password signs you in, so do not reuse real credentials or store real personal data in the demo.']
         },
         {
           h: 'Children',

@@ -25,11 +25,13 @@ export function StatusChip({ status }: { status: string }) {
         ? t('rejected')
         : status === 'refunded'
           ? t('refunded')
-          : status === 'ended'
-          ? t('ended')
-          : status === 'paused'
-            ? t('paused')
-            : status;
+          : status === 'refund_refused'
+            ? t('refundRefused')
+            : status === 'ended'
+              ? t('ended')
+              : status === 'paused'
+                ? t('paused')
+                : status;
   return <span className={`wallet-status ${status}`}>{label}</span>;
 }
 

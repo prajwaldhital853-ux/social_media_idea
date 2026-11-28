@@ -49,7 +49,15 @@ def coin_queue(request):
     swept = coins.sweep()
     status = request.query_params.get('status')
     qs = CoinRequest.objects.select_related('user', 'user__profile', 'lot')
-    if status and status != 'all':
+    # A refund the buyer filed is the same shape of work as a receipt nobody has
+    # credited: money is sitting on the counter waiting for a person to decide it. Both
+    # belong in the desk's opening view, so this chip means "unanswered" rather than
+    # naming one column of the status field.
+    owed = Q(status=CoinRequest.Status.APPROVED, refund_requested_at__isnull=False,
+             refunded_at__isnull=False, refund_refused_at__isnull=False)
+    if status == CoinRequest.Status.PENDING:
+        qs = qs.filter(Q(status=CoinRequest.Status.PENDING) | owed)
+    elif status and status != 'all':
         qs = qs.filter(status=status)
     search = (request.query_params.get('q') or '').strip()
     if search:
@@ -59,23 +67,25 @@ def coin_queue(request):
         item['status']: item['n']
         for item in CoinRequest.objects.values('status').annotate(n=Count('id'))
     }
+    waiting = counts.get(CoinRequest.Status.PENDING, 0) + CoinRequest.objects.filter(owed).count()
     paginator = KeysetPagination()
     rows = paginator.paginate_queryset(qs, request)
     held = CoinRequest.objects.filter(status=CoinRequest.Status.PENDING).aggregate(
         coins=Sum('coins'), rupees=Sum('amount'),
     )
-    # A pending purchase may already carry an ask, and reading it row by row made
-    # the queue cost one query per row. One grouped read covers the page.
-    pending = [item.pk for item in rows if item.status == CoinRequest.Status.PENDING]
+    # A refund ask arrives on a row that was already credited, so the Waiting view
+    # mixes two statuses. Reading the newest decision for every row on the page keeps
+    # "Decided by" honest and still costs one query.
+    page_ids = [item.pk for item in rows]
     last = {}
-    if pending:
-        for review in (CoinReview.objects.filter(request_id__in=pending).select_related('actor')
+    if page_ids:
+        for review in (CoinReview.objects.filter(request_id__in=page_ids).select_related('actor')
                        .order_by('request_id', '-created_at', '-id').distinct('request_id')):
             last[review.request_id] = review
     response = paginator.get_paginated_response([coins.row(item, last.get(item.pk)) for item in rows])
     response.data.update({
         'counts': {
-            'pending': counts.get(CoinRequest.Status.PENDING, 0),
+            'pending': waiting,
             'approved': counts.get(CoinRequest.Status.APPROVED, 0),
             'rejected': counts.get(CoinRequest.Status.REJECTED, 0),
             'refunded': counts.get(CoinRequest.Status.REFUNDED, 0),
@@ -114,6 +124,9 @@ def coin_decide(request, pk, action):
     # for on one that was already approved, so it meets its own door and its own rules.
     if action == 'paid':
         code, body = coins.settle(req, request.user, request.data.get('reason', ''))
+        return Response(body, status=code)
+    if action == 'refused':
+        code, body = coins.refuse(req, request.user, request.data.get('reason', ''))
         return Response(body, status=code)
     code, body = coins.decide(req, request.user, action, request.data.get('reason', ''))
     return Response(body, status=code)

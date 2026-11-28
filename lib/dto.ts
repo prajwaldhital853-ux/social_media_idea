@@ -360,6 +360,9 @@ export function mapCoinRequest(row: any): CoinRequest {
     refundable: !!row.refundable,
     refundRequested: !!row.refund_requested,
     refunded: !!row.refunded,
+    refundRefused: !!row.refund_refused,
+    refundSpent: !!row.refund_spent,
+    refundPromoPending: !!row.refund_promo_pending,
     locked: Math.round(Number(row.locked_coins) || 0),
   };
 }

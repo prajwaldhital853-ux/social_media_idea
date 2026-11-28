@@ -377,7 +377,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (API_ENABLED) return;
-    if (mounted && !save(db)) setToast('Device storage is full — the latest change may not persist.');
+    if (mounted && !save(db)) setToast('Device storage is full, the latest change may not persist.');
   }, [db, mounted]);
 
   useEffect(() => {
@@ -2144,7 +2144,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         // Only a campaign that was actually charged gives anything back; a withdrawn
         // order never took a coin.
         users: paid > 0 ? prev.users.map(u => (u.id === promo.uid ? { ...u, coins: u.coins + paid } : u)) : prev.users,
-        ledger: paid > 0 ? [{ id: uid(), uid: promo.uid, delta: paid, kind: 'refund' as const, note: 'Promotion ended — unused Coins returned', ts: now }, ...prev.ledger] : prev.ledger
+        ledger: paid > 0 ? [{ id: uid(), uid: promo.uid, delta: paid, kind: 'refund' as const, note: 'Promotion ended, unused Coins returned', ts: now }, ...prev.ledger] : prev.ledger
       }));
       showToast(t('promoCancelled'));
       return;

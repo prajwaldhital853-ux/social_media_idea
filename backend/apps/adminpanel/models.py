@@ -344,6 +344,7 @@ class CoinReview(models.Model):
         REJECT = 'reject', 'Rejected'
         PROOF = 'proof', 'Asked for more proof'
         PAID = 'paid', 'Refund approved'
+        REFUSED = 'refused', 'Refund refused'
 
     request = models.ForeignKey('wallet.CoinRequest', on_delete=models.CASCADE, related_name='admin_reviews')
     action = models.CharField(max_length=8, choices=Action.choices)

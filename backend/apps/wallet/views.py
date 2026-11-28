@@ -38,6 +38,18 @@ def _proof_asks(rows):
     return asks
 
 
+def _promo_pending(user):
+    """Is one of this person's campaign orders still with the desk?
+
+    A pending promotion is coins the platform promised to take and has not taken yet.
+    Refunding a purchase while that order sits hands back money the other queue is
+    about to spend, so one open order at a time is the rule on both doors.
+    """
+    from apps.promotions.models import Promotion
+
+    return Promotion.objects.filter(owner=user, status=Promotion.Status.PENDING).exists()
+
+
 class TransactionSerializer(serializers.ModelSerializer):
     class Meta:
         model = Transaction
@@ -51,9 +63,11 @@ class CoinRequestSerializer(serializers.ModelSerializer):
         model = CoinRequest
         fields = ['id', 'user', 'username', 'coins', 'amount', 'method', 'reference',
                   'screenshot_url', 'status', 'created_at', 'resubmitted_at',
-                  'refund_requested_at', 'refunded_at', 'refund_reference', 'refund_reason']
+                  'refund_requested_at', 'refunded_at', 'refund_refused_at',
+                  'refund_reference', 'refund_reason', 'refund_refuse_reason']
         read_only_fields = ['id', 'user', 'status', 'created_at', 'resubmitted_at',
-                            'refund_requested_at', 'refunded_at', 'refund_reference', 'refund_reason']
+                            'refund_requested_at', 'refunded_at', 'refund_refused_at',
+                            'refund_reference', 'refund_reason', 'refund_refuse_reason']
 
 
 @api_view(['GET'])
@@ -116,21 +130,37 @@ def coin_request_list(request):
     data = CoinRequestSerializer(rows, many=True).data
     asks = _proof_asks(rows)
     lots = {lot.request_id: lot for lot in CoinLot.objects.filter(request_id__in=[row.pk for row in rows])}
+    # One read for the whole page, not one per row: only an approved purchase has a
+    # door that could still open, so a wallet of settled history costs nothing here.
+    promo_open = any(row.status == CoinRequest.Status.APPROVED for row in rows) and _promo_pending(request.user)
     for row, item in zip(rows, data):
         review = asks.get(row.pk)
         item['proof_asked'] = review is not None
         item['proof_reason'] = review.reason if review else ''
         item['resubmitted'] = row.resubmitted_at is not None
         lot = lots.get(row.pk)
+        spent = lot is not None and not lot.untouched
         # The button's whole rule lives here, on the row: a purchase is refundable
         # while it is approved, nobody has asked yet, and not one coin of its batch has
         # been spent. Once a coin is gone the answer never comes back to yes.
         item['refundable'] = bool(
             row.status == CoinRequest.Status.APPROVED and row.refund_requested_at is None
-            and row.refunded_at is None and lot is not None and lot.untouched
+            and row.refunded_at is None and row.refund_refused_at is None
+            and lot is not None and lot.untouched and not promo_open
         )
         item['refund_requested'] = row.refund_requested_at is not None
         item['refunded'] = row.refunded_at is not None
+        item['refund_refused'] = row.refund_refused_at is not None
+        item['refund_locked'] = bool(row.refund_requested_at and not row.refunded_at
+                                     and not row.refund_refused_at)
+        # Two different reasons the door is shut on an approved purchase, and the row
+        # has to say which one it is: a person who spent a coin needs a sentence, not a
+        # button that quietly stopped existing.
+        item['refund_spent'] = bool(spent and row.refund_requested_at is None
+                                    and row.refunded_at is None and row.refund_refused_at is None)
+        item['refund_promo_pending'] = bool(promo_open and row.status == CoinRequest.Status.APPROVED
+                                            and row.refund_requested_at is None
+                                            and row.refunded_at is None and row.refund_refused_at is None)
         item['locked_coins'] = str(lot.held) if lot is not None else '0'
     return paginator.get_paginated_response(data)
 
@@ -163,6 +193,12 @@ def coin_refund_request(request, pk):
             return Response({'detail': 'No coin request of yours has that id.'}, status=404)
         if req.refunded_at is not None:
             return Response({'detail': 'That purchase was already refunded.'}, status=409)
+        if req.refund_refused_at is not None:
+            return Response(
+                {'detail': 'The desk already answered this refund request and turned it down. '
+                           'The purchase stays as it was.'},
+                status=409,
+            )
         if req.status != CoinRequest.Status.APPROVED:
             return Response(
                 {'detail': f'Only an approved purchase can be refunded. This one is {req.status}.'},
@@ -171,6 +207,15 @@ def coin_refund_request(request, pk):
         lot = CoinLot.objects.select_for_update().filter(request=req).first()
         if req.refund_requested_at is not None or (lot is not None and lot.held > 0):
             return Response({'detail': 'A refund for this purchase is already with the desk.'}, status=409)
+        # Two queues, one wallet. A campaign that is still waiting on approval has not
+        # been charged yet, so refunding underneath it would give back coins the desk is
+        # about to take.
+        if _promo_pending(request.user):
+            return Response(
+                {'detail': 'You have a promotion request pending, so you cannot ask for a refund. '
+                           'The promotion desk has to answer that order first.'},
+                status=409,
+            )
         if lot is None or not lot.untouched:
             return Response(
                 {'detail': 'Some of those coins have already been spent, so this purchase can no longer '
@@ -256,7 +301,7 @@ def coin_proof_resubmit(request, pk):
             'coin_request', req.pk,
         )
     record(req.user, 'coins_resubmit', f'coin_request:{req.pk}',
-           f'{req.coins} coins / NPR {req.amount} — new proof uploaded')
+           f'{req.coins} coins / NPR {req.amount}, new proof uploaded')
     return Response({'detail': 'Proof sent. The request stays open until the desk decides.',
                      'request': CoinRequestSerializer(req).data})
 

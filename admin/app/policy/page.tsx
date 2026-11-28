@@ -20,7 +20,7 @@ const KIND_LABEL: Record<TermRow['kind'], string> = {
 const ADD_BODY: Record<TermRow['kind'], string> = {
   word: 'From the next save, a post or comment carrying it is refused as it is written, '
     + 'its author is told which word stopped them, and the attempt is logged. Anything '
-    + 'already published is only marked for a person — nothing comes down by itself.',
+    + 'already published is only marked for a person, nothing comes down by itself.',
   item: 'From the next save, a listing carrying it is marked for a person to look at. '
     + 'It is a flag, not a takedown, nothing comes down by itself.',
 };

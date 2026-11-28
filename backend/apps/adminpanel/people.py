@@ -863,8 +863,8 @@ def delete(user, caller, *, confirm, reason=''):
         'detail': (f'@{username} is deleted, with their {held["posts"]} post(s), '
                    f'{held["comments"]} comment(s) and {held["listings"]} listing(s). '
                    'This cannot be undone; the audit row names who did it, and the '
-                   'money record — every movement, deposit reference and approval '
-                   'decision — is kept for disputes.')
+                   'money record (every movement, deposit reference and approval '
+                   'decision) is kept for disputes.')
         + (f' An email went to {emailed["to"]}.' if emailed
            else ' There is no email address on this account.'),
     }

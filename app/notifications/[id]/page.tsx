@@ -68,7 +68,7 @@ export default function WarningDetailPage() {
     ? new Date(value).toLocaleString(db.lang === 'ne' ? 'ne-NP' : 'en-GB', {
       dateStyle: 'medium', timeStyle: 'short',
     })
-    : '—';
+    : '-';
 
   return (
     <AppShell>

@@ -10,7 +10,7 @@ const API_ORIGIN = process.env.EXPOSING_API_ORIGIN || 'http://127.0.0.1:8001';
 export const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || 'https://social-media-idea.vercel.app').replace(/\/$/, '');
 
 const DEFAULT_IMAGE = `${SITE_URL}/exposing-icon.png`;
-const DESCRIPTION = 'Photos, clips and stories from your corner of the world — on Exposing.';
+const DESCRIPTION = 'Photos, clips and stories from your corner of the world, on Exposing.';
 
 async function read(path: string): Promise<any> {
   try {
@@ -61,7 +61,7 @@ export async function postMetadata(id: string): Promise<Metadata> {
   if (!row) return card('Post on Exposing', DESCRIPTION, path, [], 'article');
   const who = clip(row.author_name || row.author_username, 60);
   const where = row.place ? ` at ${clip(row.place, 40)}` : '';
-  const title = `${who}${where} — Exposing`;
+  const title = `${who}${where}, Exposing`;
   const pictures = stills(row);
   const video = (row.media || []).find((m: any) => m.kind === 'video');
   return card(
@@ -89,7 +89,7 @@ export async function mediaMetadata(id: string, index: number): Promise<Metadata
   const still = moving ? '' : abs(shown?.url || shown?.file);
   const album = items.length > 1 ? ` (${n + 1}/${items.length})` : '';
   return card(
-    clip(`${who}${album} — ${moving ? 'Clip' : 'Photo'} on Exposing`, 90),
+    clip(`${who}${album}, ${moving ? 'Clip' : 'Photo'} on Exposing`, 90),
     clip(row.text) || (still ? 'See this photo on Exposing.' : 'Watch this clip on Exposing.'),
     path,
     [still || stills(row)[0] || face(row)],
@@ -108,7 +108,7 @@ export async function reelMetadata(key: string): Promise<Metadata> {
   const video = (row.media || []).find((m: any) => m.kind === 'video');
   const images = [abs(video?.thumbnail_url), ...stills(row), face(row)].filter(Boolean);
   return card(
-    clip(`${who} — Reel on Exposing`, 90),
+    clip(`${who}, Reel on Exposing`, 90),
     clip(row.text) || 'Watch this clip on Exposing.',
     path,
     images,
@@ -122,7 +122,7 @@ export async function profileMetadata(username: string): Promise<Metadata> {
   if (!row) return card('@' + username, 'This account does not exist.', path, [], 'profile');
   const name = clip(row.name || username, 60);
   return card(
-    `${name} (@${row.username}) — Exposing`,
+    `${name} (@${row.username}), Exposing`,
     clip(row.bio) || `${Number(row.followers) || 0} followers on Exposing.`,
     path,
     [abs(row.cover_url), abs(row.avatar_url)],
@@ -135,7 +135,7 @@ export async function listingMetadata(id: string): Promise<Metadata> {
   const path = `/marketplace/${id}`;
   if (!row) return card('Listing on Exposing', DESCRIPTION, path, [], 'article');
   const price = Number(row.price);
-  const title = `${clip(row.title, 60)}${Number.isFinite(price) ? ` · NPR ${price.toLocaleString('en-US')}` : ''} — Exposing`;
+  const title = `${clip(row.title, 60)}${Number.isFinite(price) ? ` · NPR ${price.toLocaleString('en-US')}` : ''}, Exposing`;
   return card(
     clip(title, 95),
     clip(row.description) || `${row.category || 'For sale'}${row.location ? ` in ${row.location}` : ''}.`,

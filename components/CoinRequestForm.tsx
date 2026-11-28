@@ -20,7 +20,7 @@ const PRESETS = [50, 100, 200, 500, 1000];
  * proof of payment stay in one place.
  */
 export default function CoinRequestForm({ method }: { method: 'bank' | 'qr' }) {
-  const { db, me, t, setDb, merge, showToast } = useApp();
+  const { db, me, t, setDb, merge, showToast, showConfirm } = useApp();
   const router = useRouter();
   const [coins, setCoins] = useState(100);
   const [reference, setReference] = useState('');
@@ -84,13 +84,7 @@ export default function CoinRequestForm({ method }: { method: 'bank' | 'qr' }) {
     setTimeout(() => router.push('/wallet/requests'), 0);
   };
 
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!reference.trim()) { setError(t('reference')); return; }
-    if (waiting) {
-      showToast(waiting.proofAsked ? t('coinProofFirst') : t('coinWaiting'));
-      return;
-    }
+  const send = async () => {
     if (API_ENABLED) {
       setBusy(true);
       try {
@@ -122,6 +116,20 @@ export default function CoinRequestForm({ method }: { method: 'bank' | 'qr' }) {
     setError('');
     showToast(t('requestSent'));
     toRequests();
+  };
+
+  // Sending this tells the desk money left your own bank session, so the bar at the
+  // foot of the screen repeats the number back before it goes. A request that is
+  // bounced for a wrong reference is a second ticket the seat has to explain.
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (busy) return;
+    if (!reference.trim()) { setError(t('reference')); return; }
+    if (waiting) {
+      showToast(waiting.proofAsked ? t('coinProofFirst') : t('coinWaiting'));
+      return;
+    }
+    showConfirm(t('coinSendConfirm', { n: coins, a: amount }), () => { void send(); });
   };
 
   return (

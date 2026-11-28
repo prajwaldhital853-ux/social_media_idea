@@ -6738,10 +6738,12 @@ a.wallet-sec-note:hover { color: var(--brand); text-decoration: underline; }
 .wallet-entry-side {
   display: flex; flex-direction: column; align-items: flex-end; gap: 6px; flex-shrink: 0;
 }
-.wallet-status.refunding { color: var(--brand); }
-.wallet-status.refunding::before { background: var(--brand); }
+/* An open refund gets no badge of its own, the row already says Approved and the
+   lock line says the rest. What the desk decides does arrive as one: paid, or refused. */
 .wallet-status.refunded { color: var(--muted); }
 .wallet-status.refunded::before { background: var(--line-strong, #c9ccd1); }
+.wallet-status.refund_refused { color: var(--red); }
+.wallet-status.refund_refused::before { background: var(--red); }
 .refund-ask {
   padding: 6px 11px; border-radius: 9px; border: 1px solid var(--brand);
   background: var(--paper); color: var(--brand);
@@ -6751,8 +6753,27 @@ a.wallet-sec-note:hover { color: var(--brand); text-decoration: underline; }
 .refund-ask:hover { background: var(--brand-tint); }
 .wallet-entry-hint { font-style: italic; }
 .wallet-entry-lock { color: var(--amber-ink) !important; font-weight: 650; }
+/* A door that has closed, said in the row's own voice rather than as an error:
+   nobody did anything wrong, the coins were simply spent or held elsewhere. */
+.wallet-entry-shut { color: var(--muted) !important; }
 
-.refund-modal { display: flex; flex-direction: column; gap: 12px; width: min(520px, 100%); }
+/* The sheet's own body starts where its title does. `.modal-header` carries 16px
+   of its own, so the form gets the same inset and the header is pulled back out
+   of it to keep its rule full width. Without this the fields sat flush against
+   the rounded corner while the heading floated above them at an angle. */
+.refund-modal {
+  display: flex; flex-direction: column; gap: 12px;
+  width: min(520px, 100%);
+  padding: 0 18px 18px;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+.refund-modal .modal-header {
+  position: sticky; top: 0; z-index: 1;
+  margin: 0 -18px; padding: 16px 18px;
+  background: var(--paper);
+  flex: none;
+}
 .refund-modal .field textarea {
   width: 100%; border: 1px solid var(--line); border-radius: 9px; background: var(--paper);
   color: var(--ink); padding: 9px 11px; font: inherit; font-size: 14px; resize: vertical; outline: none;
@@ -6760,6 +6781,22 @@ a.wallet-sec-note:hover { color: var(--brand); text-decoration: underline; }
 .refund-modal .field textarea:focus { border-color: var(--brand); box-shadow: 0 0 0 3px var(--brand-ring); }
 .refund-sum { font-weight: 700; color: var(--ink) !important; font-variant-numeric: tabular-nums; }
 .refund-lock-note { border-top: 1px solid var(--line); padding-top: 10px; }
+/* On a phone this is a sheet rising from the bottom, not a box floating in the
+   middle: with the keyboard up, a centred sheet puts its own reason field and
+   send button under the keys and the reader cannot drag it out of the way. */
+@media (max-width: 560px) {
+  .refund-overlay { align-items: flex-end; padding: 0; }
+  .refund-modal {
+    width: 100%; max-height: calc(var(--visible-height, 100dvh) - 12px);
+    border-radius: 18px 18px 0 0; padding: 0 16px calc(16px + env(safe-area-inset-bottom));
+    gap: 13px;
+  }
+  .refund-modal .modal-header { margin: 0 -16px; padding: 15px 16px; }
+  /* iOS zooms the whole page when a focused control is under 16px, which leaves
+     the sheet magnified and half of it off screen. */
+  .refund-modal .field input, .refund-modal .field textarea { font-size: 16px; }
+  .refund-modal .wallet-shot input { font-size: 16px; }
+}
 
 .wallet-form { display: flex; flex-direction: column; gap: 14px; max-width: 560px; }
 .wallet-field { display: flex; flex-direction: column; gap: 8px; }
