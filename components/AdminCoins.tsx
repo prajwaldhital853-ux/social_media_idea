@@ -9,7 +9,7 @@ import { IC } from '@/lib/icons';
 import { ago, uid } from '@/lib/utils';
 import { CoinRequest } from '@/lib/types';
 
-const FILTERS = ['all', 'pending', 'approved', 'rejected'] as const;
+const FILTERS = ['all', 'pending', 'approved', 'rejected', 'refunded'] as const;
 
 function RejectRequest({ request, onClose }: { request: CoinRequest; onClose: () => void }) {
   const { t, setDb, showToast, logAudit, notify } = useApp();

@@ -23,7 +23,9 @@ export function StatusChip({ status }: { status: string }) {
       ? t('approved')
       : status === 'rejected'
         ? t('rejected')
-        : status === 'ended'
+        : status === 'refunded'
+          ? t('refunded')
+          : status === 'ended'
           ? t('ended')
           : status === 'paused'
             ? t('paused')

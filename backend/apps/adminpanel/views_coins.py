@@ -48,7 +48,7 @@ def coin_queue(request):
     """The money that has already moved and is waiting on a person."""
     swept = coins.sweep()
     status = request.query_params.get('status')
-    qs = CoinRequest.objects.select_related('user', 'user__profile')
+    qs = CoinRequest.objects.select_related('user', 'user__profile', 'lot')
     if status and status != 'all':
         qs = qs.filter(status=status)
     search = (request.query_params.get('q') or '').strip()
@@ -78,6 +78,7 @@ def coin_queue(request):
             'pending': counts.get(CoinRequest.Status.PENDING, 0),
             'approved': counts.get(CoinRequest.Status.APPROVED, 0),
             'rejected': counts.get(CoinRequest.Status.REJECTED, 0),
+            'refunded': counts.get(CoinRequest.Status.REFUNDED, 0),
             'every': sum(counts.values()),
         },
         'held': {'coins': held['coins'] or 0, 'rupees': str(held['rupees'] or 0)},
@@ -109,6 +110,11 @@ def coin_decide(request, pk, action):
     req = coins.find_request(pk)
     if req is None:
         return Response({'detail': 'No coin request with that id.'}, status=404)
+    # `paid` is not a verdict on an open purchase. It closes a refund the buyer asked
+    # for on one that was already approved, so it meets its own door and its own rules.
+    if action == 'paid':
+        code, body = coins.settle(req, request.user, request.data.get('reason', ''))
+        return Response(body, status=code)
     code, body = coins.decide(req, request.user, action, request.data.get('reason', ''))
     return Response(body, status=code)
 
@@ -117,13 +123,18 @@ def coin_decide(request, pk, action):
 @permission_classes([IsAuthenticated])
 @rbac.staff_only('coins_view')
 def coin_proof_link(request, pk):
-    """Mint the short-lived link, then the console points an image at it."""
+    """Mint the short-lived link, then the console points an image at it.
+
+    `?for=refund` mints the picture the buyer attached to a refund ask instead of the
+    payment receipt, so neither one is ever handed out as a URL that outlives the click.
+    """
     req = CoinRequest.objects.filter(pk=pk).first()
     if req is None:
         return Response({'detail': 'No coin request with that id.'}, status=404)
-    if not req.screenshot_url:
-        return Response({'detail': 'There is no payment screenshot on this request.'}, status=404)
-    token = coins.proof_token(req, request.user)
+    which = 'refund' if request.query_params.get('for') == 'refund' else 'payment'
+    if not coins._proof_url(req, which):
+        return Response({'detail': f'There is no {which} screenshot on this request.'}, status=404)
+    token = coins.proof_token(req, request.user, which)
     return Response({
         'href': f'/api/admin/coins/{pk}/receipt/?t={token}',
         'expires_in': coins.PROOF_TTL,

@@ -22,6 +22,7 @@ import { CoinAsk, CoinPage } from '@/lib/types';
 const STATES = [
   { id: 'pending', label: 'Waiting' },
   { id: 'approved', label: 'Credited' },
+  { id: 'refunded', label: 'Refund paid' },
   { id: 'rejected', label: 'Rejected' },
   { id: 'all', label: 'Every request' },
 ];
@@ -30,6 +31,7 @@ const STANDINGS: Record<string, { tone: string; label: string }> = {
   pending: { tone: 'warn', label: 'Waiting on a person' },
   approved: { tone: 'good', label: 'Coins credited' },
   rejected: { tone: 'mute', label: 'Rejected' },
+  refunded: { tone: 'mute', label: 'Refund paid' },
 };
 
 export default function CoinsPage() {
@@ -125,7 +127,7 @@ export default function CoinsPage() {
         chips={STATES.map(item => ({
           id: item.id,
           label: item.label,
-          n: page ? (item.id === 'all' ? page.counts.every : page.counts[item.id as 'pending' | 'approved' | 'rejected']) : undefined,
+          n: page ? (item.id === 'all' ? page.counts.every : page.counts[item.id as 'pending' | 'approved' | 'rejected' | 'refunded']) : undefined,
         }))}
         value={state}
         onPick={setState}
@@ -245,6 +247,11 @@ function Ask({ row }: { row: CoinAsk }) {
           {row.status === 'pending' && (row.asked
             ? <span className="pill dead" data-owed>Owed proof</span>
             : row.resubmitted && <span className="pill good" data-resent>Proof resent</span>)}
+          {/* A refund ask is money the platform owes, so the queue says so before
+              the seat has to open the request to find out. */}
+          {!!row.refund && (row.refund.paid_at
+            ? <span className="pill mute" title={stamp(row.refund.paid_at)} data-refund="paid">Refund paid</span>
+            : <span className="pill warn" title={`${row.refund.coins ?? row.coins} coins locked`} data-refund="open">Refund owed</span>)}
         </td>
         <td data-label="Decided by" className="dim">
           {row.review

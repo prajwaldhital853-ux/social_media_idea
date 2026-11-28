@@ -5,13 +5,13 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from apps.adminpanel import rbac, settings_store
+from apps.adminpanel import bell, rbac, settings_store
 from apps.adminpanel.journal import record
 from apps.common.emails import queue_coin_decision_email
 from apps.common.pagination import KeysetPagination
 from apps.notifications.services import notify
 
-from .models import CoinRequest, Transaction, Wallet, apply
+from .models import CoinLot, CoinRequest, Transaction, Wallet, credit_purchase
 
 
 def _proof_asks(rows):
@@ -50,8 +50,10 @@ class CoinRequestSerializer(serializers.ModelSerializer):
     class Meta:
         model = CoinRequest
         fields = ['id', 'user', 'username', 'coins', 'amount', 'method', 'reference',
-                  'screenshot_url', 'status', 'created_at', 'resubmitted_at']
-        read_only_fields = ['id', 'user', 'status', 'created_at', 'resubmitted_at']
+                  'screenshot_url', 'status', 'created_at', 'resubmitted_at',
+                  'refund_requested_at', 'refunded_at', 'refund_reference', 'refund_reason']
+        read_only_fields = ['id', 'user', 'status', 'created_at', 'resubmitted_at',
+                            'refund_requested_at', 'refunded_at', 'refund_reference', 'refund_reason']
 
 
 @api_view(['GET'])
@@ -110,12 +112,94 @@ def coin_request_list(request):
     rows = paginator.paginate_queryset(qs.select_related('user'), request)
     data = CoinRequestSerializer(rows, many=True).data
     asks = _proof_asks(rows)
+    lots = {lot.request_id: lot for lot in CoinLot.objects.filter(request_id__in=[row.pk for row in rows])}
     for row, item in zip(rows, data):
         review = asks.get(row.pk)
         item['proof_asked'] = review is not None
         item['proof_reason'] = review.reason if review else ''
         item['resubmitted'] = row.resubmitted_at is not None
+        lot = lots.get(row.pk)
+        # The button's whole rule lives here, on the row: a purchase is refundable
+        # while it is approved, nobody has asked yet, and not one coin of its batch has
+        # been spent. Once a coin is gone the answer never comes back to yes.
+        item['refundable'] = bool(
+            row.status == CoinRequest.Status.APPROVED and row.refund_requested_at is None
+            and row.refunded_at is None and lot is not None and lot.untouched
+        )
+        item['refund_requested'] = row.refund_requested_at is not None
+        item['refunded'] = row.refunded_at is not None
+        item['locked_coins'] = str(lot.held) if lot is not None else '0'
     return paginator.get_paginated_response(data)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def coin_refund_request(request, pk):
+    """Ask for an approved purchase back, and put those coins under lock while it waits.
+
+    The lock is the honest half of the promise. A refund the platform intends to pay
+    while the buyer is still free to spend the coins is a refund that ends with an
+    empty wallet and an angry person, so the batch is held the moment the ask is
+    filed, and every spend door refuses to touch a held coin until the desk settles it.
+    A purchase with even one coin gone is refused for good: a part-spent batch has no
+    clean number to give back, and a button that disappears once and for all is easier
+    to trust than one that lies about what is left.
+    """
+    screenshot = str(request.data.get('screenshot_url') or '').strip()
+    reference = str(request.data.get('reference') or '').strip()
+    reason = str(request.data.get('reason') or '').strip()
+    if not screenshot:
+        return Response({'detail': 'Attach the screenshot of the payment you want back.'}, status=400)
+    if not reason:
+        return Response({'detail': 'Write why you want the refund. The desk reads this sentence.'}, status=400)
+    if len(screenshot) > 200 or len(reference) > 80 or len(reason) > 240:
+        return Response({'detail': 'That is too long to record.'}, status=400)
+    with transaction.atomic():
+        req = CoinRequest.objects.select_for_update().filter(pk=pk, user=request.user).first()
+        if req is None:
+            return Response({'detail': 'No coin request of yours has that id.'}, status=404)
+        if req.refunded_at is not None:
+            return Response({'detail': 'That purchase was already refunded.'}, status=409)
+        if req.status != CoinRequest.Status.APPROVED:
+            return Response(
+                {'detail': f'Only an approved purchase can be refunded. This one is {req.status}.'},
+                status=409,
+            )
+        lot = CoinLot.objects.select_for_update().filter(request=req).first()
+        if req.refund_requested_at is not None or (lot is not None and lot.held > 0):
+            return Response({'detail': 'A refund for this purchase is already with the desk.'}, status=409)
+        if lot is None or not lot.untouched:
+            return Response(
+                {'detail': 'Some of those coins have already been spent, so this purchase can no longer '
+                           'be refunded.'},
+                status=409,
+            )
+        lot.held = lot.remaining
+        lot.save(update_fields=['held'])
+        req.refund_requested_at = timezone.now()
+        req.refund_screenshot_url = screenshot
+        req.refund_reference = reference
+        req.refund_reason = reason
+        req.save(update_fields=['refund_requested_at', 'refund_screenshot_url',
+                                'refund_reference', 'refund_reason'])
+    notify(request.user, request.user, 'coins',
+           f'You asked for a refund on purchase #{req.pk}. {req.coins} coins are locked until the desk settles it.',
+           'wallet', req.pk)
+    bell.announce(
+        'coin_refund',
+        f'@{request.user.username} asked for a refund on purchase #{req.pk} ({req.coins} coins / NPR {req.amount}).',
+        f'/coins/{req.pk}', 'coins_review',
+    )
+    record(request.user, 'coins_refund_ask', f'coin_request:{req.pk}',
+           f'{req.coins} coins locked, {reason or "no reason given"}')
+    wallet, _ = Wallet.objects.get_or_create(user=request.user)
+    try:
+        from apps.common import pulse
+        pulse.to_user(request.user.pk, 'coins', balance=str(wallet.balance), held=str(lot.held))
+    except Exception:  # noqa: BLE001 - the lock is written; the wire is a courtesy
+        pass
+    return Response({'detail': 'Refund requested. Those coins are locked until the desk settles it.',
+                     'request': CoinRequestSerializer(req).data})
 
 
 @api_view(['GET', 'POST'])
@@ -187,9 +271,7 @@ def coin_request_review(request, pk, action):
             return Response({'detail': 'No pending request with that id.'}, status=404)
         if action == 'approve':
             wallet, _ = Wallet.objects.get_or_create(user=obj.user)
-            apply(wallet.pk, Transaction.Kind.CREDIT, obj.coins,
-                  f'Coin purchase {obj.pk} approved',
-                  actor=request.user, ref=obj.reference or f'coin_request:{obj.pk}')
+            credit_purchase(wallet, obj, actor=request.user)
             wallet.refresh_from_db()
             obj.status = CoinRequest.Status.APPROVED
         else:

@@ -30,6 +30,7 @@ const KIND_LABEL: Record<string, string> = {
   report: 'Report',
   coin_request: 'Coins',
   coin_proof: 'Proof',
+  coin_refund: 'Refund',
   signup: 'Joined',
   promotion: 'Campaign',
   autohide: 'Auto-hide',

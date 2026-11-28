@@ -728,8 +728,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
           ...prev,
           coinRequests: prev.coinRequests.map(r => (r.id === id ? { ...r, status: String(p.status || r.status) as CoinRequest['status'] } : r)),
         }));
+        // A paid refund takes coins back the same way an approval adds them, and the
+        // balance line is read from the member's own row, so the number the wire
+        // carried has to land there or the wallet shows money that has gone.
+        if (p.balance !== undefined && p.balance !== null) {
+          setDb(prev => {
+            const row = prev.users.find(u => u.id === prev.meId);
+            if (!row) return prev;
+            return applyFragment(prev, { saved: [{ ...row, coins: Math.round(Number(p.balance) || 0) }] } as any);
+          });
+        }
         void refreshList('coin-requests', { path: '/wallet/requests/list/', frag: coinRequestsFragment });
-        void refreshList('wallet', { path: '/wallet/', frag: walletFragment(selfId) });
+        // 'wallet-ledger' is the key the money rows are actually mounted under, and a
+        // refund that was just paid is a ledger row as much as a status change.
+        void refreshList('wallet-ledger', { path: '/wallet/', frag: walletFragment(selfId) });
       }
     };
 

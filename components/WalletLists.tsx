@@ -1,7 +1,8 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import Link from 'next/link';
+import RefundForm from '@/components/RefundForm';
 import { StatusChip } from '@/components/WalletShell';
 import { useApp } from '@/lib/AppContext';
 import { coinRequestsFragment, useList, walletFragment } from '@/lib/lists';
@@ -112,6 +113,7 @@ export function LedgerRows({ cap, href }: { cap?: number; href?: string }) {
 export function RequestRows({ cap, href }: { cap?: number; href?: string }) {
   const { db, t, serverMode } = useApp();
   const { rows, list } = useRequestRows();
+  const [refund, setRefund] = useState<CoinRequest | null>(null);
   const page = cap || WINDOW;
   const windowed = useWindowed(rows.length, page, db.lang === 'ne' ? 'ne' : 'en',
     serverMode ? { hasMore: list.hasMore, loading: list.loading, load: list.loadMore } : undefined,
@@ -127,24 +129,41 @@ export function RequestRows({ cap, href }: { cap?: number; href?: string }) {
   return (
     <>
       <div className="wallet-rows">
-        {shown.map(r => (
-          <div className="wallet-entry" key={r.id}>
-            <span className="wallet-entry-day">{day(r.ts, db.lang)}</span>
-            <span className="wallet-entry-main">
-              <b>{r.coins} {t('coins')} · NPR {r.amount}</b>
-              <small>{r.method === 'bank' ? t('bankTransfer') : t('qrPay')} · {r.reference} · {ago(r.ts, db.lang)}</small>
-              {r.note && <small className="wallet-entry-note">{r.note}</small>}
-              {r.status === 'pending' && <small className="wallet-entry-remind">{t('coinOneAtATime')}</small>}
-            </span>
-            <StatusChip status={r.status} />
-            {r.resubmitted && r.status === 'pending' && <span className="wallet-status resubmitted">{t('resubmitted')}</span>}
-          </div>
-        ))}
+        {shown.map(r => {
+          // The desk answers this question, because only it knows whether a coin of
+          // that batch was spent. A demo build has no lots, so an approved purchase
+          // is refundable until the ask is made.
+          const askable = r.refundable ?? (r.status === 'approved' && !r.refundRequested && !r.refunded);
+          return (
+            <div className="wallet-entry" key={r.id}>
+              <span className="wallet-entry-day">{day(r.ts, db.lang)}</span>
+              <span className="wallet-entry-main">
+                <b>{r.coins} {t('coins')} · NPR {r.amount}</b>
+                <small>{r.method === 'bank' ? t('bankTransfer') : t('qrPay')} · {r.reference} · {ago(r.ts, db.lang)}</small>
+                {r.note && <small className="wallet-entry-note">{r.note}</small>}
+                {r.status === 'pending' && <small className="wallet-entry-remind">{t('coinOneAtATime')}</small>}
+                {r.status === 'pending' && <small className="wallet-entry-hint">{t('refundNotice')}</small>}
+                {!!r.locked && r.status !== 'refunded' && (
+                  <small className="wallet-entry-lock">{t('refundLocked', { n: r.locked })}</small>
+                )}
+              </span>
+              <span className="wallet-entry-side">
+                <StatusChip status={r.status} />
+                {r.resubmitted && r.status === 'pending' && <span className="wallet-status resubmitted">{t('resubmitted')}</span>}
+                {r.refundRequested && <span className="wallet-status refunding">{t('refundRequested')}</span>}
+                {askable && (
+                  <button type="button" className="refund-ask" onClick={() => setRefund(r)}>{t('refundRequest')}</button>
+                )}
+              </span>
+            </div>
+          );
+        })}
         <WalletSeam windowed={windowed} />
       </div>
       {cap && href && rows.length > cap && (
         <Link className="wallet-more" href={href}>{t('viewAll')} · {rows.length}</Link>
       )}
+      {refund && <RefundForm request={refund} onClose={() => setRefund(null)} />}
     </>
   );
 }

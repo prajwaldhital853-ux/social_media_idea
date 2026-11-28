@@ -357,6 +357,10 @@ export function mapCoinRequest(row: any): CoinRequest {
     proofAsked: !!row.proof_asked,
     proofReason: row.proof_reason || '',
     resubmitted: !!row.resubmitted,
+    refundable: !!row.refundable,
+    refundRequested: !!row.refund_requested,
+    refunded: !!row.refunded,
+    locked: Math.round(Number(row.locked_coins) || 0),
   };
 }
 

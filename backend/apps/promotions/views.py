@@ -14,7 +14,7 @@ from apps.common.pagination import KeysetPagination
 from apps.common.rules import rate, seat
 from apps.marketplace.models import Listing
 from apps.posts.models import Post
-from apps.wallet.models import Wallet
+from apps.wallet.models import Wallet, locked_coins
 
 from . import services
 from .models import PromoImpression, Promotion, PromoEvent
@@ -160,6 +160,17 @@ def promotion_list(request):
             return Response(
                 {'detail': f'That package costs {budget} coins and your balance is {wallet.balance}. '
                            'Buy coins first.'},
+                status=400,
+            )
+        # A refund the desk has not paid is money already promised, so those coins are
+        # not the member's to spend meanwhile. Saying which coins and why is the
+        # difference between a member who waits for the refund and one who buys twice.
+        promise = locked_coins(wallet.pk)
+        if budget > 0 and wallet.balance - promise < Decimal(str(budget)):
+            return Response(
+                {'detail': f'{promise} of your {wallet.balance} coins are locked for a refund you asked for, '
+                           f'so {wallet.balance - promise} coins can be spent. The desk releases them when it '
+                           'settles the refund.'},
                 status=400,
             )
         promo = serializer.save(

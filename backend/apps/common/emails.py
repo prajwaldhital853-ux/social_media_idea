@@ -208,6 +208,14 @@ def queue_coin_decision_email(user, *, action, coins, amount, balance=None, requ
         heading = 'The coins were not added'
         message = f'Your purchase of {coins} coins was not approved. Reason: {reason or "not stated"}'
         footnote = 'Nothing was credited. If the reason looks wrong, reply with your bank receipt and we will look again.'
+    elif action == 'paid':
+        subject = 'Your Exposing refund was approved'
+        heading = 'Your refund was approved'
+        message = (f'The refund on your {coins} coin purchase was approved and the coins were taken back off your '
+                   f'wallet. The money is transferred to the payment details you sent with the request.')
+        details.insert(2, ('Wallet balance', f'{balance} coins'))
+        footnote = 'Refunds are paid by hand by the Exposing desk and can take a working day to reach your account. ' \
+                   'Reply to this email with your reference if the money has not arrived.'
     else:
         subject = 'Exposing needs a better payment proof'
         heading = 'One more look at your receipt'
