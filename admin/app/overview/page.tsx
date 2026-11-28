@@ -18,6 +18,23 @@ const REFRESH_EVERY = 60000;
 const PAGE = 7;
 const TARGET_LABEL: Record<string, string> = { post: 'posts', comment: 'comments', user: 'people', listing: 'listings' };
 
+/** Every card counts its own headline over one of these stretches, picked in the
+ *  corner of the card. The server answers all six at once so a change of mind
+ *  redraws at once instead of waiting on another round of counting. */
+const WINDOW_KEYS = ['24h', '3d', '7d', '1m', '6m', '1y'];
+const WINDOW_DEFAULT = '24h';
+const WINDOW_NAME: Record<string, string> = {
+  '24h': 'the last 24 hours',
+  '3d': 'the last 3 days',
+  '7d': 'the last 7 days',
+  '1m': 'the last month',
+  '6m': 'the last 6 months',
+  '1y': 'the last year',
+};
+const WINDOW_SHORT: Record<string, string> = {
+  '24h': '24 hr', '3d': '3 days', '7d': '7 days', '1m': '1 month', '6m': '6 months', '1y': '1 year',
+};
+
 /** One hue per tile, shared by that tile's sparkline and by whatever chart the
  *  same number appears in, a tile and its chart drawn in two colours reads as
  *  two different measures. */
@@ -176,21 +193,32 @@ const HEALTH_HEADLINE: Record<string, string> = {
 
 function TileCard({ tile, threshold }: { tile: Tile; threshold?: Threshold }) {
   const { session } = useSession();
+  const [win, setWin] = useState(WINDOW_DEFAULT);
   const link = shipped(tile.href, session?.permissions || [], session?.role) ? tile.href : null;
   const color = TILE_COLOR[tile.id] || 'var(--brand)';
   return (
     <article className={`tile tile-${tile.kind}`} data-tile={tile.id} style={{ ['--tile' as string]: color }}>
       <header className="tile-head">
         <span className="tile-label">{tile.label}</span>
-        <span className="tile-icon">{TILE_ICON[tile.id] || IC.chart}</span>
+        {tile.windows ? (
+          <select
+            className="tile-window"
+            value={win}
+            onChange={e => setWin(e.target.value)}
+            aria-label={`${tile.label} counted over`}
+            title="How far back this card counts"
+          >
+            {WINDOW_KEYS.map(key => <option key={key} value={key}>{WINDOW_SHORT[key]}</option>)}
+          </select>
+        ) : <span className="tile-icon">{TILE_ICON[tile.id] || IC.chart}</span>}
       </header>
 
-      {tile.kind === 'rate' && <RateBody tile={tile}/>}
-      {tile.kind === 'queue' && <QueueBody tile={tile}/>}
-      {tile.kind === 'coins' && <CoinsBody tile={tile}/>}
-      {tile.kind === 'promotions' && <PromoBody tile={tile}/>}
+      {tile.kind === 'rate' && <RateBody tile={tile} win={win}/>}
+      {tile.kind === 'queue' && <QueueBody tile={tile} win={win}/>}
+      {tile.kind === 'coins' && <CoinsBody tile={tile} win={win}/>}
+      {tile.kind === 'promotions' && <PromoBody tile={tile} win={win}/>}
       {tile.kind === 'storage' && <StorageBody tile={tile} threshold={threshold}/>}
-      {tile.kind === 'ledger' && <LedgerBody tile={tile}/>}
+      {tile.kind === 'ledger' && <LedgerBody tile={tile} win={win}/>}
 
       {link && (
         <Link className="tile-link" href={link}>
@@ -223,13 +251,18 @@ function Split({ items }: { items: [string, string][] }) {
   );
 }
 
-function RateBody({ tile }: { tile: Tile }) {
+function RateBody({ tile, win }: { tile: Tile; win: string }) {
   return (
     <>
-      <b className="tile-number">{num(tile.today)}</b>
-      <span className="tile-unit">since midnight <Trend points={tile.series}/></span>
+      <b className="tile-number">{num(tile.windows?.[win] ?? tile.today)}</b>
+      <span className="tile-unit">in {WINDOW_NAME[win]} <Trend points={tile.series}/></span>
       <Spark points={tile.series || []}/>
-      <Split items={[['7 days', num(tile.week)], ['30 days', num(tile.month)], ['All time', num(tile.total)]]}/>
+      <Split items={[
+        ['Since midnight', num(tile.today)],
+        ['7 days', num(tile.week)],
+        ['30 days', num(tile.month)],
+        ['All time', num(tile.total)],
+      ]}/>
     </>
   );
 }
@@ -260,12 +293,13 @@ function Trend({ points }: { points?: SeriesPoint[] }) {
   );
 }
 
-function QueueBody({ tile }: { tile: Tile }) {
+function QueueBody({ tile, win }: { tile: Tile; win: string }) {
   return (
     <>
-      <b className={`tile-number ${tile.value ? 'is-debt' : ''}`}>{num(tile.value)}</b>
-      <span className="tile-unit">waiting on a decision</span>
+      <b className={`tile-number ${tile.value ? 'is-debt' : ''}`}>{num(tile.windows?.[win] ?? tile.value)}</b>
+      <span className="tile-unit">filed in {WINDOW_NAME[win]}</span>
       <Split items={[
+        ['Waiting on a decision', num(tile.value)],
         ['Opened today', num(tile.new_today)],
         ['Closed this week', num(tile.closed_week)],
         ['Oldest', tile.value ? waiting(tile.oldest_minutes) : 'nothing waiting'],
@@ -274,12 +308,13 @@ function QueueBody({ tile }: { tile: Tile }) {
   );
 }
 
-function CoinsBody({ tile }: { tile: Tile }) {
+function CoinsBody({ tile, win }: { tile: Tile; win: string }) {
   return (
     <>
-      <b className={`tile-number ${tile.pending ? 'is-debt' : ''}`}>{num(tile.pending)}</b>
-      <span className="tile-unit">proofs unverified</span>
+      <b className={`tile-number ${tile.pending ? 'is-debt' : ''}`}>{num(tile.windows?.[win] ?? tile.pending)}</b>
+      <span className="tile-unit">proofs filed in {WINDOW_NAME[win]}</span>
       <Split items={[
+        ['Waiting unverified', num(tile.pending)],
         ['Coins held up', num(tile.pending_coins)],
         ['Value held up', money(tile.pending_npr)],
         ['Oldest', tile.pending ? waiting(tile.oldest_minutes) : 'queue clear'],
@@ -293,14 +328,15 @@ function CoinsBody({ tile }: { tile: Tile }) {
   );
 }
 
-function PromoBody({ tile }: { tile: Tile }) {
+function PromoBody({ tile, win }: { tile: Tile; win: string }) {
   const views = tile.impressions_month || 0;
   const opens = tile.clicks_month || 0;
   return (
     <>
-      <b className="tile-number">{num(tile.active)}</b>
-      <span className="tile-unit">running in the feed right now</span>
+      <b className="tile-number">{num(tile.windows?.[win] ?? tile.active)}</b>
+      <span className="tile-unit">campaigns started in {WINDOW_NAME[win]}</span>
       <Split items={[
+        ['Running in the feed', num(tile.active)],
         ['Awaiting review', num(tile.awaiting_review)],
         ['Paused', num(tile.paused)],
         ['Started this month', num(tile.started_month)],
@@ -340,13 +376,18 @@ function StorageBody({ tile, threshold }: { tile: Tile; threshold?: Threshold })
   );
 }
 
-function LedgerBody({ tile }: { tile: Tile }) {
+function LedgerBody({ tile, win }: { tile: Tile; win: string }) {
   return (
     <>
-      <b className="tile-number">{num(tile.spent_today)}</b>
-      <span className="tile-unit">spent since midnight <Trend points={tile.series}/></span>
+      <b className="tile-number">{num(tile.windows?.[win] ?? tile.spent_today)}</b>
+      <span className="tile-unit">spent in {WINDOW_NAME[win]} <Trend points={tile.series}/></span>
       <Spark points={tile.series || []}/>
-      <Split items={[['7 days', num(tile.spent_week)], ['30 days', num(tile.spent_month)], ['Bought in 30 d', num(tile.credited_month)]]}/>
+      <Split items={[
+        ['Since midnight', num(tile.spent_today)],
+        ['7 days', num(tile.spent_week)],
+        ['30 days', num(tile.spent_month)],
+        ['Bought in 30 d', num(tile.credited_month)],
+      ]}/>
     </>
   );
 }

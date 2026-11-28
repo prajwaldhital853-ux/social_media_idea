@@ -100,6 +100,7 @@ export interface Tile {
   week?: number;
   month?: number;
   total?: number;
+  windows?: Record<string, number>;
   series?: SeriesPoint[];
 
   value?: number;

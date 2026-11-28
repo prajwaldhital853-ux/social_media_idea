@@ -39,6 +39,11 @@ STORAGE_CACHE_KEY = 'adminpanel:storage'
 STORAGE_CACHE_SECONDS = 300
 _MONEY = DecimalField(max_digits=14, decimal_places=2)
 
+# The windows every dashboard card can be cut to, in the order its picker shows
+# them. A month is 30 days and a year 365 because the card says "last", not
+# "this calendar month" — the calendar reading belongs to the desks below it.
+WINDOW_DAYS = (('24h', 1), ('3d', 3), ('7d', 7), ('1m', 30), ('6m', 182), ('1y', 365))
+
 
 def _total(queryset, field, money=False):
     """COALESCE keeps an empty window at zero, which is an answer; None is not."""
@@ -64,6 +69,20 @@ def windows(now=None):
         'month': now - timedelta(days=30),
         'series': day_start - timedelta(days=SERIES_DAYS - 1),
     }
+
+
+def _windows(queryset, cutoffs, field='created_at', amount=None):
+    """The same pile cut to every window a card offers, in one pass per window.
+
+    Six aggregates answered up front rather than a fresh request on each pick:
+    the dashboard is read by a handful of seats, and a card that made the person
+    wait on the database to change its own heading would feel broken, not careful.
+    """
+    out = {}
+    for key, days in WINDOW_DAYS:
+        rows = queryset.filter(**{f'{field}__gte': cutoffs['now'] - timedelta(days=days)})
+        out[key] = int(_total(rows, amount, money=True)) if amount else rows.count()
+    return out
 
 
 def _daily(queryset, since, field='created_at', amount=None):
@@ -99,6 +118,7 @@ def _rate_tile(tile_id, label, href, model, field, cutoffs):
         'week': counted(cutoffs['week']),
         'month': counted(cutoffs['month']),
         'total': model.objects.count(),
+        'windows': _windows(model.objects.all(), cutoffs, field),
         'series': _daily(windowed, cutoffs['series'], field),
     }
 
@@ -113,6 +133,7 @@ def _open_reports(cutoffs):
         'href': '/reports',
         'value': open_qs.count(),
         'new_today': open_qs.filter(created_at__gte=cutoffs['today']).count(),
+        'windows': _windows(open_qs, cutoffs),
         'closed_week': Report.objects.filter(
             status__in=CLOSED_STATES, resolved_at__gte=cutoffs['week'],
         ).count(),
@@ -136,6 +157,7 @@ def _coin_requests(cutoffs):
         'label': 'Coins and payments',
         'href': '/coins',
         'pending': pending.count(),
+        'windows': _windows(pending, cutoffs),
         'pending_coins': _total(pending, 'coins'),
         'pending_npr': float(_total(pending, 'amount', money=True)),
         'waiting_today': pending.filter(created_at__gte=cutoffs['today']).count(),
@@ -160,6 +182,7 @@ def _promotions(cutoffs):
         'label': 'Promotions',
         'href': '/promotions',
         'active': running.count(),
+        'windows': _windows(Promotion.objects.all(), cutoffs),
         'awaiting_review': Promotion.objects.filter(status=Promotion.Status.PENDING).count(),
         'paused': Promotion.objects.filter(status=Promotion.Status.PAUSED).count(),
         'started_month': Promotion.objects.filter(created_at__gte=cutoffs['month']).count(),
@@ -187,6 +210,7 @@ def _coins_moved(cutoffs):
         'label': 'Coins spent',
         'href': '/ledger',
         'spent_today': coins(debit.filter(created_at__gte=cutoffs['today'])),
+        'windows': _windows(debit, cutoffs, amount='amount'),
         'spent_week': coins(debit.filter(created_at__gte=cutoffs['week'])),
         'spent_month': coins(debit.filter(created_at__gte=cutoffs['month'])),
         'credited_month': coins(credit.filter(created_at__gte=cutoffs['month'])),
