@@ -274,6 +274,15 @@ def _notice(kind, row, actor, reason, text, audience=PublicNotice.Audience.PUBLI
         text=text[:240], reason=reason[:120], actor=actor,
         audience=audience_of(audience),
     )
+    # A card already on the screen shows the banner the server handed it when it
+    # landed, so a sentence written afterwards has to be pushed or the warning goes
+    # unread until a reload. Held to the commit: a verdict that rolls back must not
+    # leave open tabs promising a notice nobody wrote.
+    try:
+        from apps.common import pulse
+        transaction.on_commit(lambda: pulse.notice_landed(notice))
+    except Exception:  # noqa: BLE001 - the wire is a courtesy, the notice already stands
+        pass
     return notice
 
 

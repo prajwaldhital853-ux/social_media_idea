@@ -79,6 +79,7 @@ export const NAV: NavGroup[] = [
     items: [
       { href: '/welcome', label: 'First-load wording', icon: 'chat', permission: 'welcome_text' },
       { href: '/limits', label: 'Post limits', icon: 'sliders', permission: 'post_limits' },
+      { href: '/features', label: 'Site features', icon: 'shield', permission: 'site_features' },
     ],
   },
   {

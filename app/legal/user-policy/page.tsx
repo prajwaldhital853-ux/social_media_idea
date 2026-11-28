@@ -26,7 +26,7 @@ export default function UserPolicyPage() {
         },
         {
           h: 'Keep it safe',
-          paras: ['No content that promotes violence, self-harm, eating disorders or dangerous acts. No sexual content involving minors — this is reported to authorities. No graphic gore posted for shock value. News and documentary context may be allowed with a warning.']
+          paras: ['No content that promotes violence, self-harm, eating disorders or dangerous acts. No sexual content involving minors, this is reported to authorities. No graphic gore posted for shock value. News and documentary context may be allowed with a warning.']
         },
         {
           h: 'No nudity or sexual content',
@@ -34,7 +34,7 @@ export default function UserPolicyPage() {
         },
         {
           h: 'No misinformation that causes harm',
-          paras: ['Do not post false information that could cause real-world harm — fake health cures, manipulated media presented as real, or false claims about elections or emergencies. Honest mistakes happen; correct them when you learn better.']
+          paras: ['Do not post false information that could cause real-world harm, fake health cures, manipulated media presented as real, or false claims about elections or emergencies. Honest mistakes happen; correct them when you learn better.']
         },
         {
           h: 'No spam or scams',

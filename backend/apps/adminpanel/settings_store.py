@@ -14,7 +14,7 @@ from .models import AdminSetting
 DEFAULTS = {
     'alert_report_pile': (3, 'int', 'Reports before content is pulled',
                           'How many different people have to report one thing before the platform hides it by '
-                          'itself — a post, a comment or a marketplace listing. At 1 the first report pulls it, '
+                          'itself (a post, a comment or a marketplace listing). At 1 the first report pulls it, '
                           'and it stays hidden until a person reviews it. The switch below turns the whole rule off.',
                           'safety'),
     'alert_report_age_hours': (24, 'int', 'A report may sit unanswered for (hours)',
@@ -182,8 +182,8 @@ DEFAULTS = {
                             'that this person actually fits.', 'promo'),
     'algo_relevance_floor': (2, 'int', 'Score that leads the paid queue',
                              'A person scoring this or above is served the campaign ahead of everybody '
-                             'else. Below it they are still offered it — the reach a package promises is '
-                             'mostly strangers — but only after the readers who fit, and between those ads '
+                             'else. Below it they are still offered it (the reach a package promises is '
+                             'mostly strangers) but only after the readers who fit, and between those ads '
                              'the better-received one goes first.',
                              'promo'),
     'promo_daily_cap': (2, 'int', 'Promotions per person per day',
@@ -200,6 +200,31 @@ DEFAULTS = {
     # means the shipped catalog still stands.
     'promo_packages': ('', 'str', 'Promotion packages (JSON)',
                        'What a campaign costs, how long it runs and how far it reaches.', 'promo'),
+    # The five doors a seat can close without a deploy. Each one is enforced twice:
+    # the member app greys the control, and the endpoint behind it refuses, so a
+    # hand-written request gets the same answer as a greyed button. Nothing here
+    # deletes content -- a closed marketplace still shows the offers it held, and a
+    # person whose wallet is closed still sees the balance they already have.
+    'feature_marketplace': (True, 'bool', 'Marketplace',
+                            'Off: nobody may list, buy, save or open an offer. The listings that already '
+                            'exist stay where they were posted, and the section shows a line saying it is '
+                            'closed rather than vanishing from the site.', 'feature'),
+    'feature_video': (True, 'bool', 'Video and reels',
+                      'Off: no video can be uploaded and no reel can be posted. Reels already on the site '
+                      'still play where they are linked, because pulling them out would empty the shelf '
+                      'rather than close the door.', 'feature'),
+    'feature_wallet': (True, 'bool', 'Coins and the wallet',
+                       'Off: no new coin purchase can be filed and a waiting request cannot be re-paid. '
+                       'Balances, history and every decision already made stay readable, and the desk '
+                       'keeps approving requests that were filed before the door closed.', 'feature'),
+    'feature_messages': (True, 'bool', 'Messages',
+                         'Off: nobody may send a message, and the typing light stops. Every conversation '
+                         'stays open to be read, so a person does not lose the answers they were given, '
+                         'and staff letters still arrive.', 'feature'),
+    'feature_promotion': (True, 'bool', 'Promotions',
+                          'Off: no campaign can be bought and a post cannot be put behind one. Campaigns '
+                          'already running keep their coins and keep running -- pause them here or end them '
+                          'with the payer if they should stop.', 'feature'),
     # Contract 6.10: the size of one post. These were the member app's own hard
     # numbers, 2,000 characters, four photos, one 60-second video, which made the
     # sentence "the Admin can change the post limits" a deploy. They are rows now,
@@ -256,7 +281,8 @@ DEFAULTS = {
 }
 
 GROUPS = {'safety': 'Safety and audit', 'payments': 'Coins and payments',
-          'promo': 'Promotions and reach', 'platform': 'Platform settings'}
+          'promo': 'Promotions and reach', 'platform': 'Platform settings',
+          'feature': 'Features members can use'}
 
 
 def _coerce(raw, kind, fallback):

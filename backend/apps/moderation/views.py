@@ -53,7 +53,7 @@ def reports(request):
         ).exists():
             return Response(
                 {'detail': 'You already reported this today. Each post, comment or account can '
-                           'be reported once every 24 hours — our team has it.'},
+                           'be reported once every 24 hours. Our team has it.'},
                 status=429,
             )
         obj = serializer.save(reporter=request.user)

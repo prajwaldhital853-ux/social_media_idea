@@ -294,7 +294,7 @@ export default function WelcomePage() {
                     <em className="welcome-who">
                       {item.set
                         ? <>written by <b>{item.by}</b> {ago(item.at || '')}, {item.help}</>
-                        : <>still the platform’s own value and never written here — {item.help.toLowerCase()}</>}
+                        : <>still the platform’s own value and never written here, {item.help.toLowerCase()}</>}
                     </em>
                   </label>
                 ))}

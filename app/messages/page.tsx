@@ -10,7 +10,8 @@ import { IC } from '@/lib/icons';
 
 export default function MessagesPage() {
   const router = useRouter();
-  const { me, t } = useApp();
+  const { me, t, featureLock } = useApp();
+  const chatOff = featureLock('messages');
   // Shared cache with the column below; here it is only the header count.
   const { conversations } = useInbox();
   const totalUnread = conversations.reduce((n, c) => n + c.unread, 0);
@@ -32,6 +33,7 @@ export default function MessagesPage() {
   return <AppShell>
     <div className="inbox-view messenger">
       <div className="messenger-side">
+        {chatOff && <p className="feature-off-note">{chatOff.msg}</p>}
         {!me ? (
           <div className="empty-state">
             <span className="empty-state-icon">{IC.msg}</span>

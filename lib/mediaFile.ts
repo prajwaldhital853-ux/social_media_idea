@@ -14,9 +14,9 @@ export function checkPhoto(file: File, maxMb = MAX_PHOTO_MB): void {
   if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
     throw new Error('Choose a JPEG, PNG or WebP image.');
   }
-  if (!file.size) throw new Error('That file is empty — choose another one.');
+  if (!file.size) throw new Error('That file is empty, choose another one.');
   if (file.size > maxMb * 1024 * 1024) {
-    throw new Error(`Photo must be under ${maxMb} MB — this one is ${mb(file.size)} MB.`);
+    throw new Error(`Photo must be under ${maxMb} MB, this one is ${mb(file.size)} MB.`);
   }
 }
 
@@ -69,12 +69,12 @@ export async function mediaFromFile(
   if (!video && !['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
     throw new Error('Choose a JPEG, PNG or WebP photo, or a video.');
   }
-  if (!file.size) throw new Error('That file is empty — choose another one.');
+  if (!file.size) throw new Error('That file is empty, choose another one.');
   if (video && file.size > videoMb * 1024 * 1024) {
-    throw new Error(`Video must be under ${videoMb} MB — this one is ${mb(file.size)} MB.`);
+    throw new Error(`Video must be under ${videoMb} MB, this one is ${mb(file.size)} MB.`);
   }
   if (!video && file.size > photoMb * 1024 * 1024) {
-    throw new Error(`Photo must be under ${photoMb} MB — this one is ${mb(file.size)} MB.`);
+    throw new Error(`Photo must be under ${photoMb} MB, this one is ${mb(file.size)} MB.`);
   }
   if (!video) return imageFromFile(file, onProgress);
   const src = URL.createObjectURL(file);
@@ -88,7 +88,7 @@ export async function mediaFromFile(
     URL.revokeObjectURL(src);
   }
   if (limits?.videoSeconds && dur > limits.videoSeconds) {
-    throw new Error(`Choose a video up to ${limits.videoSeconds} seconds long — this one runs ${Math.round(dur)}.`);
+    throw new Error(`Choose a video up to ${limits.videoSeconds} seconds long, this one runs ${Math.round(dur)}.`);
   }
   if (API_ENABLED) return { type: 'video', src: (await uploadFile(file, undefined, onProgress)).url, dur };
   const blobId = uid();

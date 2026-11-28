@@ -21,7 +21,7 @@ export default function TermsPage() {
         },
         {
           h: 'Your content',
-          paras: ['You keep ownership of what you post. By posting, you grant Exposing a non-exclusive licence to host and display it to the audience you choose (public, or followers only). Content stays until you delete it — nothing expires automatically. You may only post material you have the right to share.']
+          paras: ['You keep ownership of what you post. By posting, you grant Exposing a non-exclusive licence to host and display it to the audience you choose (public, or followers only). Content stays until you delete it, nothing expires automatically. You may only post material you have the right to share.']
         },
         {
           h: 'Acceptable use',

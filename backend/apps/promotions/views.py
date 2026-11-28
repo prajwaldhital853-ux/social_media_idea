@@ -11,11 +11,12 @@ from apps.adminpanel import rbac
 from apps.common.api import person
 from apps.common.config import package_by_id
 from apps.common.emails import queue_promotion_request_email
+from apps.common.features import notice as feature_notice
 from apps.common.pagination import KeysetPagination
 from apps.common.rules import rate, seat
 from apps.marketplace.models import Listing
 from apps.posts.models import Post
-from apps.wallet.models import Wallet
+from apps.wallet.models import Wallet, locked_coins
 
 from . import services
 from .models import PromoImpression, Promotion, PromoEvent
@@ -111,6 +112,9 @@ def _rows(promos):
 @permission_classes([IsAuthenticated])
 def promotion_list(request):
     if request.method == 'POST':
+        refused = feature_notice('promotion')
+        if refused:
+            return refused
         serializer = PromotionSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
@@ -121,6 +125,22 @@ def promotion_list(request):
             target = Listing.objects.filter(pk=target_id, seller=request.user).first() if target_id.isdigit() else None
         if not target:
             return Response({'detail': 'You can only promote your own content.'}, status=400)
+        # One order with the desk at a time, across every post and advert the account
+        # owns. The coins are not taken until a seat approves, so a member holding 300
+        # could otherwise queue two 200 coin orders and have both bill the wallet when
+        # the desk says yes to them. A withdrawn, refused or finished order is not
+        # waiting, so the door opens again the moment the desk answers. This is checked
+        # before the target's own answer so a second order on the same card is not
+        # mistaken for the one already in the queue.
+        in_queue = Promotion.objects.filter(
+            owner=request.user, status=Promotion.Status.PENDING,
+        ).order_by('-created_at').first()
+        if in_queue:
+            return Response(
+                {'detail': 'You already have a promotion request waiting for approval. Wait for the '
+                           'admin to approve or refuse it before sending another one.'},
+                status=409,
+            )
         # One campaign at a time per post or advert. Two live orders on one card would
         # spend two budgets on the same audience and leave the desk judging the same
         # advert twice, and a refused or finished campaign is not a live one — that
@@ -131,12 +151,6 @@ def promotion_list(request):
         ).filter(Q(ends_at__isnull=True) | Q(ends_at__gt=timezone.now())).order_by('-created_at').first()
         if held:
             what = 'post' if target_type == Promotion.Target.POST else 'listing'
-            if held.status == Promotion.Status.PENDING:
-                return Response(
-                    {'detail': f'This {what} is already waiting for approval. Please wait for the '
-                               'admin to approve or refuse it before sending another request.'},
-                    status=409,
-                )
             return Response(
                 {'detail': f'This {what} is already being promoted. End that campaign before '
                            'sending another request for it.'},
@@ -161,6 +175,17 @@ def promotion_list(request):
             return Response(
                 {'detail': f'That package costs {budget} coins and your balance is {wallet.balance}. '
                            'Buy coins first.'},
+                status=400,
+            )
+        # A refund the desk has not paid is money already promised, so those coins are
+        # not the member's to spend meanwhile. Saying which coins and why is the
+        # difference between a member who waits for the refund and one who buys twice.
+        promise = locked_coins(wallet.pk)
+        if budget > 0 and wallet.balance - promise < Decimal(str(budget)):
+            return Response(
+                {'detail': f'{promise} of your {wallet.balance} coins are locked for a refund you asked for, '
+                           f'so {wallet.balance - promise} coins can be spent. The desk releases them when it '
+                           'settles the refund.'},
                 status=400,
             )
         promo = serializer.save(

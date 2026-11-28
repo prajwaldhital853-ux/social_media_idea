@@ -4,14 +4,15 @@ import { ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useApp } from '@/lib/AppContext';
+import type { FeatureName } from '@/lib/AppContext';
 import { useNewCount } from '@/lib/newCount';
 import Avatar from './Avatar';
 import { IC } from '@/lib/icons';
 
-type RailItem = { icon: ReactNode; label: string; href: string; badge?: number; plus?: boolean };
+type RailItem = { icon: ReactNode; label: string; href: string; badge?: number; plus?: boolean; gate?: FeatureName };
 
 export default function NavRail() {
-  const { me, db, logout, t, feature, openCreateChooser } = useApp();
+  const { me, db, logout, t, featureLock, openCreateChooser } = useApp();
   const pathname = usePathname();
   const router = useRouter();
 
@@ -20,28 +21,32 @@ export default function NavRail() {
   const unreadMsg = db.unread ? db.unread.messages : (me ? db.messages.filter(m => m.to === me.id && !m.read).length : 0);
   const feedNew = useNewCount('feed');
   const reelsNew = useNewCount('reels');
+  const walletOff = featureLock('wallet');
 
   const navItems: RailItem[] = [
     { icon: IC.home, label: t('home'), href: '/', badge: feedNew, plus: true },
     { icon: IC.bell, label: t('notifications'), href: '/notifications' },
-    { icon: IC.msg, label: t('messages'), href: '/messages', badge: unreadMsg },
+    { icon: IC.msg, label: t('messages'), href: '/messages', badge: unreadMsg, gate: 'messages' },
     { icon: IC.search, label: t('search'), href: '/explore' },
-    ...(feature('video') ? [{ icon: IC.video, label: t('video'), href: '/video', badge: reelsNew, plus: true }] : []),
-    ...(feature('marketplace') ? [{ icon: IC.store, label: t('marketplace'), href: '/marketplace' }] : [])
+    { icon: IC.video, label: t('video'), href: '/video', badge: reelsNew, plus: true, gate: 'video' },
+    { icon: IC.store, label: t('marketplace'), href: '/marketplace', gate: 'marketplace' },
   ];
 
   return (
     <aside className="rail">
       <nav className="rail-nav" aria-label="Primary">
-        {navItems.map(item => (
+        {navItems.map(item => {
+          const lock = item.gate ? featureLock(item.gate) : null;
+          return (
           <Link
             key={item.href}
             href={item.href}
-            className={`nav-item ${pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href + '/')) ? 'active' : ''}`}
+            className={`nav-item ${pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href + '/')) ? 'active' : ''}${lock ? ' f-off' : ''}`}
+            {...(lock ? lock.props : {})}
           >
             <span className="nav-ico">
               {item.icon}
-              {!!item.badge && (
+              {!!item.badge && !lock && (
                 <span className={`nav-badge ${item.plus ? 'nav-badge-new' : ''}`}>
                   {item.plus ? (item.badge > 99 ? '99+' : `+${item.badge}`) : (item.badge > 9 ? '9+' : item.badge)}
                 </span>
@@ -49,7 +54,8 @@ export default function NavRail() {
             </span>
             <span>{item.label}</span>
           </Link>
-        ))}
+          );
+        })}
       </nav>
 
       <div className="rail-foot">
@@ -57,7 +63,7 @@ export default function NavRail() {
           {IC.bookmark}
           <span>{t('saved')}</span>
         </Link>
-        <Link href="/wallet" className={`nav-item ${pathname.startsWith('/wallet') ? 'active' : ''}`}>
+        <Link href="/wallet" className={`nav-item ${pathname.startsWith('/wallet') ? 'active' : ''}${walletOff ? ' f-off' : ''}`} {...(walletOff ? walletOff.props : {})}>
           {IC.wallet}
           <span>{t('wallet')}</span>
         </Link>

@@ -23,8 +23,15 @@ import type { Listing } from '@/lib/types';
 export default function ListingPage() {
   const params = useParams();
   const router = useRouter();
-  const { db, me, t, feature, setDb, serverMode, showToast, showConfirm, activePromo, openPromo, isListingSaved, toggleListingSave } = useApp();
+  const { db, me, t, featureLock, setDb, serverMode, showToast, showConfirm, activePromo, openPromo, pendingPromo, isListingSaved, toggleListingSave } = useApp();
   const lang = db.lang;
+  const marketOff = featureLock('marketplace');
+  const promoOff = featureLock('promotion');
+  const chatOff = featureLock('messages');
+  // Contacting a seller needs both the market and the thread open, and the first
+  // closed one names itself. A buyer told "messages are off" while the market is
+  // the shut door would go looking for a switch that is not there.
+  const contactOff = marketOff || chatOff;
   const [photo, setPhoto] = useState(0);
   const [editing, setEditing] = useState(false);
   const [promote, setPromote] = useState(false);
@@ -87,6 +94,9 @@ export default function ListingPage() {
   // about what it waits for.
   const held = mine ? openPromo('listing', listing.id) : undefined;
   const waiting = held?.status === 'pending' ? held : undefined;
+  // One order with the desk at a time, so an earlier request on one of the seller's
+  // own posts closes this door until the desk answers it.
+  const queued = mine ? pendingPromo() : undefined;
   const images = listing.media.filter(m => m.type === 'image' && m.src);
   const current = images[Math.min(photo, images.length - 1)];
   const saved = isListingSaved(listing.id);
@@ -203,34 +213,37 @@ export default function ListingPage() {
             <div className="listing-actions">
               {mine ? (
                 <>
-                  <button type="button" className="promote-submit" onClick={() => setEditing(true)}>{IC.edit}{t('edit')}</button>
-                  {listing.status === 'active' && feature('promotion') && (!held || waiting) && (
+                  <button type="button" className={`promote-submit${marketOff ? ' f-off' : ''}`} onClick={() => setEditing(true)} {...(marketOff ? marketOff.props : {})}>{IC.edit}{t('edit')}</button>
+                  {listing.status === 'active' && (!held || waiting) && (
                     <button
                       type="button"
-                      className="ghost-btn"
+                      className={`ghost-btn${promoOff ? ' f-off' : ''}`}
                       onClick={() => {
+                        if (queued) { showToast(t('promoQueueHold')); return; }
                         if (waiting) { showToast(t('promoWaiting', { what: t('dlisting') })); return; }
                         setPromote(true);
                       }}
+                      {...(promoOff ? promoOff.props : {})}
                     >{IC.chart}{t('promote')}</button>
                   )}
                   {listing.status === 'active' ? (
-                    <button type="button" className="ghost-btn" onClick={() => setStatus('sold')}>{IC.check}{t('markSold')}</button>
+                    <button type="button" className={`ghost-btn${marketOff ? ' f-off' : ''}`} onClick={() => setStatus('sold')} {...(marketOff ? marketOff.props : {})}>{IC.check}{t('markSold')}</button>
                   ) : listing.status === 'sold' ? (
-                    <button type="button" className="ghost-btn" onClick={() => setStatus('active')}>{IC.store}{t('relist')}</button>
+                    <button type="button" className={`ghost-btn${marketOff ? ' f-off' : ''}`} onClick={() => setStatus('active')} {...(marketOff ? marketOff.props : {})}>{IC.store}{t('relist')}</button>
                   ) : null}
                   <button
                     type="button"
-                    className="ghost-btn danger"
+                    className={`ghost-btn danger${marketOff ? ' f-off' : ''}`}
                     onClick={() => showConfirm(t('confirmDelete'), () => setStatus('removed'))}
+                    {...(marketOff ? marketOff.props : {})}
                   >
                     {IC.x}{t('del')}
                   </button>
                 </>
               ) : (
                 <>
-                  <button type="button" className="promote-submit" onClick={contact}>{IC.msg}{t('contactSeller')}</button>
-                  <button type="button" className={`ghost-btn ${saved ? 'saved-on' : ''}`} onClick={save} aria-pressed={saved}>
+                  <button type="button" className={`promote-submit${contactOff ? ' f-off' : ''}`} onClick={contact} {...(contactOff ? contactOff.props : {})}>{IC.msg}{t('contactSeller')}</button>
+                  <button type="button" className={`ghost-btn ${saved ? 'saved-on' : ''}${marketOff ? ' f-off' : ''}`} onClick={save} aria-pressed={saved} {...(marketOff ? marketOff.props : {})}>
                     {IC.bookmark}<span>{saved ? t('saved') : t('saveListing')}</span>
                   </button>
                   <button type="button" className="ghost-btn" onClick={() => setSharing(true)}>{IC.share}{t('share')}</button>
@@ -238,6 +251,8 @@ export default function ListingPage() {
                 </>
               )}
             </div>
+
+            {marketOff && <p className="feature-off-note">{marketOff.msg}</p>}
 
             {seller && (
               <Link href={`/u/${seller.username}`} className="listing-seller-card">

@@ -143,7 +143,7 @@ export function mapMedia(m: any): Media {
  * rather than an empty array, so a card the server said nothing about keeps the
  * shape it had and prints no banner.
  */
-function mapNotices(rows: any): Notice[] | undefined {
+export function mapNotices(rows: any): Notice[] | undefined {
   if (!Array.isArray(rows) || rows.length === 0) return undefined;
   return rows.map((n: any) => ({
     id: idOf(n.id), text: n.text || '', reason: n.reason || undefined,
@@ -357,6 +357,14 @@ export function mapCoinRequest(row: any): CoinRequest {
     proofAsked: !!row.proof_asked,
     proofReason: row.proof_reason || '',
     resubmitted: !!row.resubmitted,
+    refundable: !!row.refundable,
+    refundRequested: !!row.refund_requested,
+    refunded: !!row.refunded,
+    refundRefused: !!row.refund_refused,
+    refundSpent: !!row.refund_spent,
+    refundPromoPending: !!row.refund_promo_pending,
+    refundOtherOpen: !!row.refund_other_open,
+    locked: Math.round(Number(row.locked_coins) || 0),
   };
 }
 
@@ -390,6 +398,8 @@ export function mapSettings(config: any): Settings {
     features: {
       video: config.features?.video !== false,
       marketplace: config.features?.marketplace !== false,
+      wallet: config.features?.wallet !== false,
+      messages: config.features?.messages !== false,
       promotion: config.features?.promotion !== false,
       googleLogin: !!config.features?.googleLogin,
       facebookLogin: !!config.features?.facebookLogin,

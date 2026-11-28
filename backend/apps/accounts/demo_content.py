@@ -581,7 +581,7 @@ REPLY_LINES = [
 # Small talk pairs: (first line, reply). A conversation is several of these,
 # plus a handful of openers and closers, so the inbox reads like two people.
 CHAT_SCRIPTS = [
-    ('Are we still on for the ridge hike?', 'Yes — six sharp, bring the good camera.'),
+    ('Are we still on for the ridge hike?', 'Yes. Six sharp, bring the good camera.'),
     ('Did you get the bus in time?', 'Barely. Walked the last four kilometres.'),
     ('The client moved the meeting to nine.', 'Nine. Sure. I will be awake for most of it.'),
     ('Sending you the {place} photos now.', 'Oh wow. The light on the second one.'),

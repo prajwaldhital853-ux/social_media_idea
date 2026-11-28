@@ -14,7 +14,7 @@ export default function CookiesPage() {
         {
           h: 'What we store',
           list: [
-            'exposing-demo-v1 (localStorage): the demo database — accounts, posts, comments, reactions, follows, messages, wallet and settings.',
+            'exposing-demo-v1 (localStorage): the demo database, accounts, posts, comments, reactions, follows, messages, wallet and settings.',
             'exposing-theme (localStorage): your light or dark mode choice.',
             'exposing-search-history:<user> (localStorage): your recent search terms, kept per account.',
             'exposing-media (IndexedDB): video clips you attach, stored on-device so they survive reloads.'

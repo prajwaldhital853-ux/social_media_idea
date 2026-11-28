@@ -147,7 +147,7 @@ export function seed(): Database {
     },
     {
       id: 'p14', uid: 'u10',
-      text: 'Night market in Thamel — steam, neon, and a really good sel roti stand.',
+      text: 'Night market in Thamel, steam, neon, and a really good sel roti stand.',
       media: [
         { type: 'image' as const, src: 'https://images.unsplash.com/photo-1534274988757-a28bf1a57c17?w=1200&q=80' },
         { type: 'image' as const, src: 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=1200&q=80' },
@@ -377,7 +377,10 @@ export function defaultSettings(): Settings {
     bankName: 'Nepal Bank Ltd',
     bankAccount: '0120-4455-8891',
     bankHolder: 'Exposing Pvt Ltd',
-    features: { video: true, marketplace: true, promotion: true, googleLogin: true, facebookLogin: true, appleLogin: false },
+    features: {
+      video: true, marketplace: true, wallet: true, messages: true, promotion: true,
+      googleLogin: true, facebookLogin: true, appleLogin: false,
+    },
     packages: [
       { id: 'pk_starter', name: 'Starter', coins: 100, days: 3, reach: 'Up to 3,000 people' },
       { id: 'pk_growth', name: 'Growth', coins: 300, days: 7, reach: 'Up to 12,000 people' },

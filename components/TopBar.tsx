@@ -15,13 +15,15 @@ import { IC } from '@/lib/icons';
 type Panel = 'none' | 'messages' | 'notifications';
 
 export default function TopBar() {
-  const { me, db, t, feedTab, setFeedTab, updateLang } = useApp();
+  const { me, db, t, feedTab, setFeedTab, updateLang, featureLock } = useApp();
   const pathname = usePathname();
   const [panel, setPanel] = useState<Panel>('none');
   const msgBox = useRef<HTMLDivElement>(null);
   const notifBox = useRef<HTMLDivElement>(null);
   const close = useCallback(() => setPanel('none'), []);
   const toggle = (next: Panel) => setPanel(p => (p === next ? 'none' : next));
+  const videoOff = featureLock('video');
+  const msgOff = featureLock('messages');
 
   // Each box guards its own panel only: with both armed, the idle box would
   // read clicks inside the open panel as outside clicks and swallow the first one.
@@ -71,24 +73,26 @@ export default function TopBar() {
       <div className="topbar-right">
         <Link
           href="/video"
-          className={`topbar-icon ${pathname.startsWith('/video') ? 'active' : ''}`}
+          className={`topbar-icon ${pathname.startsWith('/video') ? 'active' : ''}${videoOff ? ' f-off' : ''}`}
           aria-label={t('video')}
           title={t('video')}
+          {...(videoOff ? videoOff.props : {})}
         >
           {IC.video}
         </Link>
         <div className="topbar-slot" ref={msgBox}>
           <button
             type="button"
-            className={`topbar-icon ${pathname.startsWith('/messages') || panel === 'messages' ? 'active' : ''}`}
+            className={`topbar-icon ${pathname.startsWith('/messages') || panel === 'messages' ? 'active' : ''}${msgOff ? ' f-off' : ''}`}
             aria-label={t('messages')}
             title={t('messages')}
             aria-haspopup="dialog"
             aria-expanded={panel === 'messages'}
             onClick={() => toggle('messages')}
+            {...(msgOff ? msgOff.props : {})}
           >
             {IC.msg}
-            {unreadMsg > 0 && <span className="topbar-badge">{badge(unreadMsg)}</span>}
+            {unreadMsg > 0 && !msgOff && <span className="topbar-badge">{badge(unreadMsg)}</span>}
           </button>
           {panel === 'messages' && <MessengerPanel close={close} />}
         </div>

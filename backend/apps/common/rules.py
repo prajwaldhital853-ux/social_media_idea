@@ -110,19 +110,19 @@ def post_limits_gate(request):
     if len(photos) > most:
         return Response({
             'detail': f'A post carries {most} photo{"s" if most != 1 else ""}. '
-                      f'Yours has {len(photos)} — take some out and post again.',
+                      f'Yours has {len(photos)}, take some out and post again.',
         }, status=400)
     most = published['video']['per_post']
     if len(videos) > most:
         return Response({
             'detail': f'A post carries {most} video{"s" if most != 1 else ""}. '
-                      f'Yours has {len(videos)} — take some out and post again.',
+                      f'Yours has {len(videos)}, take some out and post again.',
         }, status=400)
     seconds = published['video']['seconds']
     longest = max((float(row.get('duration') or 0) for row in videos), default=0)
     if longest > seconds:
         return Response({
-            'detail': f'A video here runs up to {seconds} seconds — one of yours runs {round(longest)}.',
+            'detail': f'A video here runs up to {seconds} seconds, one of yours runs {round(longest)}.',
         }, status=400)
     return None
 

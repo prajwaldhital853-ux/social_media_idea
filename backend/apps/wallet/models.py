@@ -59,6 +59,7 @@ class CoinRequest(models.Model):
         PENDING = 'pending', 'Pending'
         APPROVED = 'approved', 'Approved'
         REJECTED = 'rejected', 'Rejected'
+        REFUNDED = 'refunded', 'Refunded'
 
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='coin_requests')
     coins = models.PositiveIntegerField()
@@ -75,6 +76,19 @@ class CoinRequest(models.Model):
     # the banner. The request row is updated in place — resubmitting never makes
     # a second purchase the admin then has to reconcile with the first.
     resubmitted_at = models.DateTimeField(null=True, blank=True)
+    # The refund half of the same purchase. The coins stay on the request the buyer
+    # paid for: a refund is a chapter of that purchase, not a second one, and one
+    # row keeps the desk's paper in the place it already looks.
+    refund_requested_at = models.DateTimeField(null=True, blank=True)
+    refund_reference = models.CharField(max_length=80, blank=True)
+    refund_screenshot_url = models.URLField(blank=True)
+    refund_reason = models.CharField(max_length=240, blank=True)
+    refunded_at = models.DateTimeField(null=True, blank=True)
+    # The desk read the ask and said no. The coins come off the lock, the purchase
+    # stays approved, and this stamp is what turns the buyer's badge from "waiting"
+    # into the answer without a sixth status that means the same thing twice.
+    refund_refused_at = models.DateTimeField(null=True, blank=True)
+    refund_refuse_reason = models.CharField(max_length=240, blank=True)
 
     class Meta:
         ordering = ['-created_at']
@@ -84,6 +98,37 @@ class CoinRequest(models.Model):
             models.Index(fields=['status', '-created_at'], name='coins_status_newest'),
             models.Index(fields=['user', '-created_at'], name='coins_user_newest'),
         ]
+
+
+class CoinLot(models.Model):
+    """The coins from one approved purchase, and what is left of them.
+
+    A refund is only honest if the platform can say "not one of these coins has been
+    spent", and a balance alone cannot answer that because coins pool the moment they
+    land. So every approval writes a lot, every debit eats the oldest free lot first,
+    and a lot can be held — a hold is money the buyer asked back and the desk has not
+    paid yet. A wallet funded before this table existed simply has no lot rows, and
+    its coins move exactly as they always did.
+    """
+
+    wallet = models.ForeignKey(Wallet, on_delete=models.CASCADE, related_name='coin_lots')
+    request = models.OneToOneField(CoinRequest, on_delete=models.CASCADE, related_name='lot')
+    coins = models.DecimalField(max_digits=12, decimal_places=2)
+    remaining = models.DecimalField(max_digits=12, decimal_places=2)
+    held = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['created_at', 'id']
+        indexes = [models.Index(fields=['wallet', 'created_at'], name='coin_lot_oldest')]
+
+    @property
+    def untouched(self):
+        """Not one coin of this purchase has been spent."""
+        return self.remaining >= self.coins
+
+    def __str__(self):
+        return f'{self.remaining}/{self.coins} from request {self.request_id}'
 
 
 class DeletedWalletRecord(models.Model):
@@ -108,8 +153,14 @@ class DeletedWalletRecord(models.Model):
         return f'{self.username} ({self.archived_at:%Y-%m-%d})'
 
 
-def apply(wallet_id, kind, amount, note='', actor=None, ref=''):
-    """Atomic balance change + ledger row. Raises ValueError on overdraft."""
+def apply(wallet_id, kind, amount, note='', actor=None, ref='', from_lot=None):
+    """Atomic balance change + ledger row. Raises ValueError on overdraft.
+
+    `from_lot` names the batch a debit is drawn from. A settled refund pays back one
+    purchase's own coins, so it must take them off that lot and nowhere else; left to
+    pick the oldest free lot, it eats a second purchase's coins on top of the ones it
+    already closed and shuts the refund door on somebody who never spent a coin.
+    """
     amount = Decimal(amount)
     if amount <= 0:
         raise ValueError('Amount must be positive.')
@@ -118,11 +169,83 @@ def apply(wallet_id, kind, amount, note='', actor=None, ref=''):
         delta = amount if kind == Transaction.Kind.CREDIT else -amount
         if wallet.balance + delta < 0:
             raise ValueError('Insufficient balance.')
+        lots = []
+        if kind == Transaction.Kind.DEBIT:
+            lots = list(CoinLot.objects.select_for_update().filter(wallet=wallet).order_by('created_at', 'id'))
+            held = _held(lots)
+            if amount > wallet.balance - held:
+                raise ValueError(
+                    f'{_whole(held)} of this wallet\'s {_whole(wallet.balance)} coins are locked for a '
+                    f'refund that was asked for and not yet paid, so at most '
+                    f'{_whole(wallet.balance - held)} coins can be spent.'
+                )
         Wallet.objects.filter(pk=wallet.pk).update(balance=F('balance') + delta)
+        if kind == Transaction.Kind.DEBIT:
+            _consume(lots, amount, only=from_lot)
         row = Transaction.objects.create(wallet=wallet, kind=kind, amount=amount,
                                          note=note[:200], actor=actor, ref=str(ref or '')[:80])
     _pulse_balance(wallet.user_id, wallet.pk)
     return row
+
+
+def _held(lots):
+    return sum((lot.held for lot in lots), Decimal('0'))
+
+
+def _whole(value):
+    """A coin count without the trailing `.00`, which is how a person counts coins."""
+    number = Decimal(value)
+    return int(number) if number == number.to_integral_value() else number
+
+
+def _consume(lots, amount, only=None):
+    """Eat the oldest coins that no refund has its hand on.
+
+    The order is the whole point: a purchase stays refundable only while it is
+    untouched, so a buyer who spends anything spends their oldest coins first and
+    the batch they might want back is the one left intact.
+
+    `only` narrows the eating to one batch, which is what a refund settlement needs:
+    those coins already left the wallet, and drawing the same number again off the
+    oldest free lot would spend somebody else's purchase twice over.
+    """
+    left = amount
+    for lot in lots:
+        if left <= 0:
+            return
+        if only is not None and lot.pk != only:
+            continue
+        free = lot.remaining - lot.held
+        if free <= 0:
+            continue
+        take = min(free, left)
+        lot.remaining = lot.remaining - take
+        CoinLot.objects.filter(pk=lot.pk).update(remaining=lot.remaining)
+        left -= take
+
+
+def credit_purchase(wallet, req, actor=None):
+    """Rupees approved, coins in: the ledger row and the batch it belongs to.
+
+    Every door that credits an approved purchase comes through here, so a lot always
+    exists beside an approval and the refund question has something to answer from.
+    """
+    entry = apply(wallet.pk, Transaction.Kind.CREDIT, req.coins,
+                  f'Coin purchase {req.pk} approved',
+                  actor=actor, ref=req.reference or f'coin_request:{req.pk}')
+    CoinLot.objects.get_or_create(
+        request=req, defaults={'wallet_id': wallet.pk, 'coins': Decimal(req.coins),
+                               'remaining': Decimal(req.coins)},
+    )
+    return entry
+
+
+def locked_coins(wallet_id, except_request=None):
+    """What the refund desk is currently holding this wallet's coins for."""
+    qs = CoinLot.objects.filter(wallet_id=wallet_id)
+    if except_request is not None:
+        qs = qs.exclude(request_id=except_request)
+    return _held(list(qs))
 
 
 def _pulse_balance(user_id, wallet_id):

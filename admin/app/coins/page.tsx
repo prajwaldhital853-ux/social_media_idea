@@ -20,8 +20,12 @@ import { CoinAsk, CoinPage } from '@/lib/types';
  */
 
 const STATES = [
+  // "Waiting" is the desk's word for unanswered work, and a refund the buyer filed is
+  // exactly that: the server answers this chip with an uncredited receipt and an unpaid
+  // refund together, because the seat should not have to know which column each lives in.
   { id: 'pending', label: 'Waiting' },
   { id: 'approved', label: 'Credited' },
+  { id: 'refunded', label: 'Refund paid' },
   { id: 'rejected', label: 'Rejected' },
   { id: 'all', label: 'Every request' },
 ];
@@ -30,6 +34,7 @@ const STANDINGS: Record<string, { tone: string; label: string }> = {
   pending: { tone: 'warn', label: 'Waiting on a person' },
   approved: { tone: 'good', label: 'Coins credited' },
   rejected: { tone: 'mute', label: 'Rejected' },
+  refunded: { tone: 'mute', label: 'Refund paid' },
 };
 
 export default function CoinsPage() {
@@ -125,7 +130,7 @@ export default function CoinsPage() {
         chips={STATES.map(item => ({
           id: item.id,
           label: item.label,
-          n: page ? (item.id === 'all' ? page.counts.every : page.counts[item.id as 'pending' | 'approved' | 'rejected']) : undefined,
+          n: page ? (item.id === 'all' ? page.counts.every : page.counts[item.id as 'pending' | 'approved' | 'rejected' | 'refunded']) : undefined,
         }))}
         value={state}
         onPick={setState}
@@ -181,7 +186,7 @@ export default function CoinsPage() {
           <h2>Nothing to settle</h2>
           <p>
             {state === 'pending'
-              ? 'Every coin purchase that reached the account has been credited. A new one appears the moment someone uploads their receipt.'
+              ? 'Nothing is owed to anybody. Every receipt that reached the account is credited, and no refund ask is open.'
               : 'No request matches this view. Try widening the filter.'}
           </p>
         </section>
@@ -245,6 +250,14 @@ function Ask({ row }: { row: CoinAsk }) {
           {row.status === 'pending' && (row.asked
             ? <span className="pill dead" data-owed>Owed proof</span>
             : row.resubmitted && <span className="pill good" data-resent>Proof resent</span>)}
+          {/* A refund ask is money the platform owes, so the queue says so before
+              the seat has to open the request to find out. It sits in the same
+              Standing column as the purchase itself: one request, two chapters. */}
+          {!!row.refund && (row.refund.paid_at
+            ? <span className="pill mute" title={stamp(row.refund.paid_at)} data-refund="paid">Refund paid</span>
+            : row.refund.refused_at
+              ? <span className="pill dead" title={stamp(row.refund.refused_at)} data-refund="refused">Refund refused</span>
+              : <span className="pill warn" title={`${row.refund.coins ?? row.coins} coins locked`} data-refund="open">Refund owed</span>)}
         </td>
         <td data-label="Decided by" className="dim">
           {row.review

@@ -115,7 +115,7 @@ const PULSE_KINDS: ReadonlySet<string> = new Set<AdminPulseKind>([
   'coin_request', 'promotion', 'coins', 'warning',
 ]);
 const NOTICE_KINDS: ReadonlySet<string> = new Set([
-  'report', 'coin_request', 'signup', 'coin_proof', 'promotion', 'alert',
+  'report', 'coin_request', 'signup', 'coin_proof', 'coin_refund', 'promotion', 'alert',
 ]);
 const REFRESH_DELAY = 40;
 let health: AdminHealth = 'offline';

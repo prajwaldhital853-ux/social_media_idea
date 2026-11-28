@@ -14,15 +14,21 @@ import { uid } from '@/lib/utils';
 import { CoinRequest } from '@/lib/types';
 
 const PRESETS = [50, 100, 200, 500, 1000];
+const CEILING = 10000;
 /**
  * The coin request form, once per payment method. The two wallet pages differ
  * only by which detail the buyer copies, so the amount, the reference and the
  * proof of payment stay in one place.
  */
 export default function CoinRequestForm({ method }: { method: 'bank' | 'qr' }) {
-  const { db, me, t, setDb, merge, showToast } = useApp();
+  const { db, me, t, setDb, merge, showToast, showConfirm, featureLock } = useApp();
+  const walletOff = featureLock('wallet');
   const router = useRouter();
   const [coins, setCoins] = useState(100);
+  // The floor is a rule for the order, not for the typing. Clamping on every
+  // keystroke rewrote "2" on the way to "250" back into the desk's minimum, so the
+  // box could only ever be clicked, never written in.
+  const [coinsText, setCoinsText] = useState('100');
   const [reference, setReference] = useState('');
   const [screenshot, setScreenshot] = useState('');
   const [error, setError] = useState('');
@@ -44,11 +50,23 @@ export default function CoinRequestForm({ method }: { method: 'bank' | 'qr' }) {
   const presets = PRESETS.filter(value => value >= floor);
   const choices = presets.length > 0 ? presets : [floor];
 
+  const applyCoins = (value: number) => {
+    setCoins(value);
+    setCoinsText(String(value));
+  };
+  // Leaving the field is where a written number becomes an order figure: too small
+  // goes up to the floor, too large comes down to the ceiling. Nothing is rewritten
+  // while the hand is still in the box.
+  const settleCoins = () => {
+    const picked = Math.round(Number(coinsText) || 0);
+    applyCoins(Math.max(floor, Math.min(CEILING, picked)));
+  };
+
   // The desk's floor can arrive after this form rendered (the seed says 100
   // until /api/meta/ answers), so a pick made in that window is re-clamped.
   useEffect(() => {
-    setCoins(prev => (prev < floor ? floor : prev));
-  }, [floor]);
+    if (coins < floor) applyCoins(floor);
+  }, [floor]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const copy = async (value: string) => {
     try {
@@ -84,13 +102,7 @@ export default function CoinRequestForm({ method }: { method: 'bank' | 'qr' }) {
     setTimeout(() => router.push('/wallet/requests'), 0);
   };
 
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!reference.trim()) { setError(t('reference')); return; }
-    if (waiting) {
-      showToast(waiting.proofAsked ? t('coinProofFirst') : t('coinWaiting'));
-      return;
-    }
+  const send = async () => {
     if (API_ENABLED) {
       setBusy(true);
       try {
@@ -124,8 +136,29 @@ export default function CoinRequestForm({ method }: { method: 'bank' | 'qr' }) {
     toRequests();
   };
 
+  // Sending this tells the desk money left your own bank session, so the bar at the
+  // foot of the screen repeats the number back before it goes. A request that is
+  // bounced for a wrong reference is a second ticket the seat has to explain.
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (busy) return;
+    if (walletOff) { showToast(walletOff.msg); return; }
+    const picked = Math.round(Number(coinsText) || 0);
+    if (picked < floor || picked > CEILING) {
+      applyCoins(Math.max(floor, Math.min(CEILING, picked)));
+      setError(t('coinRange', { n: floor, m: CEILING }));
+      return;
+    }
+    if (!reference.trim()) { setError(t('reference')); return; }
+    if (waiting) {
+      showToast(waiting.proofAsked ? t('coinProofFirst') : t('coinWaiting'));
+      return;
+    }
+    showConfirm(t('coinSendConfirm', { n: coins, a: amount }), () => { void send(); });
+  };
+
   return (
-    <form className="wallet-form" onSubmit={submit}>
+    <form className="wallet-form" onSubmit={submit} noValidate>
       <div className="wallet-field">
         <span className="wallet-label">{t('chooseCoins')}</span>
         <div className="wallet-amounts">
@@ -134,7 +167,7 @@ export default function CoinRequestForm({ method }: { method: 'bank' | 'qr' }) {
               key={value}
               type="button"
               className={`wallet-amount ${coins === value ? 'on' : ''}`}
-              onClick={() => setCoins(value)}
+              onClick={() => applyCoins(value)}
             >
               {value}
             </button>
@@ -145,10 +178,17 @@ export default function CoinRequestForm({ method }: { method: 'bank' | 'qr' }) {
           <input
             type="number"
             min={floor}
-            max={10000}
+            max={CEILING}
             step={10}
-            value={coins}
-            onChange={e => setCoins(Math.max(floor, Math.min(10000, Number(e.target.value) || floor)))}
+            value={coinsText}
+            onChange={e => {
+              const raw = e.target.value;
+              const n = Math.round(Number(raw));
+              setCoinsText(raw);
+              setError('');
+              if (raw !== '' && Number.isFinite(n) && n >= floor && n <= CEILING) setCoins(n);
+            }}
+            onBlur={settleCoins}
             aria-label={t('chooseCoins')}
           />
         </label>
@@ -216,7 +256,9 @@ export default function CoinRequestForm({ method }: { method: 'bank' | 'qr' }) {
 
       {error && <p className="wallet-error">{error}</p>}
 
-      <button type="submit" className="wallet-submit" disabled={busy}>
+      {walletOff && <p className="feature-off-note">{walletOff.msg}</p>}
+
+      <button type="submit" className={`wallet-submit${walletOff ? ' f-off' : ''}`} disabled={busy} {...(walletOff ? walletOff.props : {})}>
         {t('submitRequest')} · {coins} {t('coins')}
       </button>
     </form>

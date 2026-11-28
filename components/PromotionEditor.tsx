@@ -22,7 +22,7 @@ const ageOf = (text: string, fallback: number) => Math.max(13, Math.min(100, Mat
  * waiting for a seat the desk is reading the price it was asked to approve.
  */
 export default function PromotionEditor({ promo, onClose }: PromotionEditorProps) {
-  const { db, t, updatePromotion } = useApp();
+  const { db, t, updatePromotion, showConfirm } = useApp();
   const [category, setCategory] = useState(promo.category || (promo.targetType === 'listing' ? db.settings.categories[0] : POST_TOPICS[0]));
   const [ageMin, setAgeMin] = useState(String(promo.ageMin));
   const [ageMax, setAgeMax] = useState(String(promo.ageMax));
@@ -50,12 +50,7 @@ export default function PromotionEditor({ promo, onClose }: PromotionEditorProps
     setAgeMax(String(hi));
   };
 
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const lo = ageOf(ageMin, 18);
-    const hi = Math.max(ageOf(ageMax, 40), lo);
-    setAgeMin(String(lo));
-    setAgeMax(String(hi));
+  const send = async (lo: number, hi: number) => {
     setBusy(true);
     const ok = await updatePromotion(promo.id, {
       category, ageMin: lo, ageMax: hi,
@@ -64,6 +59,16 @@ export default function PromotionEditor({ promo, onClose }: PromotionEditorProps
     });
     setBusy(false);
     if (ok) onClose();
+  };
+
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (busy) return;
+    const lo = ageOf(ageMin, 18);
+    const hi = Math.max(ageOf(ageMax, 40), lo);
+    setAgeMin(String(lo));
+    setAgeMax(String(hi));
+    showConfirm(t('saveAudienceConfirm'), () => void send(lo, hi));
   };
 
   return createPortal(
@@ -75,7 +80,7 @@ export default function PromotionEditor({ promo, onClose }: PromotionEditorProps
         </div>
         <form className="promote-form" onSubmit={submit}>
           <div className="promo-edit-frozen">
-            <span>{t('package')}: <b>{pack?.name || promo.packageId || '—'}</b></span>
+            <span>{t('package')}: <b>{pack?.name || promo.packageId || '-'}</b></span>
             {promo.status === 'pending' ? (
               <>
                 <span className="wallet-status pending">{t('awaitingApproval')}</span>

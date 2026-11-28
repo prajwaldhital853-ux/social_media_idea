@@ -11,7 +11,7 @@ import { api, API_ENABLED, ApiError, onWakeChange } from './api';
 import { merge as applyFragment, Fragment } from './store';
 import { noteRoute } from './navStack';
 import {
-  idOf, at, mapComment, mapFollow, mapMe, mapMessage, mapNotification, mapPerson, mapPost, mapPromotion,
+  idOf, at, mapComment, mapFollow, mapMe, mapMessage, mapNotices, mapNotification, mapPerson, mapPost, mapPromotion,
   mapReport, mapSettings, mediaPayload, profilePatch, reactionsOfPost, toPostPayload, toProfilePayload,
 } from './dto';
 import { bindListCache, coinRequestsFragment, dropListRow, forgetLists, inboxListDef, listingsFragment, notificationsFragment, promotionsFragment, postsFragment, pushListRow, refreshList, removeListRow, walletFragment } from './lists';
@@ -21,6 +21,27 @@ import { bumpNew } from './newCount';
 
 type Target = 'post' | 'comment' | 'media';
 
+/** The doors the Admin can shut, and what the member is told when one is shut. */
+const OFF_KEYS = {
+  marketplace: 'off_marketplace',
+  video: 'off_video',
+  wallet: 'off_wallet',
+  messages: 'off_messages',
+  promotion: 'off_promotion',
+} as const;
+
+export type FeatureName = keyof typeof OFF_KEYS;
+
+export interface FeatureLock {
+  msg: string;
+  /** Spread onto the control, last: it stays visible, stops working, and says why. */
+  props: {
+    'aria-disabled'?: true;
+    title?: string;
+    onClick?: (event: { preventDefault(): void; stopPropagation(): void }) => void;
+  };
+}
+
 interface AppContextType {
   db: Database;
   setDb: Dispatch<SetStateAction<Database>>;
@@ -29,6 +50,8 @@ interface AppContextType {
   isStaff: () => boolean;
   t: (key: TranslationKey, vars?: Record<string, string | number>) => string;
   feature: (key: keyof FeatureFlags) => boolean;
+  /** Null when the feature is open; a message and the props that grey the control when not. */
+  featureLock: (key: FeatureName) => FeatureLock | null;
   addPost: (post: Post) => Promise<Post>;
   updatePost: (id: string, updates: Partial<Post>) => Promise<void>;
   deletePost: (id: string) => Promise<void>;
@@ -80,6 +103,7 @@ interface AppContextType {
   updatePromotion: (id: string, patch: PromoTarget) => Promise<boolean>;
   activePromo: (targetType: 'post' | 'listing', targetId: string) => Promotion | undefined;
   openPromo: (targetType: 'post' | 'listing', targetId: string) => Promotion | undefined;
+  pendingPromo: () => Promotion | undefined;
   promoEligible: (promo: Promotion) => boolean;
   trackPromo: (promoId: string, kind: 'click' | 'profile') => void;
   updateLang: (lang: 'en' | 'ne') => void;
@@ -282,6 +306,27 @@ function dropNotice(db: Database, target: string, id: string, notice: string): D
   return { ...db, posts: strip(db.posts) };
 }
 
+/**
+ * Put one notice the desk has just written onto the cached row it stands on.
+ *
+ * The mirror of the drop above, and it follows the same reading order: the newest
+ * sentence is the one the banner shows first. A row that already carries it is left
+ * alone, so a frame delivered twice cannot double the warning it just wrote.
+ */
+function putNotice(db: Database, target: string, id: string, notice: Notice): Database {
+  const add = <T extends { id: string; notices?: Notice[] }>(rows: T[]): T[] => {
+    if (!rows.some(row => row.id === id)) return rows;
+    return rows.map(row => {
+      if (row.id !== id || row.notices?.some(n => n.id === notice.id)) return row;
+      return { ...row, notices: [notice, ...(row.notices || [])] };
+    });
+  };
+  if (target === 'comment') return { ...db, comments: add(db.comments) };
+  if (target === 'listing') return { ...db, listings: add(db.listings) };
+  if (target === 'user') return { ...db, users: add(db.users) };
+  return { ...db, posts: add(db.posts) };
+}
+
 export function AppProvider({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -377,7 +422,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (API_ENABLED) return;
-    if (mounted && !save(db)) setToast('Device storage is full — the latest change may not persist.');
+    if (mounted && !save(db)) setToast('Device storage is full, the latest change may not persist.');
   }, [db, mounted]);
 
   useEffect(() => {
@@ -410,6 +455,32 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (last && last.msg === msg && Date.now() - last.at < 4500) return;
     lastToastRef.current = { msg, at: Date.now() };
     setToast(msg);
+  };
+
+  /**
+   * A feature the Admin closed stays on the page. Removing it would leave a hole
+   * in the chrome and teach nothing; a greyed control that answers "the admin
+   * turned this off" is the same shape with the bite taken out. The server refuses
+   * the write too, so this is courtesy, not the lock. A console edit of
+   * `db.settings` gets a toast and a 409.
+   */
+  const featureLock = (key: FeatureName): FeatureLock | null => {
+    // Only an explicit `false` closes a door. A settings blob cached before a
+    // switch existed must not grey the feature out for the people holding it.
+    if (db.settings.features[key] !== false) return null;
+    const msg = t(OFF_KEYS[key]);
+    return {
+      msg,
+      props: {
+        'aria-disabled': true,
+        title: msg,
+        onClick: (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          showToast(msg);
+        },
+      },
+    };
   };
 
   /**
@@ -644,6 +715,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
       } else if (p.kind === 'warning') {
         void pullBadges();
         void pullSession();
+      } else if (p.kind === 'notice_new') {
+        // The desk wrote a sentence over content this seat may already be looking at.
+        // The frame carries the words because the banner under the card needs them,
+        // and it reaches only the seats allowed to read them: a public notice goes to
+        // the site, a private one down the single account it was written for.
+        const id = String(p.id || '');
+        const written = mapNotices([p.notice]);
+        if (!id || !written || !written.length) return;
+        setDb(prev => putNotice(prev, String(p.target || ''), id, written[0]));
+        if (p.about && currentMe()?.username === p.about) void pullBadges();
       } else if (p.kind === 'notice_gone') {
         // The console took a public notice down. The email and the bell line say so
         // already; this is the frame that takes the banner off the card it was
@@ -728,8 +809,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
           ...prev,
           coinRequests: prev.coinRequests.map(r => (r.id === id ? { ...r, status: String(p.status || r.status) as CoinRequest['status'] } : r)),
         }));
+        // A paid refund takes coins back the same way an approval adds them, and the
+        // balance line is read from the member's own row, so the number the wire
+        // carried has to land there or the wallet shows money that has gone.
+        if (p.balance !== undefined && p.balance !== null) {
+          setDb(prev => {
+            const row = prev.users.find(u => u.id === prev.meId);
+            if (!row) return prev;
+            return applyFragment(prev, { saved: [{ ...row, coins: Math.round(Number(p.balance) || 0) }] } as any);
+          });
+        }
         void refreshList('coin-requests', { path: '/wallet/requests/list/', frag: coinRequestsFragment });
-        void refreshList('wallet', { path: '/wallet/', frag: walletFragment(selfId) });
+        // 'wallet-ledger' is the key the money rows are actually mounted under, and a
+        // refund that was just paid is a ledger row as much as a status change.
+        void refreshList('wallet-ledger', { path: '/wallet/', frag: walletFragment(selfId) });
       }
     };
 
@@ -1220,6 +1313,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const deletePost = async (id: string) => {
+    // Asked before anything is torn out of the lists: a row still under a campaign
+    // belongs to the reach somebody paid for, and the server refuses it too. Saying
+    // it here is what saves the card from vanishing and springing back a round-trip
+    // later, and it is the same answer the demo mode has no server to be told by.
+    if (openPromo('post', id)) {
+      showToast(t('promoDeleteHold'));
+      return;
+    }
     const snapshot = dbRef.current;
     const gone = snapshot.posts.find(p => p.id === id);
     const self = currentMe();
@@ -2033,6 +2134,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
       && (p.status === 'pending' || p.status === 'active' || p.status === 'paused')
       && (!p.ends || p.ends > Date.now()));
 
+  /**
+   * The order this account still has with the desk, on any post or advert. Coins
+   * only leave the wallet when a seat approves, so 300 coins could otherwise carry
+   * two 200 coin orders and pay for both; one order at a time is what keeps a
+   * pending promise honest about the money standing behind it.
+   */
+  const pendingPromo = (): Promotion | undefined => {
+    const self = currentMe();
+    return db.promotions.find(p => p.status === 'pending' && (!self || p.uid === self.id));
+  };
+
   const promoEligible = (promo: Promotion) => {
     const self = currentMe();
     if (!self) return true;
@@ -2085,6 +2197,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
     const pack = db.settings.packages.find(p => p.id === cfg.packageId);
     if (!pack || self.coins < pack.coins) return false;
+    // The same wall the API puts up: one order with the desk at a time. Asking here
+    // rather than at the door means a member who ticked the box before the desk
+    // answered the last order still gets told why nothing was placed.
+    if (pendingPromo()) {
+      showToast(t('promoQueueHold'));
+      return false;
+    }
     if (!API_ENABLED) {
       const now = Date.now();
       // An order is only a promise: the coins stay in the wallet and the run has no
@@ -2123,27 +2242,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const cancelPromotion = async (id: string) => {
     const promo = db.promotions.find(p => p.id === id);
     if (!promo) return;
+    // Two acts wear this one button, and they settle differently. Withdrawing an order
+    // the desk never approved hands back nothing because it took nothing; ending a run
+    // that was charged spends the whole budget, and the reach it bought is not returned
+    // in coins. No door here moves money, so the answer is only ever said, not written.
+    const said = promo.status === 'pending' ? t('promoCancelled') : t('promoEndedNoRefund');
     if (!API_ENABLED) {
       const now = Date.now();
-      const paid = promo.coins;
       setDb(prev => ({
         ...prev,
         promotions: prev.promotions.map(p => (p.id === id ? { ...p, status: 'ended' as const, ends: now } : p)),
-        // Only a campaign that was actually charged gives anything back; a withdrawn
-        // order never took a coin.
-        users: paid > 0 ? prev.users.map(u => (u.id === promo.uid ? { ...u, coins: u.coins + paid } : u)) : prev.users,
-        ledger: paid > 0 ? [{ id: uid(), uid: promo.uid, delta: paid, kind: 'refund' as const, note: 'Promotion ended — unused Coins returned', ts: now }, ...prev.ledger] : prev.ledger
       }));
-      showToast(t('promoCancelled'));
+      showToast(said);
       return;
     }
     try {
       merge({ promotions: [mapPromotion(await api.post<any>(`/api/promotions/${id}/end/`, {}))] });
       await resync();
-      // A refund is a ledger row, and the history list would otherwise keep showing
-      // the page it had before the money moved.
-      forgetLists('wallet-ledger');
-      showToast(t('promoCancelled'));
+      showToast(said);
     } catch (err) {
       showToast(errText(err, 'Could not end the promotion.'));
     }
@@ -2220,13 +2336,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
   return (
     <AppContext.Provider
       value={{
-        db, setDb, me, isAdmin, isStaff, t, feature,
+        db, setDb, me, isAdmin, isStaff, t, feature, featureLock,
         addPost, updatePost, deletePost, addComment, deleteComment,
         toggleFollow, isFollowing, followState, requestFrom, incomingRequests, acceptRequest, declineRequest, removeFollower, mutualIds, followedIds,
         react, myReaction, reactionCount, reactionMix, reactionPeople, myPostReaction, toggleSave, isSaved, toggleListingSave, isListingSaved,
         sharePost, mayShare, countView, blockUser, unblockUser, isBlocked, blockedIds,
         notify, markAllRead, markRead, sendMessage, deleteConversation, markThreadRead, addReport, logAudit,
-        requestPromotion, cancelPromotion, activePromo, openPromo, promoEligible, trackPromo,
+        requestPromotion, cancelPromotion, activePromo, openPromo, pendingPromo, promoEligible, trackPromo,
         setPromotionStatus, updatePromotion,
         updateLang, login, logout, isAuthenticated,
         theme, toggleTheme,

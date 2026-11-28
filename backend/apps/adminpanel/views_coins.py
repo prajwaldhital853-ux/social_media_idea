@@ -48,8 +48,17 @@ def coin_queue(request):
     """The money that has already moved and is waiting on a person."""
     swept = coins.sweep()
     status = request.query_params.get('status')
-    qs = CoinRequest.objects.select_related('user', 'user__profile')
-    if status and status != 'all':
+    qs = CoinRequest.objects.select_related('user', 'user__profile', 'lot')
+    # A refund the buyer filed is the same shape of work as a receipt nobody has
+    # credited: money is sitting on the counter waiting for a person to decide it. Both
+    # belong in the desk's opening view, so this chip means "unanswered" rather than
+    # naming one column of the status field. An ask counts only while neither answer
+    # has been stamped on it; a paid or refused refund is settled work.
+    owed = Q(status=CoinRequest.Status.APPROVED, refund_requested_at__isnull=False,
+             refunded_at__isnull=True, refund_refused_at__isnull=True)
+    if status == CoinRequest.Status.PENDING:
+        qs = qs.filter(Q(status=CoinRequest.Status.PENDING) | owed)
+    elif status and status != 'all':
         qs = qs.filter(status=status)
     search = (request.query_params.get('q') or '').strip()
     if search:
@@ -59,25 +68,28 @@ def coin_queue(request):
         item['status']: item['n']
         for item in CoinRequest.objects.values('status').annotate(n=Count('id'))
     }
+    waiting = counts.get(CoinRequest.Status.PENDING, 0) + CoinRequest.objects.filter(owed).count()
     paginator = KeysetPagination()
     rows = paginator.paginate_queryset(qs, request)
     held = CoinRequest.objects.filter(status=CoinRequest.Status.PENDING).aggregate(
         coins=Sum('coins'), rupees=Sum('amount'),
     )
-    # A pending purchase may already carry an ask, and reading it row by row made
-    # the queue cost one query per row. One grouped read covers the page.
-    pending = [item.pk for item in rows if item.status == CoinRequest.Status.PENDING]
+    # A refund ask arrives on a row that was already credited, so the Waiting view
+    # mixes two statuses. Reading the newest decision for every row on the page keeps
+    # "Decided by" honest and still costs one query.
+    page_ids = [item.pk for item in rows]
     last = {}
-    if pending:
-        for review in (CoinReview.objects.filter(request_id__in=pending).select_related('actor')
+    if page_ids:
+        for review in (CoinReview.objects.filter(request_id__in=page_ids).select_related('actor')
                        .order_by('request_id', '-created_at', '-id').distinct('request_id')):
             last[review.request_id] = review
     response = paginator.get_paginated_response([coins.row(item, last.get(item.pk)) for item in rows])
     response.data.update({
         'counts': {
-            'pending': counts.get(CoinRequest.Status.PENDING, 0),
+            'pending': waiting,
             'approved': counts.get(CoinRequest.Status.APPROVED, 0),
             'rejected': counts.get(CoinRequest.Status.REJECTED, 0),
+            'refunded': counts.get(CoinRequest.Status.REFUNDED, 0),
             'every': sum(counts.values()),
         },
         'held': {'coins': held['coins'] or 0, 'rupees': str(held['rupees'] or 0)},
@@ -109,6 +121,14 @@ def coin_decide(request, pk, action):
     req = coins.find_request(pk)
     if req is None:
         return Response({'detail': 'No coin request with that id.'}, status=404)
+    # `paid` is not a verdict on an open purchase. It closes a refund the buyer asked
+    # for on one that was already approved, so it meets its own door and its own rules.
+    if action == 'paid':
+        code, body = coins.settle(req, request.user, request.data.get('reason', ''))
+        return Response(body, status=code)
+    if action == 'refused':
+        code, body = coins.refuse(req, request.user, request.data.get('reason', ''))
+        return Response(body, status=code)
     code, body = coins.decide(req, request.user, action, request.data.get('reason', ''))
     return Response(body, status=code)
 
@@ -117,13 +137,18 @@ def coin_decide(request, pk, action):
 @permission_classes([IsAuthenticated])
 @rbac.staff_only('coins_view')
 def coin_proof_link(request, pk):
-    """Mint the short-lived link, then the console points an image at it."""
+    """Mint the short-lived link, then the console points an image at it.
+
+    `?for=refund` mints the picture the buyer attached to a refund ask instead of the
+    payment receipt, so neither one is ever handed out as a URL that outlives the click.
+    """
     req = CoinRequest.objects.filter(pk=pk).first()
     if req is None:
         return Response({'detail': 'No coin request with that id.'}, status=404)
-    if not req.screenshot_url:
-        return Response({'detail': 'There is no payment screenshot on this request.'}, status=404)
-    token = coins.proof_token(req, request.user)
+    which = 'refund' if request.query_params.get('for') == 'refund' else 'payment'
+    if not coins._proof_url(req, which):
+        return Response({'detail': f'There is no {which} screenshot on this request.'}, status=404)
+    token = coins.proof_token(req, request.user, which)
     return Response({
         'href': f'/api/admin/coins/{pk}/receipt/?t={token}',
         'expires_in': coins.PROOF_TTL,

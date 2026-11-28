@@ -44,7 +44,7 @@ export default function ReactionSummary({ postId, extraCount = 0 }: { postId: st
         className="reaction-summary"
         aria-haspopup="dialog"
         aria-expanded={open}
-        aria-label={`${text} — ${t('reactorsTitle')}`}
+        aria-label={`${text}, ${t('reactorsTitle')}`}
         onClick={() => setOpen(true)}
       >
         {mix.length > 0 && (

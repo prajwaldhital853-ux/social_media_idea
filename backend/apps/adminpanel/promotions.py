@@ -34,7 +34,7 @@ from apps.notifications.services import notify
 from apps.posts.models import Post
 from apps.promotions.models import Promotion
 from apps.promotions.services import campaign_figures
-from apps.wallet.models import Transaction, Wallet, apply as coin_apply
+from apps.wallet.models import Transaction, Wallet, apply as coin_apply, locked_coins
 
 from . import review, settings_store
 from .journal import record
@@ -421,6 +421,14 @@ def decide(promo, actor, action, reason='', choice=''):
                     return 409, {
                         'detail': f'@{promo.owner.username} now has {_coins(wallet.balance)} coins and this '
                                   f'campaign costs {_coins(taken)}. Refuse it, or wait until they buy coins.'}
+                # Coins locked under a refund the coin desk has not paid are money already
+                # promised, so they cannot also buy a campaign on top of the promise.
+                promise = locked_coins(wallet.pk)
+                if wallet.balance - promise < taken:
+                    return 409, {
+                        'detail': f'{_coins(promise)} of @{promo.owner.username}\'s {_coins(wallet.balance)} coins '
+                                  f'are locked for a refund that has not been paid yet. Settle that refund first, '
+                                  f'or refuse this campaign.'}
 
         Promotion.objects.filter(pk=promo.pk).update(
             status=status, starts_at=starts_at,

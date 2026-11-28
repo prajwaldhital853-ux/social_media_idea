@@ -679,7 +679,7 @@ export interface CoinAsk {
   amount: string;
   method: string;
   reference: string;
-  status: 'pending' | 'approved' | 'rejected';
+  status: 'pending' | 'approved' | 'rejected' | 'refunded';
   status_label: string;
   has_proof: boolean;
   created_at: string;
@@ -689,8 +689,19 @@ export interface CoinAsk {
   asked?: boolean;
   resubmitted?: boolean;
   resubmitted_at?: string | null;
+  /** The money-back chapter of an approved purchase, null while nobody has asked. */
+  refund?: {
+    requested_at: string | null;
+    reference: string;
+    reason: string;
+    has_proof: boolean;
+    coins: string | null;
+    paid_at: string | null;
+    refused_at: string | null;
+    refused_reason: string;
+  } | null;
   review?: {
-    action: 'approve' | 'reject' | 'proof';
+    action: 'approve' | 'reject' | 'proof' | 'paid' | 'refused';
     label: string;
     reason: string;
     coins_credited: number;
@@ -700,7 +711,7 @@ export interface CoinAsk {
 }
 
 export interface CoinPage extends Page<CoinAsk> {
-  counts: { pending: number; approved: number; rejected: number; every: number };
+  counts: { pending: number; approved: number; rejected: number; refunded: number; every: number };
   held: { coins: number; rupees: string };
   proofs_deleted: number;
   retention_days: number;
@@ -786,6 +797,18 @@ export interface SettingLine {
   group: string;
   by: string | null;
   at: string | null;
+}
+
+/** One row of the features desk: a settings line, the door it owns, and whether that door is open. */
+export interface FeatureLine extends SettingLine {
+  feature: 'marketplace' | 'video' | 'wallet' | 'messages' | 'promotion';
+  on: boolean;
+}
+
+export interface FeaturesDesk {
+  lines: FeatureLine[];
+  live: Partial<Record<FeatureLine['feature'], boolean>>;
+  can_write: boolean;
 }
 
 export interface CoinDesk {

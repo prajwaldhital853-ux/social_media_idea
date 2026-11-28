@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Post as PostType, User } from '@/lib/types';
 import { ago, compact } from '@/lib/utils';
-import { useApp } from '@/lib/AppContext';
+import { useApp, type FeatureLock } from '@/lib/AppContext';
 import Avatar from './Avatar';
 import VerifiedBadge from './VerifiedBadge';
 import PostVideo from './PostVideo';
@@ -98,7 +98,8 @@ function FeedFollow({ author }: { author: User }) {
 export default function PostCard({ post, author, featured }: PostCardProps) {
   const router = useRouter();
   const { db, me, t, deletePost, toggleSave, isSaved, sharePost, mayShare, openComposer, activePromo, openPromo,
-    promoEligible, trackPromo, showToast, showConfirm, reactionCount, serverMode, blockUser, unblockUser, isBlocked } = useApp();
+    pendingPromo, promoEligible, trackPromo, showToast, showConfirm, reactionCount, serverMode, blockUser, unblockUser, isBlocked, featureLock } = useApp();
+  const promoOff = featureLock('promotion');
   const [menuOpen, setMenuOpen] = useState(false);
   const [showComments, setShowComments] = useState(false);
   const [reporting, setReporting] = useState(false);
@@ -119,6 +120,9 @@ export default function PostCard({ post, author, featured }: PostCardProps) {
   // outright; a waiting one stays on the menu only long enough to say what it waits on.
   const held = own ? openPromo('post', post.id) : undefined;
   const waiting = held?.status === 'pending' ? held : undefined;
+  // One order with the desk at a time, so a card with nothing on it still has no
+  // door while an earlier order on another post is unread.
+  const queued = own ? pendingPromo() : undefined;
 
   const comments = db.comments
     .filter(c => c.pid === post.id && c.status === 'live')
@@ -210,11 +214,12 @@ export default function PostCard({ post, author, featured }: PostCardProps) {
     if (single && media[0]?.type === 'video') router.prefetch(`/video/${post.id}-0`);
   };
 
-  const menuItem = (label: string, fn: () => void, danger = false) => (
+  const menuItem = (label: string, fn: () => void, danger = false, off?: FeatureLock | null) => (
     <button
       type="button"
-      className={`post-menu-item ${danger ? 'danger' : ''}`}
+      className={`post-menu-item ${danger ? 'danger' : ''}${off ? ' f-off' : ''}`}
       onClick={e => { e.stopPropagation(); setMenuOpen(false); fn(); }}
+      {...(off ? { 'aria-disabled': true, title: off.msg } : {})}
     >
       {label}
     </button>
@@ -280,12 +285,18 @@ export default function PostCard({ post, author, featured }: PostCardProps) {
               {menuOpen && (
                 <div className="post-menu" onClick={e => e.stopPropagation()}>
                   {menuItem(t('copyLink'), () => { void copyShareLink(); })}
-                  {own && !me?.private && db.settings.features.promotion && (!held || waiting) && menuItem(
+                  {own && !me?.private && (!held || waiting) && menuItem(
                     t('promote'),
                     () => {
+                      if (promoOff) { showToast(promoOff.msg); return; }
+                      // The account's queue answers before this card does: an order on
+                      // another post buys this card nothing until the desk reads it.
+                      if (queued) { showToast(t('promoQueueHold')); return; }
                       if (waiting) { showToast(t('promoWaiting', { what: t('dpost') })); return; }
                       setPromoting(true);
                     },
+                    false,
+                    promoOff,
                   )}
                   {own && menuItem(t('edit'), () => openComposer(post.id))}
                   {own && menuItem(t('del'), () => showConfirm(t('confirmDelete'), () => deletePost(post.id)), true)}

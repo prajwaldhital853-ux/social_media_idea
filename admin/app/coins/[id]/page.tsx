@@ -16,6 +16,7 @@ const STANDINGS: Record<string, { tone: string; label: string }> = {
   pending: { tone: 'warn', label: 'Waiting on a person' },
   approved: { tone: 'good', label: 'Coins credited' },
   rejected: { tone: 'mute', label: 'Rejected' },
+  refunded: { tone: 'mute', label: 'Refund paid' },
 };
 
 /**
@@ -29,10 +30,10 @@ export default function CoinRequestPage({ params }: { params: { id: string } }) 
   const [detail, setDetail] = useState<CoinDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [banner, setBanner] = useState<{ kind: 'ok' | 'bad'; text: string } | null>(null);
-  const [verb, setVerb] = useState<'reject' | 'proof' | null>(null);
+  const [verb, setVerb] = useState<'reject' | 'proof' | 'refused' | null>(null);
   const [reason, setReason] = useState('');
-  const [proof, setProof] = useState<ProofLink | null>(null);
-  const [closed, setClosed] = useState(false);
+  const [proof, setProof] = useState<{ which: 'payment' | 'refund'; link: ProofLink } | null>(null);
+  const [closed, setClosed] = useState<Record<string, boolean>>({});
   const [working, setWorking] = useState(false);
   const [mail, setMail] = useState('');
   const timer = useRef<number | null>(null);
@@ -63,47 +64,66 @@ export default function CoinRequestPage({ params }: { params: { id: string } }) 
   });
 
   // The link is a two-minute window on purpose, so the picture closes itself when
-  // the window does rather than staying on screen as if it were still private.
+  // the window does rather than staying on screen as if it were still private. Each
+  // of the two pictures a purchase can carry keeps its own window: opening the
+  // refund screenshot must not be the thing that shuts the payment receipt.
   useEffect(() => {
     if (!proof) return undefined;
-    timer.current = window.setTimeout(() => setClosed(true), proof.expires_in * 1000);
+    const { which, link } = proof;
+    timer.current = window.setTimeout(() => setClosed(prev => ({ ...prev, [which]: true })), link.expires_in * 1000);
     return () => {
       if (timer.current) window.clearTimeout(timer.current);
     };
   }, [proof]);
 
-  const showProof = async () => {
+  const showProof = async (which: 'payment' | 'refund') => {
     setError(null);
     try {
-      setClosed(false);
-      setProof(await api<ProofLink>(`admin/coins/${params.id}/receipt-link/`));
+      setClosed(prev => ({ ...prev, [which]: false }));
+      setProof({ which, link: await api<ProofLink>(`admin/coins/${params.id}/receipt-link/${which === 'refund' ? '?for=refund' : ''}`) });
     } catch (err) {
       setProof(null);
       if (!noteGate(err)) setError((err as Error).message);
     }
   };
 
-  const submit = async (which: 'approve' | 'reject' | 'proof') => {
+  const submit = async (which: 'approve' | 'reject' | 'proof' | 'paid' | 'refused') => {
     const sure = await confirm({
       title: which === 'approve'
         ? `Credit ${detail?.request.coins} coins to @${detail?.request.card.username}?`
         : which === 'reject'
           ? 'Reject this payment request?'
-          : 'Ask this person for a better receipt?',
+          : which === 'paid'
+            ? `Mark the refund on purchase #${params.id} as paid?`
+            : which === 'refused'
+              ? 'Turn this refund request down?'
+              : 'Ask this person for a better receipt?',
       body: which === 'approve'
         ? 'Real rupees have already reached the account, so the coins go into their wallet now. There is no undo here, a mistake is corrected with a new ledger row.'
         : which === 'reject'
           ? 'The request is refused and they are sent your reason. Nothing is credited.'
-          : 'The request stays open and they are told what else you need.',
-      confirmLabel: which === 'approve' ? `Credit ${detail?.request.coins} coins` : which === 'reject' ? 'Reject' : 'Ask for more proof',
-      tone: which === 'approve' ? 'primary' : which === 'reject' ? 'danger' : 'primary',
+          : which === 'paid'
+            ? `Only press this after the rupees left the platform's own bank session, nothing is re-checked, the payment was verified when the purchase was approved. This releases the ${detail?.request.refund?.coins ?? 'locked'} locked coins, writes a debit that cannot be edited, and emails the person.`
+            : which === 'refused'
+              ? `Nothing is taken from the wallet. The ${detail?.request.refund?.coins ?? 'locked'} coins go back in reach, the purchase keeps its approved standing, and the person is sent your sentence as the answer.`
+              : 'The request stays open and they are told what else you need.',
+      confirmLabel: which === 'approve'
+        ? `Credit ${detail?.request.coins} coins`
+        : which === 'reject'
+          ? 'Reject'
+          : which === 'paid'
+            ? 'Refund approved'
+            : which === 'refused'
+              ? 'Refuse the refund'
+              : 'Ask for more proof',
+      tone: which === 'approve' ? 'primary' : which === 'reject' ? 'danger' : which === 'paid' ? 'danger' : which === 'refused' ? 'danger' : 'primary',
     });
     if (!sure) return;
     setWorking(true);
     setError(null);
     try {
       const out = await api<{ detail: string; mail?: string } & CoinDetail>(`admin/coins/${params.id}/${which}/`, {
-        method: 'POST', body: { reason: which === 'approve' ? '' : reason.trim() },
+        method: 'POST', body: { reason: which === 'approve' || which === 'paid' ? '' : reason.trim() },
       });
       setVerb(null);
       setReason('');
@@ -122,6 +142,11 @@ export default function CoinRequestPage({ params }: { params: { id: string } }) 
 
   const row = detail?.request;
   const standing = row ? (STANDINGS[row.status] || { tone: 'mute', label: row.status_label }) : null;
+  const refund = row?.refund || null;
+  // The ask is open until the seat answers it one way or the other. This is the only
+  // money door here that moves nothing on a yes: the payment was verified at approval,
+  // so what is recorded is that the desk handed the money over by hand.
+  const openRefund = !!row && row.status === 'approved' && !!refund && !refund.paid_at && !refund.refused_at;
 
   return (
     <ConsoleShell
@@ -181,22 +206,23 @@ export default function CoinRequestPage({ params }: { params: { id: string } }) 
 
             <Section title="The payment proof">
               {row.has_proof ? (
-                proof && !closed ? (
+                proof?.which === 'payment' && !closed.payment ? (
                   <div className="proof" data-proof>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={proof.href} alt={`Payment proof for @${row.card.username}`} className="proof-img"/>
+                    <img src={proof.link.href} alt={`Payment proof for @${row.card.username}`} className="proof-img"/>
                     <p className="note row">
                       {IC.lock}
-                      <span>This link closes after {Math.round(proof.expires_in / 60)} minutes and is
+                      <span>This link closes after {Math.round(proof.link.expires_in / 60)} minutes and is
                         good only for your seat. The receipt is never printed in the list itself.</span>
                     </p>
                   </div>
                 ) : (
                   <div className="proof-shut">
-                    <button type="button" className="btn ghost tiny" disabled={working} onClick={showProof} data-proof-open>
-                      {IC.eye}<span>{closed ? 'Ask for the link again' : 'Open the payment proof'}</span>
+                    <button type="button" className="btn ghost tiny" disabled={working}
+                      onClick={() => void showProof('payment')} data-proof-open>
+                      {IC.eye}<span>{closed.payment ? 'Ask for the link again' : 'Open the payment proof'}</span>
                     </button>
-                    {closed && <p className="note row"><span>That view has closed. Nothing was downloaded.</span></p>}
+                    {closed.payment && <p className="note row"><span>That view has closed. Nothing was downloaded.</span></p>}
                   </div>
                 )
               ) : (
@@ -210,12 +236,63 @@ export default function CoinRequestPage({ params }: { params: { id: string } }) 
               )}
             </Section>
 
+            {refund && (
+              <Section title="The refund they asked for">
+                <ul className="coin-facts" data-refund>
+                  <li><span>Asked</span><b title={stamp(refund.requested_at || row.created_at)}>{ago(refund.requested_at || row.created_at)}</b></li>
+                  <li><span>Coins locked</span><b>{refund.coins ?? row.coins}</b></li>
+                  <li><span>Rupees to hand back</span><b>{row.amount}</b></li>
+                  <li><span>Bank reference</span><b>{refund.reference || '-'}</b></li>
+                  <li><span>Reason</span><b>{refund.reason || '-'}</b></li>
+                  <li>
+                    <span>Standing</span>
+                    <b>{refund.paid_at
+                      ? <span className="pill mute" title={stamp(refund.paid_at)}>Paid {ago(refund.paid_at)}</span>
+                      : refund.refused_at
+                        ? <span className="pill dead" title={stamp(refund.refused_at)}>Refused {ago(refund.refused_at)}</span>
+                        : <span className="pill warn">Waiting for the money to leave</span>}</b>
+                  </li>
+                  {!!refund.refused_at && (
+                    <li><span>Why it was turned down</span><b>{refund.refused_reason || 'no sentence was written'}</b></li>
+                  )}
+                </ul>
+                {refund.has_proof ? (
+                  proof?.which === 'refund' && !closed.refund ? (
+                    <div className="proof" data-refund-proof>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={proof.link.href} alt={`Refund proof for @${row.card.username}`} className="proof-img"/>
+                      <p className="note row">
+                        {IC.lock}
+                        <span>The screenshot they attached to the refund ask. It closes with the same
+                          {Math.round(proof.link.expires_in / 60)} minute window as the receipt.</span>
+                      </p>
+                    </div>
+                  ) : (
+                    <button type="button" className="btn ghost tiny" disabled={working}
+                      onClick={() => void showProof('refund')} data-refund-proof-open>
+                      {IC.eye}<span>{closed.refund ? 'Ask for that link again' : 'Open their refund screenshot'}</span>
+                    </button>
+                  )
+                ) : (
+                  <p className="empty-note">{IC.x}<span>They did not attach a screenshot to the ask.</span></p>
+                )}
+              </Section>
+            )}
+
             {detail && detail.asks.length > 0 && (
               <Section title="What was asked of them">
                 <ul className="coin-asks">
                   {detail.asks.map((ask, index) => (
                     <li key={`${ask.at}-${index}`}>
-                      <b>{ask.action === 'proof' ? 'More proof' : ask.action === 'reject' ? 'Rejected' : 'Credited'}</b>
+                      <b>{ask.action === 'proof'
+                        ? 'More proof'
+                        : ask.action === 'reject'
+                          ? 'Rejected'
+                          : ask.action === 'paid'
+                            ? 'Refund approved'
+                            : ask.action === 'refused'
+                              ? 'Refund refused'
+                              : 'Credited'}</b>
                       <span>{ask.reason || 'no sentence was written'}</span>
                       <em>{ask.by ? `@${ask.by}` : 'system'} {ago(ask.at)}</em>
                     </li>
@@ -270,15 +347,57 @@ export default function CoinRequestPage({ params }: { params: { id: string } }) 
               </div>
             )}
 
-            {verb && row.status === 'pending' && review && (
+            {openRefund && refund && (review ? (
+              <div className="verbs" data-refund-verbs>
+                <button type="button" className="btn danger tiny" data-verb="paid"
+                  disabled={working} onClick={() => void submit('paid')}
+                  title={`Record the hand-paid refund and take ${refund.coins} coins back`}>
+                  {IC.check}<span>Refund approved</span>
+                </button>
+                <button type="button" className="btn danger outline tiny" data-verb="refused"
+                  disabled={working || verb === 'refused'}
+                  onClick={() => { setVerb(verb === 'refused' ? null : 'refused'); setReason(''); }}
+                  title="Turn the ask down and put those coins back in their reach">
+                  {IC.x}<span>Refund refused</span>
+                </button>
+                <p className="note">
+                  {IC.coin}
+                  <span>{refund.coins} coins stay locked to this purchase until you press one of these, they
+                    cannot be spent or spent on a campaign while the ask is open. Nothing here pays the
+                    rupees, it only records that your bank session already did.</span>
+                </p>
+              </div>
+            ) : (
+              <p className="note row">
+                {IC.lock}
+                <span>A refund is waiting to be settled. Doing that is not on your seat.</span>
+              </p>
+            ))}
+
+            {refund?.refused_at && (
+              <p className="note row" data-refund-done>
+                {IC.x}
+                <span>This refund was refused {ago(refund.refused_at)}
+                  {refund.refused_reason ? `, said: ${refund.refused_reason}` : ''}. The coins are spendable
+                  again and the buyer was told.</span>
+              </p>
+            )}
+
+            {verb && review && (verb === 'refused' ? openRefund : row.status === 'pending') && (
               <div className="ask">
                 <label className="field">
-                  <span>{verb === 'reject' ? 'Why the money is not being credited, they are sent this' : 'What more you need from them'}</span>
+                  <span>{verb === 'reject'
+                    ? 'Why the money is not being credited, they are sent this'
+                    : verb === 'refused'
+                      ? 'Why the refund is being turned down, they are sent this'
+                      : 'What more you need from them'}</span>
                   <textarea
                     rows={2} name="reason" maxLength={240} value={reason} autoFocus
                     placeholder={verb === 'reject'
                       ? 'e.g. the reference does not match this amount'
-                      : 'e.g. the right-hand edge of the receipt is cut off'}
+                      : verb === 'refused'
+                        ? 'e.g. the rupees went back at the counter last week'
+                        : 'e.g. the right-hand edge of the receipt is cut off'}
                     onChange={event => setReason(event.target.value)}
                   />
                 </label>
@@ -287,7 +406,9 @@ export default function CoinRequestPage({ params }: { params: { id: string } }) 
                     type="button" className="btn primary tiny" disabled={working || !reason.trim()}
                     onClick={() => submit(verb)}
                   >
-                    {IC.go}<span>{working ? 'Working…' : `Confirm, ${verb === 'reject' ? 'Reject' : 'Ask for more proof'}`}</span>
+                    {IC.go}<span>{working
+                      ? 'Working…'
+                      : `Confirm, ${verb === 'reject' ? 'Reject' : verb === 'refused' ? 'Refuse the refund' : 'Ask for more proof'}`}</span>
                   </button>
                   <button type="button" className="btn ghost tiny" disabled={working}
                     onClick={() => { setVerb(null); setReason(''); }}>

@@ -31,7 +31,7 @@ BLIND = ('', 'unknown')
 
 COPY = {
     'email': 'Too many wrong passwords on this account. Everything that opens it is '
-             'closed for {time} — sign in with the right password once it lifts.',
+             'closed for {time}, sign in with the right password once it lifts.',
     'device': 'This browser was used to guess passwords too many times. Signing up and '
               'signing in are closed here for {time}.',
     'ip': 'This connection is blocked by staff until {time}.',

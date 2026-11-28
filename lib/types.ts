@@ -214,13 +214,28 @@ export interface CoinRequest {
   reference: string;
   screenshot?: string;
   ts: number;
-  status: 'pending' | 'approved' | 'rejected';
+  status: 'pending' | 'approved' | 'rejected' | 'refunded';
   note?: string;
   /** The desk asked for a better screenshot and has not been answered yet. */
   proofAsked?: boolean;
   proofReason?: string;
   /** This buyer already answered an ask, so the row is waiting on the desk. */
   resubmitted?: boolean;
+  /** Approved, untouched and nobody has asked yet, so the refund button belongs here. */
+  refundable?: boolean;
+  /** The buyer asked, and those coins are locked until the desk settles it. */
+  refundRequested?: boolean;
+  refunded?: boolean;
+  /** The desk read the ask and turned it down, so the badge says so. */
+  refundRefused?: boolean;
+  /** A coin of this batch was spent, which closes the refund door for good. */
+  refundSpent?: boolean;
+  /** A promotion order is still with the desk, so no refund can be filed on top of it. */
+  refundPromoPending?: boolean;
+  /** Another purchase already holds the one refund ask this wallet is allowed. */
+  refundOtherOpen?: boolean;
+  /** Coins of this purchase the lock is holding. */
+  locked?: number;
 }
 
 export interface LedgerEntry {
@@ -306,6 +321,8 @@ export interface Audit {
 export interface FeatureFlags {
   video: boolean;
   marketplace: boolean;
+  wallet: boolean;
+  messages: boolean;
   promotion: boolean;
   googleLogin: boolean;
   facebookLogin: boolean;
