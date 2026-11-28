@@ -23,7 +23,7 @@ from apps.common.api import person
 from apps.common.pagination import KeysetPagination
 from apps.common.stream import acquire, release, stream_user
 from apps.marketplace.models import Listing
-from apps.messages.models import Message
+from apps.messages.models import ConversationHide, Message
 from apps.posts.models import Post
 from .models import PushSubscription
 from apps.posts.views import visible_posts
@@ -140,12 +140,18 @@ def notification_list(request):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def unread_count(request):
-    """Both badge counters, for a screen that only needs to know they changed."""
+    """Both badge counters, for a screen that only needs to know they changed.
+
+    A thread the reader deleted out of their inbox gives up its unread rows here:
+    the badge counts what is waiting to be read, and a hidden thread has no door
+    to read it through. Same rule the /sync/ counters apply.
+    """
+    hidden = ConversationHide.objects.filter(user=request.user).values_list('conversation_id', flat=True)
     return Response({
         'unread': Notification.objects.filter(recipient=request.user, read_at__isnull=True).count(),
         'messages': Message.objects.filter(
             read_at__isnull=True, conversation__participants=request.user
-        ).exclude(sender=request.user).count(),
+        ).exclude(sender=request.user).exclude(conversation_id__in=hidden).count(),
     })
 
 

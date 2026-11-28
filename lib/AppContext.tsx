@@ -1902,6 +1902,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const self = currentMe();
     if (!self) return false;
     const before = dbRef.current.messages;
+    // A deleted thread takes its unread rows out of the badge with it, so the
+    // dot moves on the click instead of waiting for the re-pull underneath.
+    const unreads = dbRef.current.messages.filter(m => m.from === to && m.to === self.id && !m.read).length;
     setDb(prev => ({
       ...prev,
       messages: prev.messages.filter(m => !((m.from === self.id && m.to === to) || (m.from === to && m.to === self.id))),
@@ -1909,6 +1912,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       notifications: prev.notifications.filter(n => !(
         n.kind === 'message' && n.actor === to && (n.uid === self.id || !n.uid)
       )),
+      unread: prev.unread
+        ? { ...prev.unread, messages: Math.max(0, (prev.unread.messages || 0) - unreads) }
+        : prev.unread,
     }));
     removeListRow('inbox', undefined, to);
     if (!API_ENABLED) return true;
@@ -1922,6 +1928,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setDb(prev => ({ ...prev, messages: before, hiddenConversations: (prev.hiddenConversations || []).filter(id => id !== to) }));
       showToast(errText(err, 'Could not delete the conversation.'));
       void refreshList('inbox', inboxListDef(self.id));
+      // The thread came back, so whatever the badge gave up has to come back too.
+      void pullBadges();
       return false;
     }
   };
