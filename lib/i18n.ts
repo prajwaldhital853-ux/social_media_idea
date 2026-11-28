@@ -318,6 +318,7 @@ export const I18N = {
     addImageUrl: 'Add image URL',
     savedListings: 'Saved listings',
     listingUpdated: 'Listing updated.',
+    listingSaving: 'Publishing…',
     saveListing: 'Save',
     safetyTip: 'Meet in a public place and check the item before paying.',
     message: 'Message',
@@ -371,8 +372,7 @@ export const I18N = {
     screenshot: 'Payment screenshot',
     submitRequest: 'Submit request',
     requestSent: 'Request sent. Admin will confirm your payment.',
-    coinWaiting: 'Your coin request is still waiting for the admin. Please wait for it to be approved '
-      + 'or refused before sending another request.',
+    coinWaiting: 'Another coin request is still with the admin. Wait for it to be approved or refused first.',
     coinProofFirst: 'The admin is waiting on a new screenshot for an open coin request. Send it from that '
       + 'request before making another one.',
     method: 'Payment method',
@@ -931,6 +931,7 @@ export const I18N = {
     addImageUrl: 'छवि URL थप्नुहोस्',
     savedListings: 'सेभ गरिएका लिस्टिङ',
     listingUpdated: 'लिस्टिङ अपडेट भयो।',
+    listingSaving: 'प्रकाशित हुँदैछ…',
     saveListing: 'सेभ',
     safetyTip: 'सार्वजनिक ठाउँमा भेट्नुहोस् र तिर्नुअघि सामान जाँच्नुहोस्।',
     message: 'सन्देश',

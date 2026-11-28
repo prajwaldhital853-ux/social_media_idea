@@ -201,18 +201,28 @@ export const resizeImage = (file: File, max = 2560): Promise<string> => {
       let from: HTMLImageElement | HTMLCanvasElement = img;
       let sw = w;
       let sh = h;
+      // WebKit keeps a canvas's pixels alive until the canvas itself dies, so
+      // every halving step would otherwise sit in memory beside the next one.
+      // A phone asked to downscale five of these at once runs out and answers
+      // with a blank, unresponsive tab.
+      const drop = (old: HTMLImageElement | HTMLCanvasElement) => {
+        if (old instanceof HTMLCanvasElement) { old.width = 0; old.height = 0; }
+      };
       // One jump from four thousand pixels to two thousand is what makes a photo
       // mush: the browser averages a huge area into its destination in a single
       // pass. Halving twice over keeps the edges the eye reads as detail.
       while (sw > tw * 2 && sh > th * 2) {
         const dw = Math.max(tw, Math.floor(sw / 2));
         const dh = Math.max(th, Math.floor(sh / 2));
-        from = blit(from, sw, sh, dw, dh);
+        const next = blit(from, sw, sh, dw, dh);
+        drop(from);
+        from = next;
         sw = dw;
         sh = dh;
       }
       URL.revokeObjectURL(url);
       const canvas = blit(from, sw, sh, tw, th);
+      drop(from);
       canEncodeWebp().then(ok => {
         if (!ok) {
           res(canvas.toDataURL('image/jpeg', 0.94));
