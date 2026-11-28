@@ -18,8 +18,11 @@ export default function WalletRequestsPage() {
           <h2>{t('requests')}</h2>
           <Link href="/wallet/bank" className="wallet-sec-note">{t('addCoins')}</Link>
         </div>
+        {/* The line under the heading answers the question the reader actually
+            has while a request sits unanswered — when they may send another —
+            instead of repeating the transfer instructions they already followed. */}
         <p className="wallet-hint">
-          {waiting > 0 ? `${waiting} · ` : ''}{t('bankHint')}
+          {waiting > 0 ? t('coinWaitingNext', { n: waiting }) : t('bankHint')}
         </p>
         <RequestRows />
       </section>

@@ -93,7 +93,11 @@ export default function CoinProofResubmitPage() {
       });
       forgetLists('coin-requests');
       showToast(t('proofSent'));
-      router.push('/wallet');
+      // The same iOS habit as the request form: the tap's activation is spent by
+      // the time the answer lands, and Safari drops the navigation it issued
+      // from under the keyboard. Blur, then move from a fresh task.
+      (document.activeElement as HTMLElement | null)?.blur?.();
+      setTimeout(() => router.push('/wallet'), 0);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'The proof could not be sent.');
       setBusy(false);
