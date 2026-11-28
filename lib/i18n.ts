@@ -468,6 +468,8 @@ export const I18N = {
     promoRequested: 'Promotion sent for approval. No Coins are taken until a moderator approves it.',
     promoWaiting: 'This {what} is already waiting for approval. Please wait for the admin to approve '
       + 'or refuse it before sending another request.',
+    promoQueueHold: 'You already have a promotion request waiting for approval. Wait for the admin to '
+      + 'approve or refuse it before sending another one.',
     allAges: 'All ages',
     allLocations: 'All locations',
     cities: 'Cities',
@@ -1111,6 +1113,8 @@ export const I18N = {
     promoRequested: 'प्रोमोसन स्वीकृतिको लागि पठाइयो। मोडरेटरले स्वीकृत नगरेसम्म Coins काटिँदैन।',
     promoWaiting: 'यो {what} पहिले नै स्वीकृतिको पर्खाइमा छ। एडमिनले स्वीकृत वा अस्वीकार नगरेसम्म अर्को '
       + 'अनुरोध नपठाउनुहोस्।',
+    promoQueueHold: 'तपाईंको एउटा promotion अनुरोध अझै स्वीकृतिको पर्खाइमा छ। एडमिनले स्वीकृत वा अस्वीकार '
+      + 'नगरेसम्म अर्को अनुरोध नपठाउनुहोस्।',
     allAges: 'सबै उमेर',
     allLocations: 'सबै स्थान',
     cities: 'सहरहरू',

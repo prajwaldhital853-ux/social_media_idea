@@ -23,7 +23,7 @@ import type { Listing } from '@/lib/types';
 export default function ListingPage() {
   const params = useParams();
   const router = useRouter();
-  const { db, me, t, feature, setDb, serverMode, showToast, showConfirm, activePromo, openPromo, isListingSaved, toggleListingSave } = useApp();
+  const { db, me, t, feature, setDb, serverMode, showToast, showConfirm, activePromo, openPromo, pendingPromo, isListingSaved, toggleListingSave } = useApp();
   const lang = db.lang;
   const [photo, setPhoto] = useState(0);
   const [editing, setEditing] = useState(false);
@@ -87,6 +87,9 @@ export default function ListingPage() {
   // about what it waits for.
   const held = mine ? openPromo('listing', listing.id) : undefined;
   const waiting = held?.status === 'pending' ? held : undefined;
+  // One order with the desk at a time, so an earlier request on one of the seller's
+  // own posts closes this door until the desk answers it.
+  const queued = mine ? pendingPromo() : undefined;
   const images = listing.media.filter(m => m.type === 'image' && m.src);
   const current = images[Math.min(photo, images.length - 1)];
   const saved = isListingSaved(listing.id);
@@ -209,6 +212,7 @@ export default function ListingPage() {
                       type="button"
                       className="ghost-btn"
                       onClick={() => {
+                        if (queued) { showToast(t('promoQueueHold')); return; }
                         if (waiting) { showToast(t('promoWaiting', { what: t('dlisting') })); return; }
                         setPromote(true);
                       }}

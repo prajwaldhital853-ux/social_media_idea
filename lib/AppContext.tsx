@@ -80,6 +80,7 @@ interface AppContextType {
   updatePromotion: (id: string, patch: PromoTarget) => Promise<boolean>;
   activePromo: (targetType: 'post' | 'listing', targetId: string) => Promotion | undefined;
   openPromo: (targetType: 'post' | 'listing', targetId: string) => Promotion | undefined;
+  pendingPromo: () => Promotion | undefined;
   promoEligible: (promo: Promotion) => boolean;
   trackPromo: (promoId: string, kind: 'click' | 'profile') => void;
   updateLang: (lang: 'en' | 'ne') => void;
@@ -2045,6 +2046,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
       && (p.status === 'pending' || p.status === 'active' || p.status === 'paused')
       && (!p.ends || p.ends > Date.now()));
 
+  /**
+   * The order this account still has with the desk, on any post or advert. Coins
+   * only leave the wallet when a seat approves, so 300 coins could otherwise carry
+   * two 200 coin orders and pay for both; one order at a time is what keeps a
+   * pending promise honest about the money standing behind it.
+   */
+  const pendingPromo = (): Promotion | undefined => {
+    const self = currentMe();
+    return db.promotions.find(p => p.status === 'pending' && (!self || p.uid === self.id));
+  };
+
   const promoEligible = (promo: Promotion) => {
     const self = currentMe();
     if (!self) return true;
@@ -2097,6 +2109,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
     const pack = db.settings.packages.find(p => p.id === cfg.packageId);
     if (!pack || self.coins < pack.coins) return false;
+    // The same wall the API puts up: one order with the desk at a time. Asking here
+    // rather than at the door means a member who ticked the box before the desk
+    // answered the last order still gets told why nothing was placed.
+    if (pendingPromo()) {
+      showToast(t('promoQueueHold'));
+      return false;
+    }
     if (!API_ENABLED) {
       const now = Date.now();
       // An order is only a promise: the coins stay in the wallet and the run has no
@@ -2238,7 +2257,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         react, myReaction, reactionCount, reactionMix, reactionPeople, myPostReaction, toggleSave, isSaved, toggleListingSave, isListingSaved,
         sharePost, mayShare, countView, blockUser, unblockUser, isBlocked, blockedIds,
         notify, markAllRead, markRead, sendMessage, deleteConversation, markThreadRead, addReport, logAudit,
-        requestPromotion, cancelPromotion, activePromo, openPromo, promoEligible, trackPromo,
+        requestPromotion, cancelPromotion, activePromo, openPromo, pendingPromo, promoEligible, trackPromo,
         setPromotionStatus, updatePromotion,
         updateLang, login, logout, isAuthenticated,
         theme, toggleTheme,

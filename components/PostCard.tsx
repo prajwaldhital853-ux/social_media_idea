@@ -98,7 +98,7 @@ function FeedFollow({ author }: { author: User }) {
 export default function PostCard({ post, author, featured }: PostCardProps) {
   const router = useRouter();
   const { db, me, t, deletePost, toggleSave, isSaved, sharePost, mayShare, openComposer, activePromo, openPromo,
-    promoEligible, trackPromo, showToast, showConfirm, reactionCount, serverMode, blockUser, unblockUser, isBlocked } = useApp();
+    pendingPromo, promoEligible, trackPromo, showToast, showConfirm, reactionCount, serverMode, blockUser, unblockUser, isBlocked } = useApp();
   const [menuOpen, setMenuOpen] = useState(false);
   const [showComments, setShowComments] = useState(false);
   const [reporting, setReporting] = useState(false);
@@ -119,6 +119,9 @@ export default function PostCard({ post, author, featured }: PostCardProps) {
   // outright; a waiting one stays on the menu only long enough to say what it waits on.
   const held = own ? openPromo('post', post.id) : undefined;
   const waiting = held?.status === 'pending' ? held : undefined;
+  // One order with the desk at a time, so a card with nothing on it still has no
+  // door while an earlier order on another post is unread.
+  const queued = own ? pendingPromo() : undefined;
 
   const comments = db.comments
     .filter(c => c.pid === post.id && c.status === 'live')
@@ -283,6 +286,9 @@ export default function PostCard({ post, author, featured }: PostCardProps) {
                   {own && !me?.private && db.settings.features.promotion && (!held || waiting) && menuItem(
                     t('promote'),
                     () => {
+                      // The account's queue answers before this card does: an order on
+                      // another post buys this card nothing until the desk reads it.
+                      if (queued) { showToast(t('promoQueueHold')); return; }
                       if (waiting) { showToast(t('promoWaiting', { what: t('dpost') })); return; }
                       setPromoting(true);
                     },

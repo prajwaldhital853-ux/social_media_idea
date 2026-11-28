@@ -15,7 +15,7 @@ import PromoteForm from './PromoteForm';
 import BlockedEcho from './BlockedEcho';
 
 function Composer({ original }: { original?: Post }) {
-  const { me, t, closeComposer, addPost, updatePost, showToast, requestPromotion, feature, db } = useApp();
+  const { me, t, closeComposer, addPost, updatePost, showToast, requestPromotion, feature, db, pendingPromo } = useApp();
   // The console's post limits desk decides what one post may hold.
   const limits = db.settings.limits;
   const [stage, setStage] = useState<'choose' | 'post' | 'reel'>(original ? original.kind || 'post' : 'choose');
@@ -176,7 +176,12 @@ function Composer({ original }: { original?: Post }) {
                 </div>
               )}
               <button type="button" className="cp-attach" disabled={busy} onClick={() => fileRef.current?.click()}>{IC.img} Add photos or video</button>
-              {feature('promotion') && !original && !me?.private && <label className="cp-promote-toggle"><span>{t('promoteSection')}<small>Optional · paid with Coins</small></span><input type="checkbox" checked={promote} onChange={e => setPromote(e.target.checked)} /></label>}
+              {feature('promotion') && !original && !me?.private && <label className="cp-promote-toggle"><span>{t('promoteSection')}<small>Optional · paid with Coins</small></span><input type="checkbox" checked={promote} onChange={e => {
+                // Ticking the box is where a member finds out the desk is still reading
+                // an earlier order, not after the post is already published.
+                if (e.target.checked && pendingPromo()) { showToast(t('promoQueueHold')); return; }
+                setPromote(e.target.checked);
+              }} /></label>}
               {promote && <PromoteForm targetType="post" confirmLabel="Use this promotion" onConfirm={cfg => setPromoConfig(cfg)} />}
               {promote && promoConfig && <small>Promotion selected. It will be requested when you post.</small>}
             </div>
