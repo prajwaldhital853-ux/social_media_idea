@@ -2193,27 +2193,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const cancelPromotion = async (id: string) => {
     const promo = db.promotions.find(p => p.id === id);
     if (!promo) return;
+    // Two acts wear this one button, and they settle differently. Withdrawing an order
+    // the desk never approved hands back nothing because it took nothing; ending a run
+    // that was charged spends the whole budget, and the reach it bought is not returned
+    // in coins. No door here moves money, so the answer is only ever said, not written.
+    const said = promo.status === 'pending' ? t('promoCancelled') : t('promoEndedNoRefund');
     if (!API_ENABLED) {
       const now = Date.now();
-      const paid = promo.coins;
       setDb(prev => ({
         ...prev,
         promotions: prev.promotions.map(p => (p.id === id ? { ...p, status: 'ended' as const, ends: now } : p)),
-        // Only a campaign that was actually charged gives anything back; a withdrawn
-        // order never took a coin.
-        users: paid > 0 ? prev.users.map(u => (u.id === promo.uid ? { ...u, coins: u.coins + paid } : u)) : prev.users,
-        ledger: paid > 0 ? [{ id: uid(), uid: promo.uid, delta: paid, kind: 'refund' as const, note: 'Promotion ended, unused Coins returned', ts: now }, ...prev.ledger] : prev.ledger
       }));
-      showToast(t('promoCancelled'));
+      showToast(said);
       return;
     }
     try {
       merge({ promotions: [mapPromotion(await api.post<any>(`/api/promotions/${id}/end/`, {}))] });
       await resync();
-      // A refund is a ledger row, and the history list would otherwise keep showing
-      // the page it had before the money moved.
-      forgetLists('wallet-ledger');
-      showToast(t('promoCancelled'));
+      showToast(said);
     } catch (err) {
       showToast(errText(err, 'Could not end the promotion.'));
     }

@@ -154,7 +154,7 @@ export default function WalletPromotionsPage() {
                   <button
                     type="button"
                     className="wallet-quiet danger"
-                    onClick={() => showConfirm(t('confirmDelete'), () => void cancelPromotion(p.id))}
+                    onClick={() => showConfirm(t('endPromoConfirm'), () => void cancelPromotion(p.id))}
                   >
                     {t('endNow')}
                   </button>
