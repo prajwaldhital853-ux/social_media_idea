@@ -280,15 +280,44 @@ def _storage_tile(media):
     }
 
 
+def _members():
+    """The accounts a visitor can actually reach.
+
+    A staff seat, a locked account and a banned one are all rows the member site
+    refuses to show, so a card that counted them read as accounts that were
+    nowhere to be found.
+    """
+    return User.objects.filter(is_active=True).exclude(
+        Q(is_staff=True) | Q(is_superuser=True) | Q(staff_account__is_enabled=True),
+    )
+
+
 def tiles(cutoffs, media=None):
-    """The overview cards, in the order the contract lists them."""
+    """The overview cards, in the order the contract lists them.
+
+    Each card counts what the site can hand a reader today. A member who deletes
+    their ad, a post a moderator took down, a comment under a gone post — none of
+    them belong in a number a seat then tries to walk to. The count and the page
+    have to agree, or the card is a lifetime tally of things that are not there.
+    """
     media = media if media is not None else storage_used()
+    listed = Listing.objects.exclude(status=Listing.Status.REMOVED)
+    listings = _rate_tile('listings', 'Listings created', '/listings', Listing, 'created_at', cutoffs,
+                          base=listed)
+    # The seller who marked an offer sold did not delete it, and a reader cannot buy
+    # it either, so the two numbers are said apart rather than folded into one.
+    listings['parts'] = [
+        ['On the market', listed.filter(status=Listing.Status.ACTIVE).count()],
+        ['Marked sold', listed.filter(status=Listing.Status.SOLD).count()],
+        ['Taken down by staff', listed.filter(status=Listing.Status.HIDDEN).count()],
+    ]
     out = [
-        _rate_tile('new_users', 'New accounts', '/users', User, 'date_joined', cutoffs),
-        _rate_tile('posts', 'Posts created', '/content', Post, 'created_at', cutoffs),
-        _rate_tile('comments', 'Comments created', '/content', Comment, 'created_at', cutoffs),
-        _rate_tile('listings', 'Listings created', '/listings', Listing, 'created_at', cutoffs,
-                   base=Listing.objects.exclude(status=Listing.Status.REMOVED)),
+        _rate_tile('new_users', 'New accounts', '/users', User, 'date_joined', cutoffs, base=_members()),
+        _rate_tile('posts', 'Posts created', '/content', Post, 'created_at', cutoffs,
+                   base=Post.objects.filter(status=Post.Status.LIVE)),
+        _rate_tile('comments', 'Comments created', '/content', Comment, 'created_at', cutoffs,
+                   base=Comment.objects.filter(status=Comment.Status.LIVE, post__status=Post.Status.LIVE)),
+        listings,
         _open_reports(cutoffs),
         _coin_requests(cutoffs),
         _promotions(cutoffs),

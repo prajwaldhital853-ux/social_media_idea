@@ -128,6 +128,7 @@ class ListingViewSet(viewsets.ModelViewSet):
         user = self.request.user
         params = self.request.query_params
         taken_down = Q(status=Listing.Status.REMOVED) | Q(status=Listing.Status.HIDDEN)
+        staff_walk = user.is_authenticated and user.is_staff and params.get('status')
         if getattr(self, 'action', None) == 'retrieve':
             # A deleted or held ad still answers its own link, for its seller and
             # for the moderator who took it down, so both read "not available"
@@ -135,11 +136,17 @@ class ListingViewSet(viewsets.ModelViewSet):
             if not (user.is_authenticated and user.is_staff):
                 stranger = taken_down if not user.is_authenticated else taken_down & ~Q(seller=user)
                 qs = qs.exclude(stranger)
-        elif not (user.is_authenticated and user.is_staff and params.get('status')):
+        elif not staff_walk:
             # The grid is a page of live offers for everyone: the seller who
             # deleted an ad and the staff who moderates it both reach the archive
             # on purpose, and nobody gets a hidden row padding an ordinary page.
             qs = qs.exclude(taken_down)
+            # A sold offer has nothing left to buy, so it walks out of the browse
+            # grid the moment it is marked. It stays on the seller's own shelf and
+            # on the page that names a seller, where "sold" is the answer a reader
+            # went there to see.
+            if not (params.get('mine') or params.get('seller')):
+                qs = qs.exclude(status=Listing.Status.SOLD)
         if params.get('seller'):
             qs = qs.filter(seller__username=params['seller'])
         if params.get('mine') and user.is_authenticated:

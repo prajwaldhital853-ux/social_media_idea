@@ -10,6 +10,7 @@ from rest_framework.response import Response
 from apps.adminpanel import rbac
 from apps.common.api import person
 from apps.common.config import package_by_id
+from apps.common.emails import queue_promotion_request_email
 from apps.common.pagination import KeysetPagination
 from apps.common.rules import rate, seat
 from apps.marketplace.models import Listing
@@ -180,6 +181,7 @@ def promotion_list(request):
             starts_at=None,
             ends_at=None,
         )
+        queue_promotion_request_email(promo)
         return Response(_row(promo), status=status.HTTP_201_CREATED)
     qs = Promotion.objects.filter(owner=request.user).select_related('owner')
     paginator = KeysetPagination()

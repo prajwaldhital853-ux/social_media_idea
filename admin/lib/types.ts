@@ -101,6 +101,8 @@ export interface Tile {
   month?: number;
   total?: number;
   windows?: Record<string, number>;
+  /** A second read of the same pile, said apart: what is buyable and what is sold. */
+  parts?: [string, number][];
   series?: SeriesPoint[];
 
   value?: number;
@@ -625,7 +627,7 @@ export interface WelcomeLine {
   key: string;
   // The last two are written on the same desk but never reach the card: they steer
   // where the platform's own letters go.
-  field: 'message' | 'tagline' | 'email' | 'phone' | 'form' | 'report_inbox' | 'console_url';
+  field: 'message' | 'tagline' | 'email' | 'phone' | 'form' | 'report_inbox' | 'request_inbox' | 'console_url';
   label: string;
   help: string;
   limit: number;

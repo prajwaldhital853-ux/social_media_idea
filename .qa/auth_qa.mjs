@@ -216,7 +216,9 @@ const fillSignup = (page, data) => page.evaluate(d => {
   set(texts[1], d.username);
   set(document.querySelector('.signup-form input[type=email]'), d.email);
   set(document.querySelector('.signup-form input[type=password]'), d.password);
-  set(document.querySelector('.signup-form input[type=date]'), d.dob);
+  const seg = (label, v) => set(document.querySelector(`.signup-form .dp [aria-label="${label}"]`), v);
+  const [yy, mm, dd] = String(d.dob || '').split('-');
+  seg('Day', dd || ''); seg('Month', mm || ''); seg('Year', yy || '');
   document.querySelectorAll('.signup-check input[type=checkbox]').forEach(c => { if (!c.checked) c.click(); });
 }, data);
 

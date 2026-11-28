@@ -35,14 +35,19 @@ LINES = (
     ('report_inbox', 'report_inbox', 120, 'Complaints inbox',
      'A copy of every report a user files is mailed to this address as it arrives. '
      'Left empty, complaints stay inside the console queue.'),
+    ('request_inbox', 'request_inbox', 120, 'Requests inbox',
+     'A coin purchase and a promotion order are mailed to this address the moment a member '
+     'files them. Left empty, they go to the complaints inbox instead.'),
+    ('console_url', 'console_url', 200, 'Console address',
+     'The link a staff letter points at, and the desk a request email asks someone to open.'),
 )
 BY_KEY = {line[0]: line for line in LINES}
 CONTACT_LABELS = (('contact_email', 'Email'), ('contact_phone', 'Phone'),
                   ('contact_form', 'Support form'))
 # Rows the visitor never sees. They steer where the platform's own letters go, so
 # they are written from the console but never printed on the first-load card.
-MAIL_KEYS = frozenset({'report_inbox', 'console_url'})
-MAIL_LABELS = frozenset({'Complaints inbox', 'Console address'})
+MAIL_KEYS = frozenset({'report_inbox', 'request_inbox', 'console_url'})
+MAIL_LABELS = frozenset({'Complaints inbox', 'Requests inbox', 'Console address'})
 
 
 def card():

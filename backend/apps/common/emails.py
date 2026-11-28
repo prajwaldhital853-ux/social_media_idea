@@ -142,6 +142,100 @@ def queue_report_email(report):
     )
 
 
+_INBOX = re.compile(r'[^\s@]+@[^\s@]+\.[^\s@]{2,}')
+
+
+def _inbox(*keys):
+    """The first of these settings that holds a whole address.
+
+    A request letter has one fallback, the complaints box: a deployment that told
+    the platform where complaints go has already named the person who reads the
+    queue, and a letter that goes nowhere because a second box was never filled is
+    a silent missed payment.
+    """
+    try:
+        from apps.adminpanel.settings_store import get
+
+        for key in keys:
+            value = str(get(key) or '').strip()
+            if _INBOX.fullmatch(value):
+                return value
+    except Exception:
+        logger.exception('Could not read the request inbox settings')
+    return ''
+
+
+def console_link(path):
+    """A link into the console, or the member site when no console address is written."""
+    try:
+        from apps.adminpanel.settings_store import get
+
+        door = str(get('console_url') or '').strip().rstrip('/')
+    except Exception:
+        logger.exception('Could not read the console address setting')
+        door = ''
+    return f'{door}{path}' if door else path
+
+
+def queue_coin_request_email(coin_request):
+    """Tell the desk money was ordered, while the proof is still fresh.
+
+    A request that sits unread is a member who paid and got nothing, and the coins
+    desk only gets read when somebody remembers it is there.
+    """
+    inbox = _inbox('request_inbox', 'report_inbox')
+    if not inbox:
+        return None
+    buyer = coin_request.user
+    return queue_event_email(
+        inbox,
+        'A coin purchase is waiting on Exposing',
+        'Someone paid for coins',
+        f'@{buyer.username} filed a coin purchase for {coin_request.coins} coins. It is open in '
+        'the coins desk, where the payment proof is checked and the coins are credited.',
+        details=(
+            ('Member', f'@{buyer.username}'),
+            ('Their email', buyer.email or ''),
+            ('Coins asked for', f'{coin_request.coins} coins'),
+            ('Amount', f'NPR {coin_request.amount}'),
+            ('Paid by', 'bank transfer' if coin_request.method == 'bank' else 'QR / wallet'),
+            ('Their reference', coin_request.reference or 'not given'),
+            ('Payment proof', 'attached' if coin_request.screenshot_url else 'none attached'),
+            ('Filed at', timezone.localtime(coin_request.created_at).strftime('%d %b %Y at %H:%M')),
+        ),
+        cta_label='Open the coins desk',
+        cta_path=console_link('/coins'),
+        footnote='This address is set under Console → First-load wording, beside the complaints inbox.',
+    )
+
+
+def queue_promotion_request_email(promo):
+    """The same courtesy for the reach somebody has bought with their coins."""
+    inbox = _inbox('request_inbox', 'report_inbox')
+    if not inbox:
+        return None
+    owner = promo.owner
+    return queue_event_email(
+        inbox,
+        'A promotion order is waiting on Exposing',
+        'Someone bought reach',
+        f'@{owner.username} ordered a promotion for {promo.budget} coins. Until a seat approves '
+        'it the campaign runs nowhere and the coins are not yet spent.',
+        details=(
+            ('Member', f'@{owner.username}'),
+            ('Their email', owner.email or ''),
+            ('Package', str(promo.package or 'not named')),
+            ('Coins', f'{promo.budget} coins'),
+            ('Promoting', f'{promo.target_type} #{promo.target_id}'),
+            ('Category', promo.category or 'whole city'),
+            ('Filed at', timezone.localtime(promo.created_at).strftime('%d %b %Y at %H:%M')),
+        ),
+        cta_label='Open the promotions desk',
+        cta_path=console_link('/promotions'),
+        footnote='This address is set under Console → First-load wording, beside the complaints inbox.',
+    )
+
+
 def queue_staff_created_email(user, *, password, role, permissions=(), by=''):
     """Hand a new seat what it needs to walk in once: address, password, role, screens, link.
 
@@ -153,13 +247,6 @@ def queue_staff_created_email(user, *, password, role, permissions=(), by=''):
     """
     from apps.adminpanel.rbac import LABELS, ROLE_LABELS
 
-    try:
-        from apps.adminpanel.settings_store import get
-
-        door = str(get('console_url') or '').strip().rstrip('/')
-    except Exception:
-        logger.exception('Could not read the console address setting')
-        door = ''
     names = [LABELS.get(key, key) for key in permissions]
     return queue_event_email(
         user.email,
@@ -176,7 +263,7 @@ def queue_staff_created_email(user, *, password, role, permissions=(), by=''):
             ('Screens you can open', ', '.join(names) if names else 'None yet'),
         ),
         cta_label='Open the staff sign-in',
-        cta_path=f'{door}/login' if door else '/login',
+        cta_path=console_link('/login'),
         footnote='This password stops working the moment you replace it, and it is not sent out '
                  'again. If this letter reached the wrong person, tell Exposing staff rather than '
                  'signing in.',

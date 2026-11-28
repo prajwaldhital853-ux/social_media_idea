@@ -98,11 +98,30 @@ class WindowTests(TestCase):
         self.assertEqual(series[0]['day'], (self.cutoffs['today'] - timedelta(days=stats.SERIES_DAYS - 1)).date().isoformat())
         self.assertTrue(all('n' in point for point in series), 'a gap reads as zero, never as missing')
 
-    def test_a_removed_post_still_counts_as_something_created(self):
+    def test_a_post_the_site_cannot_show_is_off_the_card(self):
         author = member('deleter')
         post(author, status=Post.Status.REMOVED)
         tile = next(tile for tile in stats.tiles(self.cutoffs) if tile['id'] == 'posts')
-        self.assertEqual(tile['total'], 1, 'the tile measures activity; moderation status is the review queue story')
+        self.assertEqual(tile['total'], 0, 'the card counts what a reader can be handed, not history')
+
+    def test_a_comment_under_a_post_that_is_gone_is_off_the_card(self):
+        author = member('quiet')
+        gone = post(author, status=Post.Status.REMOVED)
+        Comment.objects.create(post=gone, author=author, text='nice')
+        tile = next(tile for tile in stats.tiles(self.cutoffs) if tile['id'] == 'comments')
+        self.assertEqual(tile['total'], 0)
+
+    def test_a_sold_offer_is_said_apart_and_a_deleted_one_is_not_said_at_all(self):
+        author = member('seller')
+        Listing.objects.create(seller=author, title='Bike', price=Decimal('1500'),
+                               status=Listing.Status.SOLD)
+        Listing.objects.create(seller=author, title='Helmet', price=Decimal('900'))
+        Listing.objects.create(seller=author, title='Pump', price=Decimal('300'),
+                               status=Listing.Status.REMOVED)
+        tile = next(tile for tile in stats.tiles(self.cutoffs) if tile['id'] == 'listings')
+        self.assertEqual(tile['total'], 2, 'the ad the seller deleted is out of both numbers')
+        self.assertEqual(dict(tile['parts']),
+                         {'On the market': 1, 'Marked sold': 1, 'Taken down by staff': 0})
 
 
 class QueueTileTests(TestCase):

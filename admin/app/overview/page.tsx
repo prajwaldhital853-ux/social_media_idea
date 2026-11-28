@@ -263,6 +263,13 @@ function RateBody({ tile, win }: { tile: Tile; win: string }) {
         ['30 days', num(tile.month)],
         ['All time', num(tile.total)],
       ]}/>
+      {tile.parts && tile.parts.length > 0 && (
+        <div className="tile-foot">
+          {tile.parts.map(([label, value]) => (
+            <span key={label}>{label} <b>{num(value)}</b></span>
+          ))}
+        </div>
+      )}
     </>
   );
 }
