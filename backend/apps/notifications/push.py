@@ -81,8 +81,15 @@ def _fan_out(recipient_id, payload):
         # A thread must not inherit the request's connection: the request
         # returns and puts it back in the pool while this is still holding it.
         connections.close_all()
-        for sub in list(PushSubscription.objects.filter(user_id=recipient_id)):
+        subs = list(PushSubscription.objects.filter(user_id=recipient_id))
+        # Silence is the reason a card that never arrived could not be traced:
+        # "the switch is on" says nothing about whose browser the server holds.
+        if not subs:
+            logger.warning('push: nobody holds a filed browser for %s', payload.get('to') or recipient_id)
+            return
+        for sub in subs:
             _send(sub, payload)
+        logger.warning('push: card for %s handed to %d browser(s)', payload.get('to'), len(subs))
     except Exception:
         logger.exception('Could not deliver a push notification')
 
@@ -171,10 +178,12 @@ def _send(sub, payload):
             # formed: the member cleared site data, unsubscribed, or the keys
             # stopped matching the browser. Keeping the row would mean signing
             # letters forever for a device that will never read them.
+            logger.warning('push: %s is gone (%s); dropping the address', sub.endpoint[:64], code)
             PushSubscription.objects.filter(pk=sub.pk).delete()
         else:
             # 402, 429 and every 5xx are our problem or the service's, not the
             # browser's. A transient refusal must not delete a live subscription.
+            logger.warning('push: the service refused %s (%s); counting a failure', sub.endpoint[:64], code or 'no status')
             _count_failure(sub)
     except Exception:
         logger.exception('The push service could not be reached')

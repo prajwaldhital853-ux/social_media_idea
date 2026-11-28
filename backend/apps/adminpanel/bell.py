@@ -13,6 +13,8 @@ while nobody was watching, a payment proof waiting on a decision. Everything els
 a number on a dashboard and stays there.
 """
 
+import logging
+
 from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.db.models import Count, Q
@@ -26,6 +28,8 @@ from apps.wallet.models import CoinRequest
 
 from . import rbac
 from .models import StaffAccount, StaffNotice
+
+logger = logging.getLogger(__name__)
 
 # Per seat, unread or not. Older rows are deleted, not hidden: the console is the
 # archive, and a bell is a queue with a memory the length of one screen.
@@ -65,7 +69,7 @@ def announce(kind, text, href, permission=''):
     Called from inside the request that caused the event, so it stays a handful of
     indexed writes: the number of staff seats is a roster, not a user base.
     """
-    seat_rows = StaffAccount.objects.filter(is_enabled=True).select_related('user')
+    seat_rows = list(StaffAccount.objects.filter(is_enabled=True).select_related('user'))
     route = _route(href)
     told = 0
     for seat in seat_rows:
@@ -86,6 +90,11 @@ def announce(kind, text, href, permission=''):
         ))
         _trim(user)
         told += 1
+    if not told:
+        logger.warning(
+            'bell: nobody was told for %s (permission=%s, enabled seats=%d)',
+            kind, permission or '-', len(seat_rows),
+        )
     if told:
         transaction.on_commit(lambda: _pulse(kind, route, permission))
     return told

@@ -135,6 +135,10 @@ export default function ListingForm({ onClose, onSaved, listingId }: ListingForm
         // The market, the seller's grid and every saved page all list this row.
         ['market', 'profile-listings', 'saved-listings'].forEach(forgetLists);
         setBlocked([]);
+        // Safari keeps the keyboard's scroll offset after the field it was
+        // measured against is torn away with the sheet, and the next screen
+        // opens on a blank stretch of page until the reader scrolls back.
+        (document.activeElement as HTMLElement | null)?.blur?.();
         showToast(existing ? t('listingUpdated') : t('listingCreated'));
         onSaved(String(row.id));
         onClose();
@@ -168,7 +172,7 @@ export default function ListingForm({ onClose, onSaved, listingId }: ListingForm
   };
 
   return createPortal(
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay" onClick={() => { if (!busy) onClose(); }}>
       <div className="modal-content listing-form-modal" onClick={e => e.stopPropagation()} role="dialog" aria-label={existing ? t('editListing') : t('createListing')}>
         <div className="modal-header">
           <b>{existing ? t('editListing') : t('createListing')}</b>
@@ -255,7 +259,7 @@ export default function ListingForm({ onClose, onSaved, listingId }: ListingForm
           )}
 
           {error && <p className="form-error" role="alert">{error}</p>}
-          <button type="submit" className="promote-submit" disabled={busy}>{IC.store}{existing ? t('save') : t('createListing')}</button>
+          <button type="submit" className="promote-submit" disabled={busy}>{IC.store}{busy ? t('listingSaving') : existing ? t('save') : t('createListing')}</button>
         </form>
       </div>
     </div>,

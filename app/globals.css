@@ -111,6 +111,11 @@ body {
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  /* iOS Safari quietly enlarges text it decides is a block of prose, and a short
+     bar of centered sentences is exactly what it decides. Without this the toast
+     lands on a phone twice the size it was drawn. */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 body.noscroll {
@@ -2478,6 +2483,19 @@ a.trend-item:hover { text-decoration: none; }
   animation: fadeIn 0.2s ease; max-width: 90vw; text-align: center;
 }
 @media (min-width: 769px) { .toast { bottom: 28px; } }
+
+/* On a phone the bar spans the hand like the desktop's does, the sentence reads
+   left-aligned across at most two lines, and the ends stop curving into a circle
+   the moment the copy wraps — a fully rounded pill around six lines of text is
+   the one shape that makes a short warning look like an outage. */
+@media (max-width: 768px) {
+  .toast {
+    width: calc(100vw - 20px); max-width: calc(100vw - 20px); justify-content: space-between;
+    padding: 9px 12px; border-radius: 14px; font-size: 13px; font-weight: 500;
+    line-height: 1.35; text-align: left;
+  }
+  .toast > span:first-of-type { flex: 1 1 auto; min-width: 0; }
+}
 
 .toast-x {
   flex: none; width: 20px; height: 20px; border: 0;
@@ -6622,6 +6640,9 @@ a.wallet-sec-note:hover { color: var(--brand); text-decoration: underline; }
 .wallet-entry-main b { font-size: 13.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .wallet-entry-main small { font-size: 12px; color: var(--muted); }
 .wallet-entry-note { color: var(--red) !important; }
+/* The one-at-a-time rule belongs on the row it applies to, and in the tone of a
+   reminder rather than the red of a refusal. */
+.wallet-entry-remind { font-style: italic; }
 .wallet-entry-num { font-size: 14px; font-weight: 700; flex-shrink: 0; font-variant-numeric: tabular-nums; }
 .wallet-entry-num.in { color: var(--green); }
 .wallet-entry-num.out { color: var(--red); }
