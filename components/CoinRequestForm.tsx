@@ -7,7 +7,7 @@ import { useRequestRows } from '@/components/WalletLists';
 import { useApp } from '@/lib/AppContext';
 import { api, API_ENABLED } from '@/lib/api';
 import { mapCoinRequest } from '@/lib/dto';
-import { forgetLists } from '@/lib/lists';
+import { pushListRow } from '@/lib/lists';
 import { mediaFromFile } from '@/lib/mediaFile';
 import { IC } from '@/lib/icons';
 import { uid } from '@/lib/utils';
@@ -74,6 +74,16 @@ export default function CoinRequestForm({ method }: { method: 'bank' | 'qr' }) {
     }
   };
 
+  // Two iOS habits land here at once: the page keeps the keyboard's scroll
+  // offset and the file chooser's focus after a submit that navigates from
+  // underneath them, and by the time the answer arrives the tap's activation is
+  // spent, which is the navigation Safari is known to drop on the floor. Let go
+  // of the field, then move from a fresh task instead of from the await.
+  const toRequests = () => {
+    (document.activeElement as HTMLElement | null)?.blur?.();
+    setTimeout(() => router.push('/wallet/requests'), 0);
+  };
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!reference.trim()) { setError(t('reference')); return; }
@@ -87,10 +97,14 @@ export default function CoinRequestForm({ method }: { method: 'bank' | 'qr' }) {
         const row = await api.post<any>('/api/wallet/requests/', {
           coins, amount, method, reference: reference.trim(), screenshot_url: screenshot || '',
         });
-        merge({ coinRequests: [mapCoinRequest(row)] });
-        forgetLists('coin-requests');
+        const saved = mapCoinRequest(row);
+        merge({ coinRequests: [saved] });
+        // The request the server just accepted IS the answer: put it at the head
+        // of the list the Requests page reads instead of dropping that list and
+        // making the member watch a skeleton while the same page is fetched back.
+        pushListRow('coin-requests', undefined, saved.id);
         showToast(t('requestSent'));
-        router.push('/wallet/requests');
+        toRequests();
       } catch (err) {
         setError(err instanceof Error ? err.message : 'The request could not be sent.');
         setBusy(false);
@@ -107,7 +121,7 @@ export default function CoinRequestForm({ method }: { method: 'bank' | 'qr' }) {
     setScreenshot('');
     setError('');
     showToast(t('requestSent'));
-    router.push('/wallet/requests');
+    toRequests();
   };
 
   return (

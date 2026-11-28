@@ -9,7 +9,7 @@ import ThemeToggle from '@/components/ThemeToggle';
 import EditProfileModal from '@/components/EditProfileModal';
 import { useApp } from '@/lib/AppContext';
 import { api } from '@/lib/api';
-import { disablePush, enablePush, pushState, PushState } from '@/lib/push';
+import { autoPush, disablePush, enablePush, mutePush, pushState, PushState } from '@/lib/push';
 import { mapPerson } from '@/lib/dto';
 import { User } from '@/lib/types';
 import { KEY } from '@/lib/utils';
@@ -30,13 +30,18 @@ export default function SettingsPage() {
   const [pushBusy, setPushBusy] = useState(false);
 
   useEffect(() => {
-    void pushState().then(setPushOn);
+    // The site asks for the right as soon as it opens, so the answer may still
+    // be on its way when this screen mounts. Running the arrival routine here
+    // settles it: it takes an address for a browser that already allowed
+    // alerts, and never asks a second time for one that has been asked.
+    void autoPush().then(setPushOn);
   }, []);
 
   const setPush = async (on: boolean) => {
     if (pushBusy) return;
     setPushBusy(true);
     if (!on) {
+      mutePush();
       await disablePush();
       setPushOn('off');
       setPushBusy(false);

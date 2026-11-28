@@ -134,6 +134,7 @@ export function RequestRows({ cap, href }: { cap?: number; href?: string }) {
               <b>{r.coins} {t('coins')} · NPR {r.amount}</b>
               <small>{r.method === 'bank' ? t('bankTransfer') : t('qrPay')} · {r.reference} · {ago(r.ts, db.lang)}</small>
               {r.note && <small className="wallet-entry-note">{r.note}</small>}
+              {r.status === 'pending' && <small className="wallet-entry-remind">{t('coinOneAtATime')}</small>}
             </span>
             <StatusChip status={r.status} />
             {r.resubmitted && r.status === 'pending' && <span className="wallet-status resubmitted">{t('resubmitted')}</span>}

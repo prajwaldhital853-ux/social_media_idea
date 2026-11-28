@@ -37,9 +37,12 @@ export interface ListState {
   /** A re-read of page one while the previous rows stay on screen. */
   refreshing: boolean;
   error: string | null;
+  /** When page one last was answered, so a screen can pair "I have now seen the
+   *  newest rows" with the reading that showed them to it. */
+  pulled: number;
 }
 
-const IDLE: ListState = { ids: [], cursor: null, loaded: false, done: false, loading: false, refreshing: false, error: null };
+const IDLE: ListState = { ids: [], cursor: null, loaded: false, done: false, loading: false, refreshing: false, error: null, pulled: 0 };
 
 const states = new Map<string, ListState>();
 /** When each list last answered page one, so a screen returning to it knows whether the answer is stale. */
@@ -123,6 +126,7 @@ async function fetchPage(key: string, def: ListDef, query: Query | undefined, cu
     if (apply) apply(def.frag(rows));
     const ids = (def.ids || (r => r.map(row => idOf(row.id))))(rows);
     const prev = snapshot(key).ids;
+    const now = Date.now();
     set(key, {
       // A refresh answers with page one, so it replaces; a later page appends.
       ids: cursor ? [...prev, ...ids.filter(id => !prev.includes(id))] : ids,
@@ -131,10 +135,13 @@ async function fetchPage(key: string, def: ListDef, query: Query | undefined, cu
       loaded: true,
       loading: false,
       refreshing: false,
+      // Only a page-one answer is a reading of the head of the list, so only one
+      // moves the stamp a screen waits on to call the new rows seen.
+      pulled: cursor ? snapshot(key).pulled : now,
     });
     // Only a page-one answer settles the question of how fresh a screen is. A
     // later page tells you nothing about whether the head of the list moved.
-    if (!cursor) pulledAt.set(key, Date.now());
+    if (!cursor) pulledAt.set(key, now);
   } catch (err: any) {
     const message = err?.message || 'Could not load this list.';
     // A rebuild emptied the rows on purpose, so a failed one puts back what the
@@ -354,6 +361,7 @@ export function useList(key: string, def: ListDef, query?: Query, enabled = true
     loaded: state.loaded,
     hasMore: enabled && !state.done,
     error: state.error,
+    pulled: state.pulled,
     loadMore: () => (enabled ? loadMoreAt(sk, defRef.current, queryRef.current) : Promise.resolve()),
     reload: () => (enabled ? refreshAt(sk, defRef.current, queryRef.current) : Promise.resolve()),
   };

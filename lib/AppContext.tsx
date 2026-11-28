@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback, ReactNode, Dispatch, SetStateAction } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { Database, Follow, User, Post, Comment, ThemeMode, ReactionKind, NotificationKind, FeatureFlags, Promotion, Message, CoinRequest } from './types';
+import { Database, Follow, User, Post, Comment, ThemeMode, ReactionKind, NotificationKind, FeatureFlags, Promotion, Message, CoinRequest, Notice } from './types';
 import { getDb, save, emptyDb } from './storage';
 import { hydrateVideoSrcs } from './videoStore';
 import { THEME_KEY, LANG_KEY, uid, ageFromDob, reactionRank } from './utils';
@@ -16,7 +16,7 @@ import {
 } from './dto';
 import { bindListCache, coinRequestsFragment, dropListRow, forgetLists, inboxListDef, listingsFragment, notificationsFragment, promotionsFragment, postsFragment, pushListRow, refreshList, removeListRow, walletFragment } from './lists';
 import { emitLive, onLive } from './live';
-import { disablePush, pushSupported, syncPush } from './push';
+import { announceSeat, autoPush, disablePush, pushSupported } from './push';
 import { bumpNew } from './newCount';
 
 type Target = 'post' | 'comment' | 'media';
@@ -258,6 +258,30 @@ function moveTally(post: Post, rows: Comment[], delta: 1 | -1): Post {
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
+/**
+ * Take one withdrawn notice out of the cached rows it stood on.
+ *
+ * The console's retraction frame names the target and the notice and nothing else,
+ * so the drop is keyed on both: a post and a comment can share a number, and a row
+ * can carry two notices when only one of them was taken down. A row that ends with
+ * nothing to say goes back to no banner at all, which is the shape a card the server
+ * never spoke about arrives with.
+ */
+function dropNotice(db: Database, target: string, id: string, notice: string): Database {
+  const strip = <T extends { id: string; notices?: Notice[] }>(rows: T[]): T[] => {
+    if (!rows.some(row => row.id === id && row.notices?.some(n => n.id === notice))) return rows;
+    return rows.map(row => {
+      if (row.id !== id || !row.notices?.some(n => n.id === notice)) return row;
+      const left = row.notices.filter(n => n.id !== notice);
+      return { ...row, notices: left.length ? left : undefined };
+    });
+  };
+  if (target === 'comment') return { ...db, comments: strip(db.comments) };
+  if (target === 'listing') return { ...db, listings: strip(db.listings) };
+  if (target === 'user') return { ...db, users: strip(db.users) };
+  return { ...db, posts: strip(db.posts) };
+}
+
 export function AppProvider({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -291,11 +315,29 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [pathname]);
 
   useEffect(() => {
+    // The right belongs to the browser, not the seat, so a visitor is asked the
+    // moment the site opens instead of after they find a setting. A guest cannot
+    // file an address yet; the next effect does that once they have a session.
+    void autoPush();
+  }, []);
+
+  useEffect(() => {
     // Whoever signs in owns this browser's address for as long as the seat
-    // lasts. The call is cheap when nothing is subscribed and does nothing at
-    // all when the member never allowed notifications.
+    // lasts, and a browser that has never been asked is asked now rather than
+    // whenever the member finds the switch in Settings. Both calls do nothing at
+    // all to a member who has already said no.
     if (!API_ENABLED || !db.meId) return;
-    void syncPush();
+    // The worker draws a card for the whole browser, so every tab has to say
+    // whose account it is holding — otherwise the tab that happens to be in
+    // front swallows the message meant for the member who is away.
+    const seat = () => {
+      const holder = dbRef.current.users.find(u => u.id === dbRef.current.meId);
+      if (holder) announceSeat(holder.username);
+    };
+    void autoPush().then(seat);
+    seat();
+    document.addEventListener('visibilitychange', seat);
+    return () => document.removeEventListener('visibilitychange', seat);
   }, [db.meId]);
 
   useEffect(() => {
@@ -602,6 +644,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       } else if (p.kind === 'warning') {
         void pullBadges();
         void pullSession();
+      } else if (p.kind === 'notice_gone') {
+        // The console took a public notice down. The email and the bell line say so
+        // already; this is the frame that takes the banner off the card it was
+        // standing on, so the site stops contradicting the retraction it announced.
+        const id = String(p.id || '');
+        const notice = String(p.notice || '');
+        if (!id || !notice) return;
+        setDb(prev => dropNotice(prev, String(p.target || ''), id, notice));
       } else if (p.kind === 'post_new') {
         // The badge counts arrivals from someone else's pen; my own publish is
         // already on screen and asks for no counter.
@@ -1852,6 +1902,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const self = currentMe();
     if (!self) return false;
     const before = dbRef.current.messages;
+    // A deleted thread takes its unread rows out of the badge with it, so the
+    // dot moves on the click instead of waiting for the re-pull underneath.
+    const unreads = dbRef.current.messages.filter(m => m.from === to && m.to === self.id && !m.read).length;
     setDb(prev => ({
       ...prev,
       messages: prev.messages.filter(m => !((m.from === self.id && m.to === to) || (m.from === to && m.to === self.id))),
@@ -1859,6 +1912,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       notifications: prev.notifications.filter(n => !(
         n.kind === 'message' && n.actor === to && (n.uid === self.id || !n.uid)
       )),
+      unread: prev.unread
+        ? { ...prev.unread, messages: Math.max(0, (prev.unread.messages || 0) - unreads) }
+        : prev.unread,
     }));
     removeListRow('inbox', undefined, to);
     if (!API_ENABLED) return true;
@@ -1872,6 +1928,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setDb(prev => ({ ...prev, messages: before, hiddenConversations: (prev.hiddenConversations || []).filter(id => id !== to) }));
       showToast(errText(err, 'Could not delete the conversation.'));
       void refreshList('inbox', inboxListDef(self.id));
+      // The thread came back, so whatever the badge gave up has to come back too.
+      void pullBadges();
       return false;
     }
   };

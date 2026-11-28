@@ -8,6 +8,7 @@ import { COUNTRIES, safeUrl } from '@/lib/utils';
 import { checkPhoto, profileImage } from '@/lib/mediaFile';
 import { ProfileLink } from '@/lib/types';
 import Avatar from './Avatar';
+import DatePicker, { todayIso } from './DatePicker';
 import ImageCropper from './ImageCropper';
 import { IC } from '@/lib/icons';
 
@@ -183,10 +184,10 @@ export default function EditProfileModal({ onClose }: { onClose: () => void }) {
             <textarea value={bio} maxLength={160} rows={3} onChange={e => setBio(e.target.value)} placeholder={t('bio')} />
             <small className="field-count">{bio.length}/160</small>
           </label>
-          <label className="field">
+          <div className="field">
             <span>{t('dob')}</span>
-            <input type="date" value={dob} onChange={e => setDob(e.target.value)} />
-          </label>
+            <DatePicker value={dob} max={todayIso()} onChange={setDob} />
+          </div>
           <div className="field-row">
             <label className="field">
               <span>{t('country')}</span>

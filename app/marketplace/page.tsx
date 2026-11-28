@@ -56,12 +56,12 @@ export default function MarketplacePage() {
       const index = new Map(db.listings.map(l => [l.id, l] as [string, Listing]));
       return market.ids
         .map(id => index.get(id))
-        .filter((l): l is Listing => !!l && (tab === 'mine' ? l.status !== 'removed' : l.status === 'active' || l.status === 'sold'));
+        .filter((l): l is Listing => !!l && (tab === 'mine' ? l.status !== 'removed' : l.status === 'active'));
     }
     const visible = db.listings.filter(l => {
       if (tab === 'mine') {
         if (l.uid !== me?.id || l.status === 'removed') return false;
-      } else if (l.status !== 'active' && l.status !== 'sold') {
+      } else if (l.status !== 'active') {
         return false;
       }
       if (needle && !`${l.title} ${l.desc} ${l.location}`.toLowerCase().includes(needle)) return false;

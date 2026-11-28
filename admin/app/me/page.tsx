@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import Banner from '@/components/Banner';
 import ConsoleShell from '@/components/ConsoleShell';
 import { IC } from '@/lib/icons';
-import { PushState, disablePush, enablePush, pushState } from '@/lib/push';
+import { PushState, autoPush, disablePush, enablePush, mutePush, pushState } from '@/lib/push';
 import { ago, stamp } from '@/lib/time';
 import { useSession } from '@/lib/session';
 import { PermissionEntry } from '@/lib/types';
@@ -32,13 +32,20 @@ export default function MePage() {
   const [banner, setBanner] = useState<{ kind: 'ok' | 'bad'; text: string } | null>(null);
 
   useEffect(() => {
-    void pushState().then(setPush);
+    // The console asks as it opens, so the answer may still be on its way when
+    // this screen mounts. Running the arrival routine settles it and takes an
+    // address for a browser that allowed alerts without touching this button.
+    void autoPush().then(setPush);
   }, []);
 
   const setAlerts = async (on: boolean) => {
+    if (pushBusy) return;
     setPushBusy(true);
     const result = on ? await enablePush() : null;
-    if (!on) await disablePush();
+    if (!on) {
+      mutePush();
+      await disablePush();
+    }
     setPush(await pushState());
     setPushBusy(false);
     if (result && !result.ok) setBanner({ kind: 'bad', text: result.detail || 'The browser refused.' });

@@ -81,8 +81,15 @@ def _fan_out(recipient_id, payload):
         # A thread must not inherit the request's connection: the request
         # returns and puts it back in the pool while this is still holding it.
         connections.close_all()
-        for sub in list(PushSubscription.objects.filter(user_id=recipient_id)):
+        subs = list(PushSubscription.objects.filter(user_id=recipient_id))
+        # Silence is the reason a card that never arrived could not be traced:
+        # "the switch is on" says nothing about whose browser the server holds.
+        if not subs:
+            logger.warning('push: nobody holds a filed browser for %s', payload.get('to') or recipient_id)
+            return
+        for sub in subs:
             _send(sub, payload)
+        logger.warning('push: card for %s handed to %d browser(s)', payload.get('to'), len(subs))
     except Exception:
         logger.exception('Could not deliver a push notification')
 
@@ -109,6 +116,11 @@ def _payload(row):
         # The bell row's own page: it marks itself read, shows the warning or
         # comment it came from, and needs no route table kept in step with this.
         'url': f'/notifications/{row.pk}',
+        # Who the card is for. One browser runs one worker for every account
+        # signed in on it, and a worker that is not told whose card this is
+        # cannot tell a member who is already reading the site from somebody
+        # else's tab that happens to be in front.
+        'to': (row.recipient.username if row.recipient_id else '')[:64],
     }
 
 
@@ -123,6 +135,7 @@ def notice_card(notice):
         'tag': f'staff:{notice.kind}:{notice.pk}'[:120],
         'renotify': True,
         'url': notice.href or '/overview',
+        'to': (notice.recipient.username if notice.recipient_id else '')[:64],
     }
 
 
@@ -131,7 +144,7 @@ def _deliver(row_pk):
         # A thread must not inherit the request's connection: the request
         # returns and puts it back in the pool while this is still holding it.
         connections.close_all()
-        row = Notification.objects.select_related('actor').filter(pk=row_pk).first()
+        row = Notification.objects.select_related('actor', 'recipient').filter(pk=row_pk).first()
         if row is None or row.kind in QUIET:
             return
     except Exception:
@@ -165,10 +178,12 @@ def _send(sub, payload):
             # formed: the member cleared site data, unsubscribed, or the keys
             # stopped matching the browser. Keeping the row would mean signing
             # letters forever for a device that will never read them.
+            logger.warning('push: %s is gone (%s); dropping the address', sub.endpoint[:64], code)
             PushSubscription.objects.filter(pk=sub.pk).delete()
         else:
             # 402, 429 and every 5xx are our problem or the service's, not the
             # browser's. A transient refusal must not delete a live subscription.
+            logger.warning('push: the service refused %s (%s); counting a failure', sub.endpoint[:64], code or 'no status')
             _count_failure(sub)
     except Exception:
         logger.exception('The push service could not be reached')

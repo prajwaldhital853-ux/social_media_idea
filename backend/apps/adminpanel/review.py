@@ -331,6 +331,16 @@ def withdraw(notice, actor, *, tell=True):
     notice.withdrawn_at = timezone.now()
     notice.save(update_fields=['is_live', 'withdrawn_at'])
     record(actor, 'withdraw_notice', f'{notice.target_type}:{notice.target_id}', notice.text[:120])
+    # A card already on somebody's screen holds the words the server handed it a
+    # minute ago, so the retraction has to reach it: one frame naming the target and
+    # the notice — never the sentence — lets every open tab take that line out of what
+    # it cached. Without it the site keeps contradicting the email it just sent.
+    try:
+        from apps.common import pulse
+        pulse.to_site('notice_gone', target=notice.target_type,
+                      id=str(notice.target_id), notice=str(notice.pk))
+    except Exception:  # noqa: BLE001 - the wire is a courtesy, the withdrawal already stands
+        pass
     out = notice_row(notice)
     if tell:
         out['told'] = unsaid(notice, actor)

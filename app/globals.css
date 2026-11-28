@@ -111,6 +111,11 @@ body {
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  /* iOS Safari quietly enlarges text it decides is a block of prose, and a short
+     bar of centered sentences is exactly what it decides. Without this the toast
+     lands on a phone twice the size it was drawn. */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 body.noscroll {
@@ -2478,6 +2483,19 @@ a.trend-item:hover { text-decoration: none; }
   animation: fadeIn 0.2s ease; max-width: 90vw; text-align: center;
 }
 @media (min-width: 769px) { .toast { bottom: 28px; } }
+
+/* On a phone the bar spans the hand like the desktop's does, the sentence reads
+   left-aligned across at most two lines, and the ends stop curving into a circle
+   the moment the copy wraps — a fully rounded pill around six lines of text is
+   the one shape that makes a short warning look like an outage. */
+@media (max-width: 768px) {
+  .toast {
+    width: calc(100vw - 20px); max-width: calc(100vw - 20px); justify-content: space-between;
+    padding: 9px 12px; border-radius: 14px; font-size: 13px; font-weight: 500;
+    line-height: 1.35; text-align: left;
+  }
+  .toast > span:first-of-type { flex: 1 1 auto; min-width: 0; }
+}
 
 .toast-x {
   flex: none; width: 20px; height: 20px; border: 0;
@@ -6275,6 +6293,68 @@ textarea {
 .field-row .field { min-width: 140px; }
 .field-count { font-size: 11.5px; color: var(--muted); text-align: right; }
 
+/* --- date picker ------------------------------------------------------------ */
+/* A phone's own date control is a wheel where the year only moves after a tap on
+   its small heading, which is where the birthday box lost people. These three
+   fields take a tap each, and the sheet is touched rather than spun. */
+.dp { position: relative; }
+.dp-box {
+  display: flex; align-items: center; gap: 2px; width: 100%; box-sizing: border-box;
+  border: 1px solid var(--line); border-radius: 10px; background: var(--paper);
+  color: var(--ink); padding: 6px 8px; font-size: 14px;
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+.dp-box:focus-within { border-color: var(--brand); box-shadow: 0 0 0 3px var(--brand-ring); }
+.dp-box[aria-invalid="true"] { border-color: var(--red); box-shadow: none; }
+.dp-box.login-input { border-radius: 4px; padding: 8px 12px; margin-bottom: 12px; }
+.dp-box.login-input:focus-within { border-width: 1px; box-shadow: none; }
+.dp-seg {
+  flex: 0 0 auto; width: 2.4ch; min-width: 0; border: 0; border-radius: 6px; background: transparent;
+  color: inherit; font-family: inherit; font-size: 16px; font-weight: 600; padding: 4px 2px;
+  text-align: center; outline: none; appearance: none; -webkit-appearance: none;
+}
+.dp-seg-mon { width: 3.9ch; }
+.dp-seg-yr { width: 4.6ch; }
+.dp-seg:focus { background: rgba(127, 127, 127, .16); }
+.dp-seg::placeholder { color: var(--muted); font-weight: 500; }
+.dp-dot { color: var(--muted); font-size: 14px; }
+.dp-open {
+  flex: none; margin-left: auto; display: inline-flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px; border: 0; border-radius: 8px; background: transparent;
+  color: var(--muted); cursor: pointer;
+}
+.dp-open:hover { background: rgba(127, 127, 127, .16); color: var(--ink); }
+.dp-pop {
+  position: fixed; z-index: 1700; width: 268px; box-sizing: border-box;
+  background: var(--surface); color: var(--ink); border: 1px solid var(--line);
+  border-radius: 14px; box-shadow: 0 18px 46px rgba(0, 0, 0, .3); padding: 10px; font-size: 13px;
+}
+.dp-head { display: flex; align-items: center; gap: 2px; margin-bottom: 4px; }
+.dp-nav {
+  display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 28px;
+  border: 0; border-radius: 8px; background: transparent; color: var(--muted); cursor: pointer;
+}
+.dp-nav:hover { background: rgba(127, 127, 127, .16); color: var(--ink); }
+.dp-pick {
+  border: 0; border-radius: 8px; background: transparent; color: var(--ink); font: inherit;
+  font-weight: 700; padding: 5px 7px; cursor: pointer;
+}
+.dp-pick:hover { background: rgba(127, 127, 127, .16); }
+.dp-week, .dp-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+.dp-week { margin-bottom: 2px; }
+.dp-week span { text-align: center; font-size: 11px; font-weight: 700; color: var(--muted); }
+.dp-cell {
+  height: 30px; border: 0; border-radius: 8px; background: transparent; color: var(--ink);
+  font: inherit; cursor: pointer;
+}
+.dp-cell:hover:not(:disabled) { background: rgba(127, 127, 127, .16); }
+.dp-cell.on { background: var(--brand); color: var(--paper); font-weight: 700; }
+.dp-cell:disabled { color: var(--muted); opacity: .4; cursor: default; }
+.dp-tall { height: 38px; }
+.dp-blank { height: 30px; }
+.dp-mon-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+.dp-years { max-height: 250px; overflow: auto; display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px; }
+
 .form-error {
   margin: 0; font-size: 13px; color: var(--red); background: rgba(228, 1, 4, .07);
   border: 1px solid rgba(228, 1, 4, .25); padding: 8px 12px; border-radius: 10px;
@@ -6622,6 +6702,9 @@ a.wallet-sec-note:hover { color: var(--brand); text-decoration: underline; }
 .wallet-entry-main b { font-size: 13.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .wallet-entry-main small { font-size: 12px; color: var(--muted); }
 .wallet-entry-note { color: var(--red) !important; }
+/* The one-at-a-time rule belongs on the row it applies to, and in the tone of a
+   reminder rather than the red of a refusal. */
+.wallet-entry-remind { font-style: italic; }
 .wallet-entry-num { font-size: 14px; font-weight: 700; flex-shrink: 0; font-variant-numeric: tabular-nums; }
 .wallet-entry-num.in { color: var(--green); }
 .wallet-entry-num.out { color: var(--red); }

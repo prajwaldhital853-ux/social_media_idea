@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import AuthCode from '@/components/AuthCode';
 import BrandLogo from '@/components/BrandLogo';
+import DatePicker, { todayIso } from '@/components/DatePicker';
 import { AuthResult, useApp } from '@/lib/AppContext';
 import { API_ENABLED } from '@/lib/api';
 import { COUNTRIES, THEME_KEY, ageFromDob, uid } from '@/lib/utils';
@@ -84,8 +85,9 @@ export default function SignupPage() {
     requestAnimationFrame(() => {
       const input = fields.current[field];
       if (!input) return;
+      const focusable = input instanceof HTMLInputElement ? input : input.querySelector('input');
       input.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      input.focus({ preventScroll: true });
+      focusable?.focus({ preventScroll: true });
     });
   };
 
@@ -335,20 +337,19 @@ export default function SignupPage() {
             </label>
           )}
           <div className="signup-row">
-            <label className="signup-field">
+            <div className="signup-field">
               <span>{t('dob')} *</span>
-              <input
-                ref={el => { fields.current.dob = el; }}
+              <DatePicker
                 className="login-input"
-                type="date"
                 value={dob}
-                max={new Date().toISOString().slice(0, 10)}
-                aria-invalid={!!fieldErrors.dob}
-                aria-describedby={fieldErrors.dob ? 'signup-dob-error' : undefined}
-                onChange={e => { setDob(e.target.value); clearFieldError('dob'); }}
+                max={todayIso()}
+                invalid={!!fieldErrors.dob}
+                describedBy={fieldErrors.dob ? 'signup-dob-error' : undefined}
+                register={el => { fields.current.dob = el; }}
+                onChange={v => { setDob(v); clearFieldError('dob'); }}
               />
               {fieldErrors.dob ? <span className="signup-field-error" id="signup-dob-error" role="alert">{fieldErrors.dob}</span> : null}
-            </label>
+            </div>
             <label className="signup-field">
               <span>{t('country')} *</span>
               <select

@@ -50,6 +50,12 @@ class MarketplaceTests(TestCase):
         self.assertEqual(resp.status_code, 200)
         self.listing.refresh_from_db()
         self.assertEqual(self.listing.status, 'sold')
+        # A sold offer leaves the browse grid the moment it is marked and stays on
+        # the shelf that says whose it is: nobody can buy it, its owner still sells it.
+        grid = self.cb.get('/api/marketplace/')
+        self.assertNotIn(self.listing.pk, [row['id'] for row in grid.data['results']])
+        shelf = self.cs.get('/api/marketplace/?mine=1')
+        self.assertIn(self.listing.pk, [row['id'] for row in shelf.data['results']])
         resp = self.cs.post(f'/api/marketplace/{self.listing.pk}/relist/')
         self.assertEqual(resp.status_code, 200)
         self.listing.refresh_from_db()

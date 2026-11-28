@@ -19,6 +19,18 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(self.clients.claim());
 });
 
+/* Which account each open tab holds, by tab id. A page tells the worker who it
+   is when it loads and when it comes back to the front; a tab that never said
+   is treated as somebody else's, which is the only reading that does not swallow
+   a card. */
+const seats = {};
+
+self.addEventListener('message', (event) => {
+  const user = event.data && event.data.user;
+  const id = event.source && event.source.id;
+  if (id && typeof user === 'string' && user) seats[id] = user;
+});
+
 self.addEventListener('push', (event) => {
   let card = {};
   try {
@@ -43,7 +55,13 @@ self.addEventListener('push', (event) => {
     // it. The tray updates live, so a card here would only cover up the thing
     // it is describing — the wake-up is for the background and the closed tab.
     const tabs = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
-    if (tabs.some((tab) => tab.visibilityState === 'visible')) return;
+    const live = {};
+    tabs.forEach((tab) => { live[tab.id] = true; });
+    Object.keys(seats).forEach((id) => { if (!live[id]) delete seats[id]; });
+    const reading = card.to
+      ? tabs.some((tab) => tab.visibilityState === 'visible' && seats[tab.id] === card.to)
+      : tabs.some((tab) => tab.visibilityState === 'visible');
+    if (reading) return;
     await self.registration.showNotification(card.title || 'Exposing', options);
   })());
 });

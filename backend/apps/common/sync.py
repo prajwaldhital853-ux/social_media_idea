@@ -133,7 +133,9 @@ def sync(request):
     # shape the inbox list uses — so the suggested band above the threads agrees
     # with the list it sits on.
     hidden_chats = []
-    for hide in ConversationHide.objects.filter(user=user).select_related('conversation'):
+    hides = list(ConversationHide.objects.filter(user=user).select_related('conversation'))
+    hidden_threads = [hide.conversation_id for hide in hides]
+    for hide in hides:
         other = hide.conversation.participants.exclude(pk=user.pk).first()
         if other:
             hidden_chats.append(other.pk)
@@ -155,9 +157,13 @@ def sync(request):
     unread_notifications = Notification.objects.filter(
         recipient=user, read_at__isnull=True
     ).count()
+    # The badge answers "what is waiting to be read", and a thread the reader
+    # deleted has no place left to read it from — hiding it has to lower the
+    # counter, or a Delete does nothing the inbox does not already undo. A new
+    # message un-hides the thread and its count returns with it.
     unread_messages = Message.objects.filter(
         read_at__isnull=True, conversation__participants=user
-    ).exclude(sender=user).count()
+    ).exclude(sender=user).exclude(conversation_id__in=hidden_threads).count()
     own_promotions = Promotion.objects.filter(owner=user).order_by('-created_at')[:20]
     promo_labels = target_labels(own_promotions)
 
