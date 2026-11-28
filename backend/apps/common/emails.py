@@ -326,13 +326,13 @@ def queue_coin_decision_email(user, *, action, coins, amount, balance=None, requ
 
 
 def queue_refund_request_email(coin_request, *, locked=None):
-    """Acknowledge a refund the moment it is filed, and say the rules back to the filer.
+    """Acknowledge a refund the moment it is filed, in three short paragraphs.
 
-    The wallet screen can only say the ask was received. The letter is where the
-    member learns how long the desk is allowed to take and which of their coins are
-    frozen while it decides, because an ask that turns out to sit on spent coins
-    reads as a broken promise rather than as the rule it is. Business days are left
-    unnamed on purpose: the desk's holidays are not this letter's to declare.
+    The wallet screen can only say the ask was received, so the letter carries the
+    wait and the rules. It is read on a phone between other things: a numbered
+    process and a page of conditions land as a document nobody opens, so the body
+    says what happens and when, the table says which purchase, and the rules stay
+    to the six that can actually change what the member does next.
     """
     user = coin_request.user
     try:
@@ -345,49 +345,35 @@ def queue_refund_request_email(coin_request, *, locked=None):
         ('Coins', f'{coin_request.coins} coins'),
         ('Amount paid', f'NPR {paid}'),
         ('Paid by', 'bank transfer' if coin_request.method == 'bank' else 'QR / wallet'),
-        ('Coins locked', f'{locked} coins held for this request' if locked else ''),
-        ('Your payout reference', coin_request.refund_reference or ''),
-        ('Reason you gave', coin_request.refund_reason or ''),
+        ('Coins locked', f'{locked} coins' if locked else ''),
         ('Filed at', timezone.localtime(filed).strftime('%d %b %Y at %H:%M')),
     ]
     message = (
-        f'Your refund request on purchase #{coin_request.pk} is with the coins desk.\n'
+        f'Purchase #{coin_request.pk} is with the coins desk. The {coin_request.coins} coins it bought are '
+        'locked until the desk answers, so they cannot be spent or put into a promotion.\n'
         '\n'
-        'What happens next:\n'
-        '1. The desk reads your screenshot, your reference and your reason, and compares them with the payment '
-        'that actually arrived.\n'
-        '2. Requests are answered in the order they were filed. It may take up to 3 business days to handle your '
-        'refund request. A weekend or a public holiday does not move the queue.\n'
-        '3. You get the answer by email and in your Exposing notifications, whichever way it goes.\n'
-        '4. When a refund is approved the coins come off your wallet and the money is paid by hand to the details '
-        'you sent. After approval a bank transfer can take a further working day to land.'
+        'Requests are settled in the order they arrive. It may take up to 3 business days to handle yours, '
+        'and a weekend or a holiday does not count towards that.\n'
+        '\n'
+        'If the refund is approved, the coins come off your wallet and the money is sent by hand to the '
+        'details you gave. That transfer can take one more working day. Either way the answer reaches you '
+        'here and in your Exposing notifications.'
     )
     footnote = (
-        'The refund rules in full:\n'
-        '- Only an approved purchase can be refunded. A pending or refused one has nothing to give back yet.\n'
-        '- Not one coin of the batch may have been spent. If even a single coin was used, that purchase can no '
-        'longer be refunded, because a part-spent batch has no clean number to give back.\n'
-        '- The whole purchase is refunded or none of it. There is no partial refund.\n'
-        '- From the moment this request was filed those coins are locked. They cannot be spent, moved or put into '
-        'a promotion until the desk answers.\n'
-        '- One refund request at a time per account. While one is open, another request is refused until the first '
-        'is settled.\n'
-        '- No refund while a promotion request of yours is still pending approval, because those coins have not '
-        'been charged yet.\n'
-        '- A payment screenshot and a written reason are both required for the request to be filed.\n'
-        '- A settled purchase is not asked twice. A refund already paid cannot be requested again, and a refused '
-        'ask closes that purchase: the coins stay in your wallet and stay spendable.\n'
-        '- The desk may ask for a clearer receipt. That holds your request until you upload the new proof from the '
-        'wallet screen.\n'
-        '- When the refund is paid, your ledger records it, so your history shows the coins leaving after they '
-        'were credited.\n'
+        'The refund rules, short:\n'
+        '- Only an approved purchase can be refunded.\n'
+        '- If even one coin of that batch was spent, the purchase can no longer be refunded.\n'
+        '- The whole purchase or nothing. There is no partial refund.\n'
+        '- One open refund per account, and none while a promotion request is pending.\n'
+        '- Locked coins are released the moment the desk answers, whichever way it goes.\n'
+        '- A paid refund is not asked twice. A refused ask closes that purchase for good.\n'
         '\n'
-        'Reply to this email if any detail above is wrong, or if 3 business days pass without an answer.'
+        'Something wrong above, or 3 business days gone with no answer? Reply to this email.'
     )
     return queue_event_email(
         user.email,
         'Your Exposing refund request is being reviewed',
-        'The desk has your refund request',
+        'Your refund request is with the desk',
         message,
         details=details,
         cta_label='Open your wallet',
